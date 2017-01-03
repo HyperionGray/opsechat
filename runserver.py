@@ -22,7 +22,7 @@ def id_generator(size=6,
 app.secret_key = id_generator(size=64)
 
 
-def check_older_than(chat_dic, secs_to_live = 120):
+def check_older_than(chat_dic, secs_to_live = 300):
     now = datetime.datetime.now()
     timestamp = chat_dic["timestamp"]
     diff = now - timestamp
