@@ -1,3 +1,11 @@
+Platform
+========
+
+To be a dropchat server host requires a Linux machine (any Linux should do), if this gets more popular we will create one for Windows.
+
+To be a dropchat client requires a Tor Browser on any OS.
+
+
 Install
 =======
 
