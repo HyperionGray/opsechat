@@ -31,7 +31,7 @@ Usage
 
 Start Tor, make sure your Control Port is open and listening on the default port.
 
-`$ python runserver.py`
+`$ dropchat`
 
 Share the drop URL with your friends to open in Tor Browser. Chat with them safely and securely!
 
