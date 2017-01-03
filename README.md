@@ -1,0 +1,36 @@
+Install
+=======
+
+- Activate your favorite virtualenv
+- pip install git+git@gitlab.com:hyperion-gray/dropchat.git
+
+That's it!
+
+How it works
+============
+
+Dropchat is a disposable mini-chat server that can be used to chat safely and anonymously through Tor. One
+person is the host of the chat server (don't worry being a host only requires one command) and
+the others are the clients. The host starts the server and shares a URL with the clients. They
+can then chat with each other safely and anonymously. Once you're done sharing the info you want,
+simply kill the server. No information is stored on disk.
+
+Usage
+=====
+
+`$ python runserver.py`
+
+Share the drop URL with your friends to open in Tor Browser. Chat with them safely and securely!
+
+Features
+========
+
+- As chat happens inside the Tor network via ephemeral hidden services, everything is encrypted and attribution of chatters is virtually impossible
+- No JS required, use safely with NoScript
+- *Nothing* touches disk, everything happens in-memory
+- Low barrier to entry, few dependencies
+- No need for a client
+- Chats are deleted every 5 minutes
+- Randomized usernames - this is for your own safety, so as to decrease chances of username reuse
+- New chat service created every time the server is started
+- No frills, no fancy CSS, code is easy to follow and review to ensure your safety
