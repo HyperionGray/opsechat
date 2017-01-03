@@ -1,0 +1,25 @@
+<!doctype html>
+<title>Your Drop</title>
+<style>
+  *{
+  padding-top:3px;
+  font-family: Lucida Sans Typewriter,Lucida Console,monaco,Bitstream Vera Sans Mono,monospace;
+  
+  }
+</style>
+
+
+<div id="welcome">Welcome to drop {{ hostname }}<br />
+  Share the drop URL with your friends to chat with them<br />
+  Enter Message:<br>
+</div>
+
+<div>
+  <textarea name="dropdata" form="deadform" style="width:400px; height:100px;" autofocus></textarea> 
+  <form id="deadform" action="/{{ path }}/chats" method="POST">
+    <input type="submit" value="Submit" style="margin-top:5px;">  
+  </form>
+</div>
+
+<iframe src="/{{path}}/chats" name="chatframe" width="1000" height="1000" style="padding-top:100px; padding-bottom:100px; align-left:true;" frameBorder=0><iframe>
+
