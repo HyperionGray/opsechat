@@ -89,8 +89,7 @@ def chat_messages(url_addition):
     return render_template("chats.html",
                            chatlines=chatlines)
 
-if __name__ == "__main__":
-
+def main():
     print(' * Connecting to tor')
 
     with Controller.from_port() as controller:
@@ -104,7 +103,7 @@ if __name__ == "__main__":
         print(' * Creating ephemeral hidden service, this may take a minute or two')
         result = controller.create_ephemeral_hidden_service({80: 5000}, await_publication = True)
 
-        print(" * Started a new hidden service with the address of %s.onion" % result.service_id)        
+        print(" * Started a new hidden service with the address of %s.onion" % result.service_id)
         ###result = controller.create_hidden_service(hidden_service_dir, 80, target_port = 5000)
 
         # The hostname is only available when we can read the hidden service
@@ -114,7 +113,7 @@ if __name__ == "__main__":
             print(" * Something went wrong, shutting down")
             ###controller.remove_hidden_service(hidden_service_dir)
             ###shutil.rmtree(hidden_service_dir)
-            
+
         if result.service_id:
             app.config["hostname"] = result.service_id
             app.config["path"] = id_generator(size = 64)
@@ -128,9 +127,12 @@ if __name__ == "__main__":
         finally:
 
             print(" * Shutting down our hidden service")
-            controller.remove_ephemeral_hidden_service(result.service_id)            
+            controller.remove_ephemeral_hidden_service(result.service_id)
 
             #TODO: Encryption
             #TODO: Message Lifetime
             #TODO: Message Truncation
             #could I use session tokens to send people to a URL to retrieve public keys for eachother?
+
+if __name__ == "__main__":
+    main()
