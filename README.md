@@ -13,7 +13,7 @@ Install Tor
 
 Activate your favorite virtualenv
 
-`pip install git+git@gitlab.com:hyperion-gray/dropchat.git`
+`pip install git+https://gitlab.com/hyperion-gray/dropchat.git`
 
 That's it!
 
