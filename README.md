@@ -9,6 +9,8 @@ To be a dropchat client requires a Tor Browser on any OS.
 Install
 =======
 
+Install Tor
+
 Activate your favorite virtualenv
 
 `pip install git+git@gitlab.com:hyperion-gray/dropchat.git`
@@ -26,6 +28,8 @@ simply kill the server. No information is stored on disk.
 
 Usage
 =====
+
+Start Tor, make sure your Control Port is open and listening on the default port.
 
 `$ python runserver.py`
 
