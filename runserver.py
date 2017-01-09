@@ -38,11 +38,25 @@ def get_random_color():
     r = lambda: random.randint(0,128)
     return (r(),r(),r())
 
+
+
+# Remove headers that can be used to fingerprint this server
+@app.after_request
+def remove_headers(response):
+        response.headers["Server"] = ""
+        response.headers["Date"] = ""
+        return response
+
+# Empty Index page to avoid Flask fingerprinting
+@app.route('/', methods=["GET"])
+def index():
+        return ('', 200)
+
 @app.route('/<string:url_addition>', methods=["GET"])
 def drop(url_addition):
 
     if url_addition != app.config["path"]:
-        abort(404)
+        return ('', 404)
 
     if "_id" not in session:
         session["_id"] = id_generator()
@@ -59,7 +73,7 @@ def chat_messages(url_addition):
 
     more_chats = False
     if url_addition != app.config["path"]:
-        abort(404)
+        return ('', 404)
 
     to_delete = []
     c = 0
