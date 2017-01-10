@@ -8,6 +8,7 @@ from stem.control import Controller
 from hashlib import sha224
 import random
 import datetime
+from stem import SocketError
 
 app = Flask(__name__)
 chatlines = []
@@ -90,11 +91,18 @@ def chat_messages(url_addition):
                            chatlines=chatlines)
 
 def main():
+
+    try:
+        controller = Controller.from_port()
+    except SocketError:
+        sys.stderr.write(' * Tor proxy or Control Port are not running. Try starting the Tor Browser or Tor daemon and ensure the ControlPort is open.\n')
+        sys.exit(1)
+        
+    
     print(' * Connecting to tor')
-
-    with Controller.from_port() as controller:
+    with controller:
         controller.authenticate()
-
+        
         # All hidden services have a directory on disk. Lets put ours in tor's data
         # directory.
 
@@ -128,11 +136,6 @@ def main():
 
             print(" * Shutting down our hidden service")
             controller.remove_ephemeral_hidden_service(result.service_id)
-
-            #TODO: Encryption
-            #TODO: Message Lifetime
-            #TODO: Message Truncation
-            #could I use session tokens to send people to a URL to retrieve public keys for eachother?
 
 if __name__ == "__main__":
     main()
