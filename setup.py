@@ -1,5 +1,5 @@
 import os
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name = 'dropchat',
@@ -12,6 +12,7 @@ setup(
     author_email = 'contact@hyperiongray.com',
     packages = [''],
     include_package_data = True,
+    package_data = {'': ['templates/*.html']},
     install_requires = ["flask", "stem"],
     classifiers = [ 'Development Status :: 4 - Beta',
                     'Programming Language :: Python :: 3',
