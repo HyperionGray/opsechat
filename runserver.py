@@ -12,6 +12,7 @@ from stem import SocketError
 
 app = Flask(__name__)
 chatlines = []
+chatters = []
 
 def id_generator(size=6,
                    chars=string.ascii_uppercase + string.digits +
@@ -47,6 +48,7 @@ def drop(url_addition):
 
     if "_id" not in session:
         session["_id"] = id_generator()
+        chatters.append(session["_id"])        
         session["color"] = get_random_color()
 
     if request.method == "GET":
@@ -88,7 +90,7 @@ def chat_messages(url_addition):
             return redirect(app.config["path"], code=302)
 
     return render_template("chats.html",
-                           chatlines=chatlines, num_people = len(chatlines))
+                           chatlines=chatlines, num_people = len(chatters))
 
 def main():
 
