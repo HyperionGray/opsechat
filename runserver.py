@@ -101,7 +101,7 @@ def chat_messages(url_addition):
             chatlines.append(chat)
             more_chats = True
 
-            return redirect(app.config["path"], code=302)
+        return redirect(app.config["path"], code=302)
 
     return render_template("chats.html",
                            chatlines=chatlines, num_people = len(chatters))
