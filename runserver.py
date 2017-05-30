@@ -9,10 +9,16 @@ from hashlib import sha224
 import random
 import datetime
 from stem import SocketError
-
+import textwrap
 app = Flask(__name__)
-chatlines = []
+import logging
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
+
+
 chatters = []
+global chatlines
+chatlines = []
 
 def id_generator(size=6,
                    chars=string.ascii_uppercase + string.digits +
@@ -24,16 +30,17 @@ def id_generator(size=6,
 app.secret_key = id_generator(size=64)
 
 
-def check_older_than(chat_dic, secs_to_live = 300):
+def check_older_than(chat_dic, secs_to_live = 180):
     now = datetime.datetime.now()
     timestamp = chat_dic["timestamp"]
     diff = now - timestamp
     secs = diff.total_seconds()
-    print(secs)
+
     if secs >= secs_to_live:
         return True
 
     return False
+
 
 def get_random_color():
 
@@ -41,18 +48,39 @@ def get_random_color():
     return (r(),r(),r())
 
 
+def process_chat(chat_dic):
+
+    chats = []
+    max_chat_len = 69
+    if len(chat_dic["msg"]) > max_chat_len:
+        
+        for message in textwrap.wrap(chat_dic["msg"], width = max_chat_len):
+            partial_chat = {}
+            partial_chat["msg"] = message.strip()
+            partial_chat["timestamp"] = datetime.datetime.now()
+            partial_chat["username"] = session["_id"]
+            partial_chat["color"] = session["color"]
+            chats.append(partial_chat)
+
+    else:
+        chats = [chat_dic]
+
+    return chats
+
 
 # Remove headers that can be used to fingerprint this server
 @app.after_request
 def remove_headers(response):
-        response.headers["Server"] = ""
-        response.headers["Date"] = ""
-        return response
+    response.headers["Server"] = ""
+    response.headers["Date"] = ""
+    return response
+
 
 # Empty Index page to avoid Flask fingerprinting
 @app.route('/', methods=["GET"])
 def index():
-        return ('', 200)
+    return ('', 200)
+
 
 @app.route('/<string:url_addition>', methods=["GET"])
 def drop(url_addition):
@@ -62,10 +90,11 @@ def drop(url_addition):
 
     if "_id" not in session:
         session["_id"] = id_generator()
-        chatters.append(session["_id"])        
+        chatters.append(session["_id"])
         session["color"] = get_random_color()
 
     if request.method == "GET":
+        full_path = app.config["hostname"] + "/" + app.config["path"]
         return render_template("drop.html",
                                hostname=app.config["hostname"],
                                path=app.config["path"])
@@ -74,6 +103,7 @@ def drop(url_addition):
 @app.route('/<string:url_addition>/chats', methods=["GET", "POST"])
 def chat_messages(url_addition):
 
+    global chatlines
     more_chats = False
     if url_addition != app.config["path"]:
         return ('', 404)
@@ -92,13 +122,15 @@ def chat_messages(url_addition):
     if request.method == "POST":
 
         if request.form["dropdata"].strip():
+            
             chat = {}
             chat["msg"] = request.form["dropdata"].strip()
             chat["timestamp"] = datetime.datetime.now()
-            print(datetime.datetime.now())
             chat["username"] = session["_id"]
             chat["color"] = session["color"]
-            chatlines.append(chat)
+            chats = process_chat(chat)
+            chatlines = chatlines + chats
+            chatlines = chatlines[-13:]
             more_chats = True
 
         return redirect(app.config["path"], code=302)
@@ -118,9 +150,6 @@ def main():
     print(' * Connecting to tor')
     with controller:
         controller.authenticate()
-        
-        # All hidden services have a directory on disk. Lets put ours in tor's data
-        # directory.
 
         # Create ephemeral hidden service where visitors of port 80 get redirected to local
         # port 5000 (this is where Flask runs by default).
@@ -142,7 +171,7 @@ def main():
             app.config["hostname"] = result.service_id
             app.config["path"] = id_generator(size = 64)
             app.config["full_path"] = app.config["hostname"] + ".onion" + "/" + app.config["path"]
-            print(" * Our service is available at: %s , press ctrl+c to quit" % app.config["full_path"])
+            print(" * Your service is available at: %s , press ctrl+c to quit" % app.config["full_path"])
         else:
             print(" * Unable to determine our ephemeral service's hostname")
 

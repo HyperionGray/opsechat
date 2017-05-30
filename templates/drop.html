@@ -11,11 +11,11 @@
 
 
 <div id="welcome">Welcome to drop {{ hostname }}<br />
-  Share the drop URL with your friends to chat with them. Do not share it publicly.<br />
+  Share the <a href="/{{ path }}">drop URL</a> with your friends to chat with them. Do not share it publicly.<br />
 </div>
 
-<div style="-webkit-overflow-scrolling: touch; overflow: auto;">
-  <iframe src="/{{path}}/chats" name="chatframe" style="width:90vw; height:80vh;" frameBorder=0></iframe>
+<div style="overflow: auto;">
+  <iframe src="/{{path}}/chats" name="chatframe" style="width:90vw; height:90vh;" frameBorder=0></iframe>
 </div>
 
 <div style="position: fixed; bottom: 5px;">
