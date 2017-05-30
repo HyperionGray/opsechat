@@ -12,8 +12,11 @@ Install
 Install Tor
 
 Activate your favorite virtualenv e.g..
+
 `sudo apt-get install python-virtualenv`
+
 `venv dropenv`
+
 `source dropenv/bin/activate`
 
 `pip install git+https://gitlab.com/hyperion-gray/dropchat.git`
