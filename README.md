@@ -35,7 +35,7 @@ done sharing the info you want, simply kill the server. No information is stored
 Usage
 =====
 
-Start Tor, make sure your Control Port is open and listening on the default port.
+Start Tor or Tor Browser, make sure your Control Port is open and listening on the default port.
 
 `$ dropchat`
 
