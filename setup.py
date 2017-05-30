@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = 'dropchat',
-    version = '0.2.4',
+    version = '0.3.0',
     description = 'DropChat',
     long_description = 'Drop Chat - Secure Disposable Chat',
     url = '',
