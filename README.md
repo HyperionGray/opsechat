@@ -11,7 +11,10 @@ Install
 
 Install Tor
 
-Activate your favorite virtualenv
+Activate your favorite virtualenv e.g..
+`sudo apt-get install python-virtualenv`
+`venv dropenv`
+`source dropenv/bin/activate`
 
 `pip install git+https://gitlab.com/hyperion-gray/dropchat.git`
 
@@ -22,9 +25,9 @@ How it works
 
 Dropchat is a disposable mini-chat server that can be used to chat safely and anonymously through Tor. One
 person is the host of the chat server (don't worry being a host only requires one command - no messing with
-complex config files) and the others are the clients. The host starts the server and shares a URL with the
-clients. They can then chat with each other safely and anonymously. Once you're done sharing the info you want,
-simply kill the server. No information is stored on disk.
+complex config files) and the others are the clients using only a Tor Browser. The host starts the server 
+and shares a URL with the clients. They can then chat with each other safely and anonymously. Once you're 
+done sharing the info you want, simply kill the server. No information is stored on disk.
 
 Usage
 =====
@@ -44,7 +47,7 @@ Features
 - No configuration required
 - Low barrier to entry, few dependencies
 - No need for a client
-- Chats are deleted every 5 minutes
+- Chats are deleted every 3 minutes
 - Randomized usernames - this is for your own safety, so as to decrease chances of username reuse
 - New chat service created every time the server is started
 - No frills, no fancy CSS, code is easy to follow and review to ensure your safety
