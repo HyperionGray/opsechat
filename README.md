@@ -15,7 +15,7 @@ Activate your favorite virtualenv e.g..
 
 `sudo apt-get install python-virtualenv`
 
-`venv dropenv`
+`virtualenv dropenv`
 
 `source dropenv/bin/activate`
 
