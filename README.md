@@ -54,3 +54,7 @@ Features
 - Randomized usernames - this is for your own safety, so as to decrease chances of username reuse
 - New chat service created every time the server is started
 - No frills, no fancy CSS, code is easy to follow and review to ensure your safety
+
+---
+
+[![define hyperion gray](https://hyperiongray.s3.amazonaws.com/define-hg.svg)](https://hyperiongray.com/?pk_campaign=github&pk_kwd=dropchat "Hyperion Gray")
