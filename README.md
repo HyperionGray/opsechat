@@ -13,13 +13,16 @@ Install Tor
 
 Activate your favorite virtualenv e.g..
 
+`$ git clone git@github.com:HyperionGray/dropchat.git`
+
+`$ cd dropchat`
+
 `$ sudo apt-get install python-virtualenv`
 
 `$ virtualenv dropenv`
 
 `$ source dropenv/bin/activate`
 
-`$ pip install git+https://gitlab.com/hyperion-gray/dropchat.git`
 
 That's it!
 
@@ -40,6 +43,17 @@ Start Tor or Tor Browser, make sure your Control Port is open and listening on t
 `$ dropchat`
 
 Share the drop URL with your friends to open in Tor Browser. Chat with them safely and securely!
+
+
+Javascript
+==========
+
+You have the option of using Javascript or not. In order to use it go to noscript -> options -> add the hostname
+to the whitelist (not the url). Then click on the link at the top of the page to go to the script-allowed version
+of dropchat if you are not redirected. This is for when you trust the people you are chatting with, the user experience
+is significantly improved with Javascript.
+
+To not use javascript simply leave noscript on.
 
 Features
 ========
