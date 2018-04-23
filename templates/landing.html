@@ -1,0 +1,36 @@
+<!doctype html>
+<title>Your Drop</title>
+<link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+<style>
+  *{
+    padding-top:3px;
+    font-family: Lucida Sans Typewriter,Lucida Console,monaco,Bitstream Vera Sans Mono,monospace;
+    font-size:22px;
+  }
+</style>
+
+<noscript>
+  <style type="text/css">
+    .pagecontainer {display:none;}
+  </style>
+  <div class="noscriptmsg">
+    You don't have javascript enabled. You can use <a href="{{ path }}/noscript">Dropchat without it</a>, but it will be limited.
+  </div>
+</noscript>
+
+<div class="pagecontainer">
+<div id="welcome">Welcome to drop {{ hostname }}<br />
+  Share the <a href="/{{ path }}">drop URL</a> with your friends to chat with them. Do not share it publicly.<br />
+</div>
+
+<div style="overflow: auto;">
+  <iframe src="/{{path}}/chats" name="chatframe" style="width:90vw; height:90vh;" frameBorder=0></iframe>
+</div>
+
+<div style="position: fixed; bottom: 5px;">
+  <form id="deadform" action="/{{ path }}/chats" method="POST">
+    <input type="text" placeholder="Type your message here and press enter..." name="dropdata" style="width:90vw; height:40px;" autofocus required> 
+    <input type="submit" value="Send" style="margin-top:5px; float:right; display:none;">
+  </form>
+</div>
+</div>

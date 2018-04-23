@@ -1,26 +1,88 @@
 <!doctype html>
 <title>Your Drop</title>
+<head>
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+<script src="{{ url_for('static', filename='jquery.js') }}"></script> 
+</head>
+
+<noscript>  
+  <style>html{display:none;}</style>
+  <meta http-equiv="refresh" content="0.0;url=noscript">
+</noscript>
+
 <style>
   *{
     padding-top:3px;
     font-family: Lucida Sans Typewriter,Lucida Console,monaco,Bitstream Vera Sans Mono,monospace;
     font-size:22px;
   }
+  
 </style>
+
+<script>
+function doPoll() {
+  $( document ).ready(function() {
+    $.ajax({
+      url : 'chatsjs',
+      type : 'GET',
+      dataType:'json',
+      success : function(data) {
+            //alert('Data: '+ JSON.stringify(data));
+            $("#chatf").html("");
+            for(var i = 0; i < data.length; i++) {
+	      var obj = data[i];
+              var color1 = JSON.stringify(obj.color[0]);
+              var color2 = JSON.stringify(obj.color[1]);
+	      var color3 = JSON.stringify(obj.color[2]);
+	      //alert(color1);
+	     $("#chatf").append('<tr>' + '<td name="msg" class="msg" style="color:rgb(' + color1 + ',' + color2 + ',' + color3 + ');"><b>' + obj.username + ': ' + obj.msg + '</b></td>');
+             $("#numpeeps").html(obj.num_people);
+	     //alert(obj.num_people);		       
+          }
+	  setTimeout(doPoll,3000);
+
+      },
+      error : function(request,error) {
+              alert("There was an error. Request: "+JSON.stringify(request));
+      }
+    });
+  });
+};
+doPoll();
+</script>
 
 
 <div id="welcome">Welcome to drop {{ hostname }}<br />
   Share the <a href="/{{ path }}">drop URL</a> with your friends to chat with them. Do not share it publicly.<br />
+  Go to noscript version <a href="/{{path}}/noscript">here</a><br />
+  Go to script-enabled version <a href="/{{path}}/yesscript">here</a>.<br />
+  To use the script-enabled version please whitelist the hostname in noscript (note: hostname, not url).<br />
+
+  <div style="font-size:9px;float:right;">Number of people in this chat: <span id="numpeeps" style="font-size:9px;"></span></div>
 </div>
 
-<div style="overflow: auto;">
-  <iframe src="/{{path}}/chats" name="chatframe" style="width:90vw; height:90vh;" frameBorder=0></iframe>
+<div id="chatf" style="overflow: auto; width:90vw; height:90vh;">
+  <!--<iframe src="/{{path}}/chats" name="chatframe" style="width:90vw; height:90vh;" frameBorder=0></iframe>-->
 </div>
 
-<div style="position: fixed; bottom: 5px;">
-  <form id="deadform" action="/{{ path }}/chats" method="POST">
-    <input type="text" placeholder="Type your message here and press enter..." name="dropdata" style="width:90vw; height:40px;" autofocus required> 
-    <input type="submit" value="Send" style="margin-top:5px; float:right; display:none;">
-  </form>
-</div>
+<input type="text" id="messagearea" style="width:90vw; height:30px; position: fixed;  bottom: 0;" autofocus required></input>
+
+<script>
+$( document ).ready(function() {
+
+    $(document).keypress(function(e){
+    if (e.which == 13){
+        var txt = $("#messagearea").val();
+        $.post("/{{ path }}/chatsjs", {dropdata: txt}, function(result){
+            $("span").html(result);
+            $("#messagearea").val("")
+        });
+    }
+    });
+
+});
+</script>
+
+
+
+</html>
