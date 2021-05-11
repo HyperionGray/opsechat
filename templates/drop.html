@@ -3,21 +3,13 @@
 <head>
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 <script src="{{ url_for('static', filename='jquery.js') }}"></script> 
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 
 <noscript>  
   <style>html{display:none;}</style>
   <meta http-equiv="refresh" content="0.0;url=noscript">
 </noscript>
-
-<style>
-  *{
-    padding-top:3px;
-    font-family: Lucida Sans Typewriter,Lucida Console,monaco,Bitstream Vera Sans Mono,monospace;
-    font-size:22px;
-  }
-  
-</style>
 
 <script>
 function doPoll() {
@@ -35,7 +27,7 @@ function doPoll() {
               var color2 = JSON.stringify(obj.color[1]);
 	      var color3 = JSON.stringify(obj.color[2]);
 	      //alert(color1);
-	     $("#chatf").append('<tr>' + '<td name="msg" class="msg" style="color:rgb(' + color1 + ',' + color2 + ',' + color3 + ');"><b>' + obj.username + ': ' + obj.msg + '</b></td>');
+        $("#chatf").append('<tr><th scope="row" name="msg" class="msg name" style="color:rgb(' + color1 + ',' + color2 + ',' + color3 + ');"><b>' + obj.username + ': </b></th><td name="msg" class="msg text" style="color:rgb(' + color1 + ',' + color2 + ',' + color3 + ');"><b>' + obj.msg + '</b></td></tr>');
              $("#numpeeps").html(obj.num_people);
 	     //alert(obj.num_people);		       
           }

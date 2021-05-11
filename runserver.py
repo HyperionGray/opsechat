@@ -49,20 +49,20 @@ def get_random_color():
 
 def process_chat(chat_dic):
 
-    chats = []
-    max_chat_len = 69
-    if len(chat_dic["msg"]) > max_chat_len:
+    # chats = []
+    # max_chat_len = 69
+    # if len(chat_dic["msg"]) > max_chat_len:
         
-        for message in textwrap.wrap(chat_dic["msg"], width = max_chat_len):
-            partial_chat = {}
-            partial_chat["msg"] = message.strip()
-            partial_chat["timestamp"] = datetime.datetime.now()
-            partial_chat["username"] = session["_id"]
-            partial_chat["color"] = session["color"]
-            chats.append(partial_chat)
+    #     for message in textwrap.wrap(chat_dic["msg"], width = max_chat_len):
+    #         partial_chat = {}
+    #         partial_chat["msg"] = message.strip()
+    #         partial_chat["timestamp"] = datetime.datetime.now()
+    #         partial_chat["username"] = session["_id"]
+    #         partial_chat["color"] = session["color"]
+    #         chats.append(partial_chat)
 
-    else:
-        chats = [chat_dic]
+    # else:
+    chats = [chat_dic]
 
     return chats
 
