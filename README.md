@@ -1,9 +1,9 @@
 Platform
 ========
 
-To be a dropchat server host requires a Linux machine (any Linux should do), if this gets more popular we will create one for Windows.
+To be a opsechat server host requires a Linux machine (any Linux should do), if this gets more popular we will create one for Windows.
 
-To be a dropchat client requires a Tor Browser on any OS.
+To be a opsechat client requires a Tor Browser on any OS.
 
 
 Install
@@ -13,9 +13,9 @@ Install Tor, Open Tor browser to establish a Tor client port
 
 Activate your favorite virtualenv e.g..
 
-`$ git clone git@github.com:HyperionGray/dropchat.git`
+`$ git clone git@github.com:HyperionGray/opsechat.git`
 
-`$ cd dropchat`
+`$ cd opsechat`
 
 `$ sudo apt-get install python-virtualenv`
 
