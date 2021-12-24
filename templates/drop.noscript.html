@@ -1,15 +1,10 @@
 <!doctype html>
 <title>Your Drop</title>
-<link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
-<style>
-  *{
-    padding-top:3px;
-    font-family: Lucida Sans Typewriter,Lucida Console,monaco,Bitstream Vera Sans Mono,monospace;
-    font-size:22px;
-  }
+<head>
+  <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="stylesheet"  href="{{ url_for('static', filename='styles.css') }}">
+</head>
 
-  
-</style>
 
 <div id="welcome">Welcome to drop {{ hostname }}<br />
   Share the <a href="/{{ path }}">drop URL</a> with your friends to chat with them. Do not share it publicly.<br />

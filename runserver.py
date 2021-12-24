@@ -37,35 +37,11 @@ def check_older_than(chat_dic, secs_to_live = 180):
 
     if secs >= secs_to_live:
         return True
-
     return False
 
-
 def get_random_color():
-
     r = lambda: random.randint(0,128)
     return (r(),r(),r())
-
-
-def process_chat(chat_dic):
-
-    chats = []
-    max_chat_len = 69
-    if len(chat_dic["msg"]) > max_chat_len:
-        
-        for message in textwrap.wrap(chat_dic["msg"], width = max_chat_len):
-            partial_chat = {}
-            partial_chat["msg"] = message.strip()
-            partial_chat["timestamp"] = datetime.datetime.now()
-            partial_chat["username"] = session["_id"]
-            partial_chat["color"] = session["color"]
-            chats.append(partial_chat)
-
-    else:
-        chats = [chat_dic]
-
-    return chats
-
 
 # Remove headers that can be used to fingerprint this server
 @app.after_request
@@ -199,7 +175,7 @@ def chat_messages(url_addition):
             chat["timestamp"] = datetime.datetime.now()
             chat["username"] = session["_id"]
             chat["color"] = session["color"]
-            chats = process_chat(chat)
+            chats = [chat]
             chatlines = chatlines + chats
             chatlines = chatlines[-13:]
             more_chats = True
@@ -243,7 +219,7 @@ def chat_messages_js(url_addition):
             chat["username"] = session["_id"]
             chat["color"] = session["color"]
             chat["num_people"] = len(chatters)
-            chats = process_chat(chat)
+            chats = [chat]
             chatlines = chatlines + chats
             chatlines = chatlines[-13:]
             more_chats = True
