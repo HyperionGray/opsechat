@@ -1,2 +1,3 @@
 deadenv/
 deadenv/*
+__pycache__/

@@ -93,7 +93,7 @@ def drop(url_addition):
 
     if request.method == "GET":
         full_path = app.config["hostname"] + "/" + app.config["path"]
-        return render_template("drop_unified.html",
+        return render_template("drop.html",
                                hostname=app.config["hostname"],
                                path=app.config["path"],
                                script_enabled=True)
@@ -148,7 +148,7 @@ def drop_yes(url_addition):
 
     if request.method == "GET":
         full_path = app.config["hostname"] + "/" + app.config["path"]
-        return render_template("drop_unified.html",
+        return render_template("drop.html",
                                hostname=app.config["hostname"],
                                path=app.config["path"],
                                script_enabled=True)
@@ -167,7 +167,7 @@ def drop_noscript(url_addition):
 
     if request.method == "GET":
         full_path = app.config["hostname"] + "/" + app.config["path"]
-        return render_template("drop_unified.html",
+        return render_template("drop.html",
                                hostname=app.config["hostname"],
                                path=app.config["path"],
                                script_enabled=False)

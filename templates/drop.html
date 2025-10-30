@@ -1,5 +1,6 @@
 <!doctype html>
 <title>Your Drop</title>
+{% if script_enabled %}
 <head>
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 <script src="{{ url_for('static', filename='jquery.js') }}"></script> 
@@ -9,6 +10,9 @@
   <style>html{display:none;}</style>
   <meta http-equiv="refresh" content="0.0;url=noscript">
 </noscript>
+{% else %}
+<link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+{% endif %}
 
 <style>
   *{
@@ -19,6 +23,7 @@
   
 </style>
 
+{% if script_enabled %}
 <script>
 function doPoll() {
   $( document ).ready(function() {
@@ -50,17 +55,22 @@ function doPoll() {
 };
 doPoll();
 </script>
+{% endif %}
 
 
 <div id="welcome">Welcome to drop {{ hostname }}<br />
   Share the <a href="/{{ path }}">drop URL</a> with your friends to chat with them. Do not share it publicly.<br />
-  Go to noscript version <a href="/{{path}}/noscript">here</a><br />
+  Go to noscript version <a href="/{{path}}/noscript">here</a>{% if script_enabled %}<br />{% else %}.<br />{% endif %}
   Go to script-enabled version <a href="/{{path}}/yesscript">here</a>.<br />
-  To use the script-enabled version please whitelist the hostname in noscript (note: hostname, not url).<br />
+  To use the script-enabled version please whitelist the hostname in noscript (note: hostname, not url){% if script_enabled %}.<br />{% else %}.{% endif %}
 
+{% if script_enabled %}
   <div style="font-size:9px;float:right;">Number of people in this chat: <span id="numpeeps" style="font-size:9px;"></span></div>
-</div>
+{% endif %}
+</div>{% if not script_enabled %}       {% endif %}
 
+
+{% if script_enabled %}
 <div id="chatf" style="overflow: auto; width:90vw; height:90vh;">
   <!--<iframe src="/{{path}}/chats" name="chatframe" style="width:90vw; height:90vh;" frameBorder=0></iframe>-->
 </div>
@@ -82,6 +92,18 @@ $( document ).ready(function() {
 
 });
 </script>
+{% else %}
+<div style="overflow: auto;">
+  <iframe src="/{{path}}/chats" name="chatframe" style="width:90vw; height:90vh;" frameBorder=0></iframe>
+</div>
+
+<div style="position: fixed; bottom: 0;">
+  <form id="deadform" action="/{{ path }}/chats" method="POST">
+    <input type="text" placeholder="Type your message here and press enter..." name="dropdata" style="width:90vw; height:40px; position: fixed;  bottom: 0;" autofocus required> 
+    <input type="submit" value="Send" style="margin-top:5px; float:right; display:none;">
+  </form>
+</div>
+{% endif %}
 
 
 
