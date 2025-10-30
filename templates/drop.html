@@ -45,6 +45,11 @@
     text-decoration: underline;
   }
   
+  .people-count-inline {
+    font-size: 9px;
+    float: right;
+  }
+  
   #chatf {
     background-color: #ffffff;
     border: 2px solid #1e3a8a;
@@ -126,7 +131,7 @@ doPoll();
   Go to script-enabled version <a href="/{{path}}/yesscript">here</a>.<br />
   To use the script-enabled version please whitelist the hostname in noscript (note: hostname, not url).<br />
 
-  <div style="font-size:9px;float:right;">Number of people in this chat: <span id="numpeeps" style="font-size:9px;"></span></div>
+  <div class="people-count-inline">Number of people in this chat: <span id="numpeeps"></span></div>
 </div>
 
 <div id="chatf" style="overflow: auto; width:90vw; height:90vh;">

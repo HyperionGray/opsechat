@@ -33,7 +33,8 @@
       color: inherit;
     }
     
-    div[style*="float:right"] {
+    .people-count {
+      float: right;
       background-color: #dbeafe;
       padding: 5px 10px;
       border-radius: 4px;
@@ -43,7 +44,7 @@
     }
   </style>
 
-  <div style="float:right; font-size:10px;">People in chat: {{ num_people }}</div>
+  <div class="people-count">People in chat: {{ num_people }}</div>
   <table>
     {% for message_dic in chatlines %}
     <tr>
