@@ -1,2 +1,5 @@
 deadenv/
 deadenv/*
+__pycache__/
+*.pyc
+*.pyo
