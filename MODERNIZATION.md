@@ -109,10 +109,11 @@ The bundled jQuery (v3.3.1) has known XSS vulnerabilities. Manual update require
 
 ### Pre-existing Code Issues
 
-Some pre-existing issues were discovered but not fixed (to maintain minimal changes):
-- Routes assume `app.config["path"]` exists (set only when Tor connects)
-- Global variables used for chat state (acceptable for single-instance app)
-- No automated tests (no test infrastructure exists)
+Some pre-existing issues were discovered but not fixed to maintain minimal changes and avoid introducing new bugs:
+
+- **Routes assume Tor configuration exists**: Routes expect `app.config["path"]` to be set, which only happens when Tor connects successfully. This can cause KeyError if routes are accessed before Tor connection.
+- **Global variables for state**: Chat state (`chatlines`, `chatters`) is stored in global variables, which is acceptable for a single-instance application but wouldn't scale to multi-process deployments.
+- **No automated tests**: The repository has no test infrastructure, so automated testing was not added to keep changes minimal.
 
 ## Migration Guide
 
