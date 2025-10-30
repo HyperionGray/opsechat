@@ -93,9 +93,10 @@ def drop(url_addition):
 
     if request.method == "GET":
         full_path = app.config["hostname"] + "/" + app.config["path"]
-        return render_template("drop.html",
+        return render_template("drop_unified.html",
                                hostname=app.config["hostname"],
-                               path=app.config["path"])
+                               path=app.config["path"],
+                               script_enabled=True)
 
 
 @app.route('/<string:url_addition>', methods=["GET"])
@@ -147,9 +148,10 @@ def drop_yes(url_addition):
 
     if request.method == "GET":
         full_path = app.config["hostname"] + "/" + app.config["path"]
-        return render_template("drop.html",
+        return render_template("drop_unified.html",
                                hostname=app.config["hostname"],
-                               path=app.config["path"])
+                               path=app.config["path"],
+                               script_enabled=True)
 
 
 @app.route('/<string:url_addition>/noscript', methods=["GET"])
@@ -165,9 +167,10 @@ def drop_noscript(url_addition):
 
     if request.method == "GET":
         full_path = app.config["hostname"] + "/" + app.config["path"]
-        return render_template("drop.noscript.html",
+        return render_template("drop_unified.html",
                                hostname=app.config["hostname"],
-                               path=app.config["path"])
+                               path=app.config["path"],
+                               script_enabled=False)
 
 @app.route('/<string:url_addition>/chats', methods=["GET", "POST"])
 def chat_messages(url_addition):
