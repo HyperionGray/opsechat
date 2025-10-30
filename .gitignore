@@ -1,2 +1,5 @@
 deadenv/
 deadenv/*
+node_modules/
+package.json
+package-lock.json
