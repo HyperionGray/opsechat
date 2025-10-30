@@ -74,6 +74,7 @@ Features
 - As chat happens inside the Tor network via ephemeral hidden services, everything is encrypted and attribution of chatters is virtually impossible
 - *Nothing* touches disk except the app, everything happens in-memory, no chat, image, video, or ANYTHING caching to storage.
 - This chat is meant to help you with opsec, disappearing messages, randomized usernames, encrypted comms are the default (much more to come)
+- **PGP encryption support** - Optional end-to-end encryption using PGP keys (see [PGP_USAGE.md](PGP_USAGE.md))
 - No configuration required
 - Low barrier to entry, few dependencies
 - No need for a client
