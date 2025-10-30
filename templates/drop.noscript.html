@@ -2,13 +2,62 @@
 <title>Your Drop</title>
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 <style>
-  *{
-    padding-top:3px;
-    font-family: Lucida Sans Typewriter,Lucida Console,monaco,Bitstream Vera Sans Mono,monospace;
-    font-size:22px;
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
   }
-
   
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 16px;
+    background-color: #f0f9ff;
+    color: #1e3a8a;
+    padding: 20px;
+  }
+  
+  #welcome {
+    background-color: #1e3a8a;
+    color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  
+  #welcome a {
+    color: #93c5fd;
+    text-decoration: none;
+    font-weight: bold;
+  }
+  
+  #welcome a:hover {
+    color: #dbeafe;
+    text-decoration: underline;
+  }
+  
+  iframe {
+    border: 2px solid #1e3a8a;
+    border-radius: 8px;
+    background-color: #ffffff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  
+  input[type="text"] {
+    border: 2px solid #1e3a8a;
+    border-radius: 4px;
+    padding: 10px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 16px;
+    background-color: #ffffff;
+    color: #1e3a8a;
+  }
+  
+  input[type="text"]:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
 </style>
 
 <div id="welcome">Welcome to drop {{ hostname }}<br />
