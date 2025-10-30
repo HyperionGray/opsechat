@@ -17,11 +17,13 @@ Activate your favorite virtualenv e.g..
 
 `$ cd opsechat`
 
-`$ sudo apt-get install python-virtualenv`
+`$ sudo apt-get install python3-virtualenv`
 
-`$ virtualenv --python=python2 dropenv`
+`$ python3 -m venv dropenv`
 
 `$ source dropenv/bin/activate`
+
+`$ pip install -r requirements.txt`
 
 
 That's it!
