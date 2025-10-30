@@ -1,17 +1,18 @@
 <!doctype html>
-<title>Your Drop</title>
-{% if script_enabled %}
+<html>
 <head>
+<title>Your Drop</title>
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+{% if script_enabled %}
 <script src="{{ url_for('static', filename='jquery.js') }}"></script> 
+{% endif %}
 </head>
 
+{% if script_enabled %}
 <noscript>  
   <style>html{display:none;}</style>
   <meta http-equiv="refresh" content="0.0;url=noscript">
 </noscript>
-{% else %}
-<link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 {% endif %}
 
 <style>
@@ -67,7 +68,7 @@ doPoll();
 {% if script_enabled %}
   <div style="font-size:9px;float:right;">Number of people in this chat: <span id="numpeeps" style="font-size:9px;"></span></div>
 {% endif %}
-</div>{% if not script_enabled %}       {% endif %}
+</div>
 
 
 {% if script_enabled %}
@@ -75,7 +76,7 @@ doPoll();
   <!--<iframe src="/{{path}}/chats" name="chatframe" style="width:90vw; height:90vh;" frameBorder=0></iframe>-->
 </div>
 
-<input type="text" id="messagearea" style="width:90vw; height:30px; position: fixed;  bottom: 0;" autofocus required></input>
+<input type="text" id="messagearea" style="width:90vw; height:30px; position: fixed;  bottom: 0;" autofocus required />
 
 <script>
 $( document ).ready(function() {
@@ -99,8 +100,8 @@ $( document ).ready(function() {
 
 <div style="position: fixed; bottom: 0;">
   <form id="deadform" action="/{{ path }}/chats" method="POST">
-    <input type="text" placeholder="Type your message here and press enter..." name="dropdata" style="width:90vw; height:40px; position: fixed;  bottom: 0;" autofocus required> 
-    <input type="submit" value="Send" style="margin-top:5px; float:right; display:none;">
+    <input type="text" placeholder="Type your message here and press enter..." name="dropdata" style="width:90vw; height:40px; position: fixed;  bottom: 0;" autofocus required /> 
+    <input type="submit" value="Send" style="margin-top:5px; float:right; display:none;" />
   </form>
 </div>
 {% endif %}

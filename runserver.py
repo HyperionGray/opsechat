@@ -157,8 +157,8 @@ def drop_yes(url_addition):
 @app.route('/<string:url_addition>/noscript', methods=["GET"])
 def drop_noscript(url_addition):
 
-    #if url_addition != app.config["path"]:
-    #    return ('', 404)
+    if url_addition != app.config["path"]:
+        return ('', 404)
 
     if "_id" not in session:
         session["_id"] = id_generator()
