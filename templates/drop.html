@@ -35,7 +35,7 @@ function doPoll() {
               var color2 = JSON.stringify(obj.color[1]);
 	      var color3 = JSON.stringify(obj.color[2]);
 	      //alert(color1);
-	     $("#chatf").append('<tr>' + '<td name="msg" class="msg" style="color:rgb(' + color1 + ',' + color2 + ',' + color3 + ');"><b>' + obj.username + ': ' + obj.msg + '</b></td>');
+	     $("#chatf").append('<tr>' + '<td name="msg" class="msg" style="color:rgb(' + color1 + ',' + color2 + ',' + color3 + '); word-wrap: break-word; overflow-wrap: break-word; max-width: 90vw;"><b>' + obj.username + ': ' + obj.msg + '</b></td>');
              $("#numpeeps").html(obj.num_people);
 	     //alert(obj.num_people);		       
           }
