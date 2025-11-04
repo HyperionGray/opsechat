@@ -47,8 +47,30 @@ def get_random_color():
 
 
 def process_chat(chat_dic):
-    # No longer need to split messages - CSS handles wrapping
-    return [chat_dic]
+
+    chats = []
+    max_chat_len = 69
+    
+    # Check if this is a PGP encrypted message - don't wrap it
+    is_pgp = "-----BEGIN PGP MESSAGE-----" in chat_dic["msg"]
+    
+    if is_pgp:
+        # Don't wrap PGP messages, keep them as single chat
+        chats = [chat_dic]
+    elif len(chat_dic["msg"]) > max_chat_len:
+        
+        for message in textwrap.wrap(chat_dic["msg"], width = max_chat_len):
+            partial_chat = {}
+            partial_chat["msg"] = message.strip()
+            partial_chat["timestamp"] = datetime.datetime.now()
+            partial_chat["username"] = session["_id"]
+            partial_chat["color"] = session["color"]
+            chats.append(partial_chat)
+
+    else:
+        chats = [chat_dic]
+
+    return chats
 
 
 # Remove headers that can be used to fingerprint this server
@@ -179,7 +201,9 @@ def chat_messages(url_addition):
             
             chat = {}
             chat["msg"] = request.form["dropdata"].strip()
-            chat["msg"] = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', chat["msg"])
+            # Don't sanitize PGP messages, only sanitize regular messages
+            if "-----BEGIN PGP MESSAGE-----" not in chat["msg"]:
+                chat["msg"] = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', chat["msg"])
             chat["timestamp"] = datetime.datetime.now()
             chat["username"] = session["_id"]
             chat["color"] = session["color"]
@@ -222,7 +246,9 @@ def chat_messages_js(url_addition):
             
             chat = {}
             chat["msg"] = request.form["dropdata"].strip()
-            chat["msg"] = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', chat["msg"])
+            # Don't sanitize PGP messages, only sanitize regular messages
+            if "-----BEGIN PGP MESSAGE-----" not in chat["msg"]:
+                chat["msg"] = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', chat["msg"])
             chat["timestamp"] = datetime.datetime.now()
             chat["username"] = session["_id"]
             chat["color"] = session["color"]

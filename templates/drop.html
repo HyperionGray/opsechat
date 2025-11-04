@@ -2,7 +2,9 @@
 <title>Your Drop</title>
 <head>
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
-<script src="{{ url_for('static', filename='jquery.js') }}"></script> 
+<script src="{{ url_for('static', filename='jquery.js') }}"></script>
+<script src="{{ url_for('static', filename='openpgp.min.js') }}"></script>
+<script src="{{ url_for('static', filename='pgp-manager.js') }}"></script>
 </head>
 
 <noscript>  
@@ -17,38 +19,135 @@
     font-size:22px;
   }
   
+  .pgp-modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.4);
+  }
+  
+  .pgp-modal-content {
+    background-color: #222;
+    color: #0f0;
+    margin: 5% auto;
+    padding: 20px;
+    border: 1px solid #0f0;
+    width: 80%;
+    max-width: 600px;
+    font-size: 16px;
+  }
+  
+  .pgp-close {
+    color: #0f0;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  
+  .pgp-close:hover,
+  .pgp-close:focus {
+    color: #fff;
+  }
+  
+  .pgp-textarea {
+    width: 100%;
+    height: 150px;
+    background-color: #111;
+    color: #0f0;
+    border: 1px solid #0f0;
+    font-family: monospace;
+    font-size: 12px;
+    padding: 5px;
+  }
+  
+  .pgp-button {
+    background-color: #0f0;
+    color: #000;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    margin: 5px;
+    font-family: monospace;
+    font-size: 14px;
+  }
+  
+  .pgp-button:hover {
+    background-color: #0d0;
+  }
+  
+  .pgp-input {
+    width: 100%;
+    background-color: #111;
+    color: #0f0;
+    border: 1px solid #0f0;
+    padding: 5px;
+    font-family: monospace;
+    font-size: 14px;
+    margin: 5px 0;
+  }
+  
+  .pgp-status {
+    font-size: 12px;
+    color: #0f0;
+    margin: 5px 0;
+  }
+  
+  .pgp-indicator {
+    font-size: 12px;
+    color: #0f0;
+    display: inline;
+  }
 </style>
 
 <script>
-function doPoll() {
-  $( document ).ready(function() {
-    $.ajax({
-      url : 'chatsjs',
-      type : 'GET',
-      dataType:'json',
-      success : function(data) {
-            //alert('Data: '+ JSON.stringify(data));
-            $("#chatf").html("");
-            for(var i = 0; i < data.length; i++) {
-	      var obj = data[i];
-              var color1 = JSON.stringify(obj.color[0]);
-              var color2 = JSON.stringify(obj.color[1]);
-	      var color3 = JSON.stringify(obj.color[2]);
-	      //alert(color1);
-	     $("#chatf").append('<tr>' + '<td name="msg" class="msg" style="color:rgb(' + color1 + ',' + color2 + ',' + color3 + '); word-wrap: break-word; overflow-wrap: break-word; max-width: 90vw;"><b>' + obj.username + ': ' + obj.msg + '</b></td>');
-             $("#numpeeps").html(obj.num_people);
-	     //alert(obj.num_people);		       
-          }
-	  setTimeout(doPoll,3000);
+async function processMessage(msg) {
+  // Attempt to decrypt if it's a PGP message
+  if (PGPManager.isPGPMessage(msg)) {
+    return await PGPManager.decryptMessage(msg);
+  }
+  return msg;
+}
 
-      },
-      error : function(request,error) {
-              alert("There was an error. Request: "+JSON.stringify(request));
-      }
-    });
+async function doPoll() {
+  $.ajax({
+    url : 'chatsjs',
+    type : 'GET',
+    dataType:'json',
+    success : async function(data) {
+          //alert('Data: '+ JSON.stringify(data));
+          $("#chatf").html("");
+          for(var i = 0; i < data.length; i++) {
+            var obj = data[i];
+            var color1 = JSON.stringify(obj.color[0]);
+            var color2 = JSON.stringify(obj.color[1]);
+            var color3 = JSON.stringify(obj.color[2]);
+            
+            // Decrypt message if needed
+            var displayMsg = await processMessage(obj.msg);
+            var lockIcon = PGPManager.isPGPMessage(obj.msg) ? '🔒 ' : '';
+            
+            $("#chatf").append('<tr>' + '<td name="msg" class="msg" style="color:rgb(' + color1 + ',' + color2 + ',' + color3 + ');"><b>' + lockIcon + obj.username + ': ' + displayMsg + '</b></td>');
+            $("#numpeeps").html(obj.num_people);
+          }
+          setTimeout(doPoll,3000);
+
+    },
+    error : function(request,error) {
+            alert("There was an error. Request: "+JSON.stringify(request));
+    }
   });
-};
-doPoll();
+}
+
+$( document ).ready(function() {
+  doPoll();
+  updatePGPStatus();
+});
 </script>
 
 
@@ -57,6 +156,7 @@ doPoll();
   Go to noscript version <a href="/{{path}}/noscript">here</a><br />
   Go to script-enabled version <a href="/{{path}}/yesscript">here</a>.<br />
   To use the script-enabled version please whitelist the hostname in noscript (note: hostname, not url).<br />
+  <a href="#" id="pgp-settings-link" style="color: #0f0;">⚙️ PGP Settings</a> <span id="pgp-status-indicator" class="pgp-indicator"></span><br />
 
   <div style="font-size:9px;float:right;">Number of people in this chat: <span id="numpeeps" style="font-size:9px;"></span></div>
 </div>
@@ -65,14 +165,45 @@ doPoll();
   <!--<iframe src="/{{path}}/chats" name="chatframe" style="width:90vw; height:90vh;" frameBorder=0></iframe>-->
 </div>
 
+<!-- PGP Settings Modal -->
+<div id="pgp-modal" class="pgp-modal">
+  <div class="pgp-modal-content">
+    <span class="pgp-close">&times;</span>
+    <h2 style="color: #0f0;">PGP Settings</h2>
+    
+    <h3 style="color: #0f0;">Your Private Key (for decryption)</h3>
+    <p class="pgp-status">Import your private PGP key to decrypt messages from others.</p>
+    <textarea id="private-key-input" class="pgp-textarea" placeholder="-----BEGIN PGP PRIVATE KEY BLOCK-----&#10;...&#10;-----END PGP PRIVATE KEY BLOCK-----"></textarea>
+    <input type="password" id="passphrase-input" class="pgp-input" placeholder="Passphrase (if key is encrypted)">
+    <button id="import-private-key-btn" class="pgp-button">Import Private Key</button>
+    <button id="clear-private-key-btn" class="pgp-button">Clear Private Key</button>
+    <div id="private-key-status" class="pgp-status"></div>
+    
+    <h3 style="color: #0f0;">Public Keys (for encryption)</h3>
+    <p class="pgp-status">Add public keys of other users to encrypt messages for them.</p>
+    <input type="text" id="username-input" class="pgp-input" placeholder="Username (optional identifier)">
+    <textarea id="public-key-input" class="pgp-textarea" placeholder="-----BEGIN PGP PUBLIC KEY BLOCK-----&#10;...&#10;-----END PGP PUBLIC KEY BLOCK-----"></textarea>
+    <button id="add-public-key-btn" class="pgp-button">Add Public Key</button>
+    <button id="clear-public-keys-btn" class="pgp-button">Clear All Public Keys</button>
+    <div id="public-keys-status" class="pgp-status"></div>
+    <div id="public-keys-list" class="pgp-status"></div>
+  </div>
+</div>
+
 <input type="text" id="messagearea" style="width:90vw; height:30px; position: fixed;  bottom: 0;" autofocus required></input>
 
 <script>
 $( document ).ready(function() {
 
-    $(document).keypress(function(e){
-    if (e.which == 13){
+    $(document).keypress(async function(e){
+    if (e.which == 13 && !e.shiftKey){
         var txt = $("#messagearea").val();
+        
+        // Encrypt message if PGP is enabled
+        if (PGPManager.canEncrypt()) {
+          txt = await PGPManager.encryptMessage(txt);
+        }
+        
         $.post("/{{ path }}/chatsjs", {dropdata: txt}, function(result){
             $("span").html(result);
             $("#messagearea").val("")
@@ -80,6 +211,137 @@ $( document ).ready(function() {
     }
     });
 
+});
+
+// PGP Settings Modal Management
+function updatePGPStatus() {
+  var status = '';
+  if (PGPManager.canDecrypt()) {
+    status += '🔓 Can decrypt | ';
+  }
+  if (PGPManager.canEncrypt()) {
+    status += '🔒 Will encrypt';
+  }
+  if (status === '') {
+    status = '❌ PGP not configured';
+  }
+  $('#pgp-status-indicator').text(status);
+  
+  // Update private key status
+  if (PGPManager.canDecrypt()) {
+    $('#private-key-status').text('✓ Private key imported').css('color', '#0f0');
+  } else {
+    $('#private-key-status').text('No private key').css('color', '#f00');
+  }
+  
+  // Update public keys list
+  var pubKeys = PGPManager.getPublicKeys();
+  var keysList = Object.keys(pubKeys);
+  if (keysList.length > 0) {
+    $('#public-keys-status').text('✓ ' + keysList.length + ' public key(s) imported').css('color', '#0f0');
+    $('#public-keys-list').html('<b>Public keys:</b><br>' + keysList.join('<br>'));
+  } else {
+    $('#public-keys-status').text('No public keys').css('color', '#f00');
+    $('#public-keys-list').html('');
+  }
+}
+
+$(document).ready(function() {
+  var modal = $('#pgp-modal');
+  
+  // Open modal
+  $('#pgp-settings-link').click(function(e) {
+    e.preventDefault();
+    modal.show();
+    updatePGPStatus();
+  });
+  
+  // Close modal
+  $('.pgp-close').click(function() {
+    modal.hide();
+  });
+  
+  // Close modal when clicking outside
+  $(window).click(function(e) {
+    if (e.target.id === 'pgp-modal') {
+      modal.hide();
+    }
+  });
+  
+  // Import private key
+  $('#import-private-key-btn').click(async function() {
+    var key = $('#private-key-input').val().trim();
+    var passphrase = $('#passphrase-input').val();
+    
+    if (!key) {
+      alert('Please enter a private key');
+      return;
+    }
+    
+    try {
+      // Validate key by attempting to read it
+      var privateKey = await openpgp.readPrivateKey({ armoredKey: key });
+      
+      // Try to decrypt it with passphrase if provided
+      if (passphrase) {
+        await openpgp.decryptKey({
+          privateKey: privateKey,
+          passphrase: passphrase
+        });
+        PGPManager.setPassphrase(passphrase);
+      }
+      
+      PGPManager.setPrivateKey(key);
+      alert('Private key imported successfully!');
+      $('#private-key-input').val('');
+      $('#passphrase-input').val('');
+      updatePGPStatus();
+    } catch (err) {
+      alert('Error importing private key: ' + err.message);
+    }
+  });
+  
+  // Clear private key
+  $('#clear-private-key-btn').click(function() {
+    if (confirm('Are you sure you want to remove your private key?')) {
+      PGPManager.clearPrivateKey();
+      alert('Private key cleared');
+      updatePGPStatus();
+    }
+  });
+  
+  // Add public key
+  $('#add-public-key-btn').click(async function() {
+    var key = $('#public-key-input').val().trim();
+    var username = $('#username-input').val().trim() || 'user-' + Date.now();
+    
+    if (!key) {
+      alert('Please enter a public key');
+      return;
+    }
+    
+    try {
+      // Validate key by attempting to read it
+      await openpgp.readKey({ armoredKey: key });
+      
+      PGPManager.addPublicKey(username, key);
+      alert('Public key added for: ' + username);
+      $('#public-key-input').val('');
+      $('#username-input').val('');
+      updatePGPStatus();
+    } catch (err) {
+      alert('Error adding public key: ' + err.message);
+    }
+  });
+  
+  // Clear all public keys
+  $('#clear-public-keys-btn').click(function() {
+    if (confirm('Are you sure you want to remove all public keys?')) {
+      PGPManager.clearAllPublicKeys();
+      alert('All public keys cleared');
+      updatePGPStatus();
+    }
+  });
 });
 </script>
 
