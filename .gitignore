@@ -1,6 +1,5 @@
 deadenv/
 deadenv/*
-
 # Python
 __pycache__/
 *.py[cod]
@@ -46,3 +45,9 @@ env/
 .coverage
 htmlcov/
 .tox/
+node_modules/
+package.json
+package-lock.json
+__pycache__/
+*.pyc
+*.pyo
