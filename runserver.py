@@ -9,7 +9,6 @@ from stem.control import Controller
 from hashlib import sha224
 import datetime
 from stem import SocketError
-import textwrap
 app = Flask(__name__)
 import logging
 log = logging.getLogger('werkzeug')
