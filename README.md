@@ -17,11 +17,13 @@ Activate your favorite virtualenv e.g..
 
 `$ cd opsechat`
 
-`$ sudo apt-get install python-virtualenv`
+`$ sudo apt-get install python3-virtualenv`
 
-`$ virtualenv --python=python2 dropenv`
+`$ python3 -m venv dropenv`
 
 `$ source dropenv/bin/activate`
+
+`$ pip install -r requirements.txt`
 
 
 That's it!
@@ -82,6 +84,13 @@ Features
 - Randomized usernames - this is for your own safety, so as to decrease chances of username reuse
 - New chat service created every time the server is started
 - No frills, no fancy CSS, code is easy to follow and review to ensure your safety
+
+Security
+========
+
+For security best practices and recommendations, please see [SECURITY.md](SECURITY.md).
+
+**Note on jQuery**: The bundled jQuery (v3.3.1) should be updated to v3.7.1 or later to patch known XSS vulnerabilities. Download the latest version from https://code.jquery.com/jquery-3.7.1.min.js and replace `static/jquery.js`.
 
 ---
 
