@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
 <title>Your Drop</title>
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
@@ -61,9 +61,9 @@ doPoll();
 
 <div id="welcome">Welcome to drop {{ hostname }}<br />
   Share the <a href="/{{ path }}">drop URL</a> with your friends to chat with them. Do not share it publicly.<br />
-  Go to noscript version <a href="/{{path}}/noscript">here</a>{% if script_enabled %}<br />{% else %}.<br />{% endif %}
+  Go to noscript version <a href="/{{path}}/noscript">here</a>.{% if script_enabled %}<br />{% endif %}
   Go to script-enabled version <a href="/{{path}}/yesscript">here</a>.<br />
-  To use the script-enabled version please whitelist the hostname in noscript (note: hostname, not url){% if script_enabled %}.<br />{% else %}.{% endif %}
+  To use the script-enabled version please whitelist the hostname in noscript (note: hostname, not url).{% if script_enabled %}<br />{% endif %}
 
 {% if script_enabled %}
   <div style="font-size:9px;float:right;">Number of people in this chat: <span id="numpeeps" style="font-size:9px;"></span></div>
