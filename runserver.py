@@ -9,7 +9,6 @@ from stem.control import Controller
 from hashlib import sha224
 import datetime
 from stem import SocketError
-import textwrap
 app = Flask(__name__)
 import logging
 log = logging.getLogger('werkzeug')
@@ -51,7 +50,14 @@ def process_chat(chat_dic):
 
     chats = []
     max_chat_len = 69
-    if len(chat_dic["msg"]) > max_chat_len:
+    
+    # Check if this is a PGP encrypted message - don't wrap it
+    is_pgp = "-----BEGIN PGP MESSAGE-----" in chat_dic["msg"]
+    
+    if is_pgp:
+        # Don't wrap PGP messages, keep them as single chat
+        chats = [chat_dic]
+    elif len(chat_dic["msg"]) > max_chat_len:
         
         for message in textwrap.wrap(chat_dic["msg"], width = max_chat_len):
             partial_chat = {}
@@ -198,7 +204,9 @@ def chat_messages(url_addition):
             
             chat = {}
             chat["msg"] = request.form["dropdata"].strip()
-            chat["msg"] = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', chat["msg"])
+            # Don't sanitize PGP messages, only sanitize regular messages
+            if "-----BEGIN PGP MESSAGE-----" not in chat["msg"]:
+                chat["msg"] = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', chat["msg"])
             chat["timestamp"] = datetime.datetime.now()
             chat["username"] = session["_id"]
             chat["color"] = session["color"]
@@ -241,7 +249,9 @@ def chat_messages_js(url_addition):
             
             chat = {}
             chat["msg"] = request.form["dropdata"].strip()
-            chat["msg"] = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', chat["msg"])
+            # Don't sanitize PGP messages, only sanitize regular messages
+            if "-----BEGIN PGP MESSAGE-----" not in chat["msg"]:
+                chat["msg"] = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', chat["msg"])
             chat["timestamp"] = datetime.datetime.now()
             chat["username"] = session["_id"]
             chat["color"] = session["color"]

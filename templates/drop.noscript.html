@@ -1,0 +1,32 @@
+<!doctype html>
+<title>Your Drop</title>
+<link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+<style>
+  *{
+    padding-top:3px;
+    font-family: Lucida Sans Typewriter,Lucida Console,monaco,Bitstream Vera Sans Mono,monospace;
+    font-size:22px;
+  }
+
+  
+</style>
+
+<div id="welcome">Welcome to drop {{ hostname }}<br />
+  Share the <a href="/{{ path }}">drop URL</a> with your friends to chat with them. Do not share it publicly.<br />
+  Go to noscript version <a href="/{{path}}/noscript">here</a>.<br />
+  Go to script-enabled version <a href="/{{path}}/yesscript">here</a>.<br />
+  To use the script-enabled version please whitelist the hostname in noscript (note: hostname, not url).<br />
+  <i>Note: PGP encryption requires JavaScript. Enable scripts for PGP support.</i>
+</div>       
+
+
+<div style="overflow: auto;">
+  <iframe src="/{{path}}/chats" name="chatframe" style="width:90vw; height:90vh;" frameBorder=0></iframe>
+</div>
+
+<div style="position: fixed; bottom: 0;">
+  <form id="deadform" action="/{{ path }}/chats" method="POST">
+    <input type="text" placeholder="Type your message here and press enter..." name="dropdata" style="width:90vw; height:40px; position: fixed;  bottom: 0;" autofocus required> 
+    <input type="submit" value="Send" style="margin-top:5px; float:right; display:none;">
+  </form>
+</div>
