@@ -46,8 +46,8 @@ env/
 htmlcov/
 .tox/
 node_modules/
-package.json
-package-lock.json
+playwright-report/
+test-results/
 __pycache__/
 *.pyc
 *.pyo
