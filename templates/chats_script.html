@@ -8,8 +8,8 @@
   <table>
     {% for message_dic in chatlines %}
     <tr>
-      <th scope="row" name="msg" class="msg name" style='color: rgb({{ message_dic["color"] }});'><b>{{ message_dic["username"]  }}:</b></th>
-      <td name="msg" class="msg text" style='color: rgb({{ message_dic["color"] }});'><b>{{ message_dic["msg"] }}</b></td>
+      <th scope="row" name="msg" class="msg name" style="color: rgb({{ message_dic["color"] }});"><b>{{ message_dic["username"]  }}:</b></th>
+      <td name="msg" class="msg text" style="color: rgb({{ message_dic["color"] }});"><b>{{ message_dic["msg"] }}</b></td>
     </tr>
   {% endfor %}
   </table>
