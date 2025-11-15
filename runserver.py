@@ -9,7 +9,6 @@ from stem.control import Controller
 from hashlib import sha224
 import datetime
 from stem import SocketError
-import textwrap
 app = Flask(__name__)
 import logging
 log = logging.getLogger('werkzeug')
@@ -37,12 +36,9 @@ def check_older_than(chat_dic, secs_to_live = 180):
 
     if secs >= secs_to_live:
         return True
-
     return False
 
-
 def get_random_color():
-
     r = lambda: random.randint(0,128)
     return (r(),r(),r())
 
@@ -51,7 +47,14 @@ def process_chat(chat_dic):
 
     chats = []
     max_chat_len = 69
-    if len(chat_dic["msg"]) > max_chat_len:
+    
+    # Check if this is a PGP encrypted message - don't wrap it
+    is_pgp = "-----BEGIN PGP MESSAGE-----" in chat_dic["msg"]
+    
+    if is_pgp:
+        # Don't wrap PGP messages, keep them as single chat
+        chats = [chat_dic]
+    elif len(chat_dic["msg"]) > max_chat_len:
         
         for message in textwrap.wrap(chat_dic["msg"], width = max_chat_len):
             partial_chat = {}
@@ -95,7 +98,8 @@ def drop(url_addition):
         full_path = app.config["hostname"] + "/" + app.config["path"]
         return render_template("drop.html",
                                hostname=app.config["hostname"],
-                               path=app.config["path"])
+                               path=app.config["path"],
+                               script_enabled=True)
 
 
 @app.route('/<string:url_addition>', methods=["GET"])
@@ -149,14 +153,15 @@ def drop_yes(url_addition):
         full_path = app.config["hostname"] + "/" + app.config["path"]
         return render_template("drop.html",
                                hostname=app.config["hostname"],
-                               path=app.config["path"])
+                               path=app.config["path"],
+                               script_enabled=True)
 
 
 @app.route('/<string:url_addition>/noscript', methods=["GET"])
 def drop_noscript(url_addition):
 
-    #if url_addition != app.config["path"]:
-    #    return ('', 404)
+    if url_addition != app.config["path"]:
+        return ('', 404)
 
     if "_id" not in session:
         session["_id"] = id_generator()
@@ -165,9 +170,10 @@ def drop_noscript(url_addition):
 
     if request.method == "GET":
         full_path = app.config["hostname"] + "/" + app.config["path"]
-        return render_template("drop.noscript.html",
+        return render_template("drop.html",
                                hostname=app.config["hostname"],
-                               path=app.config["path"])
+                               path=app.config["path"],
+                               script_enabled=False)
 
 @app.route('/<string:url_addition>/chats', methods=["GET", "POST"])
 def chat_messages(url_addition):
@@ -195,11 +201,13 @@ def chat_messages(url_addition):
             
             chat = {}
             chat["msg"] = request.form["dropdata"].strip()
-            chat["msg"] = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', chat["msg"])
+            # Don't sanitize PGP messages, only sanitize regular messages
+            if "-----BEGIN PGP MESSAGE-----" not in chat["msg"]:
+                chat["msg"] = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', chat["msg"])
             chat["timestamp"] = datetime.datetime.now()
             chat["username"] = session["_id"]
             chat["color"] = session["color"]
-            chats = process_chat(chat)
+            chats = [chat]
             chatlines = chatlines + chats
             chatlines = chatlines[-13:]
             more_chats = True
@@ -238,12 +246,14 @@ def chat_messages_js(url_addition):
             
             chat = {}
             chat["msg"] = request.form["dropdata"].strip()
-            chat["msg"] = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', chat["msg"])
+            # Don't sanitize PGP messages, only sanitize regular messages
+            if "-----BEGIN PGP MESSAGE-----" not in chat["msg"]:
+                chat["msg"] = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', chat["msg"])
             chat["timestamp"] = datetime.datetime.now()
             chat["username"] = session["_id"]
             chat["color"] = session["color"]
             chat["num_people"] = len(chatters)
-            chats = process_chat(chat)
+            chats = [chat]
             chatlines = chatlines + chats
             chatlines = chatlines[-13:]
             more_chats = True

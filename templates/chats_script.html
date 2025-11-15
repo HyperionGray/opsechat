@@ -1,54 +1,15 @@
 <html>
+  <head>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
   <!--<meta http-equiv="refresh" content="1" >-->
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 16px;
-      background-color: #ffffff;
-      color: #1e3a8a;
-      padding: 10px;
-    }
-    
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    
-    tr {
-      border-bottom: 1px solid #dbeafe;
-    }
-    
-    td {
-      padding: 8px 5px;
-      word-wrap: break-word;
-    }
-    
-    .msg b {
-      color: inherit;
-    }
-    
-    .people-count {
-      float: right;
-      background-color: #dbeafe;
-      padding: 5px 10px;
-      border-radius: 4px;
-      font-size: 12px;
-      color: #1e3a8a;
-      margin-bottom: 10px;
-    }
-  </style>
 
-  <div class="people-count">People in chat: {{ num_people }}</div>
+  <div id="peopleinchat">People in chat: {{ num_people }}</div>
   <table>
     {% for message_dic in chatlines %}
     <tr>
-      <td name="msg" class="msg" style="color:rgb{{ message_dic["color"] }};"><b>{{ message_dic["username"]  }}</b>: {{ message_dic["msg"] }}</td>
+      <th scope="row" name="msg" class="msg name" style='color: rgb({{ message_dic["color"] }});'><b>{{ message_dic["username"]  }}:</b></th>
+      <td name="msg" class="msg text" style='color: rgb({{ message_dic["color"] }});'><b>{{ message_dic["msg"] }}</b></td>
     </tr>
   {% endfor %}
   </table>
