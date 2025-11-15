@@ -1,12 +1,8 @@
 <html>
+  <head>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
   <meta http-equiv="refresh" content="1" >
-  <style>
-    *{
-      padding-top:3px;
-      font-family: Lucida Sans Typewriter,Lucida Console,monaco,Bitstream Vera Sans Mono,monospace;
-      font-size:22px;
-    }
-  </style>
 
   <div style="float:right; font-size:10px;">People in chat: {{ num_people }}</div>
   <table style="table-layout: fixed; width: 100%; max-width: 90vw;">
