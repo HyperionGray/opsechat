@@ -5,6 +5,7 @@ from flask import request, session, url_for, redirect, abort
 import traceback
 import sys
 import string
+import textwrap
 from stem.control import Controller
 from hashlib import sha224
 import datetime

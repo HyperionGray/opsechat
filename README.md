@@ -28,6 +28,39 @@ Activate your favorite virtualenv e.g..
 
 That's it!
 
+Testing
+=======
+
+The project includes comprehensive automated tests using Playwright. See [TESTING.md](TESTING.md) for detailed instructions.
+
+Quick start:
+
+```bash
+# Install test dependencies
+npm install
+npx playwright install
+
+# Run headless tests (no browser window)
+npm run test:headless
+
+# Run tests with visible browser (for debugging)
+npm run test:headed
+
+# Run all tests
+npm test
+```
+
+Tests cover:
+- Project structure and dependencies
+- Python module imports
+- Flask routes and session handling
+- UI functionality (script and noscript modes)
+- Security headers validation
+- Responsive design
+
+For full testing documentation, see [TESTING.md](TESTING.md).
+
+
 How it works
 ============
 
