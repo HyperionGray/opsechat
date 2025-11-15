@@ -9,7 +9,6 @@ from stem.control import Controller
 from hashlib import sha224
 import datetime
 from stem import SocketError
-import textwrap
 app = Flask(__name__)
 import logging
 log = logging.getLogger('werkzeug')
@@ -43,6 +42,34 @@ def get_random_color():
     r = lambda: random.randint(0,128)
     return (r(),r(),r())
 
+
+def process_chat(chat_dic):
+
+    chats = []
+    max_chat_len = 69
+    
+    # Check if this is a PGP encrypted message - don't wrap it
+    is_pgp = "-----BEGIN PGP MESSAGE-----" in chat_dic["msg"]
+    
+    if is_pgp:
+        # Don't wrap PGP messages, keep them as single chat
+        chats = [chat_dic]
+    elif len(chat_dic["msg"]) > max_chat_len:
+        
+        for message in textwrap.wrap(chat_dic["msg"], width = max_chat_len):
+            partial_chat = {}
+            partial_chat["msg"] = message.strip()
+            partial_chat["timestamp"] = datetime.datetime.now()
+            partial_chat["username"] = session["_id"]
+            partial_chat["color"] = session["color"]
+            chats.append(partial_chat)
+
+    else:
+        chats = [chat_dic]
+
+    return chats
+
+
 # Remove headers that can be used to fingerprint this server
 @app.after_request
 def remove_headers(response):
@@ -71,7 +98,8 @@ def drop(url_addition):
         full_path = app.config["hostname"] + "/" + app.config["path"]
         return render_template("drop.html",
                                hostname=app.config["hostname"],
-                               path=app.config["path"])
+                               path=app.config["path"],
+                               script_enabled=True)
 
 
 @app.route('/<string:url_addition>', methods=["GET"])
@@ -125,14 +153,15 @@ def drop_yes(url_addition):
         full_path = app.config["hostname"] + "/" + app.config["path"]
         return render_template("drop.html",
                                hostname=app.config["hostname"],
-                               path=app.config["path"])
+                               path=app.config["path"],
+                               script_enabled=True)
 
 
 @app.route('/<string:url_addition>/noscript', methods=["GET"])
 def drop_noscript(url_addition):
 
-    #if url_addition != app.config["path"]:
-    #    return ('', 404)
+    if url_addition != app.config["path"]:
+        return ('', 404)
 
     if "_id" not in session:
         session["_id"] = id_generator()
@@ -141,9 +170,10 @@ def drop_noscript(url_addition):
 
     if request.method == "GET":
         full_path = app.config["hostname"] + "/" + app.config["path"]
-        return render_template("drop.noscript.html",
+        return render_template("drop.html",
                                hostname=app.config["hostname"],
-                               path=app.config["path"])
+                               path=app.config["path"],
+                               script_enabled=False)
 
 @app.route('/<string:url_addition>/chats', methods=["GET", "POST"])
 def chat_messages(url_addition):
@@ -171,7 +201,9 @@ def chat_messages(url_addition):
             
             chat = {}
             chat["msg"] = request.form["dropdata"].strip()
-            chat["msg"] = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', chat["msg"])
+            # Don't sanitize PGP messages, only sanitize regular messages
+            if "-----BEGIN PGP MESSAGE-----" not in chat["msg"]:
+                chat["msg"] = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', chat["msg"])
             chat["timestamp"] = datetime.datetime.now()
             chat["username"] = session["_id"]
             chat["color"] = session["color"]
@@ -214,7 +246,9 @@ def chat_messages_js(url_addition):
             
             chat = {}
             chat["msg"] = request.form["dropdata"].strip()
-            chat["msg"] = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', chat["msg"])
+            # Don't sanitize PGP messages, only sanitize regular messages
+            if "-----BEGIN PGP MESSAGE-----" not in chat["msg"]:
+                chat["msg"] = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', chat["msg"])
             chat["timestamp"] = datetime.datetime.now()
             chat["username"] = session["_id"]
             chat["color"] = session["color"]

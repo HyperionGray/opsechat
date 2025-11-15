@@ -1,15 +1,14 @@
 <html>
   <head>
-    <link rel="stylesheet"  href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <meta http-equiv="refresh" content="1" >
 
-  <div id="peopleinchat">People in chat: {{ num_people }}</div>
-  <table>
+  <div style="float:right; font-size:10px;">People in chat: {{ num_people }}</div>
+  <table style="table-layout: fixed; width: 100%; max-width: 90vw;">
     {% for message_dic in chatlines %}
     <tr>
-      <th scope="row" name="msg" class="msg name" style="color: rgb({{ message_dic["color"] }});"><b>{{ message_dic["username"]  }}:</b></th>
-      <td name="msg" class="msg text" style="color: rgb({{ message_dic["color"] }});"><b>{{ message_dic["msg"] }}</b></td>
+      <td name="msg" class="msg" style="color:rgb{{ message_dic["color"] }}; word-wrap: break-word; overflow-wrap: break-word; max-width: 90vw;"><b>{{ message_dic["username"]  }}</b>: {{ message_dic["msg"] }}</td>
     </tr>
   {% endfor %}
   </table>
