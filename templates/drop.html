@@ -138,7 +138,7 @@ async function doPoll() {
             var displayMsg = await processMessage(obj.msg);
             var lockIcon = PGPManager.isPGPMessage(obj.msg) ? '🔒 ' : '';
             
-            $("#chatf").append('<tr>' + '<td name="msg" class="msg" style="color:rgb(' + color1 + ',' + color2 + ',' + color3 + ');"><b>' + lockIcon + obj.username + ': ' + displayMsg + '</b></td>');
+            $("#chatf").append(`<tr><td name="msg" class="msg" style="color:rgb(${color1},${color2},${color3});"><b>${lockIcon}${obj.username}: ${displayMsg}</b></td></tr>`);
             $("#numpeeps").html(obj.num_people);
           }
           setTimeout(doPoll,3000);
