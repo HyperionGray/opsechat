@@ -1,5 +1,0 @@
-# Capstanfile for OSv guest that runs guest_init.sh
-base: cloudius/osv
-cmdline: "/guest_init.sh"
-files:
-  guest_init.sh: /guest_init.sh

@@ -1,1 +1,0 @@
-../cloudflare-pfs/cloudflare-webworker/launch_planetary_pcpu.sh

@@ -1,1 +1,0 @@
-../cloudflare-pfs/cloudflare-webworker/deploy_genesis_worker.sh
