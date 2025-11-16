@@ -1,0 +1,15 @@
+name = "pfs-desc"
+main = "src/index.js"
+compatibility_date = "2025-10-06"
+workers_dev = true
+
+# If you prefer explicit account id in CI:
+# account_id = "YOUR_ACCOUNT_ID"
+
+[[r2_buckets]]
+binding = "DESC_BUCKET"
+bucket_name = "pfs-descriptors"
+
+[vars]
+# Optional origin backfill for descriptor misses
+STATIC_ORIGIN = ""

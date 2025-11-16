@@ -1,0 +1,1 @@
+../cloudflare-pfs/cloudflare-webworker/deploy.sh

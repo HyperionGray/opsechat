@@ -1,0 +1,7 @@
+name = "pfs-vcpu"
+main = "cloudflare-vcpu.js"
+compatibility_date = "2025-10-06"
+workers_dev = true
+
+[env.production]
+vars = { ENVIRONMENT = "production" }

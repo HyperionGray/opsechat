@@ -1,0 +1,1 @@
+../cloudflare-pfs/cloudflare-webworker/wake_all_edges.py

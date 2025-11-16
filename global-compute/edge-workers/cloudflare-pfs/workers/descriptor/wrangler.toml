@@ -1,0 +1,19 @@
+name = "pfs-desc"
+main = "src/index.js"
+compatibility_date = "2024-09-01"
+workers_dev = true
+
+# Bindings: R2 bucket for descriptors
+[[r2_buckets]]
+binding = "DESC_BUCKET"
+bucket_name = "pfs-descriptors"
+# preview_bucket_name = "pfs-descriptors-preview"
+
+[vars]
+# Optional static origin fallback (descriptor mirror)
+STATIC_ORIGIN = ""
+
+# Optional routes (custom domain)
+# routes = [
+#   { pattern = "desc.example.com/*", zone_id = "YOUR_ZONE_ID" }
+# ]

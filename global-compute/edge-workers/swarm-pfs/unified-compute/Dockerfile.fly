@@ -1,0 +1,34 @@
+# Fly.io Dockerfile for PacketFS Compute Dispatcher
+# Lightweight Python runtime with async support
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy dispatcher and dependencies
+COPY dispatcher.py .
+COPY browser-runtime.js .
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Health check
+HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+# Expose port
+EXPOSE 8080 9090
+
+# Set environment
+ENV PYTHONUNBUFFERED=1
+ENV LOG_LEVEL=INFO
+
+# Run dispatcher
+CMD ["python3", "dispatcher.py", "--host", "0.0.0.0", "--port", "8080"]

@@ -1,0 +1,1 @@
+../cloudflare-pfs/cloudflare-webworker/vm_join.sh
