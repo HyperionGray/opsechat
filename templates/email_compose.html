@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<title>Compose Email - OpSec</title>
+<link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: #000;
+    color: #0f0;
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    padding: 20px;
+  }
+
+  .header {
+    border-bottom: 2px solid #0f0;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+  }
+
+  h1 {
+    color: #0f0;
+    font-size: 24px;
+  }
+
+  .nav {
+    margin: 20px 0;
+  }
+
+  .nav a {
+    color: #0f0;
+    text-decoration: none;
+    margin-right: 20px;
+    padding: 5px 10px;
+    border: 1px solid #0f0;
+  }
+
+  .nav a:hover {
+    background-color: #0f0;
+    color: #000;
+  }
+
+  .form-container {
+    max-width: 800px;
+    margin: 20px 0;
+  }
+
+  .form-group {
+    margin-bottom: 15px;
+  }
+
+  label {
+    display: block;
+    color: #0f0;
+    margin-bottom: 5px;
+  }
+
+  input[type="text"],
+  input[type="email"],
+  textarea {
+    width: 100%;
+    background-color: #111;
+    color: #0f0;
+    border: 1px solid #0f0;
+    padding: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+  }
+
+  textarea {
+    min-height: 200px;
+    resize: vertical;
+  }
+
+  .raw-mode-textarea {
+    min-height: 400px;
+  }
+
+  button {
+    background-color: #000;
+    color: #0f0;
+    border: 1px solid #0f0;
+    padding: 10px 20px;
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    cursor: pointer;
+    margin-right: 10px;
+  }
+
+  button:hover {
+    background-color: #0f0;
+    color: #000;
+  }
+
+  .mode-toggle {
+    margin: 20px 0;
+    padding: 15px;
+    background-color: #111;
+    border: 1px solid #0f0;
+  }
+
+  .info {
+    background-color: #003;
+    border: 1px solid #0ff;
+    color: #0ff;
+    padding: 15px;
+    margin: 20px 0;
+  }
+
+  .warning {
+    background-color: #330;
+    border: 1px solid #f00;
+    color: #f00;
+    padding: 15px;
+    margin: 20px 0;
+  }
+
+  #raw-mode-form,
+  #standard-form {
+    display: none;
+  }
+
+  #standard-form.active,
+  #raw-mode-form.active {
+    display: block;
+  }
+</style>
+
+<body>
+  <div class="header">
+    <h1>✉️ Compose Email</h1>
+    <p>Create and send encrypted email</p>
+  </div>
+
+  <div class="nav">
+    <a href="/{{ path }}/email">Back to Inbox</a>
+    <a href="/{{ path }}">Back to Chat</a>
+  </div>
+
+  <div class="warning">
+    ⚠️ <strong>Security Research Tool:</strong> This email system is for security research and 
+    penetration testing purposes only. Use responsibly and ethically. Spoofing emails without 
+    permission is illegal in many jurisdictions.
+  </div>
+
+  <div class="mode-toggle">
+    <label>
+      <input type="radio" name="compose-mode" value="standard" checked onchange="toggleMode()"> 
+      Standard Compose
+    </label>
+    <label>
+      <input type="radio" name="compose-mode" value="raw" onchange="toggleMode()"> 
+      Raw Mode (Edit Headers)
+    </label>
+  </div>
+
+  <div class="form-container">
+    <!-- Standard Compose Form -->
+    <form id="standard-form" class="active" method="POST" action="/{{ path }}/email/compose">
+      <input type="hidden" name="raw_mode" value="false">
+      
+      <div class="form-group">
+        <label for="from">From:</label>
+        <input type="email" id="from" name="from" placeholder="your-email@opsecmail.onion" required>
+      </div>
+
+      <div class="form-group">
+        <label for="to">To:</label>
+        <input type="email" id="to" name="to" placeholder="recipient@example.com" required>
+      </div>
+
+      <div class="form-group">
+        <label for="subject">Subject:</label>
+        <input type="text" id="subject" name="subject" placeholder="Email subject">
+      </div>
+
+      <div class="form-group">
+        <label for="body">Message:</label>
+        <textarea id="body" name="body" placeholder="Email body content (supports PGP encrypted messages)"></textarea>
+      </div>
+
+      <div class="info">
+        💡 <strong>Tip:</strong> To send a PGP encrypted message, paste the entire 
+        -----BEGIN PGP MESSAGE----- block in the message field. PGP messages will bypass sanitization.
+      </div>
+
+      <button type="submit">Send Email</button>
+    </form>
+
+    <!-- Raw Mode Form -->
+    <form id="raw-mode-form" method="POST" action="/{{ path }}/email/compose">
+      <input type="hidden" name="raw_mode" value="true">
+      
+      <div class="form-group">
+        <label for="raw-email">Raw Email (Headers + Body):</label>
+        <textarea id="raw-email" name="raw_email" class="raw-mode-textarea" placeholder="From: sender@example.com
+To: recipient@example.com
+Subject: Test Email
+X-Custom-Header: Custom Value
+
+Email body goes here..."></textarea>
+      </div>
+
+      <div class="info">
+        💡 <strong>Raw Mode:</strong> Edit email headers and body directly. This allows full control 
+        over the email including custom headers for testing purposes. Separate headers from body with a blank line.
+      </div>
+
+      <button type="submit">Send Email</button>
+    </form>
+  </div>
+
+  <div class="info">
+    ℹ️ <strong>Features in Raw Mode:</strong>
+    <ul style="margin-left: 20px; margin-top: 10px;">
+      <li>Edit email headers directly (From, To, Subject, etc.)</li>
+      <li>Add custom headers for security testing</li>
+      <li>Test email spoofing scenarios (for authorized testing only)</li>
+      <li>Full control over email structure</li>
+      <li>Supports PGP encrypted message bodies</li>
+    </ul>
+  </div>
+
+  <script>
+    function toggleMode() {
+      const mode = document.querySelector('input[name="compose-mode"]:checked').value;
+      const standardForm = document.getElementById('standard-form');
+      const rawForm = document.getElementById('raw-mode-form');
+      
+      if (mode === 'raw') {
+        standardForm.classList.remove('active');
+        rawForm.classList.add('active');
+      } else {
+        rawForm.classList.remove('active');
+        standardForm.classList.add('active');
+      }
+    }
+  </script>
+</body>
+</html>

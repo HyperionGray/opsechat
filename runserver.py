@@ -16,6 +16,9 @@ log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 import random
 
+# Import email system
+from email_system import email_storage, burner_manager, EmailComposer, EmailValidator
+
 
 chatters = []
 global chatlines
@@ -263,6 +266,177 @@ def chat_messages_js(url_addition):
 
     return jsonify(chatlines)
     
+
+# Email System Routes
+@app.route('/<string:url_addition>/email', methods=["GET"])
+def email_inbox(url_addition):
+    """Main email inbox page"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        session["_id"] = id_generator()
+        session["color"] = get_random_color()
+    
+    # Initialize inbox for user
+    email_storage.create_user_inbox(session["_id"])
+    
+    # Get emails
+    emails = email_storage.get_emails(session["_id"])
+    
+    return render_template("email_inbox.html",
+                          hostname=app.config["hostname"],
+                          path=app.config["path"],
+                          emails=emails,
+                          script_enabled=False)
+
+
+@app.route('/<string:url_addition>/email/yesscript', methods=["GET"])
+def email_inbox_script(url_addition):
+    """Email inbox with JavaScript enabled"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        session["_id"] = id_generator()
+        session["color"] = get_random_color()
+    
+    email_storage.create_user_inbox(session["_id"])
+    emails = email_storage.get_emails(session["_id"])
+    
+    return render_template("email_inbox.html",
+                          hostname=app.config["hostname"],
+                          path=app.config["path"],
+                          emails=emails,
+                          script_enabled=True)
+
+
+@app.route('/<string:url_addition>/email/compose', methods=["GET", "POST"])
+def email_compose(url_addition):
+    """Compose and send email"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        return redirect(f"/{app.config['path']}/email", code=302)
+    
+    if request.method == "POST":
+        raw_mode = request.form.get("raw_mode") == "true"
+        
+        if raw_mode:
+            # Parse raw email
+            raw_content = request.form.get("raw_email", "")
+            email = EmailComposer.parse_raw_email(raw_content)
+        else:
+            # Standard compose
+            email = EmailComposer.create_email(
+                from_addr=request.form.get("from", ""),
+                to_addr=request.form.get("to", ""),
+                subject=request.form.get("subject", ""),
+                body=request.form.get("body", ""),
+                headers={}
+            )
+        
+        # For now, just add to our own inbox for testing
+        # In full implementation, this would send via SMTP
+        email_storage.add_email(session["_id"], email)
+        
+        return redirect(f"/{app.config['path']}/email", code=302)
+    
+    return render_template("email_compose.html",
+                          hostname=app.config["hostname"],
+                          path=app.config["path"],
+                          script_enabled=False)
+
+
+@app.route('/<string:url_addition>/email/view/<string:email_id>', methods=["GET"])
+def email_view(url_addition, email_id):
+    """View specific email"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        return redirect(f"/{app.config['path']}/email", code=302)
+    
+    email = email_storage.get_email(session["_id"], email_id)
+    if not email:
+        return ('Email not found', 404)
+    
+    return render_template("email_view.html",
+                          hostname=app.config["hostname"],
+                          path=app.config["path"],
+                          email=email,
+                          script_enabled=False)
+
+
+@app.route('/<string:url_addition>/email/edit/<string:email_id>', methods=["GET", "POST"])
+def email_edit(url_addition, email_id):
+    """Edit email in raw mode"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        return redirect(f"/{app.config['path']}/email", code=302)
+    
+    email = email_storage.get_email(session["_id"], email_id)
+    if not email:
+        return ('Email not found', 404)
+    
+    if request.method == "POST":
+        raw_content = request.form.get("raw_email", "")
+        updated_email = EmailComposer.parse_raw_email(raw_content)
+        email_storage.update_email(session["_id"], email_id, updated_email)
+        return redirect(f"/{app.config['path']}/email/view/{email_id}", code=302)
+    
+    raw_email = EmailComposer.format_raw_email(email)
+    
+    return render_template("email_edit.html",
+                          hostname=app.config["hostname"],
+                          path=app.config["path"],
+                          email=email,
+                          raw_email=raw_email,
+                          script_enabled=False)
+
+
+@app.route('/<string:url_addition>/email/delete/<string:email_id>', methods=["POST"])
+def email_delete(url_addition, email_id):
+    """Delete email"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        return ('Unauthorized', 401)
+    
+    email_storage.delete_email(session["_id"], email_id)
+    return redirect(f"/{app.config['path']}/email", code=302)
+
+
+@app.route('/<string:url_addition>/email/burner', methods=["GET", "POST"])
+def email_burner(url_addition):
+    """Generate burner email address"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        session["_id"] = id_generator()
+        session["color"] = get_random_color()
+    
+    if request.method == "POST":
+        burner_email = burner_manager.generate_burner_email(session["_id"])
+        email_storage.create_user_inbox(session["_id"])
+        
+        return render_template("email_burner.html",
+                              hostname=app.config["hostname"],
+                              path=app.config["path"],
+                              burner_email=burner_email,
+                              script_enabled=False)
+    
+    return render_template("email_burner.html",
+                          hostname=app.config["hostname"],
+                          path=app.config["path"],
+                          burner_email=None,
+                          script_enabled=False)
+
 
 def main():
 

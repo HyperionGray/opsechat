@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<title>OpSec Email Inbox</title>
+<link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+{% if script_enabled %}
+  <script src="{{ url_for('static', filename='jquery.js') }}"></script>
+  <script src="{{ url_for('static', filename='openpgp.min.js') }}"></script>
+{% endif %}
+</head>
+
+{% if script_enabled %}
+<noscript>  
+  <style>html{display:none;}</style>
+  <meta http-equiv="refresh" content="0.0;url={{ path }}/email">
+</noscript>
+{% endif %}
+
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: #000;
+    color: #0f0;
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    padding: 20px;
+  }
+
+  .header {
+    border-bottom: 2px solid #0f0;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+  }
+
+  h1 {
+    color: #0f0;
+    font-size: 24px;
+  }
+
+  .nav {
+    margin: 20px 0;
+  }
+
+  .nav a {
+    color: #0f0;
+    text-decoration: none;
+    margin-right: 20px;
+    padding: 5px 10px;
+    border: 1px solid #0f0;
+  }
+
+  .nav a:hover {
+    background-color: #0f0;
+    color: #000;
+  }
+
+  .email-list {
+    margin: 20px 0;
+  }
+
+  .email-item {
+    border: 1px solid #0f0;
+    padding: 10px;
+    margin: 10px 0;
+  }
+
+  .email-header {
+    font-weight: bold;
+    margin-bottom: 5px;
+  }
+
+  .email-from {
+    color: #0f0;
+  }
+
+  .email-subject {
+    color: #0ff;
+  }
+
+  .email-date {
+    color: #888;
+    font-size: 12px;
+  }
+
+  .email-actions {
+    margin-top: 10px;
+  }
+
+  .email-actions a,
+  .email-actions button {
+    color: #0f0;
+    background: #000;
+    border: 1px solid #0f0;
+    padding: 3px 8px;
+    text-decoration: none;
+    margin-right: 10px;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+  }
+
+  .email-actions a:hover,
+  .email-actions button:hover {
+    background-color: #0f0;
+    color: #000;
+  }
+
+  .no-emails {
+    color: #888;
+    font-style: italic;
+    padding: 20px;
+  }
+
+  .warning {
+    background-color: #330;
+    border: 1px solid #f00;
+    color: #f00;
+    padding: 15px;
+    margin: 20px 0;
+  }
+
+  .info {
+    background-color: #003;
+    border: 1px solid #0ff;
+    color: #0ff;
+    padding: 15px;
+    margin: 20px 0;
+  }
+
+  form {
+    display: inline;
+  }
+</style>
+
+<body>
+  <div class="header">
+    <h1>🔒 OpSec Email Inbox</h1>
+    <p>Encrypted, Anonymous Email via Tor</p>
+  </div>
+
+  <div class="warning">
+    ⚠️ <strong>Security Notice:</strong> This email system stores messages in memory only. 
+    Messages are encrypted with PGP for end-to-end security. Nothing touches disk unencrypted.
+    For research and security testing purposes only.
+  </div>
+
+  <div class="nav">
+    <a href="/{{ path }}">Back to Chat</a>
+    <a href="/{{ path }}/email/compose">Compose Email</a>
+    <a href="/{{ path }}/email/burner">Generate Burner Email</a>
+    {% if script_enabled %}
+    <a href="/{{ path }}/email">NoScript Version</a>
+    {% else %}
+    <a href="/{{ path }}/email/yesscript">JavaScript Version</a>
+    {% endif %}
+  </div>
+
+  <div class="email-list">
+    <h2>Inbox ({{ emails|length }} messages)</h2>
+    
+    {% if emails|length == 0 %}
+      <div class="no-emails">
+        No emails in your inbox. Try composing a new message or generating a burner email address.
+      </div>
+    {% else %}
+      {% for email in emails|reverse %}
+        <div class="email-item">
+          <div class="email-header">
+            <span class="email-from">From: {{ email.from }}</span>
+            <span class="email-date" style="float: right;">
+              {{ email.timestamp.strftime('%Y-%m-%d %H:%M:%S') if email.timestamp else 'Unknown' }}
+            </span>
+          </div>
+          <div class="email-subject">
+            Subject: {{ email.subject or '(no subject)' }}
+            {% if email.is_pgp %}
+              <span style="color: #ff0;">🔐 PGP Encrypted</span>
+            {% endif %}
+          </div>
+          <div class="email-actions">
+            <a href="/{{ path }}/email/view/{{ email.id }}">View</a>
+            <a href="/{{ path }}/email/edit/{{ email.id }}">Edit (Raw)</a>
+            <form method="POST" action="/{{ path }}/email/delete/{{ email.id }}">
+              <button type="submit" onclick="return confirm('Delete this email?')">Delete</button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+
+  <div class="info">
+    ℹ️ <strong>Features:</strong> 
+    <ul style="margin-left: 20px; margin-top: 10px;">
+      <li>Full control over emails - edit headers in raw mode</li>
+      <li>PGP encryption support for end-to-end security</li>
+      <li>Burner email addresses for anonymous communication</li>
+      <li>Custom SMTP settings (coming soon)</li>
+      <li>Email spoofing testing tools (for security research)</li>
+    </ul>
+  </div>
+
+  {% if script_enabled %}
+  <script>
+    // Auto-refresh inbox every 30 seconds
+    setTimeout(function() {
+      location.reload();
+    }, 30000);
+  </script>
+  {% else %}
+  <div style="margin-top: 20px;">
+    <a href="/{{ path }}/email" style="color: #0f0;">[Refresh Inbox]</a>
+  </div>
+  {% endif %}
+</body>
+</html>
