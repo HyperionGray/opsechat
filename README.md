@@ -123,7 +123,12 @@ Features
 - **Real SMTP/IMAP Integration** - Send and receive actual emails via configured email servers (see [EMAIL_SYSTEM.md](EMAIL_SYSTEM.md))
 - **Encrypted Email Inbox** - In-memory email storage with PGP support
 - **Raw Mode Editing** - Full control over email headers for security testing
-- **Burner Email Addresses** - Generate temporary anonymous email addresses
+- **Modern Burner Email System** - Guerrillamail-style rotating anonymous email addresses with:
+  - **Multi-Burner Management** - Keep multiple active burner emails simultaneously
+  - **Live Countdown Timers** - Real-time expiry tracking with JavaScript
+  - **Quick Rotation** - One-click generation and rotation to new addresses
+  - **Instant Copy** - Copy burner emails to clipboard with one click
+  - **Smart Stats Dashboard** - Track active burners and total time remaining
 - **Automated Domain Purchasing** - Porkbun API integration for cheap domain rotation (.xyz, .club, etc.)
 - **Budget Management** - Configurable monthly spending limits for domain purchases
 - **Spoofing Detection** - Test emails for spoofing attempts (unicode lookalikes, typosquatting, homographs)
