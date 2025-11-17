@@ -18,6 +18,7 @@ import random
 
 # Import email system
 from email_system import email_storage, burner_manager, EmailComposer, EmailValidator
+from email_security_tools import spoofing_tester, phishing_simulator
 
 
 chatters = []
@@ -435,6 +436,88 @@ def email_burner(url_addition):
                           hostname=app.config["hostname"],
                           path=app.config["path"],
                           burner_email=None,
+                          script_enabled=False)
+
+
+# Email Security Testing Routes
+@app.route('/<string:url_addition>/email/security/spoof-test', methods=["GET", "POST"])
+def email_spoof_test(url_addition):
+    """Test email spoofing detection"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        session["_id"] = id_generator()
+        session["color"] = get_random_color()
+    
+    results = None
+    variants = None
+    
+    if request.method == "POST":
+        test_type = request.form.get("test_type", "detect")
+        
+        if test_type == "detect":
+            # Test spoofing detection
+            test_email = request.form.get("test_email", "")
+            legitimate_domain = request.form.get("legitimate_domain", "")
+            
+            if test_email and legitimate_domain:
+                results = spoofing_tester.test_spoofing_detection(test_email, legitimate_domain)
+        
+        elif test_type == "generate":
+            # Generate spoofing variants
+            target_domain = request.form.get("target_domain", "")
+            
+            if target_domain:
+                variants = spoofing_tester.generate_spoof_variants(target_domain)
+    
+    return render_template("email_spoof_test.html",
+                          hostname=app.config["hostname"],
+                          path=app.config["path"],
+                          results=results,
+                          variants=variants,
+                          script_enabled=False)
+
+
+@app.route('/<string:url_addition>/email/security/phishing-sim', methods=["GET", "POST"])
+def email_phishing_sim(url_addition):
+    """Phishing simulation and training"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        return redirect(f"/{app.config['path']}/email", code=302)
+    
+    user_id = session["_id"]
+    action_result = None
+    
+    if request.method == "POST":
+        action = request.form.get("action")
+        
+        if action == "enable":
+            phishing_simulator.enable_persist_mode(user_id)
+            
+        elif action == "disable":
+            phishing_simulator.disable_persist_mode(user_id)
+            
+        elif action == "generate":
+            template = request.form.get("template", "generic")
+            phishing_email = phishing_simulator.create_phishing_email(user_id, template)
+            # Add to inbox
+            email_storage.add_email(user_id, phishing_email)
+            action_result = {
+                'type': 'generated',
+                'message': 'Phishing simulation email added to your inbox'
+            }
+    
+    # Get user stats
+    stats = phishing_simulator.get_user_stats(user_id)
+    
+    return render_template("email_phishing_sim.html",
+                          hostname=app.config["hostname"],
+                          path=app.config["path"],
+                          stats=stats,
+                          action_result=action_result,
                           script_enabled=False)
 
 
