@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Email Configuration - OpSechat</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: monospace;
+            background-color: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        h1, h2 {
+            color: #00ff00;
+            border-bottom: 1px solid #00ff00;
+            padding-bottom: 10px;
+        }
+        .nav {
+            margin-bottom: 20px;
+        }
+        .nav a {
+            color: #00ff00;
+            text-decoration: none;
+            margin-right: 15px;
+        }
+        .nav a:hover {
+            text-decoration: underline;
+        }
+        .message {
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid;
+        }
+        .message.success {
+            border-color: #00ff00;
+            background-color: #003300;
+        }
+        .message.error {
+            border-color: #ff0000;
+            background-color: #330000;
+            color: #ff0000;
+        }
+        .config-section {
+            background-color: #0d0d0d;
+            border: 1px solid #00ff00;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .config-form {
+            margin-top: 15px;
+        }
+        .form-group {
+            margin: 10px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #00ff00;
+        }
+        input[type="text"],
+        input[type="password"],
+        input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            background-color: #000;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            font-family: monospace;
+        }
+        input[type="checkbox"] {
+            margin-right: 5px;
+        }
+        button {
+            background-color: #003300;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-family: monospace;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #004400;
+        }
+        .status {
+            display: inline-block;
+            padding: 3px 8px;
+            margin-left: 10px;
+            border: 1px solid;
+        }
+        .status.configured {
+            border-color: #00ff00;
+            color: #00ff00;
+        }
+        .status.not-configured {
+            border-color: #ff0000;
+            color: #ff0000;
+        }
+        .info-box {
+            background-color: #001a00;
+            border: 1px solid #006600;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .budget-info {
+            margin: 10px 0;
+        }
+        .budget-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #000;
+            border: 1px solid #00ff00;
+            margin: 5px 0;
+        }
+        .budget-bar-fill {
+            height: 100%;
+            background-color: #00ff00;
+        }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <a href="/{{ path }}/email">← Back to Inbox</a>
+    </div>
+
+    <h1>📧 Email System Configuration</h1>
+
+    {% if message %}
+    <div class="message {{ message.type }}">
+        {{ message.text }}
+    </div>
+    {% endif %}
+
+    <!-- SMTP Configuration -->
+    <div class="config-section">
+        <h2>SMTP Configuration (Sending Emails)
+            <span class="status {% if config_status.smtp %}configured{% else %}not-configured{% endif %}">
+                {% if config_status.smtp %}✓ Configured{% else %}✗ Not Configured{% endif %}
+            </span>
+        </h2>
+        
+        <div class="info-box">
+            <strong>Info:</strong> Configure SMTP to send real emails. Use your email provider's SMTP settings (Gmail, ProtonMail, etc.)
+        </div>
+
+        <form method="POST" class="config-form">
+            <input type="hidden" name="action" value="configure_smtp">
+            
+            <div class="form-group">
+                <label>SMTP Server:</label>
+                <input type="text" name="smtp_server" placeholder="smtp.gmail.com" required>
+            </div>
+            
+            <div class="form-group">
+                <label>SMTP Port:</label>
+                <input type="number" name="smtp_port" value="587" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Username (Email Address):</label>
+                <input type="text" name="smtp_username" placeholder="your@email.com" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Password:</label>
+                <input type="password" name="smtp_password" required>
+            </div>
+            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="use_tls" value="true" checked>
+                    Use TLS (recommended)
+                </label>
+            </div>
+            
+            <button type="submit">Configure SMTP</button>
+        </form>
+    </div>
+
+    <!-- IMAP Configuration -->
+    <div class="config-section">
+        <h2>IMAP Configuration (Receiving Emails)
+            <span class="status {% if config_status.imap %}configured{% else %}not-configured{% endif %}">
+                {% if config_status.imap %}✓ Configured{% else %}✗ Not Configured{% endif %}
+            </span>
+        </h2>
+        
+        <div class="info-box">
+            <strong>Info:</strong> Configure IMAP to receive real emails. Use your email provider's IMAP settings.
+        </div>
+
+        <form method="POST" class="config-form">
+            <input type="hidden" name="action" value="configure_imap">
+            
+            <div class="form-group">
+                <label>IMAP Server:</label>
+                <input type="text" name="imap_server" placeholder="imap.gmail.com" required>
+            </div>
+            
+            <div class="form-group">
+                <label>IMAP Port:</label>
+                <input type="number" name="imap_port" value="993" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Username (Email Address):</label>
+                <input type="text" name="imap_username" placeholder="your@email.com" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Password:</label>
+                <input type="password" name="imap_password" required>
+            </div>
+            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="use_ssl" value="true" checked>
+                    Use SSL (recommended)
+                </label>
+            </div>
+            
+            <button type="submit">Configure IMAP</button>
+        </form>
+    </div>
+
+    <!-- Domain API Configuration -->
+    <div class="config-section">
+        <h2>Domain API (Porkbun) - Burner Email Domains</h2>
+        
+        <div class="info-box">
+            <strong>Info:</strong> Configure Porkbun API to automatically purchase cheap domains for burner email rotation.
+            <br><strong>Warning:</strong> This will actually purchase domains and charge your account!
+            <br>Get API keys from: <a href="https://porkbun.com/account/api" style="color: #00ff00;">https://porkbun.com/account/api</a>
+        </div>
+
+        {% if active_domain %}
+        <div class="budget-info">
+            <strong>Active Domain:</strong> {{ active_domain }}
+        </div>
+        {% endif %}
+
+        <div class="budget-info">
+            <strong>Budget Status:</strong>
+            <br>Monthly Budget: ${{ "%.2f"|format(budget_status.monthly_budget) }}
+            <br>Current Spending: ${{ "%.2f"|format(budget_status.current_spending) }}
+            <br>Remaining: ${{ "%.2f"|format(budget_status.remaining) }}
+            <br>Domains Owned: {{ budget_status.domains_owned }}
+            
+            <div class="budget-bar">
+                <div class="budget-bar-fill" style="width: {{ (budget_status.current_spending / budget_status.monthly_budget * 100)|round|int }}%"></div>
+            </div>
+        </div>
+
+        <form method="POST" class="config-form">
+            <input type="hidden" name="action" value="configure_domain_api">
+            
+            <div class="form-group">
+                <label>Porkbun API Key:</label>
+                <input type="text" name="api_key" placeholder="pk1_..." required>
+            </div>
+            
+            <div class="form-group">
+                <label>Porkbun API Secret:</label>
+                <input type="password" name="api_secret" placeholder="sk1_..." required>
+            </div>
+            
+            <div class="form-group">
+                <label>Monthly Budget (USD):</label>
+                <input type="number" name="monthly_budget" value="50" step="0.01" min="1" required>
+            </div>
+            
+            <button type="submit">Configure Domain API</button>
+        </form>
+
+        <form method="POST" action="/{{ path }}/email/domain/rotate" style="margin-top: 20px;">
+            <button type="submit">🔄 Rotate to New Domain</button>
+        </form>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="config-section">
+        <h2>Quick Actions</h2>
+        
+        {% if config_status.imap %}
+        <form method="POST" action="/{{ path }}/email/receive" style="display: inline-block; margin-right: 10px;">
+            <input type="hidden" name="limit" value="10">
+            <input type="hidden" name="unread_only" value="false">
+            <button type="submit">📥 Fetch Latest Emails</button>
+        </form>
+        
+        <form method="POST" action="/{{ path }}/email/receive" style="display: inline-block;">
+            <input type="hidden" name="limit" value="10">
+            <input type="hidden" name="unread_only" value="true">
+            <button type="submit">📩 Fetch Unread Only</button>
+        </form>
+        {% else %}
+        <p>Configure IMAP first to fetch emails.</p>
+        {% endif %}
+    </div>
+
+    <div class="info-box" style="margin-top: 30px;">
+        <strong>Security Note:</strong> Credentials are stored in memory only and are lost when the server restarts.
+        This is by design for privacy and security.
+    </div>
+</body>
+</html>

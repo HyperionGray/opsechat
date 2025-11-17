@@ -184,9 +184,20 @@ class BurnerEmailManager:
     
     def __init__(self):
         self.burner_addresses: Dict[str, Dict] = {}  # email -> {user_id, expires_at}
+        self.custom_domain: Optional[str] = None  # Custom domain from domain manager
     
-    def generate_burner_email(self, user_id: str, domain: str = "opsecmail.onion") -> str:
-        """Generate temporary email address"""
+    def set_custom_domain(self, domain: str) -> None:
+        """Set custom domain for burner emails"""
+        self.custom_domain = domain
+    
+    def generate_burner_email(self, user_id: str, domain: Optional[str] = None) -> str:
+        """
+        Generate temporary email address
+        Uses custom domain if available, otherwise uses default
+        """
+        if domain is None:
+            domain = self.custom_domain or "opsecmail.onion"
+        
         random_part = ''.join(random.choice(string.ascii_lowercase + string.digits) 
                              for _ in range(12))
         email = f"{random_part}@{domain}"

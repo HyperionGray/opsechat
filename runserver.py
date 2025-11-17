@@ -19,6 +19,8 @@ import random
 # Import email system
 from email_system import email_storage, burner_manager, EmailComposer, EmailValidator
 from email_security_tools import spoofing_tester, phishing_simulator
+from email_transport import transport_manager
+from domain_manager import domain_rotation_manager, PorkbunAPIClient
 
 
 chatters = []
@@ -323,6 +325,7 @@ def email_compose(url_addition):
     
     if request.method == "POST":
         raw_mode = request.form.get("raw_mode") == "true"
+        send_via_smtp = request.form.get("send_via_smtp") == "true"
         
         if raw_mode:
             # Parse raw email
@@ -338,15 +341,31 @@ def email_compose(url_addition):
                 headers={}
             )
         
-        # For now, just add to our own inbox for testing
-        # In full implementation, this would send via SMTP
+        # Send via SMTP if configured and requested
+        if send_via_smtp and transport_manager.is_configured()['smtp']:
+            success = transport_manager.send_email(
+                email['from'],
+                email['to'],
+                email['subject'],
+                email['body'],
+                email.get('headers', {})
+            )
+            if not success:
+                # Could add flash message here
+                pass
+        
+        # Always add to local inbox for reference
         email_storage.add_email(session["_id"], email)
         
         return redirect(f"/{app.config['path']}/email", code=302)
     
+    # Check if SMTP is configured for the form
+    smtp_configured = transport_manager.is_configured()['smtp']
+    
     return render_template("email_compose.html",
                           hostname=app.config["hostname"],
                           path=app.config["path"],
+                          smtp_configured=smtp_configured,
                           script_enabled=False)
 
 
@@ -519,6 +538,156 @@ def email_phishing_sim(url_addition):
                           stats=stats,
                           action_result=action_result,
                           script_enabled=False)
+
+
+# Email Configuration Routes
+@app.route('/<string:url_addition>/email/config', methods=["GET", "POST"])
+def email_config(url_addition):
+    """Configure SMTP/IMAP settings"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        return redirect(f"/{app.config['path']}/email", code=302)
+    
+    message = None
+    config_status = transport_manager.is_configured()
+    
+    if request.method == "POST":
+        action = request.form.get("action")
+        
+        if action == "configure_smtp":
+            smtp_server = request.form.get("smtp_server", "")
+            smtp_port = int(request.form.get("smtp_port", "587"))
+            smtp_username = request.form.get("smtp_username", "")
+            smtp_password = request.form.get("smtp_password", "")
+            use_tls = request.form.get("use_tls", "true") == "true"
+            
+            success = transport_manager.configure_smtp(
+                smtp_server, smtp_port, smtp_username, smtp_password, use_tls
+            )
+            
+            message = {
+                'type': 'success' if success else 'error',
+                'text': 'SMTP configured successfully' if success else 'SMTP configuration failed'
+            }
+        
+        elif action == "configure_imap":
+            imap_server = request.form.get("imap_server", "")
+            imap_port = int(request.form.get("imap_port", "993"))
+            imap_username = request.form.get("imap_username", "")
+            imap_password = request.form.get("imap_password", "")
+            use_ssl = request.form.get("use_ssl", "true") == "true"
+            
+            success = transport_manager.configure_imap(
+                imap_server, imap_port, imap_username, imap_password, use_ssl
+            )
+            
+            message = {
+                'type': 'success' if success else 'error',
+                'text': 'IMAP configured successfully' if success else 'IMAP configuration failed'
+            }
+        
+        elif action == "configure_domain_api":
+            api_key = request.form.get("api_key", "")
+            api_secret = request.form.get("api_secret", "")
+            monthly_budget = float(request.form.get("monthly_budget", "50.0"))
+            
+            if api_key and api_secret:
+                porkbun_client = PorkbunAPIClient(api_key, api_secret)
+                domain_rotation_manager.set_api_client(porkbun_client)
+                domain_rotation_manager.monthly_budget = monthly_budget
+                
+                message = {
+                    'type': 'success',
+                    'text': 'Domain API configured successfully'
+                }
+            else:
+                message = {
+                    'type': 'error',
+                    'text': 'API key and secret are required'
+                }
+        
+        config_status = transport_manager.is_configured()
+    
+    budget_status = domain_rotation_manager.get_budget_status()
+    active_domain = domain_rotation_manager.get_active_domain()
+    
+    return render_template("email_config.html",
+                          hostname=app.config["hostname"],
+                          path=app.config["path"],
+                          config_status=config_status,
+                          budget_status=budget_status,
+                          active_domain=active_domain,
+                          message=message,
+                          script_enabled=False)
+
+
+@app.route('/<string:url_addition>/email/send', methods=["POST"])
+def email_send_real(url_addition):
+    """Actually send email via SMTP"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        return ('Unauthorized', 401)
+    
+    # Get form data
+    from_addr = request.form.get("from", "")
+    to_addr = request.form.get("to", "")
+    subject = request.form.get("subject", "")
+    body = request.form.get("body", "")
+    
+    # Try to send via SMTP
+    success = transport_manager.send_email(from_addr, to_addr, subject, body)
+    
+    if success:
+        # Also add to local storage
+        email = EmailComposer.create_email(from_addr, to_addr, subject, body)
+        email_storage.add_email(session["_id"], email)
+    
+    return redirect(f"/{app.config['path']}/email", code=302)
+
+
+@app.route('/<string:url_addition>/email/receive', methods=["POST"])
+def email_receive_real(url_addition):
+    """Fetch emails from IMAP"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        return ('Unauthorized', 401)
+    
+    # Fetch from IMAP
+    limit = int(request.form.get("limit", "10"))
+    unread_only = request.form.get("unread_only", "false") == "true"
+    
+    emails = transport_manager.receive_emails(limit=limit, unread_only=unread_only)
+    
+    # Add to local storage
+    for email in emails:
+        email_storage.add_email(session["_id"], email)
+    
+    return redirect(f"/{app.config['path']}/email", code=302)
+
+
+@app.route('/<string:url_addition>/email/domain/rotate', methods=["POST"])
+def email_domain_rotate(url_addition):
+    """Rotate to a new domain"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        return ('Unauthorized', 401)
+    
+    # Attempt domain rotation
+    new_domain = domain_rotation_manager.rotate_domain()
+    
+    if new_domain:
+        # Update burner manager to use new domain
+        burner_manager.set_custom_domain(new_domain)
+    
+    return redirect(f"/{app.config['path']}/email/config", code=302)
 
 
 def main():

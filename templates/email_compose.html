@@ -187,9 +187,21 @@
         <textarea id="body" name="body" placeholder="Email body content (supports PGP encrypted messages)"></textarea>
       </div>
 
+      {% if smtp_configured %}
+      <div class="form-group">
+        <label>
+          <input type="checkbox" name="send_via_smtp" value="true" checked>
+          Send via SMTP (real email)
+        </label>
+      </div>
+      {% endif %}
+
       <div class="info">
         💡 <strong>Tip:</strong> To send a PGP encrypted message, paste the entire 
         -----BEGIN PGP MESSAGE----- block in the message field. PGP messages will bypass sanitization.
+        {% if not smtp_configured %}
+        <br>⚙️ Configure SMTP in <a href="/{{ path }}/email/config" style="color: #0ff;">Email Configuration</a> to send real emails.
+        {% endif %}
       </div>
 
       <button type="submit">Send Email</button>
@@ -209,9 +221,21 @@ X-Custom-Header: Custom Value
 Email body goes here..."></textarea>
       </div>
 
+      {% if smtp_configured %}
+      <div class="form-group">
+        <label>
+          <input type="checkbox" name="send_via_smtp" value="true" checked>
+          Send via SMTP (real email)
+        </label>
+      </div>
+      {% endif %}
+
       <div class="info">
         💡 <strong>Raw Mode:</strong> Edit email headers and body directly. This allows full control 
         over the email including custom headers for testing purposes. Separate headers from body with a blank line.
+        {% if not smtp_configured %}
+        <br>⚙️ Configure SMTP in <a href="/{{ path }}/email/config" style="color: #0ff;">Email Configuration</a> to send real emails.
+        {% endif %}
       </div>
 
       <button type="submit">Send Email</button>
