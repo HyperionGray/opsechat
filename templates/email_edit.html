@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<title>Edit Email - OpSec</title>
+<link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: #000;
+    color: #0f0;
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    padding: 20px;
+  }
+
+  .header {
+    border-bottom: 2px solid #0f0;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+  }
+
+  h1 {
+    color: #0f0;
+    font-size: 24px;
+  }
+
+  .nav {
+    margin: 20px 0;
+  }
+
+  .nav a {
+    color: #0f0;
+    text-decoration: none;
+    margin-right: 20px;
+    padding: 5px 10px;
+    border: 1px solid #0f0;
+  }
+
+  .nav a:hover {
+    background-color: #0f0;
+    color: #000;
+  }
+
+  .form-container {
+    max-width: 900px;
+    margin: 20px 0;
+  }
+
+  .form-group {
+    margin-bottom: 15px;
+  }
+
+  label {
+    display: block;
+    color: #0f0;
+    margin-bottom: 5px;
+    font-weight: bold;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 500px;
+    background-color: #111;
+    color: #0f0;
+    border: 1px solid #0f0;
+    padding: 10px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    resize: vertical;
+  }
+
+  button {
+    background-color: #000;
+    color: #0f0;
+    border: 1px solid #0f0;
+    padding: 10px 20px;
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    cursor: pointer;
+    margin-right: 10px;
+  }
+
+  button:hover {
+    background-color: #0f0;
+    color: #000;
+  }
+
+  .warning {
+    background-color: #330;
+    border: 1px solid #f00;
+    color: #f00;
+    padding: 15px;
+    margin: 20px 0;
+  }
+
+  .info {
+    background-color: #003;
+    border: 1px solid #0ff;
+    color: #0ff;
+    padding: 15px;
+    margin: 20px 0;
+  }
+</style>
+
+<body>
+  <div class="header">
+    <h1>🔧 Edit Email (Raw Mode)</h1>
+    <p>Full control over email headers and body</p>
+  </div>
+
+  <div class="nav">
+    <a href="/{{ path }}/email/view/{{ email.id }}">Cancel</a>
+    <a href="/{{ path }}/email">Back to Inbox</a>
+  </div>
+
+  <div class="warning">
+    ⚠️ <strong>Raw Mode Editing:</strong> You have full control over all email headers and body content.
+    This is a powerful feature for security research and testing. Ensure you understand email standards
+    before modifying headers. Improper formatting may cause issues.
+  </div>
+
+  <div class="info">
+    ℹ️ <strong>Format:</strong> Separate headers from body with a blank line. Each header should be on 
+    its own line in the format "Header-Name: Value". Common headers include From, To, Subject, CC, BCC, 
+    Reply-To, and custom X- headers.
+  </div>
+
+  <div class="form-container">
+    <form method="POST" action="/{{ path }}/email/edit/{{ email.id }}">
+      <div class="form-group">
+        <label for="raw-email">Raw Email Content:</label>
+        <textarea id="raw-email" name="raw_email">{{ raw_email }}</textarea>
+      </div>
+
+      <button type="submit">Save Changes</button>
+      <button type="button" onclick="window.location.href='/{{ path }}/email/view/{{ email.id }}'">Cancel</button>
+    </form>
+  </div>
+
+  <div class="info">
+    💡 <strong>Raw Mode Features:</strong>
+    <ul style="margin-left: 20px; margin-top: 10px;">
+      <li>Edit From, To, Subject headers directly</li>
+      <li>Add custom headers (X-Custom-Header: value)</li>
+      <li>Modify email body content</li>
+      <li>Test email spoofing scenarios (authorized testing only)</li>
+      <li>Full control for security research purposes</li>
+      <li>PGP encrypted messages are preserved</li>
+    </ul>
+  </div>
+</body>
+</html>

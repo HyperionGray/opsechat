@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<title>Email Spoofing Test - OpSec</title>
+<link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: #000;
+    color: #0f0;
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    padding: 20px;
+  }
+
+  .header {
+    border-bottom: 2px solid #0f0;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+  }
+
+  h1 {
+    color: #0f0;
+    font-size: 24px;
+  }
+
+  h2 {
+    color: #0ff;
+    font-size: 20px;
+    margin: 20px 0 10px 0;
+  }
+
+  .nav {
+    margin: 20px 0;
+  }
+
+  .nav a {
+    color: #0f0;
+    text-decoration: none;
+    margin-right: 20px;
+    padding: 5px 10px;
+    border: 1px solid #0f0;
+  }
+
+  .nav a:hover {
+    background-color: #0f0;
+    color: #000;
+  }
+
+  .warning {
+    background-color: #330;
+    border: 1px solid #f00;
+    color: #f00;
+    padding: 15px;
+    margin: 20px 0;
+  }
+
+  .info {
+    background-color: #003;
+    border: 1px solid #0ff;
+    color: #0ff;
+    padding: 15px;
+    margin: 20px 0;
+  }
+
+  .section {
+    margin: 30px 0;
+    padding: 20px;
+    border: 1px solid #0f0;
+  }
+
+  .form-group {
+    margin-bottom: 15px;
+  }
+
+  label {
+    display: block;
+    color: #0f0;
+    margin-bottom: 5px;
+    font-weight: bold;
+  }
+
+  input[type="text"],
+  input[type="email"] {
+    width: 100%;
+    max-width: 600px;
+    background-color: #111;
+    color: #0f0;
+    border: 1px solid #0f0;
+    padding: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+  }
+
+  button {
+    background-color: #000;
+    color: #0f0;
+    border: 1px solid #0f0;
+    padding: 10px 20px;
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    cursor: pointer;
+    margin: 10px 10px 10px 0;
+  }
+
+  button:hover {
+    background-color: #0f0;
+    color: #000;
+  }
+
+  .results {
+    margin: 20px 0;
+    padding: 15px;
+    background-color: #111;
+    border: 2px solid #0ff;
+  }
+
+  .result-item {
+    margin: 10px 0;
+    padding: 10px;
+    border-left: 3px solid #0f0;
+    padding-left: 15px;
+  }
+
+  .risk-high {
+    border-left-color: #f00;
+    color: #f00;
+  }
+
+  .risk-medium {
+    border-left-color: #ff0;
+    color: #ff0;
+  }
+
+  .risk-low {
+    border-left-color: #0f0;
+    color: #0f0;
+  }
+
+  .variant-item {
+    margin: 15px 0;
+    padding: 15px;
+    background-color: #111;
+    border: 1px solid #0f0;
+  }
+
+  .variant-header {
+    font-weight: bold;
+    color: #0ff;
+    margin-bottom: 10px;
+  }
+
+  .variant-details {
+    margin: 5px 0;
+    font-size: 14px;
+  }
+
+  .warning-list {
+    margin: 10px 0 10px 20px;
+  }
+
+  .warning-list li {
+    margin: 5px 0;
+    color: #ff0;
+  }
+
+  .tabs {
+    margin: 20px 0;
+  }
+
+  .tab-button {
+    background-color: #111;
+    color: #0f0;
+    border: 1px solid #0f0;
+    padding: 10px 20px;
+    cursor: pointer;
+  }
+
+  .tab-button.active {
+    background-color: #0f0;
+    color: #000;
+  }
+
+  .tab-content {
+    display: none;
+  }
+
+  .tab-content.active {
+    display: block;
+  }
+</style>
+
+<body>
+  <div class="header">
+    <h1>🔍 Email Spoofing Test Tool</h1>
+    <p>Test and detect email spoofing for security research</p>
+  </div>
+
+  <div class="nav">
+    <a href="/{{ path }}/email">Back to Inbox</a>
+    <a href="/{{ path }}/email/security/phishing-sim">Phishing Simulation</a>
+    <a href="/{{ path }}">Back to Chat</a>
+  </div>
+
+  <div class="warning">
+    ⚠️ <strong>FOR AUTHORIZED TESTING ONLY:</strong> This tool is designed for security research, 
+    penetration testing, and awareness training. Email spoofing without authorization is illegal. 
+    Use only on systems you own or have explicit permission to test.
+  </div>
+
+  <div class="tabs">
+    <button class="tab-button active" onclick="showTab('detect')">Spoofing Detection</button>
+    <button class="tab-button" onclick="showTab('generate')">Generate Variants</button>
+  </div>
+
+  <!-- Spoofing Detection Tab -->
+  <div id="detect-tab" class="tab-content active">
+    <div class="section">
+      <h2>Test Spoofing Detection</h2>
+      <p style="margin-bottom: 15px;">
+        Test if an email address could be spoofing a legitimate domain. 
+        This helps identify potential phishing attempts.
+      </p>
+
+      <form method="POST" action="/{{ path }}/email/security/spoof-test">
+        <input type="hidden" name="test_type" value="detect">
+        
+        <div class="form-group">
+          <label for="test_email">Email Address to Test:</label>
+          <input type="email" id="test_email" name="test_email" 
+                 placeholder="suspicious@exаmple.com" required>
+        </div>
+
+        <div class="form-group">
+          <label for="legitimate_domain">Legitimate Domain:</label>
+          <input type="text" id="legitimate_domain" name="legitimate_domain" 
+                 placeholder="example.com" required>
+        </div>
+
+        <button type="submit">Test for Spoofing</button>
+      </form>
+
+      {% if results %}
+      <div class="results">
+        <h2>Detection Results</h2>
+        <div class="result-item">
+          <strong>Email:</strong> {{ results.email }}<br>
+          <strong>Domain:</strong> {{ results.domain }}<br>
+          <strong>Legitimate Domain:</strong> {{ results.legitimate_domain }}<br>
+          <strong>Risk Score:</strong> {{ results.risk_score }}/10<br>
+          <strong>Suspicious:</strong> {{ 'Yes ⚠️' if results.is_suspicious else 'No ✓' }}
+        </div>
+
+        {% if results.warnings %}
+        <div class="result-item risk-high">
+          <strong>Warnings Detected:</strong>
+          <ul class="warning-list">
+            {% for warning in results.warnings %}
+              <li>{{ warning }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <div class="info">
+        💡 <strong>Detection Methods:</strong>
+        <ul style="margin-left: 20px; margin-top: 10px;">
+          <li><strong>Exact Match:</strong> Checks if domain matches exactly (could be legitimate or spoofed)</li>
+          <li><strong>Subdomain Check:</strong> Detects subdomain spoofing attempts</li>
+          <li><strong>Typosquatting:</strong> Identifies domains with similar spelling (Levenshtein distance)</li>
+          <li><strong>Unicode Lookalikes:</strong> Detects Cyrillic and other lookalike characters</li>
+          <li><strong>Homograph Attack:</strong> Identifies visually similar but different characters</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generate Variants Tab -->
+  <div id="generate-tab" class="tab-content">
+    <div class="section">
+      <h2>Generate Spoofing Variants</h2>
+      <p style="margin-bottom: 15px;">
+        Generate various spoofing variants of a domain to understand attack vectors.
+        Useful for defensive security and awareness training.
+      </p>
+
+      <form method="POST" action="/{{ path }}/email/security/spoof-test">
+        <input type="hidden" name="test_type" value="generate">
+        
+        <div class="form-group">
+          <label for="target_domain">Target Domain:</label>
+          <input type="text" id="target_domain" name="target_domain" 
+                 placeholder="example.com" required>
+        </div>
+
+        <button type="submit">Generate Variants</button>
+      </form>
+
+      {% if variants %}
+      <div class="results">
+        <h2>Spoofing Variants Generated</h2>
+        <p style="margin-bottom: 15px;">
+          These are examples of how attackers might spoof the target domain. 
+          Use for testing email filters and training users.
+        </p>
+
+        {% for variant in variants %}
+        <div class="variant-item">
+          <div class="variant-header">
+            {{ variant.type|upper }} - Risk: 
+            <span class="risk-{{ variant.risk_level }}">{{ variant.risk_level|upper }}</span>
+          </div>
+          <div class="variant-details">
+            <strong>Domain:</strong> {{ variant.domain }}<br>
+            <strong>Example Email:</strong> {{ variant.email }}<br>
+            <strong>Description:</strong> {{ variant.description }}<br>
+            <strong>Technique:</strong> {{ variant.technique }}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="info">
+        💡 <strong>Generated Variant Types:</strong>
+        <ul style="margin-left: 20px; margin-top: 10px;">
+          <li><strong>Direct:</strong> Exact domain spoofing (tests email authentication)</li>
+          <li><strong>Subdomain:</strong> Creates subdomain to appear legitimate</li>
+          <li><strong>Typo:</strong> Typosquatting with character swaps</li>
+          <li><strong>Unicode:</strong> Uses Cyrillic and other lookalike characters</li>
+          <li><strong>Homograph:</strong> Visual lookalike character substitution</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="warning">
+    ⚠️ <strong>Important Notes:</strong>
+    <ul style="margin-left: 20px; margin-top: 10px;">
+      <li>This tool is for defensive security research and training purposes</li>
+      <li>Do not use generated variants to send actual spoofed emails without authorization</li>
+      <li>Always obtain written permission before testing email security</li>
+      <li>Use these techniques only to improve security awareness and defenses</li>
+      <li>Report discovered vulnerabilities responsibly</li>
+    </ul>
+  </div>
+
+  <script>
+    function showTab(tabName) {
+      // Hide all tabs
+      document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      
+      // Show selected tab
+      document.getElementById(tabName + '-tab').classList.add('active');
+      event.target.classList.add('active');
+    }
+  </script>
+</body>
+</html>

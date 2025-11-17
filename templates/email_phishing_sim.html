@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<title>Phishing Simulation - OpSec</title>
+<link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: #000;
+    color: #0f0;
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    padding: 20px;
+  }
+
+  .header {
+    border-bottom: 2px solid #0f0;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+  }
+
+  h1 {
+    color: #0f0;
+    font-size: 24px;
+  }
+
+  h2 {
+    color: #0ff;
+    font-size: 20px;
+    margin: 20px 0 10px 0;
+  }
+
+  .nav {
+    margin: 20px 0;
+  }
+
+  .nav a {
+    color: #0f0;
+    text-decoration: none;
+    margin-right: 20px;
+    padding: 5px 10px;
+    border: 1px solid #0f0;
+  }
+
+  .nav a:hover {
+    background-color: #0f0;
+    color: #000;
+  }
+
+  .warning {
+    background-color: #330;
+    border: 1px solid #f00;
+    color: #f00;
+    padding: 15px;
+    margin: 20px 0;
+  }
+
+  .info {
+    background-color: #003;
+    border: 1px solid #0ff;
+    color: #0ff;
+    padding: 15px;
+    margin: 20px 0;
+  }
+
+  .success {
+    background-color: #030;
+    border: 1px solid #0f0;
+    color: #0f0;
+    padding: 15px;
+    margin: 20px 0;
+  }
+
+  .section {
+    margin: 30px 0;
+    padding: 20px;
+    border: 1px solid #0f0;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin: 20px 0;
+  }
+
+  .stat-box {
+    background-color: #111;
+    border: 1px solid #0f0;
+    padding: 15px;
+    text-align: center;
+  }
+
+  .stat-value {
+    font-size: 32px;
+    color: #0ff;
+    font-weight: bold;
+    margin: 10px 0;
+  }
+
+  .stat-label {
+    font-size: 14px;
+    color: #0f0;
+  }
+
+  button {
+    background-color: #000;
+    color: #0f0;
+    border: 1px solid #0f0;
+    padding: 10px 20px;
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    cursor: pointer;
+    margin: 10px 10px 10px 0;
+  }
+
+  button:hover {
+    background-color: #0f0;
+    color: #000;
+  }
+
+  .button-danger {
+    color: #f00;
+    border-color: #f00;
+  }
+
+  .button-danger:hover {
+    background-color: #f00;
+    color: #000;
+  }
+
+  .level-badge {
+    display: inline-block;
+    background-color: #111;
+    color: #ff0;
+    border: 2px solid #ff0;
+    padding: 5px 15px;
+    font-size: 18px;
+    font-weight: bold;
+  }
+
+  .achievement-list {
+    margin: 15px 0;
+  }
+
+  .achievement-item {
+    display: inline-block;
+    background-color: #111;
+    border: 1px solid #0ff;
+    color: #0ff;
+    padding: 5px 10px;
+    margin: 5px;
+    font-size: 14px;
+  }
+
+  .template-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+    margin: 20px 0;
+  }
+
+  .template-card {
+    background-color: #111;
+    border: 1px solid #0f0;
+    padding: 15px;
+  }
+
+  .template-card h3 {
+    color: #0ff;
+    margin-bottom: 10px;
+  }
+
+  .template-card p {
+    font-size: 14px;
+    margin: 5px 0;
+  }
+
+  .form-group {
+    margin: 15px 0;
+  }
+
+  select {
+    background-color: #111;
+    color: #0f0;
+    border: 1px solid #0f0;
+    padding: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+  }
+</style>
+
+<body>
+  <div class="header">
+    <h1>🎮 Phishing Simulation & Training</h1>
+    <p>Gamified phishing awareness training</p>
+  </div>
+
+  <div class="nav">
+    <a href="/{{ path }}/email">Back to Inbox</a>
+    <a href="/{{ path }}/email/security/spoof-test">Spoofing Test</a>
+    <a href="/{{ path }}">Back to Chat</a>
+  </div>
+
+  <div class="info">
+    ℹ️ <strong>What is this?</strong><br>
+    Phishing simulation helps you learn to identify phishing emails in a safe environment. 
+    The system sends fake phishing emails to your inbox and tracks how well you detect them. 
+    Get points for catching phishing attempts, lose points for falling for them!
+  </div>
+
+  {% if action_result %}
+  <div class="success">
+    ✅ {{ action_result.message }}
+  </div>
+  {% endif %}
+
+  <!-- User Stats Section -->
+  <div class="section">
+    <h2>Your Stats</h2>
+    
+    <div style="margin: 20px 0;">
+      <span class="level-badge">Level {{ stats.level }}</span>
+      <span style="margin-left: 20px; color: #0ff; font-size: 20px;">
+        Score: {{ stats.score }}
+      </span>
+    </div>
+
+    {% if stats.simulations and stats.simulations.enabled %}
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="stat-label">Emails Sent</div>
+        <div class="stat-value">{{ stats.simulations.emails_sent }}</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Detected</div>
+        <div class="stat-value" style="color: #0f0;">{{ stats.simulations.detected }}</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Missed</div>
+        <div class="stat-value" style="color: #f00;">{{ stats.simulations.missed }}</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Detection Rate</div>
+        <div class="stat-value">
+          {% if stats.simulations.emails_sent > 0 %}
+            {{ ((stats.simulations.detected / stats.simulations.emails_sent) * 100) | int }}%
+          {% else %}
+            N/A
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <p style="color: #888; margin: 20px 0;">
+      No simulation data yet. Generate test emails or enable persist mode to start training.
+    </p>
+    {% endif %}
+
+    {% if stats.achievements %}
+    <div class="achievement-list">
+      <strong style="color: #ff0;">🏆 Achievements:</strong><br>
+      {% for achievement in stats.achievements %}
+        <span class="achievement-item">
+          {% if achievement == 'first_detection' %}
+            🎯 First Detection
+          {% elif achievement == 'phishing_expert' %}
+            🛡️ Phishing Expert
+          {% elif achievement == 'security_master' %}
+            👑 Security Master
+          {% else %}
+            ⭐ {{ achievement }}
+          {% endif %}
+        </span>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Persist Mode Section -->
+  <div class="section">
+    <h2>Persist Mode</h2>
+    <p style="margin-bottom: 15px;">
+      Enable persist mode to receive random phishing simulations in your inbox. 
+      You'll get the "YOU JUST GOT OWNED" warning if you open a simulated phishing email!
+    </p>
+
+    {% if stats.simulations and stats.simulations.enabled %}
+    <div class="success">
+      ✅ <strong>Persist Mode Active</strong><br>
+      You're receiving phishing simulation emails. Stay alert!
+    </div>
+    <form method="POST" action="/{{ path }}/email/security/phishing-sim">
+      <input type="hidden" name="action" value="disable">
+      <button type="submit" class="button-danger">Disable Persist Mode</button>
+    </form>
+    {% else %}
+    <form method="POST" action="/{{ path }}/email/security/phishing-sim">
+      <input type="hidden" name="action" value="enable">
+      <button type="submit">Enable Persist Mode</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <!-- Generate Test Email Section -->
+  <div class="section">
+    <h2>Generate Test Email</h2>
+    <p style="margin-bottom: 15px;">
+      Manually generate a phishing simulation email to test yourself. 
+      Choose a template and it will be added to your inbox.
+    </p>
+
+    <form method="POST" action="/{{ path }}/email/security/phishing-sim">
+      <input type="hidden" name="action" value="generate">
+      
+      <div class="form-group">
+        <label for="template" style="color: #0f0; display: block; margin-bottom: 5px;">
+          Select Template:
+        </label>
+        <select name="template" id="template">
+          <option value="generic">Generic Phishing</option>
+          <option value="ceo_fraud">CEO Fraud</option>
+          <option value="tech_support">Tech Support Scam</option>
+        </select>
+      </div>
+
+      <button type="submit">Generate Test Email</button>
+    </form>
+
+    <div class="template-grid">
+      <div class="template-card">
+        <h3>Generic Phishing</h3>
+        <p><strong>Indicators:</strong> Unicode lookalike, urgency, suspicious link</p>
+        <p>Tests basic phishing detection skills</p>
+      </div>
+      <div class="template-card">
+        <h3>CEO Fraud</h3>
+        <p><strong>Indicators:</strong> Authority impersonation, urgency, unusual request</p>
+        <p>Tests social engineering awareness</p>
+      </div>
+      <div class="template-card">
+        <h3>Tech Support Scam</h3>
+        <p><strong>Indicators:</strong> Typosquatting, urgency, phone scam</p>
+        <p>Tests domain verification skills</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="info">
+    💡 <strong>How to Use:</strong>
+    <ul style="margin-left: 20px; margin-top: 10px;">
+      <li><strong>Generate Test Email:</strong> Creates a phishing simulation in your inbox</li>
+      <li><strong>Review the Email:</strong> Look for phishing indicators (check sender, links, urgency)</li>
+      <li><strong>Take Action:</strong> Delete or report suspicious emails to gain points</li>
+      <li><strong>Learn:</strong> Each template teaches different phishing techniques</li>
+      <li><strong>Track Progress:</strong> Watch your score and detection rate improve</li>
+    </ul>
+  </div>
+
+  <div class="warning">
+    ⚠️ <strong>Training Tips:</strong>
+    <ul style="margin-left: 20px; margin-top: 10px;">
+      <li>Look for unicode lookalike characters in sender domain (е vs e)</li>
+      <li>Check for urgent language designed to bypass critical thinking</li>
+      <li>Verify sender domain matches the claimed organization</li>
+      <li>Hover over links (if JavaScript enabled) before clicking</li>
+      <li>Be suspicious of unexpected requests, especially for money or credentials</li>
+      <li>Look for spelling/grammar errors in professional emails</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>Coming Soon</h2>
+    <ul style="margin-left: 20px; color: #888;">
+      <li>Automated OSINT on phishing emails</li>
+      <li>Geo-location tracking for attackers</li>
+      <li>More sophisticated phishing templates</li>
+      <li>Team challenges and leaderboards</li>
+      <li>Custom template creation</li>
+      <li>Detailed phishing technique documentation</li>
+    </ul>
+  </div>
+</body>
+</html>

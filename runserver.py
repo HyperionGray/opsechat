@@ -16,6 +16,10 @@ log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 import random
 
+# Import email system
+from email_system import email_storage, burner_manager, EmailComposer, EmailValidator
+from email_security_tools import spoofing_tester, phishing_simulator
+
 
 chatters = []
 global chatlines
@@ -263,6 +267,259 @@ def chat_messages_js(url_addition):
 
     return jsonify(chatlines)
     
+
+# Email System Routes
+@app.route('/<string:url_addition>/email', methods=["GET"])
+def email_inbox(url_addition):
+    """Main email inbox page"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        session["_id"] = id_generator()
+        session["color"] = get_random_color()
+    
+    # Initialize inbox for user
+    email_storage.create_user_inbox(session["_id"])
+    
+    # Get emails
+    emails = email_storage.get_emails(session["_id"])
+    
+    return render_template("email_inbox.html",
+                          hostname=app.config["hostname"],
+                          path=app.config["path"],
+                          emails=emails,
+                          script_enabled=False)
+
+
+@app.route('/<string:url_addition>/email/yesscript', methods=["GET"])
+def email_inbox_script(url_addition):
+    """Email inbox with JavaScript enabled"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        session["_id"] = id_generator()
+        session["color"] = get_random_color()
+    
+    email_storage.create_user_inbox(session["_id"])
+    emails = email_storage.get_emails(session["_id"])
+    
+    return render_template("email_inbox.html",
+                          hostname=app.config["hostname"],
+                          path=app.config["path"],
+                          emails=emails,
+                          script_enabled=True)
+
+
+@app.route('/<string:url_addition>/email/compose', methods=["GET", "POST"])
+def email_compose(url_addition):
+    """Compose and send email"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        return redirect(f"/{app.config['path']}/email", code=302)
+    
+    if request.method == "POST":
+        raw_mode = request.form.get("raw_mode") == "true"
+        
+        if raw_mode:
+            # Parse raw email
+            raw_content = request.form.get("raw_email", "")
+            email = EmailComposer.parse_raw_email(raw_content)
+        else:
+            # Standard compose
+            email = EmailComposer.create_email(
+                from_addr=request.form.get("from", ""),
+                to_addr=request.form.get("to", ""),
+                subject=request.form.get("subject", ""),
+                body=request.form.get("body", ""),
+                headers={}
+            )
+        
+        # For now, just add to our own inbox for testing
+        # In full implementation, this would send via SMTP
+        email_storage.add_email(session["_id"], email)
+        
+        return redirect(f"/{app.config['path']}/email", code=302)
+    
+    return render_template("email_compose.html",
+                          hostname=app.config["hostname"],
+                          path=app.config["path"],
+                          script_enabled=False)
+
+
+@app.route('/<string:url_addition>/email/view/<string:email_id>', methods=["GET"])
+def email_view(url_addition, email_id):
+    """View specific email"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        return redirect(f"/{app.config['path']}/email", code=302)
+    
+    email = email_storage.get_email(session["_id"], email_id)
+    if not email:
+        return ('Email not found', 404)
+    
+    return render_template("email_view.html",
+                          hostname=app.config["hostname"],
+                          path=app.config["path"],
+                          email=email,
+                          script_enabled=False)
+
+
+@app.route('/<string:url_addition>/email/edit/<string:email_id>', methods=["GET", "POST"])
+def email_edit(url_addition, email_id):
+    """Edit email in raw mode"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        return redirect(f"/{app.config['path']}/email", code=302)
+    
+    email = email_storage.get_email(session["_id"], email_id)
+    if not email:
+        return ('Email not found', 404)
+    
+    if request.method == "POST":
+        raw_content = request.form.get("raw_email", "")
+        updated_email = EmailComposer.parse_raw_email(raw_content)
+        email_storage.update_email(session["_id"], email_id, updated_email)
+        return redirect(f"/{app.config['path']}/email/view/{email_id}", code=302)
+    
+    raw_email = EmailComposer.format_raw_email(email)
+    
+    return render_template("email_edit.html",
+                          hostname=app.config["hostname"],
+                          path=app.config["path"],
+                          email=email,
+                          raw_email=raw_email,
+                          script_enabled=False)
+
+
+@app.route('/<string:url_addition>/email/delete/<string:email_id>', methods=["POST"])
+def email_delete(url_addition, email_id):
+    """Delete email"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        return ('Unauthorized', 401)
+    
+    email_storage.delete_email(session["_id"], email_id)
+    return redirect(f"/{app.config['path']}/email", code=302)
+
+
+@app.route('/<string:url_addition>/email/burner', methods=["GET", "POST"])
+def email_burner(url_addition):
+    """Generate burner email address"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        session["_id"] = id_generator()
+        session["color"] = get_random_color()
+    
+    if request.method == "POST":
+        burner_email = burner_manager.generate_burner_email(session["_id"])
+        email_storage.create_user_inbox(session["_id"])
+        
+        return render_template("email_burner.html",
+                              hostname=app.config["hostname"],
+                              path=app.config["path"],
+                              burner_email=burner_email,
+                              script_enabled=False)
+    
+    return render_template("email_burner.html",
+                          hostname=app.config["hostname"],
+                          path=app.config["path"],
+                          burner_email=None,
+                          script_enabled=False)
+
+
+# Email Security Testing Routes
+@app.route('/<string:url_addition>/email/security/spoof-test', methods=["GET", "POST"])
+def email_spoof_test(url_addition):
+    """Test email spoofing detection"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        session["_id"] = id_generator()
+        session["color"] = get_random_color()
+    
+    results = None
+    variants = None
+    
+    if request.method == "POST":
+        test_type = request.form.get("test_type", "detect")
+        
+        if test_type == "detect":
+            # Test spoofing detection
+            test_email = request.form.get("test_email", "")
+            legitimate_domain = request.form.get("legitimate_domain", "")
+            
+            if test_email and legitimate_domain:
+                results = spoofing_tester.test_spoofing_detection(test_email, legitimate_domain)
+        
+        elif test_type == "generate":
+            # Generate spoofing variants
+            target_domain = request.form.get("target_domain", "")
+            
+            if target_domain:
+                variants = spoofing_tester.generate_spoof_variants(target_domain)
+    
+    return render_template("email_spoof_test.html",
+                          hostname=app.config["hostname"],
+                          path=app.config["path"],
+                          results=results,
+                          variants=variants,
+                          script_enabled=False)
+
+
+@app.route('/<string:url_addition>/email/security/phishing-sim', methods=["GET", "POST"])
+def email_phishing_sim(url_addition):
+    """Phishing simulation and training"""
+    if url_addition != app.config["path"]:
+        return ('', 404)
+    
+    if "_id" not in session:
+        return redirect(f"/{app.config['path']}/email", code=302)
+    
+    user_id = session["_id"]
+    action_result = None
+    
+    if request.method == "POST":
+        action = request.form.get("action")
+        
+        if action == "enable":
+            phishing_simulator.enable_persist_mode(user_id)
+            
+        elif action == "disable":
+            phishing_simulator.disable_persist_mode(user_id)
+            
+        elif action == "generate":
+            template = request.form.get("template", "generic")
+            phishing_email = phishing_simulator.create_phishing_email(user_id, template)
+            # Add to inbox
+            email_storage.add_email(user_id, phishing_email)
+            action_result = {
+                'type': 'generated',
+                'message': 'Phishing simulation email added to your inbox'
+            }
+    
+    # Get user stats
+    stats = phishing_simulator.get_user_stats(user_id)
+    
+    return render_template("email_phishing_sim.html",
+                          hostname=app.config["hostname"],
+                          path=app.config["path"],
+                          stats=stats,
+                          action_result=action_result,
+                          script_enabled=False)
+
 
 def main():
 

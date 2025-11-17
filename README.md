@@ -106,6 +106,7 @@ To not use javascript simply leave noscript on (or the "safest" setting in TBB).
 Features
 ========
 
+### Chat System
 - As chat happens inside the Tor network via ephemeral hidden services, everything is encrypted and attribution of chatters is virtually impossible
 - *Nothing* touches disk except the app, everything happens in-memory, no chat, image, video, or ANYTHING caching to storage.
 - This chat is meant to help you with opsec, disappearing messages, randomized usernames, encrypted comms are the default (much more to come)
@@ -117,6 +118,15 @@ Features
 - Randomized usernames - this is for your own safety, so as to decrease chances of username reuse
 - New chat service created every time the server is started
 - No frills, no fancy CSS, code is easy to follow and review to ensure your safety
+
+### Email System (NEW)
+- **Encrypted Email Inbox** - In-memory email storage with PGP support (see [EMAIL_SYSTEM.md](EMAIL_SYSTEM.md))
+- **Raw Mode Editing** - Full control over email headers for security testing
+- **Burner Email Addresses** - Generate temporary anonymous email addresses
+- **Spoofing Detection** - Test emails for spoofing attempts (unicode lookalikes, typosquatting, homographs)
+- **Phishing Simulation** - Gamified training with scoring and achievements
+- **Security Research Tools** - For authorized penetration testing and awareness training
+- JavaScript optional throughout
 
 Security
 ========

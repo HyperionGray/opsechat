@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<title>Burner Email - OpSec</title>
+<link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: #000;
+    color: #0f0;
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    padding: 20px;
+  }
+
+  .header {
+    border-bottom: 2px solid #0f0;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+  }
+
+  h1 {
+    color: #0f0;
+    font-size: 24px;
+  }
+
+  .nav {
+    margin: 20px 0;
+  }
+
+  .nav a {
+    color: #0f0;
+    text-decoration: none;
+    margin-right: 20px;
+    padding: 5px 10px;
+    border: 1px solid #0f0;
+  }
+
+  .nav a:hover {
+    background-color: #0f0;
+    color: #000;
+  }
+
+  .content {
+    max-width: 800px;
+    margin: 20px 0;
+  }
+
+  .info {
+    background-color: #003;
+    border: 1px solid #0ff;
+    color: #0ff;
+    padding: 15px;
+    margin: 20px 0;
+  }
+
+  .warning {
+    background-color: #330;
+    border: 1px solid #f00;
+    color: #f00;
+    padding: 15px;
+    margin: 20px 0;
+  }
+
+  .burner-display {
+    background-color: #111;
+    border: 2px solid #0f0;
+    padding: 20px;
+    margin: 20px 0;
+    text-align: center;
+  }
+
+  .burner-email {
+    font-size: 24px;
+    color: #0ff;
+    word-break: break-all;
+    margin: 15px 0;
+  }
+
+  button {
+    background-color: #000;
+    color: #0f0;
+    border: 1px solid #0f0;
+    padding: 10px 20px;
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    cursor: pointer;
+    margin: 10px 5px;
+  }
+
+  button:hover {
+    background-color: #0f0;
+    color: #000;
+  }
+
+  .features {
+    margin: 20px 0;
+    padding: 15px;
+    border: 1px solid #0f0;
+  }
+
+  .features ul {
+    margin-left: 20px;
+    margin-top: 10px;
+  }
+
+  .features li {
+    margin: 8px 0;
+  }
+</style>
+
+<body>
+  <div class="header">
+    <h1>🔥 Burner Email Generator</h1>
+    <p>Anonymous, temporary email addresses</p>
+  </div>
+
+  <div class="nav">
+    <a href="/{{ path }}/email">Back to Inbox</a>
+    <a href="/{{ path }}">Back to Chat</a>
+  </div>
+
+  <div class="content">
+    {% if burner_email %}
+      <div class="burner-display">
+        <h2>Your Burner Email Address:</h2>
+        <div class="burner-email">{{ burner_email }}</div>
+        <p style="color: #888; margin-top: 10px;">Valid for 24 hours</p>
+        <button onclick="copyToClipboard('{{ burner_email }}')">Copy to Clipboard</button>
+        <button onclick="window.location.href='/{{ path }}/email'">Go to Inbox</button>
+      </div>
+
+      <div class="info">
+        ✅ <strong>Success!</strong> Your burner email address has been created and linked to your inbox.
+        Any emails sent to this address will appear in your inbox. The address will expire in 24 hours.
+      </div>
+
+      <div class="warning">
+        ⚠️ <strong>Note:</strong> This is a demo implementation. In a full deployment, this would:
+        <ul style="margin-left: 20px; margin-top: 10px;">
+          <li>Automatically purchase and rotate cheap domains via APIs (Porkbun, etc.)</li>
+          <li>Test domains against common sites to avoid banned domains</li>
+          <li>Set monthly budget limits for domain purchases</li>
+          <li>Integrate with real SMTP/IMAP servers for email delivery</li>
+          <li>Support custom domain settings and preferences</li>
+        </ul>
+      </div>
+    {% else %}
+      <div class="info">
+        💡 <strong>What are Burner Emails?</strong><br><br>
+        Burner emails are temporary, disposable email addresses that you can use for anonymous 
+        communication. Similar to services like GuerillaMail, these addresses don't require login
+        and are perfect for:
+        <ul style="margin-left: 20px; margin-top: 10px;">
+          <li>Anonymous signups</li>
+          <li>One-time communications</li>
+          <li>Privacy-focused correspondence</li>
+          <li>Security testing and research</li>
+        </ul>
+      </div>
+
+      <form method="POST" action="/{{ path }}/email/burner" style="text-align: center; margin: 30px 0;">
+        <button type="submit">Generate Burner Email</button>
+      </form>
+
+      <div class="features">
+        <h3 style="color: #0ff; margin-bottom: 10px;">🚀 Burner Email Features:</h3>
+        <ul>
+          <li><strong>No Login Required:</strong> Works like GuerillaMail - instant access</li>
+          <li><strong>24-Hour Validity:</strong> Temporary addresses that auto-expire</li>
+          <li><strong>Anonymous:</strong> No personal information required</li>
+          <li><strong>Tor-Compatible:</strong> Works seamlessly over Tor network</li>
+          <li><strong>PGP Support:</strong> Encrypted communications supported</li>
+        </ul>
+      </div>
+
+      <div class="warning">
+        ⚠️ <strong>Coming Soon:</strong>
+        <ul style="margin-left: 20px; margin-top: 10px;">
+          <li>Automatic domain purchasing and rotation</li>
+          <li>Budget management for domain costs</li>
+          <li>Domain blacklist testing against popular sites</li>
+          <li>Custom domain preferences</li>
+          <li>Integration with Porkbun and other registrars</li>
+          <li>Real SMTP/IMAP connectivity</li>
+        </ul>
+      </div>
+    {% endif %}
+  </div>
+
+  <script>
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(function() {
+        alert('Email address copied to clipboard!');
+      }, function(err) {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+          document.execCommand('copy');
+          alert('Email address copied to clipboard!');
+        } catch (err) {
+          alert('Failed to copy. Please copy manually: ' + text);
+        }
+        document.body.removeChild(textArea);
+      });
+    }
+  </script>
+</body>
+</html>
