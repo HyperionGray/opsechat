@@ -325,6 +325,7 @@ def email_compose(url_addition):
     
     if request.method == "POST":
         raw_mode = request.form.get("raw_mode") == "true"
+        send_via_smtp = request.form.get("send_via_smtp") == "true"
         
         if raw_mode:
             # Parse raw email
@@ -340,15 +341,31 @@ def email_compose(url_addition):
                 headers={}
             )
         
-        # For now, just add to our own inbox for testing
-        # In full implementation, this would send via SMTP
+        # Send via SMTP if configured and requested
+        if send_via_smtp and transport_manager.is_configured()['smtp']:
+            success = transport_manager.send_email(
+                email['from'],
+                email['to'],
+                email['subject'],
+                email['body'],
+                email.get('headers', {})
+            )
+            if not success:
+                # Could add flash message here
+                pass
+        
+        # Always add to local inbox for reference
         email_storage.add_email(session["_id"], email)
         
         return redirect(f"/{app.config['path']}/email", code=302)
     
+    # Check if SMTP is configured for the form
+    smtp_configured = transport_manager.is_configured()['smtp']
+    
     return render_template("email_compose.html",
                           hostname=app.config["hostname"],
                           path=app.config["path"],
+                          smtp_configured=smtp_configured,
                           script_enabled=False)
 
 

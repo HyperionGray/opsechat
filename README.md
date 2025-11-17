@@ -119,14 +119,29 @@ Features
 - New chat service created every time the server is started
 - No frills, no fancy CSS, code is easy to follow and review to ensure your safety
 
-### Email System (NEW)
-- **Encrypted Email Inbox** - In-memory email storage with PGP support (see [EMAIL_SYSTEM.md](EMAIL_SYSTEM.md))
+### Email System (NEW - REAL EMAIL SUPPORT!)
+- **Real SMTP/IMAP Integration** - Send and receive actual emails via configured email servers (see [EMAIL_SYSTEM.md](EMAIL_SYSTEM.md))
+- **Encrypted Email Inbox** - In-memory email storage with PGP support
 - **Raw Mode Editing** - Full control over email headers for security testing
 - **Burner Email Addresses** - Generate temporary anonymous email addresses
+- **Automated Domain Purchasing** - Porkbun API integration for cheap domain rotation (.xyz, .club, etc.)
+- **Budget Management** - Configurable monthly spending limits for domain purchases
 - **Spoofing Detection** - Test emails for spoofing attempts (unicode lookalikes, typosquatting, homographs)
 - **Phishing Simulation** - Gamified training with scoring and achievements
 - **Security Research Tools** - For authorized penetration testing and awareness training
+- **Plain Text Only** - HTML and images are shown as text for security analysis
 - JavaScript optional throughout
+
+#### Getting Started with Email
+1. Start the server: `python runserver.py`
+2. Access email configuration: `http://yourservice.onion/{path}/email/config`
+3. Configure SMTP for sending (optional): Add your email server settings
+4. Configure IMAP for receiving (optional): Add your IMAP server settings
+5. Configure Porkbun API for domain rotation (optional): Add API credentials and budget
+6. Compose and send emails: `http://yourservice.onion/{path}/email/compose`
+7. View your inbox: `http://yourservice.onion/{path}/email`
+
+For full documentation, see [EMAIL_SYSTEM.md](EMAIL_SYSTEM.md).
 
 Security
 ========

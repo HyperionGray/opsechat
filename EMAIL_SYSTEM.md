@@ -2,7 +2,9 @@
 
 ## Overview
 
-The OpSec Email System provides an encrypted, anonymous email platform integrated with the opsechat Tor hidden service. This system is designed for security research, penetration testing, and privacy-focused communication.
+The OpSec Email System provides an encrypted, anonymous email platform integrated with the opsechat Tor hidden service. This system includes **real SMTP/IMAP email integration** for sending and receiving actual emails, along with automated domain purchasing for burner email rotation.
+
+**NEW:** Real email capabilities with SMTP/IMAP support and automated domain management!
 
 ## ⚠️ Security Notice
 
@@ -16,9 +18,50 @@ This tool includes features for email spoofing and security testing. These capab
 
 Misuse of these features may be illegal in your jurisdiction. Always obtain proper authorization before testing.
 
-## Features
+## Core Features
 
-### 1. Email Inbox
+### 1. Real Email Integration (NEW!)
+
+#### SMTP Email Sending
+- Send real emails to external addresses
+- TLS/SSL encryption support
+- Custom header support for security testing
+- PGP encrypted message support
+- Plain text only (no HTML rendering)
+
+**Configuration:** Configure SMTP settings at `/{path}/email/config`
+
+Supported providers:
+- Gmail (smtp.gmail.com:587)
+- ProtonMail (smtp.protonmail.com:587)
+- Outlook (smtp.office365.com:587)
+- Any custom SMTP server
+
+#### IMAP Email Receiving
+- Fetch emails from real email accounts
+- SSL/TLS encryption support
+- Plain text extraction (HTML converted to text)
+- Image attachments shown as text placeholders
+- Unread/all email filtering
+- PGP encrypted message detection
+
+**Configuration:** Configure IMAP settings at `/{path}/email/config`
+
+### 2. Automated Domain Management (NEW!)
+
+#### Porkbun API Integration
+- Automatic domain availability checking
+- Purchase cheap domains (.xyz, .club, .online, etc.)
+- Monthly budget tracking
+- Domain rotation for burner emails
+
+**Configuration:** Add Porkbun API credentials at `/{path}/email/config`
+- Get API keys from: https://porkbun.com/account/api
+- Set monthly budget (default: $50)
+- System finds domains under $5
+
+#### Budget Management
+- Track spending across domain purchases
 - View received emails with full header information
 - PGP encrypted message detection and display
 - In-memory storage (nothing touches disk unencrypted)
@@ -83,14 +126,44 @@ This is the email body.
 - Automatic inbox creation
 - Anonymous communication
 
-**Access:** `/{path}/email/burner`
+- Prevent over-spending with configurable limits
+- Visual budget bar showing spending vs. limit
+- Auto-rotation when budget allows
 
-**Example Generated Address:**
-```
-xy9k2m5n8pqr@opsecmail.onion
-```
+### 3. Email Inbox
+- View received emails with full header information
+- PGP encrypted message detection and display
+- In-memory storage (nothing touches disk unencrypted)
+- JavaScript optional interface
+- Tor-compatible anonymous access
+- Fetch from IMAP button for real email sync
 
-## Architecture
+**Access:** `/{path}/email`
+
+### 4. Email Composition
+- **Standard Mode:** Simple form-based email composition
+- **Raw Mode:** Full control over email headers and structure
+- **Real SMTP Sending:** Optional checkbox to send via configured SMTP
+- PGP encrypted message support
+- Custom header injection for security testing
+
+**Access:** `/{path}/email/compose`
+
+#### Standard Mode
+Use the standard compose form to create emails with basic fields:
+- From address
+- To address
+- Subject
+- Message body
+- Optional SMTP sending (when configured)
+
+#### Raw Mode
+Toggle to raw mode for advanced features:
+- Direct header editing (From, To, Subject, CC, BCC, etc.)
+- Custom X- headers for testing
+- Full email structure control
+- Test email spoofing scenarios
+- Optional SMTP sending (when configured)
 
 ### In-Memory Storage
 All emails are stored in memory only. The system implements a two-key encryption approach:
