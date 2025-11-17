@@ -185,15 +185,22 @@ class BurnerEmailManager:
     def __init__(self):
         self.burner_addresses: Dict[str, Dict] = {}  # email -> {user_id, expires_at}
         self.custom_domain: Optional[str] = None  # Custom domain from domain manager
+        self.user_burners: Dict[str, List[str]] = {}  # user_id -> list of burner emails
     
     def set_custom_domain(self, domain: str) -> None:
         """Set custom domain for burner emails"""
         self.custom_domain = domain
     
-    def generate_burner_email(self, user_id: str, domain: Optional[str] = None) -> str:
+    def generate_burner_email(self, user_id: str, domain: Optional[str] = None, 
+                             hours_valid: int = 24) -> str:
         """
         Generate temporary email address
         Uses custom domain if available, otherwise uses default
+        
+        Args:
+            user_id: User identifier
+            domain: Optional custom domain (uses self.custom_domain if None)
+            hours_valid: Hours before expiry (default 24)
         """
         if domain is None:
             domain = self.custom_domain or "opsecmail.onion"
@@ -205,10 +212,68 @@ class BurnerEmailManager:
         self.burner_addresses[email] = {
             'user_id': user_id,
             'created_at': datetime.datetime.now(),
-            'expires_at': datetime.datetime.now() + datetime.timedelta(hours=24)
+            'expires_at': datetime.datetime.now() + datetime.timedelta(hours=hours_valid)
         }
         
+        # Track user's burners
+        if user_id not in self.user_burners:
+            self.user_burners[user_id] = []
+        self.user_burners[user_id].append(email)
+        
         return email
+    
+    def get_user_burners(self, user_id: str) -> List[Dict]:
+        """
+        Get all active burner emails for a user
+        
+        Returns:
+            List of dicts with email, created_at, expires_at, time_remaining
+        """
+        self.cleanup_expired()
+        
+        if user_id not in self.user_burners:
+            return []
+        
+        now = datetime.datetime.now()
+        active_burners = []
+        
+        for email in self.user_burners[user_id]:
+            if email in self.burner_addresses:
+                info = self.burner_addresses[email]
+                time_remaining = info['expires_at'] - now
+                active_burners.append({
+                    'email': email,
+                    'created_at': info['created_at'],
+                    'expires_at': info['expires_at'],
+                    'time_remaining_seconds': int(time_remaining.total_seconds()),
+                    'time_remaining_str': self._format_time_remaining(time_remaining)
+                })
+        
+        return active_burners
+    
+    def rotate_burner(self, user_id: str, old_email: Optional[str] = None) -> str:
+        """
+        Rotate to a new burner email
+        Optionally expire an old one immediately
+        
+        Args:
+            user_id: User identifier
+            old_email: Optional email to expire immediately
+        
+        Returns:
+            New burner email address
+        """
+        if old_email:
+            self.expire_burner(old_email)
+        
+        return self.generate_burner_email(user_id)
+    
+    def expire_burner(self, email: str) -> bool:
+        """Immediately expire a burner email"""
+        if email in self.burner_addresses:
+            del self.burner_addresses[email]
+            return True
+        return False
     
     def get_user_for_burner(self, email: str) -> Optional[str]:
         """Get user ID for burner email"""
@@ -224,6 +289,28 @@ class BurnerEmailManager:
                    if info['expires_at'] <= now]
         for email in expired:
             del self.burner_addresses[email]
+            # Also remove from user_burners
+            user_id = self.burner_addresses.get(email, {}).get('user_id')
+            if user_id and user_id in self.user_burners:
+                if email in self.user_burners[user_id]:
+                    self.user_burners[user_id].remove(email)
+    
+    def _format_time_remaining(self, time_delta: datetime.timedelta) -> str:
+        """Format time remaining in human-readable format"""
+        seconds = int(time_delta.total_seconds())
+        
+        if seconds < 0:
+            return "Expired"
+        
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        
+        if hours > 0:
+            return f"{hours}h {minutes}m"
+        elif minutes > 0:
+            return f"{minutes}m"
+        else:
+            return f"{seconds}s"
 
 
 # Global instances
