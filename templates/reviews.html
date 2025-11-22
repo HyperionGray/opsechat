@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<title>Reviews - Your Drop</title>
+<link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+{% if script_enabled %}
+  <script src="{{ url_for('static', filename='jquery.js') }}"></script>
+{% endif %}
+</head>
+
+{% if script_enabled %}
+<noscript>  
+  <style>html{display:none;}</style>
+  <meta http-equiv="refresh" content="0.0;url=../reviews">
+</noscript>
+{% endif %}
+
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body {
+    background-color: #000;
+    color: #0f0;
+    font-family: monospace;
+    font-size: 14px;
+    padding: 20px;
+  }
+  
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  
+  .header {
+    border-bottom: 1px solid #0f0;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+  }
+  
+  .nav-links {
+    margin-bottom: 20px;
+  }
+  
+  .nav-links a {
+    color: #0ff;
+    text-decoration: none;
+    margin-right: 20px;
+  }
+  
+  .nav-links a:hover {
+    color: #fff;
+  }
+  
+  .stats-section {
+    background-color: #111;
+    border: 1px solid #0f0;
+    padding: 15px;
+    margin-bottom: 20px;
+  }
+  
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+  }
+  
+  .stat-item {
+    text-align: center;
+  }
+  
+  .stat-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: #0ff;
+  }
+  
+  .stat-label {
+    font-size: 12px;
+    color: #0f0;
+  }
+  
+  .rating-bar {
+    display: flex;
+    align-items: center;
+    margin: 5px 0;
+  }
+  
+  .rating-bar-fill {
+    background-color: #0f0;
+    height: 10px;
+    margin-left: 10px;
+    margin-right: 10px;
+  }
+  
+  .rating-bar-empty {
+    background-color: #333;
+    height: 10px;
+    flex: 1;
+  }
+  
+  .review-form {
+    background-color: #111;
+    border: 1px solid #0f0;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  
+  .form-group {
+    margin-bottom: 15px;
+  }
+  
+  .form-label {
+    display: block;
+    margin-bottom: 5px;
+    color: #0f0;
+  }
+  
+  .rating-input {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  
+  .rating-option {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  
+  .rating-option input[type="radio"] {
+    margin: 0;
+  }
+  
+  .stars {
+    color: #ff0;
+  }
+  
+  .form-textarea {
+    width: 100%;
+    height: 100px;
+    background-color: #000;
+    color: #0f0;
+    border: 1px solid #0f0;
+    padding: 10px;
+    font-family: monospace;
+    font-size: 14px;
+    resize: vertical;
+  }
+  
+  .form-button {
+    background-color: #0f0;
+    color: #000;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 14px;
+  }
+  
+  .form-button:hover {
+    background-color: #0d0;
+  }
+  
+  .message {
+    padding: 10px;
+    margin-bottom: 20px;
+    border: 1px solid;
+    font-family: monospace;
+  }
+  
+  .message.success {
+    background-color: #001100;
+    border-color: #0f0;
+    color: #0f0;
+  }
+  
+  .message.error {
+    background-color: #110000;
+    border-color: #f00;
+    color: #f00;
+  }
+  
+  .reviews-section {
+    background-color: #111;
+    border: 1px solid #0f0;
+    padding: 20px;
+  }
+  
+  .review-item {
+    border-bottom: 1px solid #333;
+    padding: 15px 0;
+  }
+  
+  .review-item:last-child {
+    border-bottom: none;
+  }
+  
+  .review-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  
+  .review-rating {
+    color: #ff0;
+    font-size: 16px;
+  }
+  
+  .review-meta {
+    font-size: 12px;
+    color: #666;
+  }
+  
+  .review-text {
+    color: #0f0;
+    line-height: 1.4;
+    word-wrap: break-word;
+  }
+  
+  .no-reviews {
+    text-align: center;
+    color: #666;
+    font-style: italic;
+    padding: 40px 0;
+  }
+  
+  @media (max-width: 600px) {
+    .stats-grid {
+      grid-template-columns: 1fr;
+    }
+    
+    .review-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 5px;
+    }
+  }
+</style>
+
+<div class="container">
+  <div class="header">
+    <h1>📝 Service Reviews</h1>
+    <p>Anonymous reviews for {{ hostname }}</p>
+  </div>
+  
+  <div class="nav-links">
+    <a href="/{{ path }}">🏠 Back to Chat</a>
+    <a href="/{{ path }}/email">📧 Email Inbox</a>
+    {% if script_enabled %}
+    <a href="/{{ path }}/reviews">🚫 No Script Version</a>
+    {% else %}
+    <a href="/{{ path }}/reviews/yesscript">✅ Script Version</a>
+    {% endif %}
+  </div>
+  
+  <!-- Statistics Section -->
+  <div class="stats-section">
+    <h2>📊 Review Statistics</h2>
+    <div class="stats-grid">
+      <div class="stat-item">
+        <div class="stat-value">{{ stats.total }}</div>
+        <div class="stat-label">Total Reviews</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">{{ stats.average_rating }}</div>
+        <div class="stat-label">Average Rating</div>
+      </div>
+    </div>
+    
+    {% if stats.total > 0 %}
+    <div style="margin-top: 20px;">
+      <h3>Rating Distribution:</h3>
+      {% for rating in [5, 4, 3, 2, 1] %}
+      <div class="rating-bar">
+        <span>{{ rating }}★</span>
+        <div class="rating-bar-fill" style="width: {{ (stats.rating_distribution[rating] / stats.total * 100) if stats.total > 0 else 0 }}%;"></div>
+        <div class="rating-bar-empty"></div>
+        <span>{{ stats.rating_distribution[rating] }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  
+  <!-- Review Form -->
+  <div class="review-form">
+    <h2>✍️ Submit Your Review</h2>
+    <p style="margin-bottom: 15px; color: #666;">Your review will be submitted anonymously. Help others by sharing your experience.</p>
+    
+    {% if message %}
+    <div class="message {{ message.type }}">
+      {{ message.text }}
+    </div>
+    {% endif %}
+    
+    <form method="POST" {% if script_enabled %}id="review-form"{% endif %}>
+      <div class="form-group">
+        <label class="form-label">Rating *</label>
+        <div class="rating-input">
+          <div class="rating-option">
+            <input type="radio" name="rating" value="5" id="rating-5" required>
+            <label for="rating-5"><span class="stars">★★★★★</span> (5) Excellent</label>
+          </div>
+          <div class="rating-option">
+            <input type="radio" name="rating" value="4" id="rating-4" required>
+            <label for="rating-4"><span class="stars">★★★★☆</span> (4) Good</label>
+          </div>
+          <div class="rating-option">
+            <input type="radio" name="rating" value="3" id="rating-3" required>
+            <label for="rating-3"><span class="stars">★★★☆☆</span> (3) Average</label>
+          </div>
+          <div class="rating-option">
+            <input type="radio" name="rating" value="2" id="rating-2" required>
+            <label for="rating-2"><span class="stars">★★☆☆☆</span> (2) Poor</label>
+          </div>
+          <div class="rating-option">
+            <input type="radio" name="rating" value="1" id="rating-1" required>
+            <label for="rating-1"><span class="stars">★☆☆☆☆</span> (1) Terrible</label>
+          </div>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label for="review_text" class="form-label">Review (Optional)</label>
+        <textarea name="review_text" id="review_text" class="form-textarea" placeholder="Share your thoughts about the service..."></textarea>
+      </div>
+      
+      <button type="submit" class="form-button">Submit Review</button>
+    </form>
+  </div>
+  
+  <!-- Reviews List -->
+  <div class="reviews-section" {% if script_enabled %}id="reviews-list"{% endif %}>
+    <h2>💬 User Reviews ({{ stats.total }})</h2>
+    
+    {% if reviews %}
+      {% for review in reviews %}
+      <div class="review-item">
+        <div class="review-header">
+          <div class="review-rating">
+            {% for i in range(review.rating) %}★{% endfor %}{% for i in range(5 - review.rating) %}☆{% endfor %}
+          </div>
+          <div class="review-meta">
+            {{ review.timestamp.strftime('%Y-%m-%d %H:%M') }} | User: {{ review.user_id[:8] }}...
+          </div>
+        </div>
+        {% if review.text %}
+        <div class="review-text">{{ review.text }}</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="no-reviews">
+        No reviews yet. Be the first to share your experience!
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if script_enabled %}
+<script>
+$(document).ready(function() {
+  // Auto-refresh reviews every 30 seconds
+  setInterval(function() {
+    refreshReviews();
+  }, 30000);
+  
+  // Handle form submission via AJAX
+  $('#review-form').on('submit', function(e) {
+    e.preventDefault();
+    
+    var formData = $(this).serialize();
+    
+    $.post('/{{ path }}/reviews/submit', formData)
+      .done(function(response) {
+        if (response.success) {
+          // Show success message
+          $('.message').remove();
+          $('#review-form').before('<div class="message success">' + response.message + '</div>');
+          
+          // Clear form
+          $('#review-form')[0].reset();
+          
+          // Refresh reviews
+          refreshReviews();
+        } else {
+          // Show error message
+          $('.message').remove();
+          $('#review-form').before('<div class="message error">' + response.message + '</div>');
+        }
+      })
+      .fail(function() {
+        $('.message').remove();
+        $('#review-form').before('<div class="message error">Error submitting review. Please try again.</div>');
+      });
+  });
+});
+
+function refreshReviews() {
+  $.get('/{{ path }}/reviews/list')
+    .done(function(data) {
+      updateReviewsDisplay(data.reviews, data.stats);
+    })
+    .fail(function() {
+      console.log('Failed to refresh reviews');
+    });
+}
+
+function updateReviewsDisplay(reviews, stats) {
+  // Update stats
+  $('.stat-value').eq(0).text(stats.total);
+  $('.stat-value').eq(1).text(stats.average_rating);
+  
+  // Update rating distribution
+  if (stats.total > 0) {
+    for (var rating = 1; rating <= 5; rating++) {
+      var percentage = (stats.rating_distribution[rating] / stats.total * 100);
+      $('.rating-bar').eq(5 - rating).find('.rating-bar-fill').css('width', percentage + '%');
+      $('.rating-bar').eq(5 - rating).find('span').last().text(stats.rating_distribution[rating]);
+    }
+  }
+  
+  // Update reviews list
+  var reviewsHtml = '<h2>💬 User Reviews (' + stats.total + ')</h2>';
+  
+  if (reviews.length > 0) {
+    reviews.forEach(function(review) {
+      var stars = '';
+      for (var i = 0; i < review.rating; i++) stars += '★';
+      for (var i = review.rating; i < 5; i++) stars += '☆';
+      
+      reviewsHtml += '<div class="review-item">';
+      reviewsHtml += '<div class="review-header">';
+      reviewsHtml += '<div class="review-rating">' + stars + '</div>';
+      reviewsHtml += '<div class="review-meta">' + review.timestamp + ' | User: ' + review.user_id + '</div>';
+      reviewsHtml += '</div>';
+      if (review.text) {
+        reviewsHtml += '<div class="review-text">' + review.text + '</div>';
+      }
+      reviewsHtml += '</div>';
+    });
+  } else {
+    reviewsHtml += '<div class="no-reviews">No reviews yet. Be the first to share your experience!</div>';
+  }
+  
+  $('#reviews-list').html(reviewsHtml);
+}
+</script>
+{% endif %}
+
+</html>
