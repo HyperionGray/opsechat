@@ -27,6 +27,10 @@ chatters = []
 global chatlines
 chatlines = []
 
+# Review system storage
+global reviews
+reviews = []
+
 def id_generator(size=6,
                  chars=string.ascii_uppercase + string.digits +
                  string.ascii_lowercase):
@@ -48,6 +52,83 @@ def check_older_than(chat_dic, secs_to_live = 180):
 def get_random_color():
     r = lambda: random.randint(0,128)
     return (r(),r(),r())
+
+
+def check_review_older_than(review_dic, secs_to_live = 86400):  # 24 hours
+    """Check if a review is older than specified seconds (default 24 hours)"""
+    now = datetime.datetime.now()
+    timestamp = review_dic["timestamp"]
+    diff = now - timestamp
+    secs = diff.total_seconds()
+    
+    if secs >= secs_to_live:
+        return True
+    return False
+
+
+def cleanup_old_reviews():
+    """Remove reviews older than 24 hours to prevent memory bloat"""
+    global reviews
+    to_delete = []
+    
+    for i, review in enumerate(reviews):
+        if check_review_older_than(review):
+            to_delete.append(i)
+    
+    # Remove in reverse order to maintain indices
+    for i in reversed(to_delete):
+        reviews.pop(i)
+
+
+def add_review(user_id, rating, review_text):
+    """Add a new review to the global reviews list"""
+    global reviews
+    
+    # Cleanup old reviews first
+    cleanup_old_reviews()
+    
+    review = {
+        "id": id_generator(size=16),
+        "user_id": user_id,
+        "rating": int(rating),
+        "text": review_text.strip(),
+        "timestamp": datetime.datetime.now()
+    }
+    
+    reviews.append(review)
+    return review["id"]
+
+
+def get_reviews():
+    """Get all current reviews, cleanup old ones first"""
+    cleanup_old_reviews()
+    return reviews
+
+
+def get_review_stats():
+    """Get review statistics"""
+    cleanup_old_reviews()
+    
+    if not reviews:
+        return {
+            "total": 0,
+            "average_rating": 0,
+            "rating_distribution": {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+        }
+    
+    total = len(reviews)
+    total_rating = sum(review["rating"] for review in reviews)
+    average_rating = round(total_rating / total, 1)
+    
+    rating_distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+    for review in reviews:
+        rating_distribution[review["rating"]] += 1
+    
+    return {
+        "total": total,
+        "average_rating": average_rating,
+        "rating_distribution": rating_distribution
+    }
 
 
 def process_chat(chat_dic):
