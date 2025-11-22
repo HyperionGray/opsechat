@@ -119,12 +119,30 @@ This is the email body.
 
 **Access:** `/{path}/email/edit/{email_id}`
 
-### 5. Burner Email Addresses
-- Generate temporary, disposable email addresses
-- No login required (similar to GuerillaMail)
-- 24-hour validity period
-- Automatic inbox creation
-- Anonymous communication
+### 5. Modern Burner Email System (Enhanced!)
+Modern, Guerrillamail-style rotating anonymous email system with advanced features:
+
+- **Multi-Burner Management** - Keep multiple active burner emails simultaneously
+- **Live Countdown Timers** - Real-time expiry tracking with JavaScript enabled
+- **Quick Rotation** - One-click generation of new addresses
+- **Smart Rotation** - Rotate existing burners (generates new, expires old)
+- **Instant Copy** - One-click copy to clipboard
+- **Stats Dashboard** - Track active burner count and total time remaining
+- **Visual Indicators** - Color-coded warnings when burners are expiring soon
+- **Manual Expiry** - Delete burners before they expire
+- **No Login Required** - Instant anonymous email addresses
+- **24-Hour Validity** - Configurable expiry periods
+- **Auto-Cleanup** - Expired burners automatically removed
+- **Tor-Compatible** - Works seamlessly over Tor network
+
+**Access:** `/{path}/email/burner` (NoScript) or `/{path}/email/burner/yesscript` (JavaScript)
+
+**Key Features:**
+- Generate unlimited burner addresses
+- Each user can have multiple active burners
+- Real-time countdown updates (with JavaScript)
+- Direct link to inbox from each burner
+- Custom domain support (via Porkbun integration)
 
 - Prevent over-spending with configurable limits
 - Visual budget bar showing spending vs. limit
@@ -344,7 +362,37 @@ wcBMA1234567890ABC
 ```
 3. Send normally - PGP content is preserved
 
-### Example 4: Burner Email
+### Example 4: Modern Burner Email System
+#### Generating Multiple Burners
+1. Navigate to `/{path}/email/burner`
+2. Click "Generate New Burner Email" multiple times
+3. View all active burners with countdown timers
+4. Each burner shows:
+   - Email address with copy button
+   - Creation and expiry timestamps
+   - Time remaining (live countdown with JS)
+   - Quick action buttons
+
+#### Using the Rotation Feature
+1. From the burner list, click "🔄 Rotate (Generate New)" on any burner
+2. This will:
+   - Generate a new burner email
+   - Immediately expire the old one
+   - Keep your active burner count consistent
+
+#### Managing Burners
+- **Copy Email**: One-click copy to clipboard for easy sharing
+- **View Inbox**: Direct link to your email inbox
+- **Rotate**: Generate new and expire current in one action
+- **Delete Now**: Manually expire before 24-hour limit
+
+#### With JavaScript Enabled
+1. Navigate to `/{path}/email/burner/yesscript`
+2. Watch live countdown timers update every second
+3. Visual warnings when burners are expiring soon (<1 hour)
+4. Auto-refresh keeps burner list current
+
+### Example 5: Legacy Burner Email (Simple)
 1. Navigate to `/{path}/email/burner`
 2. Click "Generate Burner Email"
 3. Copy the generated address

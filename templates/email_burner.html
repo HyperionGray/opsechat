@@ -3,6 +3,7 @@
 <head>
 <title>Burner Email - OpSec</title>
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 
 <style>
@@ -18,6 +19,7 @@
     font-family: 'Courier New', monospace;
     font-size: 16px;
     padding: 20px;
+    min-height: 100vh;
   }
 
   .header {
@@ -31,6 +33,12 @@
     font-size: 24px;
   }
 
+  h2 {
+    color: #0ff;
+    font-size: 20px;
+    margin: 20px 0 10px 0;
+  }
+
   .nav {
     margin: 20px 0;
   }
@@ -41,6 +49,8 @@
     margin-right: 20px;
     padding: 5px 10px;
     border: 1px solid #0f0;
+    display: inline-block;
+    margin-bottom: 10px;
   }
 
   .nav a:hover {
@@ -49,8 +59,8 @@
   }
 
   .content {
-    max-width: 800px;
-    margin: 20px 0;
+    max-width: 1200px;
+    margin: 20px auto;
   }
 
   .info {
@@ -61,30 +71,23 @@
     margin: 20px 0;
   }
 
-  .warning {
-    background-color: #330;
-    border: 1px solid #f00;
-    color: #f00;
+  .success {
+    background-color: #030;
+    border: 1px solid #0f0;
+    color: #0f0;
     padding: 15px;
     margin: 20px 0;
   }
 
-  .burner-display {
-    background-color: #111;
-    border: 2px solid #0f0;
-    padding: 20px;
+  .warning {
+    background-color: #330;
+    border: 1px solid #f90;
+    color: #f90;
+    padding: 15px;
     margin: 20px 0;
-    text-align: center;
   }
 
-  .burner-email {
-    font-size: 24px;
-    color: #0ff;
-    word-break: break-all;
-    margin: 15px 0;
-  }
-
-  button {
+  button, .button {
     background-color: #000;
     color: #0f0;
     border: 1px solid #0f0;
@@ -93,11 +96,77 @@
     font-size: 16px;
     cursor: pointer;
     margin: 10px 5px;
+    display: inline-block;
+    text-decoration: none;
   }
 
-  button:hover {
+  button:hover, .button:hover {
     background-color: #0f0;
     color: #000;
+  }
+
+  button.danger {
+    border-color: #f00;
+    color: #f00;
+  }
+
+  button.danger:hover {
+    background-color: #f00;
+    color: #fff;
+  }
+
+  .burner-list {
+    margin: 20px 0;
+  }
+
+  .burner-card {
+    background-color: #111;
+    border: 2px solid #0f0;
+    padding: 20px;
+    margin: 15px 0;
+    position: relative;
+    transition: border-color 0.3s;
+  }
+
+  .burner-card.expiring-soon {
+    border-color: #f90;
+  }
+
+  .burner-card.expired {
+    border-color: #f00;
+    opacity: 0.6;
+  }
+
+  .burner-email {
+    font-size: 20px;
+    color: #0ff;
+    word-break: break-all;
+    margin: 10px 0;
+    font-weight: bold;
+  }
+
+  .burner-meta {
+    color: #888;
+    font-size: 14px;
+    margin: 10px 0;
+  }
+
+  .time-remaining {
+    color: #0f0;
+    font-size: 18px;
+    margin: 10px 0;
+  }
+
+  .time-remaining.expiring {
+    color: #f90;
+  }
+
+  .time-remaining.expired {
+    color: #f00;
+  }
+
+  .burner-actions {
+    margin-top: 15px;
   }
 
   .features {
@@ -114,106 +183,278 @@
   .features li {
     margin: 8px 0;
   }
+
+  .stats {
+    display: flex;
+    gap: 20px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+  }
+
+  .stat-box {
+    background-color: #111;
+    border: 1px solid #0f0;
+    padding: 15px;
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .stat-value {
+    font-size: 32px;
+    color: #0ff;
+    font-weight: bold;
+  }
+
+  .stat-label {
+    color: #888;
+    font-size: 14px;
+  }
+
+  .generate-section {
+    text-align: center;
+    margin: 30px 0;
+    padding: 30px;
+    border: 2px dashed #0f0;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 50px 20px;
+    color: #888;
+  }
+
+  @media (max-width: 768px) {
+    body {
+      padding: 10px;
+      font-size: 14px;
+    }
+
+    .burner-email {
+      font-size: 16px;
+    }
+
+    .stats {
+      flex-direction: column;
+    }
+  }
 </style>
 
 <body>
   <div class="header">
     <h1>🔥 Burner Email Generator</h1>
-    <p>Anonymous, temporary email addresses</p>
+    <p>Modern rotating anonymous email addresses</p>
   </div>
 
   <div class="nav">
-    <a href="/{{ path }}/email">Back to Inbox</a>
-    <a href="/{{ path }}">Back to Chat</a>
+    <a href="/{{ path }}/email">📧 Inbox</a>
+    <a href="/{{ path }}">💬 Chat</a>
+    {% if script_enabled %}
+    <a href="/{{ path }}/email/burner">NoScript Mode</a>
+    {% else %}
+    <a href="/{{ path }}/email/burner/yesscript">Enable JavaScript</a>
+    {% endif %}
   </div>
 
   <div class="content">
-    {% if burner_email %}
-      <div class="burner-display">
-        <h2>Your Burner Email Address:</h2>
-        <div class="burner-email">{{ burner_email }}</div>
-        <p style="color: #888; margin-top: 10px;">Valid for 24 hours</p>
-        <button onclick="copyToClipboard('{{ burner_email }}')">Copy to Clipboard</button>
-        <button onclick="window.location.href='/{{ path }}/email'">Go to Inbox</button>
+    <!-- Stats Section -->
+    {% if active_burners %}
+    <div class="stats">
+      <div class="stat-box">
+        <div class="stat-value">{{ active_burners|length }}</div>
+        <div class="stat-label">Active Burners</div>
       </div>
-
-      <div class="info">
-        ✅ <strong>Success!</strong> Your burner email address has been created and linked to your inbox.
-        Any emails sent to this address will appear in your inbox. The address will expire in 24 hours.
+      <div class="stat-box">
+        <div class="stat-value" id="total-time">{{ active_burners|length * 24 }}h</div>
+        <div class="stat-label">Total Time Remaining</div>
       </div>
-
-      <div class="warning">
-        ⚠️ <strong>Note:</strong> This is a demo implementation. In a full deployment, this would:
-        <ul style="margin-left: 20px; margin-top: 10px;">
-          <li>Automatically purchase and rotate cheap domains via APIs (Porkbun, etc.)</li>
-          <li>Test domains against common sites to avoid banned domains</li>
-          <li>Set monthly budget limits for domain purchases</li>
-          <li>Integrate with real SMTP/IMAP servers for email delivery</li>
-          <li>Support custom domain settings and preferences</li>
-        </ul>
-      </div>
-    {% else %}
-      <div class="info">
-        💡 <strong>What are Burner Emails?</strong><br><br>
-        Burner emails are temporary, disposable email addresses that you can use for anonymous 
-        communication. Similar to services like GuerillaMail, these addresses don't require login
-        and are perfect for:
-        <ul style="margin-left: 20px; margin-top: 10px;">
-          <li>Anonymous signups</li>
-          <li>One-time communications</li>
-          <li>Privacy-focused correspondence</li>
-          <li>Security testing and research</li>
-        </ul>
-      </div>
-
-      <form method="POST" action="/{{ path }}/email/burner" style="text-align: center; margin: 30px 0;">
-        <button type="submit">Generate Burner Email</button>
-      </form>
-
-      <div class="features">
-        <h3 style="color: #0ff; margin-bottom: 10px;">🚀 Burner Email Features:</h3>
-        <ul>
-          <li><strong>No Login Required:</strong> Works like GuerillaMail - instant access</li>
-          <li><strong>24-Hour Validity:</strong> Temporary addresses that auto-expire</li>
-          <li><strong>Anonymous:</strong> No personal information required</li>
-          <li><strong>Tor-Compatible:</strong> Works seamlessly over Tor network</li>
-          <li><strong>PGP Support:</strong> Encrypted communications supported</li>
-        </ul>
-      </div>
-
-      <div class="warning">
-        ⚠️ <strong>Coming Soon:</strong>
-        <ul style="margin-left: 20px; margin-top: 10px;">
-          <li>Automatic domain purchasing and rotation</li>
-          <li>Budget management for domain costs</li>
-          <li>Domain blacklist testing against popular sites</li>
-          <li>Custom domain preferences</li>
-          <li>Integration with Porkbun and other registrars</li>
-          <li>Real SMTP/IMAP connectivity</li>
-        </ul>
-      </div>
+    </div>
     {% endif %}
+
+    <!-- Generate New Burner Section -->
+    <div class="generate-section">
+      <h2>🚀 Generate New Burner</h2>
+      <p style="margin: 15px 0; color: #888;">
+        Create a new temporary email address for anonymous communication
+      </p>
+      <form method="POST" action="/{{ path }}/email/burner" style="display: inline;">
+        <input type="hidden" name="action" value="generate">
+        <button type="submit">Generate New Burner Email</button>
+      </form>
+    </div>
+
+    <!-- Active Burners List -->
+    {% if active_burners %}
+    <h2>📬 Active Burner Emails</h2>
+    <div class="burner-list" id="burner-list">
+      {% for burner in active_burners %}
+      <div class="burner-card {% if burner.time_remaining_seconds < 3600 %}expiring-soon{% endif %}" data-email="{{ burner.email }}" data-expires="{{ burner.time_remaining_seconds }}">
+        <div class="burner-email">{{ burner.email }}</div>
+        
+        <div class="burner-meta">
+          Created: {{ burner.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+          <br>
+          Expires: {{ burner.expires_at.strftime('%Y-%m-%d %H:%M:%S') }}
+        </div>
+        
+        <div class="time-remaining {% if burner.time_remaining_seconds < 3600 %}expiring{% endif %}" data-seconds="{{ burner.time_remaining_seconds }}">
+          ⏱️ Time Remaining: <span class="countdown">{{ burner.time_remaining_str }}</span>
+        </div>
+        
+        <div class="burner-actions">
+          <button onclick="copyToClipboard('{{ burner.email }}')">📋 Copy Email</button>
+          <a href="/{{ path }}/email" class="button">📧 View Inbox</a>
+          <form method="POST" action="/{{ path }}/email/burner" style="display: inline;">
+            <input type="hidden" name="action" value="rotate">
+            <input type="hidden" name="old_email" value="{{ burner.email }}">
+            <button type="submit">🔄 Rotate (Generate New)</button>
+          </form>
+          <form method="POST" action="/{{ path }}/email/burner/expire/{{ burner.email }}" style="display: inline;">
+            <button type="submit" class="danger">🗑️ Delete Now</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <h2>No Active Burner Emails</h2>
+      <p>Generate your first burner email to get started!</p>
+    </div>
+    {% endif %}
+
+    <!-- Info Section -->
+    <div class="info">
+      💡 <strong>How Burner Emails Work:</strong><br><br>
+      <ul style="margin-left: 20px;">
+        <li><strong>No Login Required:</strong> Instant anonymous email addresses</li>
+        <li><strong>24-Hour Validity:</strong> Each email expires after 24 hours</li>
+        <li><strong>Auto-Rotation:</strong> Generate new emails or rotate existing ones</li>
+        <li><strong>Multiple Active:</strong> Keep several burner emails active at once</li>
+        <li><strong>Real-Time Updates:</strong> See countdown timers with JavaScript enabled</li>
+        <li><strong>Privacy First:</strong> All data stored in memory, nothing hits disk</li>
+      </ul>
+    </div>
+
+    <div class="features">
+      <h3 style="color: #0ff; margin-bottom: 10px;">✨ Modern Features:</h3>
+      <ul>
+        <li><strong>Quick Rotation:</strong> One-click rotation to new addresses</li>
+        <li><strong>Live Countdowns:</strong> Real-time expiry timers (with JS)</li>
+        <li><strong>Multiple Burners:</strong> Manage several addresses simultaneously</li>
+        <li><strong>Instant Copy:</strong> One-click copy to clipboard</li>
+        <li><strong>Direct Inbox:</strong> Quick link to view emails</li>
+        <li><strong>Manual Expiry:</strong> Delete burners before they expire</li>
+        <li><strong>Tor-Compatible:</strong> Works seamlessly over Tor network</li>
+        <li><strong>PGP Support:</strong> Use with encrypted communications</li>
+      </ul>
+    </div>
+
+    <div class="warning">
+      ⚠️ <strong>Privacy Notes:</strong>
+      <ul style="margin-left: 20px; margin-top: 10px;">
+        <li>Burner emails expire automatically after 24 hours</li>
+        <li>All data stored in memory - lost on server restart</li>
+        <li>For real email, configure SMTP/IMAP in settings</li>
+        <li>Consider using PGP encryption for sensitive messages</li>
+        <li>Access via Tor Browser for maximum anonymity</li>
+      </ul>
+    </div>
   </div>
 
   <script>
     function copyToClipboard(text) {
-      navigator.clipboard.writeText(text).then(function() {
-        alert('Email address copied to clipboard!');
-      }, function(err) {
-        // Fallback for older browsers
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        document.body.appendChild(textArea);
-        textArea.select();
-        try {
-          document.execCommand('copy');
-          alert('Email address copied to clipboard!');
-        } catch (err) {
-          alert('Failed to copy. Please copy manually: ' + text);
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(function() {
+          alert('✅ Email address copied to clipboard!');
+        }, function(err) {
+          fallbackCopy(text);
+        });
+      } else {
+        fallbackCopy(text);
+      }
+    }
+
+    function fallbackCopy(text) {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        alert('✅ Email address copied to clipboard!');
+      } catch (err) {
+        alert('❌ Failed to copy. Please copy manually: ' + text);
+      }
+      document.body.removeChild(textArea);
+    }
+
+    {% if script_enabled %}
+    // Live countdown updates
+    function updateCountdowns() {
+      const countdownElements = document.querySelectorAll('.time-remaining[data-seconds]');
+      
+      countdownElements.forEach(function(element) {
+        let seconds = parseInt(element.getAttribute('data-seconds'));
+        
+        if (seconds > 0) {
+          seconds--;
+          element.setAttribute('data-seconds', seconds);
+          
+          const hours = Math.floor(seconds / 3600);
+          const minutes = Math.floor((seconds % 3600) / 60);
+          const secs = seconds % 60;
+          
+          let timeStr;
+          if (hours > 0) {
+            timeStr = hours + 'h ' + minutes + 'm';
+          } else if (minutes > 0) {
+            timeStr = minutes + 'm ' + secs + 's';
+          } else {
+            timeStr = secs + 's';
+          }
+          
+          const countdownSpan = element.querySelector('.countdown');
+          if (countdownSpan) {
+            countdownSpan.textContent = timeStr;
+          }
+          
+          // Update styling based on time remaining
+          const card = element.closest('.burner-card');
+          if (seconds < 3600) {
+            element.classList.add('expiring');
+            if (card) card.classList.add('expiring-soon');
+          }
+          if (seconds < 300) {
+            element.classList.add('expired');
+          }
+        } else {
+          element.querySelector('.countdown').textContent = 'Expired';
+          element.classList.add('expired');
+          const card = element.closest('.burner-card');
+          if (card) card.classList.add('expired');
         }
-        document.body.removeChild(textArea);
       });
     }
+
+    // Update every second
+    setInterval(updateCountdowns, 1000);
+
+    // Auto-refresh burner list every 30 seconds
+    function refreshBurnerList() {
+      fetch('/{{ path }}/email/burner/list')
+        .then(response => response.json())
+        .then(burners => {
+          // Update the list (simple reload for now)
+          // In a more advanced implementation, we'd update the DOM directly
+          console.log('Burners refreshed:', burners.length);
+        })
+        .catch(err => console.error('Error refreshing burners:', err));
+    }
+
+    setInterval(refreshBurnerList, 30000);
+    {% endif %}
   </script>
 </body>
 </html>

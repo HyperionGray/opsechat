@@ -208,3 +208,71 @@ class TestBurnerEmailManager:
         
         manager.cleanup_expired()
         assert email not in manager.burner_addresses
+    
+    def test_get_user_burners(self):
+        """Test retrieving all active burners for a user"""
+        manager = BurnerEmailManager()
+        email1 = manager.generate_burner_email("user1")
+        email2 = manager.generate_burner_email("user1")
+        email3 = manager.generate_burner_email("user2")
+        
+        burners = manager.get_user_burners("user1")
+        assert len(burners) == 2
+        assert any(b['email'] == email1 for b in burners)
+        assert any(b['email'] == email2 for b in burners)
+        assert not any(b['email'] == email3 for b in burners)
+    
+    def test_rotate_burner(self):
+        """Test rotating to a new burner email"""
+        manager = BurnerEmailManager()
+        old_email = manager.generate_burner_email("user1")
+        
+        new_email = manager.rotate_burner("user1", old_email)
+        
+        assert new_email != old_email
+        assert old_email not in manager.burner_addresses
+        assert new_email in manager.burner_addresses
+    
+    def test_expire_burner(self):
+        """Test manually expiring a burner"""
+        manager = BurnerEmailManager()
+        email = manager.generate_burner_email("user1")
+        
+        result = manager.expire_burner(email)
+        
+        assert result is True
+        assert email not in manager.burner_addresses
+    
+    def test_custom_domain(self):
+        """Test setting custom domain for burners"""
+        manager = BurnerEmailManager()
+        manager.set_custom_domain("custom.xyz")
+        
+        email = manager.generate_burner_email("user1")
+        
+        assert "@custom.xyz" in email
+    
+    def test_custom_hours_valid(self):
+        """Test generating burner with custom validity period"""
+        manager = BurnerEmailManager()
+        email = manager.generate_burner_email("user1", hours_valid=48)
+        
+        info = manager.burner_addresses[email]
+        time_diff = info['expires_at'] - info['created_at']
+        
+        # Should be approximately 48 hours (allowing for small time differences)
+        assert 47.9 < time_diff.total_seconds() / 3600 < 48.1
+    
+    def test_user_burners_excludes_expired(self):
+        """Test that get_user_burners excludes expired burners"""
+        manager = BurnerEmailManager()
+        active_email = manager.generate_burner_email("user1")
+        expired_email = manager.generate_burner_email("user1")
+        
+        # Manually expire one burner
+        manager.burner_addresses[expired_email]['expires_at'] = datetime.datetime.now() - datetime.timedelta(hours=1)
+        
+        burners = manager.get_user_burners("user1")
+        
+        assert len(burners) == 1
+        assert burners[0]['email'] == active_email
