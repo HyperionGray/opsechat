@@ -51,3 +51,8 @@ test-results/
 __pycache__/
 *.pyc
 *.pyo
+
+# Archived/backup files
+# Note: bak/ currently contains moved experimental code (tools/, transfer_sdk/)
+# but is tracked in git for history. Future additions to bak/ will be ignored.
+# bak/

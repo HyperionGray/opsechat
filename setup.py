@@ -14,7 +14,7 @@ setup(
     include_package_data = True,
     package_data = {'': ['templates/*.html']},
     python_requires='>=3.8',
-    install_requires = ["Flask>=3.0.0,<4.0.0", "stem>=1.8.2,<2.0.0"],
+    install_requires = ["Flask>=3.0.0,<4.0.0", "stem>=1.8.2,<2.0.0", "requests>=2.31.0,<3.0.0"],
     classifiers = [ 'Development Status :: 4 - Beta',
                     'Programming Language :: Python :: 3',
                     'Programming Language :: Python :: 3.8',
