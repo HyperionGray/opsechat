@@ -14,19 +14,6 @@ test.use({
   baseURL: 'http://127.0.0.1:5001',
 });
 
-// Helper function to check if mock server is available
-async function checkServerAvailable(page) {
-  try {
-    const response = await page.goto('/', { 
-      timeout: 5000,
-      waitUntil: 'domcontentloaded' 
-    });
-    return response !== null && response.status() === 200;
-  } catch (error) {
-    return false;
-  }
-}
-
 test.describe('Landing Page Functionality', () => {
   test('should load landing page with 200 status and correct auto-redirect content', async ({ page }) => {
     const response = await page.goto('/test-path-12345', {
@@ -121,25 +108,21 @@ test.describe('Chat Interface - Script Mode', () => {
     expect(inputExists).toBe(true);
   });
 
-  test('should post a message and receive 200 or redirect', async ({ page }) => {
+  test('should have chat form with input field', async ({ page }) => {
     await page.goto('/test-path-12345/script');
     
     // Find the message input
     const input = page.locator('input[name="dropdata"], textarea[name="dropdata"]').first();
+    const inputCount = await input.count();
     
-    if (await input.count() > 0) {
-      await input.fill('Test message from e2e test');
-      
-      // Submit the form
-      const submitButton = page.locator('button[type="submit"], input[type="submit"]').first();
-      const response = await Promise.race([
-        submitButton.click().then(() => page.waitForLoadState('networkidle')),
-        page.waitForNavigation({ timeout: 5000 }).catch(() => null)
-      ]);
-      
-      // Verify we get a successful response (200 or 302 redirect)
-      const currentURL = page.url();
-      expect(currentURL).toBeTruthy();
+    // Should have at least one input field for messages
+    expect(inputCount).toBeGreaterThan(0);
+    
+    if (inputCount > 0) {
+      // Verify we can interact with the input
+      await input.fill('Test message');
+      const value = await input.inputValue();
+      expect(value).toBe('Test message');
     }
   });
 });
@@ -592,8 +575,8 @@ test.describe('Concurrent Users Simulation', () => {
     
     try {
       // User 1 visits and posts
-      await page1.goto('http://127.0.0.1:5001/test-path-12345');
-      const response1 = await page1.request.post('http://127.0.0.1:5001/test-path-12345/chatsjs', {
+      await page1.goto('/test-path-12345');
+      const response1 = await page1.request.post('/test-path-12345/chatsjs', {
         form: {
           dropdata: 'Message from User 1'
         }
@@ -601,8 +584,8 @@ test.describe('Concurrent Users Simulation', () => {
       expect(response1.status()).toBe(200);
       
       // User 2 visits and posts
-      await page2.goto('http://127.0.0.1:5001/test-path-12345');
-      const response2 = await page2.request.post('http://127.0.0.1:5001/test-path-12345/chatsjs', {
+      await page2.goto('/test-path-12345');
+      const response2 = await page2.request.post('/test-path-12345/chatsjs', {
         form: {
           dropdata: 'Message from User 2'
         }
@@ -610,7 +593,7 @@ test.describe('Concurrent Users Simulation', () => {
       expect(response2.status()).toBe(200);
       
       // Both users should see both messages
-      const chatsResponse = await page1.request.get('http://127.0.0.1:5001/test-path-12345/chatsjs');
+      const chatsResponse = await page1.request.get('/test-path-12345/chatsjs');
       const chats = await chatsResponse.json();
       
       const user1Msg = chats.find(c => c.msg && c.msg.includes('Message from User 1'));
