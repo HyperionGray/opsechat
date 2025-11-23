@@ -14,8 +14,11 @@ WORKDIR /app
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt || \
-    pip install --no-cache-dir -r requirements.txt
+# Install with fallback for environments with SSL issues (e.g., CI/test environments)
+# In production, the first command should succeed
+RUN pip install --no-cache-dir -r requirements.txt || \
+    (echo "WARNING: SSL verification failed, retrying with --trusted-host (not recommended for production)" && \
+     pip install --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt)
 
 # Copy application code
 COPY runserver.py .

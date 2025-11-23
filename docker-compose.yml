@@ -9,9 +9,10 @@ services:
     volumes:
       - ./torrc:/etc/tor/torrc:ro
       - tor-data:/var/lib/tor
-    ports:
-      - "9050:9050"  # SOCKS proxy
-      - "9051:9051"  # Control port
+    # Ports are only exposed within the container network, not to host
+    # expose:
+    #   - "9050"  # SOCKS proxy (internal only)
+    #   - "9051"  # Control port (internal only)
     networks:
       - opsechat-network
     restart: unless-stopped
@@ -35,8 +36,10 @@ services:
       - TOR_CONTROL_PORT=9051
       - TOR_CONTROL_HOST=tor
       - FLASK_DEBUG=0
-    ports:
-      - "5000:5000"
+    # No ports exposed to host - access only via Tor hidden service
+    # Uncomment for debugging/development only:
+    # ports:
+    #   - "5000:5000"
     networks:
       - opsechat-network
     restart: unless-stopped

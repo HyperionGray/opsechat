@@ -111,17 +111,18 @@ docker-compose down
 
 - Both containers run in an isolated `opsechat-network` bridge network
 - The opsechat app connects to the Tor daemon via the control port (9051)
-- No ports are exposed to the host by default except:
-  - 5000: Flask application (only if you need direct access)
-  - 9050: Tor SOCKS proxy (optional)
-  - 9051: Tor control port (for debugging only)
+- **No ports are exposed to the host by default for security**
+- Access is **only through the Tor hidden service** (.onion address)
+- For debugging/development, you can uncomment the port mapping in docker-compose.yml
 
 ### Security Considerations
 
-1. **Tor Control Authentication**: The torrc file includes a hashed password for control port access
-2. **No Disk Storage**: The opsechat app stores nothing on disk (in-memory only)
-3. **Ephemeral Hidden Services**: Services are created dynamically and destroyed on shutdown
-4. **Isolated Network**: Containers communicate via a dedicated bridge network
+1. **No Host Port Exposure**: By default, no ports are exposed to the host. The application is only accessible via the Tor hidden service, maintaining anonymity.
+2. **Cookie Authentication**: Tor uses cookie authentication instead of password authentication for better security.
+3. **Isolated Network**: Containers communicate via a dedicated bridge network, isolated from the host.
+4. **Internal-Only Ports**: Tor control port and SOCKS proxy are only accessible within the container network.
+5. **No Disk Storage**: The opsechat app stores nothing on disk (in-memory only).
+6. **Ephemeral Hidden Services**: Services are created dynamically and destroyed on shutdown.
 
 ## Configuration
 
@@ -142,6 +143,26 @@ podman-compose up -d --build
 # or
 docker-compose up -d --build
 ```
+
+### Development/Debugging Mode
+
+For local development and debugging, you may want to expose Flask directly:
+
+1. Edit `docker-compose.yml` and uncomment the ports section under `opsechat`:
+   ```yaml
+   ports:
+     - "5000:5000"
+   ```
+
+2. Restart services:
+   ```bash
+   ./compose-down.sh
+   ./compose-up.sh
+   ```
+
+3. Access directly at `http://localhost:5000/{path}`
+
+**⚠️ WARNING**: Only use this for development. Never expose Flask directly in production as it bypasses Tor anonymity.
 
 ## Troubleshooting
 
