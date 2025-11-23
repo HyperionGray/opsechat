@@ -42,7 +42,7 @@ services:
     #   - "5000:5000"
     networks:
       - opsechat-network
-    restart: unless-stopped
+    restart: on-failure
     stdin_open: true
     tty: true
 
