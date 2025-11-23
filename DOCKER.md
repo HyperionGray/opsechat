@@ -54,6 +54,20 @@ Look for a line like:
 [*] Your service is available at: abc123...xyz.onion/randompath
 ```
 
+### Verifying the Setup
+
+Run the verification script to check that everything is working:
+
+```bash
+./verify-setup.sh
+```
+
+This will check:
+- Container status
+- Tor service health
+- Network connectivity
+- Hidden service address
+
 ### Viewing Logs
 
 Watch logs in real-time:
