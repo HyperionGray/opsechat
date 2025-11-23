@@ -15,7 +15,7 @@ services:
     #   - "9051"  # Control port (internal only)
     networks:
       - opsechat-network
-    restart: unless-stopped
+    restart: on-failure
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "9051"]
       interval: 10s

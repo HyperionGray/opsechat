@@ -834,7 +834,15 @@ def email_domain_rotate(url_addition):
 def main():
     # Get Tor control connection parameters from environment
     tor_host = os.environ.get('TOR_CONTROL_HOST', '127.0.0.1')
-    tor_port = int(os.environ.get('TOR_CONTROL_PORT', '9051'))
+    
+    # Validate and parse port number
+    try:
+        tor_port = int(os.environ.get('TOR_CONTROL_PORT', '9051'))
+        if not (1 <= tor_port <= 65535):
+            raise ValueError(f"Port must be between 1 and 65535, got {tor_port}")
+    except ValueError as e:
+        sys.stderr.write(f'[!] Invalid TOR_CONTROL_PORT value: {e}\n')
+        sys.exit(1)
     
     try:
         controller = Controller.from_port(address=tor_host, port=tor_port)

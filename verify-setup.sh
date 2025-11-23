@@ -63,6 +63,8 @@ fi
 # Check if opsechat generated an onion address
 echo ""
 echo -e "${YELLOW}[*]${NC} Checking for hidden service address..."
+# Tor v3 onion addresses are 56 characters followed by .onion
+# Pattern matches: 56 alphanumeric chars + .onion/ + 32 char path
 LOGS=$($COMPOSE_CMD logs opsechat 2>/dev/null | grep -o "[a-z0-9]\{56\}\.onion/[a-zA-Z0-9]\{32\}" | head -1)
 
 if [ ! -z "$LOGS" ]; then

@@ -15,4 +15,6 @@ Log notice stdout
 SocksPort 9050
 
 # Security settings
-DisableDebuggerAttachment 0
+# DisableDebuggerAttachment: Set to 1 in production to prevent debugger attachment
+# Set to 0 for development/debugging only
+DisableDebuggerAttachment 1

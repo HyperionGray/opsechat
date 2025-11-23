@@ -14,8 +14,10 @@ WORKDIR /app
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
-# Install with fallback for environments with SSL issues (e.g., CI/test environments)
-# In production, the first command should succeed
+# Install with fallback for environments with SSL issues (e.g., CI/test environments with self-signed certs)
+# In production deployments, the first command should succeed with proper SSL verification
+# The fallback is ONLY for testing environments and should not be used in production
+# TODO: Consider using a multi-stage build or pre-built wheels to avoid this compromise
 RUN pip install --no-cache-dir -r requirements.txt || \
     (echo "WARNING: SSL verification failed, retrying with --trusted-host (not recommended for production)" && \
      pip install --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt)
