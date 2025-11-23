@@ -101,8 +101,8 @@ remove_tor_config() {
                 sudo cp "$TOR_CONFIG" "${TOR_CONFIG}.backup.$(date +%Y%m%d_%H%M%S)"
                 
                 print_info "Removing opsechat configuration from Tor..."
-                # Remove opsechat configuration lines
-                sudo sed -i '/# opsechat configuration/,+2d' "$TOR_CONFIG"
+                # Remove opsechat configuration lines (3 lines: comment + ControlPort + CookieAuthentication)
+                sudo sed -i '/# opsechat configuration/,+3d' "$TOR_CONFIG"
                 
                 print_info "Restarting Tor service..."
                 sudo systemctl restart tor 2>/dev/null || true

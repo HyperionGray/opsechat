@@ -13,14 +13,23 @@ Install
 
 For a clean box installation that automatically installs all dependencies:
 
+**Option 1: Download and run (recommended)**
 ```bash
-# Download and run the installer
-curl -sSL https://raw.githubusercontent.com/HyperionGray/opsechat/master/install.sh | bash
-
-# Or clone first and then install
+# Clone the repository first
 git clone https://github.com/HyperionGray/opsechat.git
 cd opsechat
+
+# Review the script if desired
+less install.sh
+
+# Run the installer
 ./install.sh
+```
+
+**Option 2: Direct download and run**
+```bash
+# Download and run in one step (use with caution)
+curl -sSL https://raw.githubusercontent.com/HyperionGray/opsechat/master/install.sh | bash
 ```
 
 The installer will:

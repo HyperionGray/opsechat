@@ -15,17 +15,23 @@ This guide provides detailed instructions for installing opsechat on a clean Lin
 
 For most users, the automated installer is the fastest way to get started:
 
-```bash
-curl -sSL https://raw.githubusercontent.com/HyperionGray/opsechat/master/install.sh | bash
-```
-
-Or download the repository first:
-
+**Option 1: Clone and run (recommended)**
 ```bash
 git clone https://github.com/HyperionGray/opsechat.git
 cd opsechat
+# Optional: Review the script
+less install.sh
+# Run the installer
 ./install.sh
 ```
+
+**Option 2: Direct download**
+```bash
+# Use with caution - downloads and executes script without review
+curl -sSL https://raw.githubusercontent.com/HyperionGray/opsechat/master/install.sh | bash
+```
+
+We recommend Option 1 as it allows you to review the installer script before execution.
 
 ## System Requirements
 
@@ -359,14 +365,29 @@ sudo pacman -R tor python
 
 ### Tor Configuration
 
-The installer configures Tor with `CookieAuthentication 0` for simplicity. This allows any local process to control Tor.
+The installer configures Tor with `CookieAuthentication 0` for simplicity. This allows any local process to control Tor, which creates a security risk in multi-user environments.
 
-For increased security, you can:
-1. Use password authentication
-2. Restrict control port access to specific users
-3. Use Unix socket instead of TCP port
+**Security Implications:**
+- Any local process can create hidden services
+- Malicious software could abuse Tor control access
+- Acceptable for single-user systems or trusted environments
 
-See [SECURITY.md](SECURITY.md) for more details.
+**For increased security, you can:**
+
+1. **Use password authentication** - Edit `/etc/tor/torrc`:
+   ```
+   HashedControlPassword 16:872860B76453A77D60CA2BB8C1A7042072093276A3D701AD684053EC4C
+   ```
+   Generate password hash with: `tor --hash-password your_password`
+
+2. **Restrict to specific users** - Use file permissions on Unix socket
+
+3. **Use Unix socket instead of TCP port** - Edit `/etc/tor/torrc`:
+   ```
+   ControlSocket /var/run/tor/control
+   ```
+
+See [SECURITY.md](SECURITY.md) for detailed configuration examples.
 
 ### Running as Root
 

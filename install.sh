@@ -204,6 +204,8 @@ configure_tor() {
             echo "CookieAuthentication 0" | sudo tee -a "$TOR_CONFIG" > /dev/null
             
             print_info "Tor configuration updated"
+            print_warning "Note: CookieAuthentication is disabled for simplicity. For better security,"
+            print_warning "consider enabling password authentication. See SECURITY.md for details."
         fi
     else
         print_warning "Tor configuration file not found at $TOR_CONFIG"
@@ -243,7 +245,8 @@ setup_repository() {
             cd "$INSTALL_DIR"
             if [ -d .git ]; then
                 print_info "Updating repository..."
-                git pull
+                # Explicitly pull from origin to avoid unexpected sources
+                git pull origin "$(git rev-parse --abbrev-ref HEAD)" || git pull
             else
                 print_warning "Directory exists but is not a git repository. Skipping update."
             fi
