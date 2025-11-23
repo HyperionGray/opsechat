@@ -1,0 +1,19 @@
+# Tor configuration for opsechat
+# Enables control port for stem to create ephemeral hidden services
+
+# Control port configuration
+ControlPort 0.0.0.0:9051
+CookieAuthentication 0
+HashedControlPassword 16:872860B76453A77D60CA2BB8C1A7042072093276A3D701AD684053EC4C
+
+# Data directory
+DataDirectory /var/lib/tor
+
+# Log to stdout for container visibility
+Log notice stdout
+
+# Network configuration
+SocksPort 0.0.0.0:9050
+
+# Security settings
+DisableDebuggerAttachment 0

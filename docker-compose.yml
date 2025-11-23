@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  # Tor daemon service
+  tor:
+    image: alpine:latest
+    container_name: opsechat-tor
+    command: sh -c "apk add --no-cache tor && tor -f /etc/tor/torrc"
+    volumes:
+      - ./torrc:/etc/tor/torrc:ro
+      - tor-data:/var/lib/tor
+    ports:
+      - "9050:9050"  # SOCKS proxy
+      - "9051:9051"  # Control port
+    networks:
+      - opsechat-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "9051"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Main opsechat application
+  opsechat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: opsechat-app
+    depends_on:
+      tor:
+        condition: service_healthy
+    environment:
+      - TOR_CONTROL_PORT=9051
+      - TOR_CONTROL_HOST=tor
+      - FLASK_DEBUG=0
+    ports:
+      - "5000:5000"
+    networks:
+      - opsechat-network
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+networks:
+  opsechat-network:
+    driver: bridge
+
+volumes:
+  tor-data:

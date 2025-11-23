@@ -9,6 +9,20 @@ To be a opsechat client requires a Tor Browser on any OS.
 Install
 =======
 
+## Option 1: Docker/Podman (Recommended)
+
+For the easiest setup with full isolation, use containers:
+
+```bash
+$ git clone git@github.com:HyperionGray/opsechat.git
+$ cd opsechat
+$ ./compose-up.sh
+```
+
+That's it! The script will handle everything. See [DOCKER.md](DOCKER.md) for full documentation.
+
+## Option 2: Native Installation
+
 Install Tor, Open Tor browser to establish a Tor client port
 
 Activate your favorite virtualenv e.g..

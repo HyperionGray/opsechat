@@ -6,6 +6,7 @@ import traceback
 import sys
 import string
 import textwrap
+import os
 from stem.control import Controller
 from hashlib import sha224
 import datetime
@@ -831,11 +832,14 @@ def email_domain_rotate(url_addition):
 
 
 def main():
-
+    # Get Tor control connection parameters from environment
+    tor_host = os.environ.get('TOR_CONTROL_HOST', '127.0.0.1')
+    tor_port = int(os.environ.get('TOR_CONTROL_PORT', '9051'))
+    
     try:
-        controller = Controller.from_port()
+        controller = Controller.from_port(address=tor_host, port=tor_port)
     except SocketError:
-        sys.stderr.write('[!] Tor proxy or Control Port are not running. Try starting the Tor Browser or Tor daemon and ensure the ControlPort is open.\n')
+        sys.stderr.write(f'[!] Tor proxy or Control Port are not running at {tor_host}:{tor_port}. Try starting the Tor Browser or Tor daemon and ensure the ControlPort is open.\n')
         sys.exit(1)
         
     
@@ -868,7 +872,7 @@ def main():
             print("[*] Unable to determine our ephemeral service's hostname")
 
         try:
-            app.run(debug=False, threaded = True)
+            app.run(host='0.0.0.0', debug=False, threaded = True)
         finally:
 
             print(" * Shutting down our hidden service")
