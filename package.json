@@ -8,6 +8,7 @@
     "test:headless": "playwright test --project=chromium-headless --project=firefox-headless --project=webkit-headless",
     "test:headed": "playwright test --project=chromium-headed --headed",
     "test:basic": "playwright test tests/basic.spec.js",
+    "test:e2e": "playwright test tests/e2e.spec.js",
     "test:ui": "playwright test tests/ui-headless.spec.js tests/ui-headed.spec.js",
     "test:report": "playwright show-report"
   },
