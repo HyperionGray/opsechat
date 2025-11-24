@@ -39,6 +39,7 @@ The project now includes comprehensive testing using Playwright for both headles
 ```
 tests/
 ├── basic.spec.js          # Basic structure and module tests
+├── e2e.spec.js            # End-to-end functional tests (NEW)
 ├── mock-server.spec.js    # Mock server integration tests
 ├── ui-headless.spec.js    # UI tests in headless mode
 ├── ui-headed.spec.js      # UI tests in headed mode
@@ -80,6 +81,11 @@ npm run test:basic
 Run only UI tests:
 ```bash
 npm run test:ui
+```
+
+Run only end-to-end tests:
+```bash
+npm run test:e2e
 ```
 
 ### Running Specific Browsers
@@ -226,6 +232,44 @@ Current test coverage includes:
 - ✅ UI rendering (script and noscript modes)
 - ✅ Responsive design
 - ✅ Form interactions
+- ✅ **End-to-end user workflows** (NEW)
+- ✅ **Chat message posting and retrieval with content validation** (NEW)
+- ✅ **Email burner generation and management** (NEW)
+- ✅ **PGP message preservation** (NEW)
+- ✅ **XSS sanitization** (NEW)
+- ✅ **Multi-user concurrent chat scenarios** (NEW)
+- ✅ **Complete user journey testing** (NEW)
+
+### New E2E Test Suite
+
+The new `e2e.spec.js` test suite provides comprehensive end-to-end testing that validates:
+
+1. **HTTP Status Codes AND Content**: Every test checks both the status code (200, 404, 302) and validates the actual response content
+2. **User Workflows**: Tests simulate real user interactions:
+   - Landing page visit → Chat page → Post message → Read messages
+   - Email burner generation → Rotation → Expiration
+   - Script vs NoScript mode navigation
+   
+3. **Content Validation**: Tests verify:
+   - HTML structure and required elements
+   - JSON response format and data structure
+   - Message content preservation (including PGP)
+   - Proper sanitization of user input
+   
+4. **Security Features**:
+   - Session cookie creation and persistence
+   - User ID and color assignment
+   - PGP message bypass of sanitization
+   - XSS prevention through input sanitization
+   
+5. **Error Handling**:
+   - Empty message submission
+   - Invalid paths (404 responses)
+   - Whitespace-only input
+   
+6. **Concurrent Users**: Simulates multiple users in separate browser contexts
+
+The e2e tests run against the mock server and validate complete functionality as a user would experience it.
 
 ## Future Enhancements
 
