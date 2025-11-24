@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # Tor daemon service
+  tor:
+    image: alpine:latest
+    container_name: opsechat-tor
+    command: sh -c "apk add --no-cache tor netcat-openbsd && tor -f /etc/tor/torrc"
+    volumes:
+      - ./torrc:/etc/tor/torrc:ro
+      - tor-data:/var/lib/tor
+    # Ports are only exposed within the container network, not to host
+    # expose:
+    #   - "9050"  # SOCKS proxy (internal only)
+    #   - "9051"  # Control port (internal only)
+    networks:
+      - opsechat-network
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "9051"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Main opsechat application
+  opsechat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: opsechat-app
+    depends_on:
+      tor:
+        condition: service_healthy
+    environment:
+      - TOR_CONTROL_PORT=9051
+      - TOR_CONTROL_HOST=tor
+      - FLASK_DEBUG=0
+    # No ports exposed to host - access only via Tor hidden service
+    # Uncomment for debugging/development only:
+    # ports:
+    #   - "5000:5000"
+    networks:
+      - opsechat-network
+    restart: on-failure
+    stdin_open: true
+    tty: true
+
+networks:
+  opsechat-network:
+    driver: bridge
+
+volumes:
+  tor-data:

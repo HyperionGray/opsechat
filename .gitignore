@@ -56,3 +56,8 @@ __pycache__/
 # Note: bak/ currently contains moved experimental code (tools/, transfer_sdk/)
 # but is tracked in git for history. Future additions to bak/ will be ignored.
 # bak/
+
+# Container/Docker artifacts
+*.log
+docker-compose.override.yml
+.env

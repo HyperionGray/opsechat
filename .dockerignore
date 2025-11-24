@@ -1,0 +1,72 @@
+# Git files
+.git
+.gitignore
+.github
+
+# Documentation (not needed in container)
+*.md
+AGENTS.md
+EMAIL_QUICKSTART.md
+EMAIL_SYSTEM.md
+IMPLEMENTATION_SUMMARY.md
+MODERNIZATION.md
+PGP_TEST_EXAMPLE.md
+PGP_USAGE.md
+SECURITY.md
+SECURITY_ASSESSMENT.md
+TESTING.md
+REPOSITORY_STATUS.md
+
+# Python cache
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+dropenv/
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+node_modules/
+playwright-report/
+test-results/
+tests/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Backup files
+bak/
+
+# Container files (don't need these inside the container)
+Dockerfile
+docker-compose.yml
+compose-up.sh
+compose-down.sh
+DOCKER.md
+
+# Node/npm
+package.json
+package-lock.json
+playwright.config.js
+
+# Other
+LICENSE
