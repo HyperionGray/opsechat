@@ -23,24 +23,99 @@ That's it! The script will handle everything. See [DOCKER.md](DOCKER.md) for ful
 
 ## Option 2: Native Installation
 
-Install Tor, Open Tor browser to establish a Tor client port
+### Quick Install (Recommended)
 
-Activate your favorite virtualenv e.g..
+For a clean box installation that automatically installs all dependencies:
 
-`$ git clone git@github.com:HyperionGray/opsechat.git`
+**Option 1: Download and run (recommended)**
+```bash
+# Clone the repository first
+git clone https://github.com/HyperionGray/opsechat.git
+cd opsechat
 
-`$ cd opsechat`
+# Review the script if desired
+less install.sh
 
-`$ sudo apt-get install python3-virtualenv`
+# Run the installer
+./install.sh
+```
 
-`$ python3 -m venv dropenv`
+**Option 2: Direct download and run**
+```bash
+# Download and run in one step (use with caution)
+curl -sSL https://raw.githubusercontent.com/HyperionGray/opsechat/master/install.sh | bash
+```
 
-`$ source dropenv/bin/activate`
+The installer will:
+- Detect your Linux distribution (Ubuntu/Debian, RHEL/CentOS/Fedora, Arch)
+- Install system dependencies (Python 3.8+, Tor, Git)
+- Configure Tor with control port enabled
+- Create a Python virtual environment
+- Install all Python dependencies
+- Create a launcher script for easy startup
 
-`$ pip install -r requirements.txt`
+**Supported Operating Systems:**
+- Ubuntu/Debian (using apt)
+- RHEL/CentOS/Fedora (using yum/dnf)
+- Arch Linux (using pacman)
 
+**Requirements:**
+- Root/sudo access for system package installation
+- Internet connection
 
-That's it!
+After installation, start opsechat with:
+```bash
+cd ~/opsechat
+./start-opsechat.sh
+```
+
+## Manual Install
+
+If you prefer to install manually or need more control:
+
+1. Install system dependencies:
+```bash
+# Ubuntu/Debian
+sudo apt-get update
+sudo apt-get install -y python3 python3-pip python3-venv tor git
+
+# RHEL/CentOS/Fedora
+sudo dnf install -y python3 python3-pip tor git
+
+# Arch
+sudo pacman -S python python-pip tor git
+```
+
+2. Configure Tor:
+```bash
+sudo bash -c 'echo "ControlPort 9051" >> /etc/tor/torrc'
+sudo bash -c 'echo "CookieAuthentication 0" >> /etc/tor/torrc'
+sudo systemctl restart tor
+```
+
+3. Clone and setup opsechat:
+```bash
+git clone https://github.com/HyperionGray/opsechat.git
+cd opsechat
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+4. Run the server:
+```bash
+python runserver.py
+```
+
+## Uninstall
+
+To remove opsechat:
+```bash
+cd ~/opsechat
+./uninstall.sh
+```
+
+This will remove the installation directory and optionally clean up Tor configuration, while preserving system packages.
 
 Testing
 =======
