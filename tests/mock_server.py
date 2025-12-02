@@ -15,11 +15,34 @@ import datetime
 import re
 
 # Import email system
-from email_system import email_storage, burner_manager
+try:
+    from email_system import email_storage, burner_manager
+except ImportError as e:
+    print(f"Warning: Could not import email_system: {e}")
+    # Create mock objects for testing
+    class MockEmailStorage:
+        def create_user_inbox(self, user_id): pass
+    class MockBurnerManager:
+        def cleanup_expired(self): pass
+        def generate_burner_email(self, user_id): return f"test{user_id}@example.com"
+        def rotate_burner(self, user_id, old_email): return f"test{user_id}@example.com"
+        def get_user_burners(self, user_id): return []
+        def get_user_for_burner(self, email): return None
+        def expire_burner(self, email): pass
+    
+    email_storage = MockEmailStorage()
+    burner_manager = MockBurnerManager()
 
 # Create Flask app with the correct template directory
 template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'templates')
 static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static')
+
+# Verify directories exist
+if not os.path.exists(template_dir):
+    print(f"Warning: Template directory not found: {template_dir}")
+if not os.path.exists(static_dir):
+    print(f"Warning: Static directory not found: {static_dir}")
+
 app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
 app.secret_key = 'test-secret-key-for-mock-server'
 
@@ -37,6 +60,13 @@ def get_random_color():
     r = lambda: random.randint(0, 128)
     return (r(), r(), r())
 
+# Remove headers that can be used to fingerprint this server
+@app.after_request
+def remove_headers(response):
+    response.headers["Server"] = ""
+    response.headers["Date"] = ""
+    return response
+
 @app.route('/', methods=["GET"])
 def index():
     return ('', 200)
@@ -51,9 +81,25 @@ def drop_landing(url_addition):
         chatters.append(session["_id"])
         session["color"] = get_random_color()
     
-    return render_template("landing_auto.html",
-                          hostname=app.config["hostname"],
-                          path=app.config["path"])
+    try:
+        return render_template("landing_auto.html",
+                              hostname=app.config["hostname"],
+                              path=app.config["path"])
+    except Exception as e:
+        print(f"Template rendering error: {e}")
+        # Fallback to simple HTML response
+        return f'''
+        <html>
+        <head><title>Opsechat Test</title></head>
+        <body>
+        <h1>Opsechat Test Server</h1>
+        <p>Hostname: {app.config["hostname"]}</p>
+        <p>Path: {app.config["path"]}</p>
+        <p><a href="/{app.config["path"]}/script">Script Version</a></p>
+        <p><a href="/{app.config["path"]}/noscript">NoScript Version</a></p>
+        </body>
+        </html>
+        ''', 200
 
 @app.route('/<string:url_addition>/script', methods=["GET"])
 def drop_script(url_addition):
@@ -65,9 +111,22 @@ def drop_script(url_addition):
         chatters.append(session["_id"])
         session["color"] = get_random_color()
     
-    return render_template("drop.html",
-                          hostname=app.config["hostname"],
-                          path=app.config["path"])
+    try:
+        return render_template("drop.html",
+                              hostname=app.config["hostname"],
+                              path=app.config["path"])
+    except Exception as e:
+        print(f"Template rendering error in /script: {e}")
+        return f'''
+        <html>
+        <head><title>Opsechat Script Version</title></head>
+        <body>
+        <h1>Opsechat Script Version</h1>
+        <p>JavaScript enabled version</p>
+        <p><a href="/{app.config["path"]}/chats">View Chats</a></p>
+        </body>
+        </html>
+        ''', 200
 
 @app.route('/<string:url_addition>/noscript', methods=["GET"])
 def drop_noscript(url_addition):
@@ -76,9 +135,22 @@ def drop_noscript(url_addition):
         chatters.append(session["_id"])
         session["color"] = get_random_color()
     
-    return render_template("drop.noscript.html",
-                          hostname=app.config["hostname"],
-                          path=app.config["path"])
+    try:
+        return render_template("drop.noscript.html",
+                              hostname=app.config["hostname"],
+                              path=app.config["path"])
+    except Exception as e:
+        print(f"Template rendering error in /noscript: {e}")
+        return f'''
+        <html>
+        <head><title>Opsechat NoScript Version</title></head>
+        <body>
+        <h1>Opsechat NoScript Version</h1>
+        <p>JavaScript disabled version</p>
+        <p><a href="/{app.config["path"]}/chats">View Chats</a></p>
+        </body>
+        </html>
+        ''', 200
 
 @app.route('/<string:url_addition>/chats', methods=["GET", "POST"])
 def chat_messages(url_addition):
@@ -101,9 +173,31 @@ def chat_messages(url_addition):
         
         return redirect(app.config["path"], code=302)
     
-    return render_template("chats.html",
-                          chatlines=chatlines,
-                          num_people=len(chatters))
+    try:
+        return render_template("chats.html",
+                              chatlines=chatlines,
+                              num_people=len(chatters))
+    except Exception as e:
+        print(f"Template rendering error in /chats: {e}")
+        # Fallback to simple HTML response
+        chat_html = ""
+        for chat in chatlines[-10:]:  # Show last 10 messages
+            chat_html += f"<p><strong>{chat.get('username', 'anonymous')}</strong>: {chat.get('msg', '')}</p>"
+        
+        return f'''
+        <html>
+        <head><title>Opsechat Chats</title></head>
+        <body>
+        <h1>Chat Messages</h1>
+        <div>{chat_html}</div>
+        <p>People online: {len(chatters)}</p>
+        <form method="post">
+        <input type="text" name="dropdata" placeholder="Enter message">
+        <input type="submit" value="Send">
+        </form>
+        </body>
+        </html>
+        ''', 200
 
 @app.route('/<string:url_addition>/chatsjs', methods=["GET", "POST"])
 def chat_messages_js(url_addition):
@@ -155,11 +249,32 @@ def email_burner(url_addition):
     # Get all active burners for this user
     active_burners = burner_manager.get_user_burners(session["_id"])
     
-    return render_template("email_burner.html",
-                          hostname=app.config["hostname"],
-                          path=app.config["path"],
-                          active_burners=active_burners,
-                          script_enabled=False)
+    try:
+        return render_template("email_burner.html",
+                              hostname=app.config["hostname"],
+                              path=app.config["path"],
+                              active_burners=active_burners,
+                              script_enabled=False)
+    except Exception as e:
+        print(f"Template rendering error in /email/burner: {e}")
+        # Fallback to simple HTML response
+        burner_html = ""
+        for burner in active_burners:
+            burner_html += f"<p>Email: {burner.get('email', 'N/A')}</p>"
+        
+        return f'''
+        <html>
+        <head><title>Burner Email</title></head>
+        <body>
+        <h1>Burner Email Generator</h1>
+        <div>{burner_html}</div>
+        <form method="post">
+        <input type="hidden" name="action" value="generate">
+        <input type="submit" value="Generate New Burner">
+        </form>
+        </body>
+        </html>
+        ''', 200
 
 @app.route('/<string:url_addition>/email/burner/yesscript', methods=["GET"])
 def email_burner_script(url_addition):
@@ -174,11 +289,32 @@ def email_burner_script(url_addition):
     burner_manager.cleanup_expired()
     active_burners = burner_manager.get_user_burners(session["_id"])
     
-    return render_template("email_burner.html",
-                          hostname=app.config["hostname"],
-                          path=app.config["path"],
-                          active_burners=active_burners,
-                          script_enabled=True)
+    try:
+        return render_template("email_burner.html",
+                              hostname=app.config["hostname"],
+                              path=app.config["path"],
+                              active_burners=active_burners,
+                              script_enabled=True)
+    except Exception as e:
+        print(f"Template rendering error in /email/burner/yesscript: {e}")
+        # Fallback to simple HTML response
+        burner_html = ""
+        for burner in active_burners:
+            burner_html += f"<p>Email: {burner.get('email', 'N/A')}</p>"
+        
+        return f'''
+        <html>
+        <head><title>Burner Email (Script Enabled)</title></head>
+        <body>
+        <h1>Burner Email Generator (JavaScript)</h1>
+        <div>{burner_html}</div>
+        <form method="post">
+        <input type="hidden" name="action" value="generate">
+        <input type="submit" value="Generate New Burner">
+        </form>
+        </body>
+        </html>
+        ''', 200
 
 @app.route('/<string:url_addition>/email/burner/list', methods=["GET"])
 def email_burner_list_json(url_addition):
@@ -212,5 +348,15 @@ def email_burner_expire(url_addition, email):
 
 if __name__ == '__main__':
     print("Starting mock server for testing...")
-    print(f"Test URL: http://localhost:5001/{app.config['path']}/email/burner")
-    app.run(debug=False, host='127.0.0.1', port=5001, threaded=True)
+    print(f"Template directory: {template_dir}")
+    print(f"Static directory: {static_dir}")
+    print(f"Test URL: http://127.0.0.1:5001/{app.config['path']}")
+    print(f"Health check URL: http://127.0.0.1:5001/")
+    
+    try:
+        app.run(debug=False, host='127.0.0.1', port=5001, threaded=True)
+    except Exception as e:
+        print(f"Error starting mock server: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

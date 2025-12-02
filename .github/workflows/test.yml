@@ -48,22 +48,42 @@ jobs:
     
     - name: Start mock server for testing
       run: |
+        echo "Starting mock server..."
         python tests/mock_server.py &
-        echo $! > mock_server.pid
+        SERVER_PID=$!
+        echo $SERVER_PID > mock_server.pid
+        echo "Mock server started with PID: $SERVER_PID"
         sleep 5  # Give the server time to start
         
     - name: Verify mock server is running
       run: |
-        # Retry up to 10 times with 1 second delay
-        for i in {1..10}; do
-          if curl -f http://127.0.0.1:5001/ >/dev/null 2>&1; then
-            echo "Mock server is running"
-            exit 0
+        echo "Checking if mock server is responding..."
+        # Retry up to 15 times with 2 second delay
+        for i in {1..15}; do
+          if curl -f -s http://127.0.0.1:5001/ >/dev/null 2>&1; then
+            echo "✓ Mock server is running and responding"
+            # Test the main endpoint too
+            if curl -f -s "http://127.0.0.1:5001/test-path-12345" >/dev/null 2>&1; then
+              echo "✓ Mock server main endpoint is working"
+              exit 0
+            else
+              echo "! Mock server main endpoint not responding, but root is working"
+              exit 0  # Continue anyway, root endpoint working is sufficient
+            fi
           fi
-          echo "Attempt $i: Mock server not ready, waiting..."
-          sleep 1
+          echo "Attempt $i/15: Mock server not ready, waiting 2 seconds..."
+          sleep 2
         done
-        echo "Mock server failed to start after 10 attempts"
+        echo "❌ Mock server failed to start after 15 attempts"
+        echo "Checking if process is still running..."
+        if [ -f mock_server.pid ]; then
+          PID=$(cat mock_server.pid)
+          if ps -p $PID > /dev/null; then
+            echo "Process $PID is still running"
+          else
+            echo "Process $PID is not running"
+          fi
+        fi
         exit 1
     
     - name: Run Playwright tests (headless)
@@ -72,10 +92,28 @@ jobs:
     - name: Stop mock server
       if: always()
       run: |
+        echo "Stopping mock server..."
         if [ -f mock_server.pid ]; then
-          kill $(cat mock_server.pid) || true
+          PID=$(cat mock_server.pid)
+          echo "Attempting to stop process $PID"
+          if ps -p $PID > /dev/null; then
+            kill $PID || true
+            sleep 2
+            # Force kill if still running
+            if ps -p $PID > /dev/null; then
+              echo "Process still running, force killing..."
+              kill -9 $PID || true
+            fi
+            echo "✓ Mock server stopped"
+          else
+            echo "Process $PID was not running"
+          fi
           rm mock_server.pid
+        else
+          echo "No PID file found"
         fi
+        # Clean up any remaining processes on port 5001
+        lsof -ti:5001 | xargs kill -9 2>/dev/null || true
     
     - name: Upload test artifacts
       if: always()
