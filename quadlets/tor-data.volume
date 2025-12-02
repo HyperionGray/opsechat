@@ -1,0 +1,15 @@
+# tor-data.volume - Podman Quadlet volume definition
+# Place in ~/.config/containers/systemd/ (user) or /etc/containers/systemd/ (system)
+#
+# Persistent volume for Tor data. This stores Tor's keys and state.
+# For ephemeral hidden services, this volume can be deleted on shutdown.
+
+[Unit]
+Description=Tor Data Volume for Opsechat
+
+[Volume]
+# Volume name
+VolumeName=tor-data
+# Optional: Label for identification
+Label=app=opsechat
+Label=component=tor

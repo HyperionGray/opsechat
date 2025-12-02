@@ -21,6 +21,20 @@ $ ./compose-up.sh
 
 That's it! The script will handle everything. See [DOCKER.md](DOCKER.md) for full documentation.
 
+### Podman Quadlets (systemd integration)
+
+For production deployments with systemd integration:
+
+```bash
+$ git clone git@github.com:HyperionGray/opsechat.git
+$ cd opsechat
+$ podman build -t localhost/opsechat:latest .
+$ ./install-quadlets.sh
+$ systemctl --user start opsechat-app
+```
+
+See [QUADLETS.md](QUADLETS.md) for full documentation.
+
 ## Option 2: Native Installation
 
 ### Quick Install (Recommended)
@@ -218,7 +232,7 @@ Features
   - **Quick Rotation** - One-click generation and rotation to new addresses
   - **Instant Copy** - Copy burner emails to clipboard with one click
   - **Smart Stats Dashboard** - Track active burners and total time remaining
-- **Automated Domain Purchasing** - Porkbun API integration for cheap domain rotation (.xyz, .club, etc.)
+- **Automated Domain Purchasing** - Porkbun API integration for cheap domain rotation (.xyz, .club, etc.) - see [DOMAIN_REGISTRAR_API.md](DOMAIN_REGISTRAR_API.md)
 - **Budget Management** - Configurable monthly spending limits for domain purchases
 - **Spoofing Detection** - Test emails for spoofing attempts (unicode lookalikes, typosquatting, homographs)
 - **Phishing Simulation** - Gamified training with scoring and achievements
