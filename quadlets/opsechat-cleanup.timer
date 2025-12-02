@@ -1,0 +1,15 @@
+# Systemd timer for periodic cleanup tasks
+# Place in ~/.config/containers/systemd/ or /etc/containers/systemd/
+
+[Unit]
+Description=Opsechat Cleanup Timer
+Documentation=https://github.com/HyperionGray/opsechat
+Requires=opsechat-cleanup.service
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

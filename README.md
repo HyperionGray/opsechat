@@ -9,7 +9,19 @@ To be a opsechat client requires a Tor Browser on any OS.
 Install
 =======
 
-## Option 1: Docker/Podman (Recommended)
+## Option 1: Systemd Quadlets (Recommended for Production)
+
+For production deployment with native systemd integration:
+
+```bash
+$ git clone git@github.com:HyperionGray/opsechat.git
+$ cd opsechat
+$ ./quadlet-setup.sh
+```
+
+This provides the best integration with systemd, automatic startup, and native service management.
+
+## Option 2: Docker/Podman Compose (Recommended for Development)
 
 For the easiest setup with full isolation, use containers:
 
@@ -21,7 +33,21 @@ $ ./compose-up.sh
 
 That's it! The script will handle everything. See [DOCKER.md](DOCKER.md) for full documentation.
 
-## Option 2: Native Installation
+## Option 3: PF Tasks (Advanced Users)
+
+For advanced deployment automation using PF tasks:
+
+```bash
+$ git clone git@github.com:HyperionGray/opsechat.git
+$ cd opsechat
+$ python pf-tasks/build.py
+$ python pf-tasks/deploy.py
+$ python pf-tasks/test.py
+```
+
+See [pf-tasks/README.md](pf-tasks/README.md) for complete PF tasks documentation.
+
+## Option 4: Native Installation
 
 ### Quick Install (Recommended)
 
@@ -227,11 +253,11 @@ Features
 - JavaScript optional throughout
 
 #### Getting Started with Email
-1. Start the server: `python runserver.py`
+1. Start the server: `python runserver.py` or use deployment method above
 2. Access email configuration: `http://yourservice.onion/{path}/email/config`
 3. Configure SMTP for sending (optional): Add your email server settings
 4. Configure IMAP for receiving (optional): Add your IMAP server settings
-5. Configure Porkbun API for domain rotation (optional): Add API credentials and budget
+5. Configure Porkbun API for domain rotation (optional): Add API credentials and budget (see [DOMAIN_API_SETUP.md](DOMAIN_API_SETUP.md))
 6. Compose and send emails: `http://yourservice.onion/{path}/email/compose`
 7. View your inbox: `http://yourservice.onion/{path}/email`
 

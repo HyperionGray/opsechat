@@ -1,0 +1,28 @@
+# Quadlet file for Opsechat application container
+# Place in ~/.config/containers/systemd/ or /etc/containers/systemd/
+
+[Unit]
+Description=Opsechat Application Container
+Documentation=https://github.com/HyperionGray/opsechat
+After=opsechat-tor.service
+Requires=opsechat-tor.service
+BindsTo=opsechat-tor.service
+
+[Container]
+Image=localhost/opsechat:latest
+ContainerName=opsechat-app
+Environment=TOR_CONTROL_PORT=9051
+Environment=TOR_CONTROL_HOST=opsechat-tor
+Environment=FLASK_DEBUG=0
+Environment=PYTHONUNBUFFERED=1
+Network=opsechat-network.network
+AutoUpdate=local
+
+[Service]
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=300
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
