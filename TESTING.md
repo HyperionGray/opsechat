@@ -205,7 +205,7 @@ npx playwright install-deps
 
 ### Port already in use
 
-If port 5000 is already in use, stop the conflicting process or modify the mock server to use a different port.
+If port 5001 is already in use, stop the conflicting process or modify the mock server to use a different port.
 
 ### Missing dependencies
 

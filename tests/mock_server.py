@@ -213,4 +213,4 @@ def email_burner_expire(url_addition, email):
 if __name__ == '__main__':
     print("Starting mock server for testing...")
     print(f"Test URL: http://localhost:5001/{app.config['path']}/email/burner")
-    app.run(debug=False, port=5001, threaded=True)
+    app.run(debug=False, host='127.0.0.1', port=5001, threaded=True)
