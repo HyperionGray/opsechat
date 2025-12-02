@@ -81,7 +81,7 @@ echo -e "${YELLOW}Checking container image...${NC}"
 if podman image exists localhost/opsechat:latest 2>/dev/null; then
     echo -e "  ${GREEN}Image found: localhost/opsechat:latest${NC}"
 else
-    echo -e "  ${RED}Image not found. Building...${NC}"
+    echo -e "  ${YELLOW}Image not found. Building...${NC}"
     echo ""
     (cd "$SCRIPT_DIR" && podman build -t localhost/opsechat:latest .)
     echo ""

@@ -31,9 +31,16 @@ Environment=PYTHONUNBUFFERED=1
 # Join the opsechat network (same as Tor container)
 Network=opsechat-network
 
-# No ports exposed to host by default - access only via Tor hidden service
-# Uncomment for debugging/development ONLY:
+# ⚠️ SECURITY WARNING: NO PORTS EXPOSED BY DEFAULT ⚠️
+# Access is only via Tor hidden service for anonymity.
+# 
+# FOR DEVELOPMENT/DEBUGGING ONLY (BYPASSES TOR ANONYMITY!):
+# To enable direct access, create a file named "enable-debug-port" in
+# ~/.config/containers/systemd/ and add the line below (without #):
 # PublishPort=5000:5000
+#
+# NEVER enable port exposure in production as it completely
+# bypasses Tor's anonymity protections!
 
 # Interactive terminal for viewing output
 Terminal=true
