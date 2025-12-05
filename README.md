@@ -33,21 +33,21 @@ $ ./compose-up.sh
 
 That's it! The script will handle everything. See [DOCKER.md](DOCKER.md) for full documentation.
 
-## Option 3: PF Tasks (Advanced Users)
+### Podman Quadlets (systemd integration)
 
-For advanced deployment automation using PF tasks:
+For production deployments with systemd integration:
 
 ```bash
 $ git clone git@github.com:HyperionGray/opsechat.git
 $ cd opsechat
-$ python pf-tasks/build.py
-$ python pf-tasks/deploy.py
-$ python pf-tasks/test.py
+$ podman build -t localhost/opsechat:latest .
+$ ./install-quadlets.sh
+$ systemctl --user start opsechat-app
 ```
 
-See [pf-tasks/README.md](pf-tasks/README.md) for complete PF tasks documentation.
+See [QUADLETS.md](QUADLETS.md) for full documentation.
 
-## Option 4: Native Installation
+## Option 2: Native Installation
 
 ### Quick Install (Recommended)
 
@@ -244,7 +244,7 @@ Features
   - **Quick Rotation** - One-click generation and rotation to new addresses
   - **Instant Copy** - Copy burner emails to clipboard with one click
   - **Smart Stats Dashboard** - Track active burners and total time remaining
-- **Automated Domain Purchasing** - Porkbun API integration for cheap domain rotation (.xyz, .club, etc.)
+- **Automated Domain Purchasing** - Porkbun API integration for cheap domain rotation (.xyz, .club, etc.) - see [DOMAIN_REGISTRAR_API.md](DOMAIN_REGISTRAR_API.md)
 - **Budget Management** - Configurable monthly spending limits for domain purchases
 - **Spoofing Detection** - Test emails for spoofing attempts (unicode lookalikes, typosquatting, homographs)
 - **Phishing Simulation** - Gamified training with scoring and achievements

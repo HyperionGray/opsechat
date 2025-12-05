@@ -1,28 +1,61 @@
-# Quadlet file for Opsechat application container
-# Place in ~/.config/containers/systemd/ or /etc/containers/systemd/
+# opsechat-app.container - Podman Quadlet container definition for the main app
+# Place in ~/.config/containers/systemd/ (user) or /etc/containers/systemd/ (system)
+#
+# This container runs the Flask opsechat application with:
+# - Chat service (Tor-based ephemeral hidden service)
+# - Email service (SMTP/IMAP integration)
+# - Burner email management
+# - PGP encryption support
+# All traffic goes through Tor for anonymity.
 
 [Unit]
-Description=Opsechat Application Container
-Documentation=https://github.com/HyperionGray/opsechat
+Description=Opsechat Application (Chat & Email via Tor)
+After=network-online.target
+Wants=network-online.target
+# Depend on Tor container being healthy
 After=opsechat-tor.service
 Requires=opsechat-tor.service
-BindsTo=opsechat-tor.service
 
 [Container]
+# Build from local Dockerfile
+# For pre-built image, replace with: Image=ghcr.io/hyperiongray/opsechat:latest
 Image=localhost/opsechat:latest
 ContainerName=opsechat-app
+
+# Environment variables
 Environment=TOR_CONTROL_PORT=9051
 Environment=TOR_CONTROL_HOST=opsechat-tor
 Environment=FLASK_DEBUG=0
 Environment=PYTHONUNBUFFERED=1
-Network=opsechat-network.network
-AutoUpdate=local
+
+# Join the opsechat network (same as Tor container)
+Network=opsechat-network
+
+# ⚠️ SECURITY WARNING: NO PORTS EXPOSED BY DEFAULT ⚠️
+# Access is only via Tor hidden service for anonymity.
+# 
+# FOR DEVELOPMENT/DEBUGGING ONLY (BYPASSES TOR ANONYMITY!):
+# To enable direct access, create a file named "enable-debug-port" in
+# ~/.config/containers/systemd/ and add the line below (without #):
+# PublishPort=5000:5000
+#
+# NEVER enable port exposure in production as it completely
+# bypasses Tor's anonymity protections!
+
+# Interactive terminal for viewing output
+Terminal=true
+
+# Labels for identification
+Label=app=opsechat
+Label=component=flask-app
 
 [Service]
+# Restart on failure
 Restart=on-failure
-RestartSec=10
-TimeoutStartSec=300
-TimeoutStopSec=30
+RestartSec=5
+# Stop timeout - give time for graceful shutdown
+TimeoutStopSec=60
 
 [Install]
-WantedBy=multi-user.target
+# Start when multi-user target is reached
+WantedBy=multi-user.target default.target

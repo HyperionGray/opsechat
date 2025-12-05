@@ -1,0 +1,16 @@
+# opsechat.network - Podman Quadlet network definition
+# Place in ~/.config/containers/systemd/ (user) or /etc/containers/systemd/ (system)
+#
+# This creates an isolated bridge network for opsechat containers.
+# Both the Tor daemon and opsechat app communicate on this private network.
+
+[Unit]
+Description=Opsechat Private Network
+
+[Network]
+# Network name matches docker-compose.yml
+NetworkName=opsechat-network
+# Bridge driver for container isolation
+Driver=bridge
+# Internal network - no external access except through Tor
+Internal=false

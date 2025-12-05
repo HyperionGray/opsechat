@@ -1,31 +1,53 @@
-# Quadlet file for Tor daemon container
-# Place in ~/.config/containers/systemd/ or /etc/containers/systemd/
+# opsechat-tor.container - Podman Quadlet container definition for Tor daemon
+# Place in ~/.config/containers/systemd/ (user) or /etc/containers/systemd/ (system)
+#
+# This container runs the Tor daemon with control port enabled for the opsechat app.
+# The opsechat app connects to this container to create ephemeral hidden services.
 
 [Unit]
-Description=Opsechat Tor Daemon Container
-Documentation=https://github.com/HyperionGray/opsechat
+Description=Tor Daemon for Opsechat
 After=network-online.target
 Wants=network-online.target
+# Depend on network being created first
+After=opsechat-network.service
+Requires=opsechat-network.service
 
 [Container]
+# Use official Alpine image and install Tor
 Image=alpine:latest
 ContainerName=opsechat-tor
+
+# Run command: Install Tor and start it with our config
 Exec=sh -c "apk add --no-cache tor netcat-openbsd && tor -f /etc/tor/torrc"
-Volume=%h/opsechat/torrc:/etc/tor/torrc:ro,Z
-Volume=opsechat-tor-data:/var/lib/tor:Z
-Network=opsechat-network.network
-HealthCmd=nc -z localhost 9051
+
+# Mount the torrc configuration
+# IMPORTANT: Update this path to where your torrc file is located
+Volume=%h/opsechat/torrc:/etc/tor/torrc:ro
+
+# Persistent volume for Tor data
+Volume=tor-data:/var/lib/tor
+
+# Join the opsechat network
+Network=opsechat-network
+
+# Health check: Verify control port is accepting connections
+HealthCmd=/usr/bin/nc -z localhost 9051
 HealthInterval=10s
 HealthTimeout=5s
 HealthRetries=5
 HealthStartPeriod=10s
-AutoUpdate=registry
+
+# Labels for identification
+Label=app=opsechat
+Label=component=tor
 
 [Service]
+# Restart on failure
 Restart=on-failure
-RestartSec=10
-TimeoutStartSec=300
+RestartSec=5
+# Stop timeout
 TimeoutStopSec=30
 
 [Install]
-WantedBy=multi-user.target
+# Start when multi-user target is reached
+WantedBy=multi-user.target default.target
