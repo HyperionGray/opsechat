@@ -42,7 +42,7 @@ To use the mock server:
 python3 tests/mock_server.py
 ```
 
-The server will run on http://localhost:5000 and can be used for manual testing or as a target for automated tests.
+The server will run on http://localhost:5001 and can be used for manual testing or as a target for automated tests.
 
 ## Test Coverage
 

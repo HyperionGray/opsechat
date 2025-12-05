@@ -9,7 +9,7 @@ const { test, expect } = require('@playwright/test');
 
 // Configure test to use the mock server
 test.use({
-  baseURL: 'http://127.0.0.1:5000',
+  baseURL: 'http://127.0.0.1:5001',
 });
 
 test.describe('Headless UI Tests - Landing Page', () => {

@@ -1,0 +1,14 @@
+{
+  "name": "Python Tests Workflow",
+  "description": "Python testing workflow with pytest for Ubuntu 24.04",
+  "iconName": "python",
+  "categories": [
+    "Python",
+    "Testing"
+  ],
+  "filePatterns": [
+    "*.py$",
+    "setup.py$",
+    "requirements.txt$"
+  ]
+}

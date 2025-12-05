@@ -1,0 +1,10 @@
+{
+  "name": "Security Scan Workflow",
+  "description": "Comprehensive security scanning for Python and JavaScript projects",
+  "iconName": "shield",
+  "categories": [
+    "Security",
+    "Python",
+    "JavaScript"
+  ]
+}

@@ -1,0 +1,25 @@
+# Systemd service for cleanup tasks
+# Place in ~/.config/containers/systemd/ or /etc/containers/systemd/
+
+[Unit]
+Description=Opsechat Cleanup Service
+Documentation=https://github.com/HyperionGray/opsechat
+After=opsechat-app.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/podman exec opsechat-app python -c "
+import sys
+sys.path.append('/app')
+from email_system import email_storage, burner_manager
+from runserver import cleanup_old_reviews
+print('Running cleanup tasks...')
+burner_manager.cleanup_expired()
+cleanup_old_reviews()
+print('Cleanup completed.')
+"
+User=1000
+Group=1000
+
+[Install]
+WantedBy=multi-user.target

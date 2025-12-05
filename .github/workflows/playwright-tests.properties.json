@@ -1,0 +1,16 @@
+{
+  "name": "Playwright Tests Workflow",
+  "description": "Playwright end-to-end testing workflow for web applications on Ubuntu 24.04",
+  "iconName": "playwright",
+  "categories": [
+    "JavaScript",
+    "Testing",
+    "Web"
+  ],
+  "filePatterns": [
+    "playwright.config.ts$",
+    "playwright.config.js$",
+    "tests/*.spec.ts$",
+    "tests/*.spec.js$"
+  ]
+}
