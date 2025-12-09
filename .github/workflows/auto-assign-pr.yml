@@ -7,6 +7,11 @@ on:
   pull_request:
     types: [opened]
 
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
 jobs:
   auto-assign:
     runs-on: ubuntu-latest
@@ -21,13 +26,21 @@ jobs:
             const assignees = [copilotUsername]; // Or: ["copilot","anotheruser"]
             const currentAssignees = context.payload.pull_request.assignees.map(u => u.login);
             if (!assignees.every(a => currentAssignees.includes(a))) {
-              await github.rest.issues.addAssignees({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number,
-                assignees
-              });
-              console.log(`Assigned ${assignees.join(", ")} to PR #${context.payload.pull_request.number}`);
+              try {
+                await github.rest.issues.addAssignees({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.pull_request.number,
+                  assignees
+                });
+                console.log(`✅ Assigned ${assignees.join(", ")} to PR #${context.payload.pull_request.number}`);
+              } catch (error) {
+                console.log(`⚠️ Failed to assign ${assignees.join(", ")} to PR #${context.payload.pull_request.number}`);
+                console.log(`Error: ${error.message}`);
+                console.log("Note: This may happen if the user doesn't exist, isn't a collaborator, or lacks permissions.");
+                console.log("The PR will continue to be processed normally.");
+                // Don't throw the error - let the workflow continue
+              }
             } else {
-              console.log(`Already assigned: ${assignees.join(", ")} on PR #${context.payload.pull_request.number}`);
+              console.log(`ℹ️ Already assigned: ${assignees.join(", ")} on PR #${context.payload.pull_request.number}`);
             }

@@ -1,7 +1,14 @@
 name: "Label PRs and auto-comment"
+
 on:
   pull_request:
     types: [opened, reopened, synchronize]
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
 jobs:
   pr_label_comment:
     runs-on: ubuntu-latest
@@ -11,17 +18,29 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const pr_number = context.payload.pull_request.number;
+            
             // Add label
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr_number,
-              labels: ["needs-review", "copilot"] // <-- TUNE ME
-            });
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr_number,
+                labels: ["needs-review", "copilot"] // <-- TUNE ME
+              });
+              console.log(`✅ Added labels to PR #${pr_number}`);
+            } catch (error) {
+              console.log(`⚠️ Failed to add labels to PR #${pr_number}: ${error.message}`);
+            }
+            
             // Add automated comment
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr_number,
-              body: "Thanks for the PR! Copilot will assist with review."
-            });
+            try {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr_number,
+                body: "Thanks for the PR! Copilot will assist with review."
+              });
+              console.log(`✅ Added comment to PR #${pr_number}`);
+            } catch (error) {
+              console.log(`⚠️ Failed to add comment to PR #${pr_number}: ${error.message}`);
+            }
