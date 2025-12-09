@@ -268,7 +268,7 @@ Security
 
 For security best practices and recommendations, please see [SECURITY.md](SECURITY.md).
 
-**Note on jQuery**: The bundled jQuery (v3.3.1) should be updated to v3.7.1 or later to patch known XSS vulnerabilities. Download the latest version from https://code.jquery.com/jquery-3.7.1.min.js and replace `static/jquery.js`.
+**Note on jQuery**: ✅ **RESOLVED** - The bundled jQuery has been updated to v3.7.1 to patch the previously known XSS vulnerabilities (CVE-2020-11023 and CVE-2020-11022). The security vulnerabilities have been addressed.
 
 ---
 
