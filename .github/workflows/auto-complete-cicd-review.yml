@@ -23,6 +23,11 @@ on:
         default: 'false'
         type: boolean
 
+# Prevent concurrent runs to avoid duplicate issue creation
+concurrency:
+  group: cicd-review-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
   pull-requests: write
@@ -357,23 +362,25 @@ jobs:
             *Amazon Q review will follow automatically.*
             `;
             
-            // Check for existing review issues
+            // Check for existing review issues - search by title pattern and labels
             const issues = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
               labels: ['ci-cd-review', 'automated'],
-              per_page: 10
+              per_page: 50
             });
             
+            // Find any recent CI/CD review issue (within 7 days) OR with matching title pattern
             const recentIssue = issues.data.find(issue => {
+              const titleMatch = issue.title.startsWith('Complete CI/CD Review -');
               const createdAt = new Date(issue.created_at);
-              const hoursSinceCreation = (Date.now() - createdAt) / (1000 * 60 * 60);
-              return hoursSinceCreation < 24;
+              const daysSinceCreation = (Date.now() - createdAt) / (1000 * 60 * 60 * 24);
+              return titleMatch && daysSinceCreation < 7;
             });
             
             if (recentIssue) {
-              console.log(`Recent issue found: #${recentIssue.number}, updating`);
+              console.log(`Recent CI/CD review issue found: #${recentIssue.number}, updating with comment`);
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -381,6 +388,7 @@ jobs:
                 body: `## Updated Review (${date})\n\n${report}`
               });
             } else {
+              console.log('No recent CI/CD review issue found, creating new one');
               await github.rest.issues.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
