@@ -270,6 +270,46 @@ For security best practices and recommendations, please see [SECURITY.md](SECURI
 
 **Note on jQuery**: The bundled jQuery (v3.3.1) should be updated to v3.7.1 or later to patch known XSS vulnerabilities. Download the latest version from https://code.jquery.com/jquery-3.7.1.min.js and replace `static/jquery.js`.
 
+Examples
+========
+
+### Basic Chat Usage
+1. Start the server: `python runserver.py`
+2. Share the generated `.onion` URL with participants
+3. Open the URL in Tor Browser
+4. Start chatting anonymously
+
+### Email with PGP Encryption
+1. Generate or import your PGP key (see [PGP_USAGE.md](PGP_USAGE.md))
+2. Configure email settings at `/email/config`
+3. Compose encrypted email at `/email/compose`
+4. Recipient automatically decrypts with their private key
+
+### Burner Email System
+1. Navigate to `/email/burner`
+2. Click "Generate New Burner" to create temporary addresses
+3. Manage multiple burner emails with live countdown timers
+4. Copy addresses to clipboard for quick sharing
+
+For more examples, see the documentation files in the repository.
+
+Contributing
+============
+
+We welcome contributions to opsechat! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
+- How to submit issues
+- How to propose changes
+- Code style and standards
+- Testing requirements
+- Security considerations
+
+License
+=======
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+Copyright 2017 Hyperion Gray LLC
+
 ---
 
 [![define hyperion gray](https://hyperiongray.s3.amazonaws.com/define-hg.svg)](https://www.hyperiongray.com/?pk_campaign=github&pk_kwd=dropchat "Hyperion Gray")
