@@ -1,6 +1,14 @@
 #!/bin/bash
-# opsechat Uninstall Script
+# opsechat Uninstall Script (Deprecated)
 # This script removes opsechat installation while preserving system packages
+# NOTE: Container/quadlet deployments are the supported path. Set ALLOW_DEPRECATED_INSTALL=1 to proceed.
+
+# Require explicit opt-in for deprecated native workflow
+if [ "${ALLOW_DEPRECATED_INSTALL:-0}" != "1" ]; then
+    echo "uninstall.sh is deprecated. Use container/quadlet workflows."
+    echo "If you must run it, export ALLOW_DEPRECATED_INSTALL=1."
+    exit 1
+fi
 
 set -e  # Exit on error
 

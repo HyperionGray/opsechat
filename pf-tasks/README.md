@@ -5,7 +5,7 @@ This directory contains PF (Platform Framework) tasks for building, deploying, t
 ## Available Tasks
 
 ### build.py
-Builds the opsechat container image using podman or docker.
+Builds the opsechat container image using podman or docker (host networking by default to keep apt/SSL happy).
 
 ```bash
 python pf-tasks/build.py
@@ -13,6 +13,7 @@ python pf-tasks/build.py
 
 **Features:**
 - Auto-detects podman or docker
+- Uses host networking; podman uses `--runtime runc` by default
 - Builds with tag `localhost/opsechat:latest`
 - Validates build success
 - Shows image information after build

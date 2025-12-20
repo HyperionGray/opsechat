@@ -9,8 +9,8 @@ Description=Tor Daemon for Opsechat
 After=network-online.target
 Wants=network-online.target
 # Depend on network being created first
-After=opsechat-network.service
-Requires=opsechat-network.service
+After=opsechat.network
+Requires=opsechat.network
 
 [Container]
 # Use official Alpine image and install Tor

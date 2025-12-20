@@ -16,7 +16,9 @@ For production deployment with native systemd integration:
 ```bash
 $ git clone git@github.com:HyperionGray/opsechat.git
 $ cd opsechat
-$ ./quadlet-setup.sh
+$ sudo podman build --runtime=runc --network host -t localhost/opsechat:latest .
+$ ./install-quadlets.sh
+$ systemctl --user start opsechat-app
 ```
 
 This provides the best integration with systemd, automatic startup, and native service management.
@@ -47,91 +49,9 @@ $ systemctl --user start opsechat-app
 
 See [QUADLETS.md](QUADLETS.md) for full documentation.
 
-## Option 2: Native Installation
+## Option 4: Native Installation (Deprecated)
 
-### Quick Install (Recommended)
-
-For a clean box installation that automatically installs all dependencies:
-
-**Option 1: Download and run (recommended)**
-```bash
-# Clone the repository first
-git clone https://github.com/HyperionGray/opsechat.git
-cd opsechat
-
-# Review the script if desired
-less install.sh
-
-# Run the installer
-./install.sh
-```
-
-**Option 2: Direct download and run**
-```bash
-# Download and run in one step (use with caution)
-curl -sSL https://raw.githubusercontent.com/HyperionGray/opsechat/master/install.sh | bash
-```
-
-The installer will:
-- Detect your Linux distribution (Ubuntu/Debian, RHEL/CentOS/Fedora, Arch)
-- Install system dependencies (Python 3.8+, Tor, Git)
-- Configure Tor with control port enabled
-- Create a Python virtual environment
-- Install all Python dependencies
-- Create a launcher script for easy startup
-
-**Supported Operating Systems:**
-- Ubuntu/Debian (using apt)
-- RHEL/CentOS/Fedora (using yum/dnf)
-- Arch Linux (using pacman)
-
-**Requirements:**
-- Root/sudo access for system package installation
-- Internet connection
-
-After installation, start opsechat with:
-```bash
-cd ~/opsechat
-./start-opsechat.sh
-```
-
-## Manual Install
-
-If you prefer to install manually or need more control:
-
-1. Install system dependencies:
-```bash
-# Ubuntu/Debian
-sudo apt-get update
-sudo apt-get install -y python3 python3-pip python3-venv tor git
-
-# RHEL/CentOS/Fedora
-sudo dnf install -y python3 python3-pip tor git
-
-# Arch
-sudo pacman -S python python-pip tor git
-```
-
-2. Configure Tor:
-```bash
-sudo bash -c 'echo "ControlPort 9051" >> /etc/tor/torrc'
-sudo bash -c 'echo "CookieAuthentication 0" >> /etc/tor/torrc'
-sudo systemctl restart tor
-```
-
-3. Clone and setup opsechat:
-```bash
-git clone https://github.com/HyperionGray/opsechat.git
-cd opsechat
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-4. Run the server:
-```bash
-python runserver.py
-```
+Native installers (`install.sh`, `uninstall.sh`) are deprecated in favor of container/quadlet deployment. They now require `ALLOW_DEPRECATED_INSTALL=1` to run and are no longer maintained. Use quadlets or compose unless you have a specific legacy need.
 
 ## Uninstall
 
