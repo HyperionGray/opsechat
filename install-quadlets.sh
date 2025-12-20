@@ -67,11 +67,11 @@ TORRC_PATH="${SCRIPT_DIR}/torrc"
 
 if [ "$SYSTEM_INSTALL" = true ]; then
     # For system install, use absolute path
-    sed -i "s|Volume=%h/opsechat/torrc|Volume=${TORRC_PATH}|g" "$TARGET_DIR/opsechat-tor.container"
+    sed -i "s|%h/opsechat/torrc|${TORRC_PATH}|g" "$TARGET_DIR/opsechat-tor.container"
 else
     # For user install, keep %h but update path
     RELATIVE_PATH="${SCRIPT_DIR#$HOME/}"
-    sed -i "s|Volume=%h/opsechat/torrc|Volume=%h/${RELATIVE_PATH}/torrc|g" "$TARGET_DIR/opsechat-tor.container"
+    sed -i "s|%h/opsechat/torrc|%h/${RELATIVE_PATH}/torrc|g" "$TARGET_DIR/opsechat-tor.container"
 fi
 echo "  Updated torrc path to: ${TORRC_PATH}"
 

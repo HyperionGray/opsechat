@@ -16,11 +16,11 @@ Quadlets allow you to define containers using simple configuration files that Po
 
 ### 1. Build the Container Image
 
-First, build the opsechat container image:
+First, build the opsechat container image (host networking avoids apt/DNS hiccups during build):
 
 ```bash
 cd /path/to/opsechat
-podman build -t localhost/opsechat:latest .
+sudo podman build --runtime=runc --network host -t localhost/opsechat:latest .
 ```
 
 ### 2. Install Quadlet Files

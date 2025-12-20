@@ -33,10 +33,11 @@ def clean_systemd_services():
     
     services = [
         'opsechat-cleanup.timer',
-        'opsechat-cleanup.service', 
-        'opsechat-app.service',
+        'opsechat-cleanup.service',
+        'opsechat.network',
+        'opsechat-network.service',  # legacy name cleanup
         'opsechat-tor.service',
-        'opsechat-network.service'
+        'opsechat-app.service'
     ]
     
     for service in services:

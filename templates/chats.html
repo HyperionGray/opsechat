@@ -8,7 +8,8 @@
   <table style="table-layout: fixed; width: 100%; max-width: 90vw;">
     {% for message_dic in chatlines %}
     <tr>
-      <td name="msg" class="msg" style="color:rgb{{ message_dic["color"] }}; word-wrap: break-word; overflow-wrap: break-word; max-width: 90vw;"><b>{{ message_dic["username"]  }}</b>: {{ message_dic["msg"] }}</td>
+      <th scope="row" name="msg" class="msg name" style="color: rgb({{ message_dic["color"] }});"><b>{{ message_dic["username"]  }}:</b></th>
+      <td name="msg" class="msg text" style="color: rgb({{ message_dic["color"] }}); word-wrap: break-word; overflow-wrap: break-word; max-width: 90vw;"><b>{{ message_dic["msg"] }}</b></td>
     </tr>
   {% endfor %}
   </table>

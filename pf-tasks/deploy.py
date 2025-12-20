@@ -102,7 +102,7 @@ def deploy_quadlet():
     run_command(['systemctl', '--user', 'daemon-reload'])
     
     # Enable and start services
-    services = ['opsechat-network.service', 'opsechat-tor.service', 'opsechat-app.service']
+    services = ['opsechat.network', 'opsechat-tor.service', 'opsechat-app.service']
     
     for service in services:
         print(f"[*] Enabling {service}")

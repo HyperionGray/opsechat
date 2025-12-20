@@ -8,7 +8,7 @@ This directory contains systemd quadlet files for deploying opsechat using nativ
 
 - **opsechat-tor.container** - Tor daemon container
 - **opsechat-app.container** - Main opsechat application container
-- **opsechat-network.network** - Container network definition
+- **opsechat.network** - Container network definition
 
 ### Service Definitions
 
@@ -56,10 +56,10 @@ python pf-tasks/deploy.py --method quadlet
 3. **Reload systemd and start services:**
    ```bash
    systemctl --user daemon-reload
-   systemctl --user enable opsechat-network.service
+   systemctl --user enable opsechat.network
    systemctl --user enable opsechat-tor.service
    systemctl --user enable opsechat-app.service
-   systemctl --user start opsechat-network.service
+   systemctl --user start opsechat.network
    systemctl --user start opsechat-tor.service
    systemctl --user start opsechat-app.service
    ```
@@ -78,6 +78,7 @@ python pf-tasks/deploy.py --method quadlet
 # Check service status
 systemctl --user status opsechat-app.service
 systemctl --user status opsechat-tor.service
+systemctl --user status opsechat.network
 
 # View logs
 journalctl --user -u opsechat-app.service -f
@@ -89,7 +90,7 @@ systemctl --user restart opsechat-app.service
 # Stop all services
 systemctl --user stop opsechat-app.service
 systemctl --user stop opsechat-tor.service
-systemctl --user stop opsechat-network.service
+systemctl --user stop opsechat.network
 ```
 
 ### Getting the Onion Address
@@ -120,7 +121,7 @@ systemctl --user start opsechat-cleanup.service
 ### Service Dependencies
 
 ```
-opsechat-network.service
+opsechat.network
     ↓
 opsechat-tor.service
     ↓
@@ -205,7 +206,7 @@ All containers run on the `opsechat-network` bridge network, providing isolation
 
 2. **Recreate network:**
    ```bash
-   systemctl --user restart opsechat-network.service
+   systemctl --user restart opsechat.network
    ```
 
 ### Permission Issues

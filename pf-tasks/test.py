@@ -57,7 +57,7 @@ def test_systemd_services():
     """Test systemd service status"""
     print("[*] Testing systemd services")
     
-    services = ['opsechat-network.service', 'opsechat-tor.service', 'opsechat-app.service']
+    services = ['opsechat.network', 'opsechat-tor.service', 'opsechat-app.service']
     
     for service in services:
         print(f"[*] Checking {service}")
