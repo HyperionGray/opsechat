@@ -45,8 +45,15 @@ def build_image(container_tool, tag="localhost/opsechat:latest"):
     print(f"[*] Project root: {project_root}")
     print(f"[*] Target tag: {tag}")
     
-    # Build the image
+    # Build the image (default to host networking to keep apt/SSL happy in CI)
     cmd = [container_tool, 'build', '-t', tag, '.']
+    if container_tool == 'podman':
+        # Podman host network and runc runtime avoid crun/socket DNS issues
+        cmd = [container_tool, 'build', '--network', 'host', '--runtime', 'runc', '-t', tag, '.']
+    elif container_tool == 'docker':
+        # Host network is safe on Linux; noop on macOS/Windows but tolerated
+        cmd = [container_tool, 'build', '--network', 'host', '-t', tag, '.']
+
     result = run_command(cmd, cwd=project_root)
     
     if result.returncode == 0:

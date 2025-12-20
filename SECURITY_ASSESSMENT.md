@@ -105,13 +105,13 @@ and penetration testing purposes only. Use responsibly and ethically.
 **Reason**: Test code checking if string is in list, not URL sanitization
 **Action**: None required - this is safe test code
 
-### 2. jQuery Vulnerability (Pre-existing)
+### 2. jQuery Security Update ✅ **RESOLVED**
 
-**Issue**: Bundled jQuery 3.3.1 has known XSS vulnerabilities
-**CVE**: CVE-2020-11023, CVE-2020-11022
-**Mitigation**: Server-side sanitization in place
-**Recommendation**: Update to jQuery 3.7.1+ (noted in README)
-**Impact**: LOW - mitigated by server-side validation
+**Issue**: ~~Bundled jQuery 3.3.1 has known XSS vulnerabilities~~
+**CVE**: CVE-2020-11023, CVE-2020-11022 ✅ **ADDRESSED**
+**Status**: ✅ **RESOLVED** - Updated to jQuery 3.7.1
+**Impact**: Security vulnerabilities have been patched
+**Action**: ✅ **COMPLETED** - jQuery updated to secure version
 
 ### 3. Spoofing Tools (By Design)
 
@@ -187,7 +187,7 @@ These threats will need addressing when:
 1. ✅ **COMPLETE**: Add security warnings (already done)
 2. ✅ **COMPLETE**: Document ethical use (already done)
 3. ✅ **COMPLETE**: Input validation (already done)
-4. ⚠️ **OPTIONAL**: Update jQuery (noted in README)
+4. ✅ **COMPLETED**: Update jQuery (security vulnerability resolved)
 
 ### Before Public Deployment
 

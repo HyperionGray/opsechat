@@ -1,6 +1,6 @@
 # opsechat Installation Guide
 
-This guide provides detailed instructions for installing opsechat on a clean Linux system.
+**Deprecated:** This guide documents the legacy native installer. Use Podman quadlets or compose for supported installs. To proceed anyway, set `ALLOW_DEPRECATED_INSTALL=1`.
 
 ## Table of Contents
 
