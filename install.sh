@@ -1,7 +1,15 @@
 #!/bin/bash
-# opsechat Installer Script
+# opsechat Installer Script (Deprecated)
 # This script installs opsechat and all its dependencies on a clean Linux system
 # Supports: Ubuntu/Debian, RHEL/CentOS/Fedora, Arch Linux
+# NOTE: Container/quadlet deployments are the supported path. Set ALLOW_DEPRECATED_INSTALL=1 to proceed.
+
+# Require explicit opt-in for deprecated native workflow
+if [ "${ALLOW_DEPRECATED_INSTALL:-0}" != "1" ]; then
+    echo "install.sh is deprecated. Use container/quadlet workflows."
+    echo "If you must run it, export ALLOW_DEPRECATED_INSTALL=1."
+    exit 1
+fi
 
 set -e  # Exit on error
 

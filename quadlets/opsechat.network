@@ -14,3 +14,6 @@ NetworkName=opsechat-network
 Driver=bridge
 # Internal network - no external access except through Tor
 Internal=false
+
+[Install]
+WantedBy=multi-user.target default.target
