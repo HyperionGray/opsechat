@@ -1,5 +1,6 @@
 import requests
 import os
+import sys
 
 # Configuration from environment variables (recommended for security)
 # Set these as environment variables:
@@ -32,7 +33,7 @@ data = {
 if not GITHUB_TOKEN:
     print('Error: GITHUB_TOKEN environment variable is not set.')
     print('Please set it with: export GITHUB_TOKEN="your_personal_access_token"')
-    exit(1)
+    sys.exit(1)
 
 response = requests.post(url, headers=headers, json=data)
 
