@@ -1,10 +1,17 @@
 import requests
+import os
 
-# Replace these values!
-GITHUB_TOKEN = 'ghp_your_github_pat_here'     # Your GitHub personal access token with workflow access
-ORG = 'your-org'
-REPO = '.github'                              # Or any repo where your workflow lives
-WORKFLOW_FILENAME = 'copilot-org-playwright-loop.yml'  # The workflow YAML file you want to run
+# Configuration from environment variables (recommended for security)
+# Set these as environment variables:
+# export GITHUB_TOKEN="your_personal_access_token"
+# export GITHUB_ORG="your-org"
+# export GITHUB_REPO=".github"
+# export WORKFLOW_FILENAME="copilot-org-playwright-loop.yml"
+
+GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
+ORG = os.environ.get('GITHUB_ORG', 'your-org')
+REPO = os.environ.get('GITHUB_REPO', '.github')
+WORKFLOW_FILENAME = os.environ.get('WORKFLOW_FILENAME', 'copilot-org-playwright-loop.yml')
 
 # API endpoint for workflow_dispatch
 url = f'https://api.github.com/repos/{ORG}/{REPO}/actions/workflows/{WORKFLOW_FILENAME}/dispatches'
@@ -21,6 +28,11 @@ data = {
     #     "param1": "value1",
     # }
 }
+
+if not GITHUB_TOKEN:
+    print('Error: GITHUB_TOKEN environment variable is not set.')
+    print('Please set it with: export GITHUB_TOKEN="your_personal_access_token"')
+    exit(1)
 
 response = requests.post(url, headers=headers, json=data)
 
