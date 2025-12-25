@@ -174,7 +174,7 @@ class IMAPTransport:
             if date_str:
                 try:
                     timestamp = email.utils.parsedate_to_datetime(date_str)
-                except:
+                except (ValueError, TypeError, AttributeError):
                     pass
             
             # Extract body (plain text only)
@@ -218,7 +218,7 @@ class IMAPTransport:
                         payload = part.get_payload(decode=True)
                         charset = part.get_content_charset() or 'utf-8'
                         body += payload.decode(charset, errors='ignore')
-                    except:
+                    except (AttributeError, UnicodeDecodeError, LookupError):
                         pass
                 
                 # Convert HTML to text representation
@@ -228,7 +228,7 @@ class IMAPTransport:
                         charset = part.get_content_charset() or 'utf-8'
                         html_content = payload.decode(charset, errors='ignore')
                         body += f"\n[HTML Content - shown as text]:\n{html_content}\n"
-                    except:
+                    except (AttributeError, UnicodeDecodeError, LookupError):
                         pass
                 
                 # Note other content types as text

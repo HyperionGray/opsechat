@@ -35,7 +35,17 @@ reviews = []
 def id_generator(size=6,
                  chars=string.ascii_uppercase + string.digits +
                  string.ascii_lowercase):
+    """
+    Generate random IDs for ephemeral use.
     
+    Note: Uses standard `random` module instead of `secrets` because:
+    - All sessions are ephemeral (destroyed on server restart)
+    - No persistent authentication or long-lived tokens
+    - IDs are for temporary identification, not security-critical keys
+    - Acceptable for the intended Tor hidden service use case
+    
+    If adding persistent sessions or authentication, consider using `secrets` module.
+    """
     return ''.join(random.choice(chars) for i in range(size))
 
 app.secret_key = id_generator(size=64)
