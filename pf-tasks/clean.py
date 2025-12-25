@@ -188,6 +188,27 @@ def clean_build_artifacts():
     
     return True
 
+def determine_cleanup_method(args):
+    """
+    Determine which cleanup method to use based on arguments.
+    
+    Returns:
+        str or None: The effective cleanup method:
+            - None: Only clean artifacts (--artifacts without --method or --images)
+            - 'all': Default cleanup (all deployment artifacts but not images/build artifacts unless specified)
+            - 'systemd', 'compose', 'containers': Specific cleanup methods
+    """
+    if args.method is None:
+        if args.artifacts and not args.images:
+            # Only clean artifacts when --artifacts is specified alone
+            return None
+        else:
+            # Default to 'all' for other cases (no args, --images alone, etc.)
+            return 'all'
+    else:
+        # Explicit method specified
+        return args.method
+
 def main():
     """Main cleanup task"""
     parser = argparse.ArgumentParser(description='Clean up opsechat deployment')
@@ -199,19 +220,8 @@ def main():
     
     args = parser.parse_args()
     
-    # Determine effective method
-    # If --artifacts is specified without --method, only clean artifacts
-    # If --images is specified without --method, default to 'all'
-    # Otherwise default to 'all'
-    if args.method is None:
-        if args.artifacts and not args.images:
-            # Only clean artifacts when --artifacts is specified alone
-            effective_method = None
-        else:
-            # Default to 'all' for other cases
-            effective_method = 'all'
-    else:
-        effective_method = args.method
+    # Determine effective cleanup method
+    effective_method = determine_cleanup_method(args)
     
     print("=== PF Task: Clean ===")
     
