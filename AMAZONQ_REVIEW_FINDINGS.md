@@ -136,9 +136,11 @@ if "-----BEGIN PGP MESSAGE-----" not in chat["msg"]:
 ```python
 # Linear scan for old messages - acceptable for small lists
 to_delete = []
+c = 0
 for chatline_dic in chatlines:
     if check_older_than(chatline_dic):
         to_delete.append(c)
+    c += 1
 ```
 
 **Analysis**:
@@ -425,10 +427,10 @@ runserver.py
 - Container health checks
 
 **AWS Deployment Readiness**:
-- ✅ Can run in ECS/Fargate
-- ✅ Can run in EKS
-- ✅ Can run in EC2 with Docker
-- ⚠️ Needs consideration for Tor networking in cloud
+- ✅ **ECS/Fargate**: Container-ready, requires VPC configuration for Tor control port access
+- ✅ **EKS**: Kubernetes-compatible, needs PersistentVolumes for Tor data directory
+- ✅ **EC2 with Docker**: Direct deployment, requires Tor daemon installation on host or sidecar
+- ⚠️ **Networking Consideration**: Tor hidden services require persistent control port access and specific network policies
 
 **Recommendation**: 
 - Document cloud deployment considerations
