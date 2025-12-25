@@ -281,7 +281,7 @@ def chat_messages(url_addition):
 
             c += 1
 
-    for _del in to_delete:
+    for _del in reversed(to_delete):
         chatlines.pop(_del)
 
     if request.method == "POST":
@@ -326,7 +326,7 @@ def chat_messages_js(url_addition):
 
             c += 1
 
-    for _del in to_delete:
+    for _del in reversed(to_delete):
         chatlines.pop(_del)
 
     if request.method == "POST":
