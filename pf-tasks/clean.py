@@ -194,9 +194,11 @@ def determine_cleanup_method(args):
     
     Returns:
         str or None: The effective cleanup method:
-            - None: Only clean artifacts (--artifacts without --method or --images)
-            - 'all': Default cleanup (all deployment artifacts but not images/build artifacts unless specified)
-            - 'systemd', 'compose', 'containers': Specific cleanup methods
+            - None: Skip deployment cleanup, only clean artifacts (--artifacts without --method or --images)
+            - 'all': Clean all deployment artifacts - systemd, compose, and containers (default behavior)
+            - 'systemd', 'compose', 'containers': Clean only specific deployment type
+            
+    Note: Images and build artifacts are only cleaned when their respective flags (--images, --artifacts) are set.
     """
     if args.method is None:
         if args.artifacts and not args.images:
