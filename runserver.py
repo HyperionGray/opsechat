@@ -23,6 +23,9 @@ from email_security_tools import spoofing_tester, phishing_simulator
 from email_transport import transport_manager
 from domain_manager import domain_rotation_manager, PorkbunAPIClient
 
+# Import review system routes
+from review_routes import register_review_routes
+
 
 chatters = []
 global chatlines
@@ -130,6 +133,9 @@ def get_review_stats():
         "average_rating": average_rating,
         "rating_distribution": rating_distribution
     }
+
+# Register review routes with the Flask app
+register_review_routes(app, id_generator, get_random_color, add_review, get_reviews, get_review_stats)
 
 
 def process_chat(chat_dic):
@@ -281,7 +287,7 @@ def chat_messages(url_addition):
 
             c += 1
 
-    for _del in to_delete:
+    for _del in reversed(to_delete):
         chatlines.pop(_del)
 
     if request.method == "POST":
@@ -326,7 +332,7 @@ def chat_messages_js(url_addition):
 
             c += 1
 
-    for _del in to_delete:
+    for _del in reversed(to_delete):
         chatlines.pop(_del)
 
     if request.method == "POST":
