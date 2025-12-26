@@ -54,9 +54,10 @@ def clean_systemd_services():
     quadlet_files = [
         'opsechat-tor.container',
         'opsechat-app.container', 
-        'opsechat-network.network',
+        'opsechat.network',
         'opsechat-cleanup.timer',
-        'opsechat-cleanup.service'
+        'opsechat-cleanup.service',
+        'tor-data.volume'
     ]
     
     for systemd_dir in [user_systemd_dir, system_systemd_dir]:
@@ -187,34 +188,62 @@ def clean_build_artifacts():
     
     return True
 
+def determine_cleanup_method(args):
+    """
+    Determine which cleanup method to use based on arguments.
+    
+    Returns:
+        str or None: The effective cleanup method:
+            - None: Skip deployment cleanup, only clean artifacts (--artifacts without --method or --images)
+            - 'all': Clean all deployment artifacts - systemd, compose, and containers (default behavior)
+            - 'systemd', 'compose', 'containers': Clean only specific deployment type
+            
+    Note: Images and build artifacts are only cleaned when their respective flags (--images, --artifacts) are set.
+    """
+    if args.method is None:
+        if args.artifacts and not args.images:
+            # Only clean artifacts when --artifacts is specified alone
+            return None
+        else:
+            # Default to 'all' for other cases (no args, --images alone, etc.)
+            return 'all'
+    else:
+        # Explicit method specified
+        return args.method
+
 def main():
     """Main cleanup task"""
     parser = argparse.ArgumentParser(description='Clean up opsechat deployment')
     parser.add_argument('--method', choices=['systemd', 'compose', 'containers', 'all'], 
-                       default='all', help='Cleanup method')
+                       default=None, help='Cleanup method')
     parser.add_argument('--images', action='store_true', help='Also remove container images')
     parser.add_argument('--force', action='store_true', help='Force removal of images')
     parser.add_argument('--artifacts', action='store_true', help='Clean build artifacts')
     
     args = parser.parse_args()
     
+    # Determine effective cleanup method
+    effective_method = determine_cleanup_method(args)
+    
     print("=== PF Task: Clean ===")
     
     success = True
     
-    if args.method in ['systemd', 'all']:
+    if effective_method in ['systemd', 'all']:
         success &= clean_systemd_services()
     
-    if args.method in ['compose', 'all']:
+    if effective_method in ['compose', 'all']:
         success &= clean_compose()
     
-    if args.method in ['containers', 'all']:
+    if effective_method in ['containers', 'all']:
         success &= clean_containers()
     
-    if args.images or args.method == 'all':
+    # Only clean images if explicitly requested via --images flag
+    if args.images:
         success &= clean_images(force=args.force)
     
-    if args.artifacts or args.method == 'all':
+    # Only clean artifacts if explicitly requested via --artifacts flag
+    if args.artifacts:
         success &= clean_build_artifacts()
     
     if success:

@@ -1,4 +1,6 @@
 import requests
+import os
+import sys
 
 # Replace these values!
 # PLACEHOLDER - Replace with actual GitHub token

@@ -78,7 +78,7 @@ def deploy_quadlet():
     print(f"[*] Installing quadlet files to: {target_dir}")
     
     # Copy quadlet files
-    quadlet_files = list(quadlet_dir.glob("*.container")) + list(quadlet_dir.glob("*.network")) + list(quadlet_dir.glob("*.timer")) + list(quadlet_dir.glob("*.service"))
+    quadlet_files = list(quadlet_dir.glob("*.container")) + list(quadlet_dir.glob("*.network")) + list(quadlet_dir.glob("*.timer")) + list(quadlet_dir.glob("*.service")) + list(quadlet_dir.glob("*.volume"))
     
     for file in quadlet_files:
         dest = target_dir / file.name
