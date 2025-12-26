@@ -8,7 +8,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Run security checks
-        run: |
-          echo "Security scanning completed"
-          echo "Note: CodeQL analysis is handled by GitHub's default setup"
+      - name: Run CodeQL Scan
+        uses: github/codeql-action/init@v3
+        with:
+          languages: 'python,javascript'
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
