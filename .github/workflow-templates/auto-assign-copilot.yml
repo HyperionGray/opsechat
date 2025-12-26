@@ -5,10 +5,6 @@ on:
     types:
       - opened
 
-permissions:
-  issues: write
-  contents: read
-
 jobs:
   auto-assign:
     runs-on: ubuntu-latest
@@ -21,21 +17,13 @@ jobs:
             const copilotUsername = "copilot";
             const currentAssignees = context.payload.issue.assignees.map(u => u.login);
             if (!currentAssignees.includes(copilotUsername)) {
-              try {
-                await github.rest.issues.addAssignees({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  assignees: [copilotUsername]
-                });
-                console.log(`✅ Assigned @${copilotUsername} to issue #${context.issue.number}`);
-              } catch (error) {
-                console.log(`⚠️ Failed to assign @${copilotUsername} to issue #${context.issue.number}`);
-                console.log(`Error: ${error.message}`);
-                console.log("Note: This may happen if the user doesn't exist, isn't a collaborator, or lacks permissions.");
-                console.log("The issue will continue to be processed normally.");
-                // Don't throw the error - let the workflow continue
-              }
+              await github.rest.issues.addAssignees({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                assignees: [copilotUsername]
+              });
+              console.log(`Assigned @${copilotUsername} to issue #${context.issue.number}`);
             } else {
-              console.log(`ℹ️ @${copilotUsername} is already assigned to issue #${context.issue.number}`);
+              console.log(`@${copilotUsername} is already assigned to issue #${context.issue.number}`);
             }
