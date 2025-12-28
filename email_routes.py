@@ -40,11 +40,11 @@ def email_inbox(url_addition):
 @email_bp.route('/<string:url_addition>/email/compose', methods=["GET", "POST"])
 def email_compose(url_addition):
     """Compose and send email"""
-    if url_addition != app.config["path"]:
+    if url_addition != current_app.config["path"]:
         return ('', 404)
     
     if "_id" not in session:
-        return redirect(f"/{app.config['path']}/email", code=302)
+        return redirect(f"/{current_app.config['path']}/email", code=302)
     
     if request.method == "POST":
         raw_mode = request.form.get("raw_mode") == "true"
@@ -80,14 +80,14 @@ def email_compose(url_addition):
         # Always add to local inbox for reference
         email_storage.add_email(session["_id"], email)
         
-        return redirect(f"/{app.config['path']}/email", code=302)
+        return redirect(f"/{current_app.config['path']}/email", code=302)
     
     # Check if SMTP is configured for the form
     smtp_configured = transport_manager.is_configured()['smtp']
     
     return render_template("email_compose.html",
-                          hostname=app.config["hostname"],
-                          path=app.config["path"],
+                          hostname=current_app.config["hostname"],
+                          path=current_app.config["path"],
                           smtp_configured=smtp_configured,
                           script_enabled=False)
 
@@ -95,19 +95,19 @@ def email_compose(url_addition):
 @email_bp.route('/<string:url_addition>/email/view/<string:email_id>', methods=["GET"])
 def email_view(url_addition, email_id):
     """View specific email"""
-    if url_addition != app.config["path"]:
+    if url_addition != current_app.config["path"]:
         return ('', 404)
     
     if "_id" not in session:
-        return redirect(f"/{app.config['path']}/email", code=302)
+        return redirect(f"/{current_app.config['path']}/email", code=302)
     
     email = email_storage.get_email(session["_id"], email_id)
     if not email:
         return ('Email not found', 404)
     
     return render_template("email_view.html",
-                          hostname=app.config["hostname"],
-                          path=app.config["path"],
+                          hostname=current_app.config["hostname"],
+                          path=current_app.config["path"],
                           email=email,
                           script_enabled=False)
 
@@ -115,11 +115,11 @@ def email_view(url_addition, email_id):
 @email_bp.route('/<string:url_addition>/email/edit/<string:email_id>', methods=["GET", "POST"])
 def email_edit(url_addition, email_id):
     """Edit email in raw mode"""
-    if url_addition != app.config["path"]:
+    if url_addition != current_app.config["path"]:
         return ('', 404)
     
     if "_id" not in session:
-        return redirect(f"/{app.config['path']}/email", code=302)
+        return redirect(f"/{current_app.config['path']}/email", code=302)
     
     email = email_storage.get_email(session["_id"], email_id)
     if not email:
@@ -131,14 +131,14 @@ def email_edit(url_addition, email_id):
         updated_email = EmailComposer.parse_raw_email(raw_content)
         updated_email['id'] = email_id  # Preserve ID
         email_storage.update_email(session["_id"], email_id, updated_email)
-        return redirect(f"/{app.config['path']}/email/view/{email_id}", code=302)
+        return redirect(f"/{current_app.config['path']}/email/view/{email_id}", code=302)
     
     # Convert email back to raw format for editing
     raw_email = EmailComposer.email_to_raw(email)
     
     return render_template("email_edit.html",
-                          hostname=app.config["hostname"],
-                          path=app.config["path"],
+                          hostname=current_app.config["hostname"],
+                          path=current_app.config["path"],
                           email=email,
                           raw_email=raw_email,
                           script_enabled=False)
@@ -147,11 +147,11 @@ def email_edit(url_addition, email_id):
 @email_bp.route('/<string:url_addition>/email/config', methods=["GET", "POST"])
 def email_config(url_addition):
     """Email configuration"""
-    if url_addition != app.config["path"]:
+    if url_addition != current_app.config["path"]:
         return ('', 404)
     
     if "_id" not in session:
-        return redirect(f"/{app.config['path']}/email", code=302)
+        return redirect(f"/{current_app.config['path']}/email", code=302)
     
     if request.method == "POST":
         # Update SMTP configuration
@@ -186,15 +186,15 @@ def email_config(url_addition):
         # Configure domain rotation manager
         domain_rotation_manager.configure_porkbun(**porkbun_config)
         
-        return redirect(f"/{app.config['path']}/email/config", code=302)
+        return redirect(f"/{current_app.config['path']}/email/config", code=302)
     
     # Get current configuration status
     config_status = transport_manager.is_configured()
     domain_status = domain_rotation_manager.get_status()
     
     return render_template("email_config.html",
-                          hostname=app.config["hostname"],
-                          path=app.config["path"],
+                          hostname=current_app.config["hostname"],
+                          path=current_app.config["path"],
                           config_status=config_status,
                           domain_status=domain_status,
                           script_enabled=False)
@@ -203,7 +203,7 @@ def email_config(url_addition):
 @email_bp.route('/<string:url_addition>/email/send', methods=["POST"])
 def email_send_real(url_addition):
     """Send email via SMTP"""
-    if url_addition != app.config["path"]:
+    if url_addition != current_app.config["path"]:
         return ('', 404)
     
     if "_id" not in session:
@@ -222,13 +222,13 @@ def email_send_real(url_addition):
         email = EmailComposer.create_email(from_addr, to_addr, subject, body)
         email_storage.add_email(session["_id"], email)
     
-    return redirect(f"/{app.config['path']}/email", code=302)
+    return redirect(f"/{current_app.config['path']}/email", code=302)
 
 
 @email_bp.route('/<string:url_addition>/email/receive', methods=["POST"])
 def email_receive_real(url_addition):
     """Fetch emails from IMAP"""
-    if url_addition != app.config["path"]:
+    if url_addition != current_app.config["path"]:
         return ('', 404)
     
     if "_id" not in session:
@@ -244,13 +244,13 @@ def email_receive_real(url_addition):
     for email in emails:
         email_storage.add_email(session["_id"], email)
     
-    return redirect(f"/{app.config['path']}/email", code=302)
+    return redirect(f"/{current_app.config['path']}/email", code=302)
 
 
 @email_bp.route('/<string:url_addition>/email/domain/rotate', methods=["POST"])
 def email_domain_rotate(url_addition):
     """Rotate to a new domain"""
-    if url_addition != app.config["path"]:
+    if url_addition != current_app.config["path"]:
         return ('', 404)
     
     if "_id" not in session:
@@ -263,4 +263,4 @@ def email_domain_rotate(url_addition):
         # Update burner manager to use new domain
         burner_manager.set_custom_domain(new_domain)
     
-    return redirect(f"/{app.config['path']}/email/config", code=302)
+    return redirect(f"/{current_app.config['path']}/email/config", code=302)
