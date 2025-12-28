@@ -99,15 +99,9 @@ module.exports = defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'python3 tests/mock_server.py',
+    command: 'python tests/mock_server.py',
     port: 5001,
     reuseExistingServer: !process.env.CI,
-    stdout: 'pipe',
-    stderr: 'pipe',
-    timeout: 120 * 1000, // 2 minutes timeout
-    env: {
-      PYTHONPATH: '.',
-      FLASK_ENV: 'testing'
-    }
-  },
+    timeout: 120 * 1000, // 2 minutes
+  }
 });

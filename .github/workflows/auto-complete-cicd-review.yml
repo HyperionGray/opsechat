@@ -95,6 +95,13 @@ jobs:
           python-version: '3.11'
         continue-on-error: true
 
+      - name: Install Python Dependencies
+        run: |
+          if [ -f "requirements.txt" ]; then
+            pip install -r requirements.txt
+          fi
+        continue-on-error: true
+
       - name: Install Playwright for E2E
         if: matrix.test-type == 'e2e'
         run: |
@@ -123,12 +130,8 @@ jobs:
               npm test -- --testPathPattern="integration" 2>/dev/null || echo "JS integration tests not configured"
               ;;
             e2e)
-              # Playwright tests - run headless in CI
-              if [ -f "playwright.config.js" ] || [ -f "playwright.config.ts" ]; then
-                npx playwright test --project=chromium-headless --project=firefox-headless --project=webkit-headless 2>/dev/null || echo "Playwright JS tests not configured"
-              else
-                npx playwright test 2>/dev/null || echo "Playwright JS tests not configured"
-              fi
+              # Playwright tests (headless only for CI)
+              npx playwright test --project=chromium-headless --project=firefox-headless --project=webkit-headless 2>/dev/null || echo "Playwright JS tests not configured"
               pytest tests/e2e/ 2>/dev/null || pytest --browser chromium 2>/dev/null || echo "Playwright Python tests not configured"
               ;;
           esac

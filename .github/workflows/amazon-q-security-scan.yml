@@ -1,0 +1,180 @@
+name: Amazon Q Security Scan
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main ]
+  schedule:
+    # Run weekly security scans
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+jobs:
+  security-scan:
+    name: Amazon Q Code Review
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      security-events: write
+      issues: write
+      pull-requests: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install safety bandit semgrep
+    
+    - name: Run dependency vulnerability scan
+      run: |
+        echo "## Dependency Vulnerability Scan" >> security-report.md
+        echo "Date: $(date)" >> security-report.md
+        echo "" >> security-report.md
+        
+        # Check for known vulnerabilities
+        safety check --json > safety-report.json || true
+        
+        if [ -s safety-report.json ]; then
+          echo "⚠️ **Vulnerabilities found:**" >> security-report.md
+          python -c "
+import json
+with open('safety-report.json') as f:
+    data = json.load(f)
+    for vuln in data:
+        print(f'- {vuln[\"package\"]} {vuln[\"installed_version\"]}: {vuln[\"vulnerability\"]}')
+" >> security-report.md
+        else
+          echo "✅ **No known vulnerabilities found**" >> security-report.md
+        fi
+        echo "" >> security-report.md
+    
+    - name: Run static security analysis
+      run: |
+        echo "## Static Security Analysis" >> security-report.md
+        echo "" >> security-report.md
+        
+        # Run bandit for Python security issues
+        bandit -r . -f json -o bandit-report.json || true
+        
+        if [ -s bandit-report.json ]; then
+          echo "### Bandit Security Scan Results" >> security-report.md
+          python -c "
+import json
+with open('bandit-report.json') as f:
+    data = json.load(f)
+    if data['results']:
+        for result in data['results']:
+            print(f'- **{result[\"test_name\"]}** ({result[\"issue_severity\"]}): {result[\"issue_text\"]}')
+            print(f'  File: {result[\"filename\"]}:{result[\"line_number\"]}')
+    else:
+        print('✅ No security issues found')
+" >> security-report.md
+        else
+          echo "✅ **No security issues found by Bandit**" >> security-report.md
+        fi
+        echo "" >> security-report.md
+    
+    - name: Run code quality analysis
+      run: |
+        echo "## Code Quality Analysis" >> security-report.md
+        echo "" >> security-report.md
+        
+        # Check for hardcoded secrets
+        echo "### Secret Scanning" >> security-report.md
+        if grep -r -i "password\|secret\|key\|token" --include="*.py" . | grep -v "test" | grep -v "#" | head -5; then
+          echo "⚠️ **Potential secrets found - manual review required**" >> security-report.md
+        else
+          echo "✅ **No obvious hardcoded secrets detected**" >> security-report.md
+        fi
+        echo "" >> security-report.md
+    
+    - name: Configure AWS credentials (if available)
+      if: ${{ env.AWS_ACCESS_KEY_ID != '' }}
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+    
+    - name: Run Amazon CodeWhisperer scan (if configured)
+      if: ${{ env.AWS_ACCESS_KEY_ID != '' }}
+      run: |
+        echo "## Amazon CodeWhisperer Security Scan" >> security-report.md
+        echo "" >> security-report.md
+        
+        # Install AWS CLI if not present
+        if ! command -v aws &> /dev/null; then
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install
+        fi
+        
+        # Note: This is a placeholder for when Amazon Q CLI becomes available
+        echo "⚠️ **Amazon Q Developer CLI not yet available**" >> security-report.md
+        echo "This workflow is prepared for future integration" >> security-report.md
+        echo "" >> security-report.md
+    
+    - name: Generate security summary
+      run: |
+        echo "## Security Scan Summary" >> security-report.md
+        echo "Generated: $(date)" >> security-report.md
+        echo "Repository: ${{ github.repository }}" >> security-report.md
+        echo "Commit: ${{ github.sha }}" >> security-report.md
+        echo "" >> security-report.md
+        echo "### Action Items" >> security-report.md
+        echo "- [ ] Review dependency vulnerabilities" >> security-report.md
+        echo "- [ ] Address any static analysis findings" >> security-report.md
+        echo "- [ ] Verify no hardcoded secrets" >> security-report.md
+        echo "- [ ] Configure Amazon Q integration when available" >> security-report.md
+    
+    - name: Upload security report
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-scan-report
+        path: |
+          security-report.md
+          safety-report.json
+          bandit-report.json
+    
+    - name: Comment on PR (if applicable)
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const report = fs.readFileSync('security-report.md', 'utf8');
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `## 🔒 Security Scan Results\n\n${report}`
+          });
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Dependency Review
+      uses: actions/dependency-review-action@v3
+      with:
+        fail-on-severity: moderate
+        allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC
