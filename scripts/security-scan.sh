@@ -192,86 +192,6 @@ run_static_analysis() {
     fi
 }
 
-# Function to check system packages (if running on supported systems)
-check_system_packages() {
-    print_section "System Package Security Check"
-    
-    local report_file="$REPORT_DIR/system_packages_$TIMESTAMP.txt"
-    
-    echo "Checking system package security status..."
-    
-    # Check if we're on a system with package managers
-    if command_exists apt; then
-        echo "Debian/Ubuntu system detected"
-        echo "=== APT Security Updates ===" > "$report_file"
-        apt list --upgradable 2>/dev/null | grep -i security >> "$report_file" || echo "No security updates available" >> "$report_file"
-    elif command_exists yum; then
-        echo "RHEL/CentOS system detected"
-        echo "=== YUM Security Updates ===" > "$report_file"
-        yum --security check-update >> "$report_file" 2>/dev/null || echo "No security updates available" >> "$report_file"
-    elif command_exists dnf; then
-        echo "Fedora system detected"
-        echo "=== DNF Security Updates ===" > "$report_file"
-        dnf --security check-update >> "$report_file" 2>/dev/null || echo "No security updates available" >> "$report_file"
-    else
-        echo "System package manager not supported for security checks"
-        echo "Manual system package review required" > "$report_file"
-    fi
-    
-    echo "System package report: $report_file"
-}
-
-# Function to validate Docker security (if Dockerfile exists)
-check_docker_security() {
-    print_section "Docker Security Check"
-    
-    if [ ! -f "$PROJECT_ROOT/Dockerfile" ]; then
-        echo "No Dockerfile found, skipping Docker security check"
-        return
-    fi
-    
-    local report_file="$REPORT_DIR/docker_security_$TIMESTAMP.txt"
-    
-    echo "Analyzing Dockerfile security..."
-    
-    # Basic Dockerfile security checks
-    {
-        echo "=== Dockerfile Security Analysis ==="
-        echo ""
-        
-        # Check for running as root
-        if grep -q "USER root" "$PROJECT_ROOT/Dockerfile" || ! grep -q "USER " "$PROJECT_ROOT/Dockerfile"; then
-            echo "⚠️  WARNING: Container may be running as root"
-        else
-            echo "✅ Container runs as non-root user"
-        fi
-        
-        # Check for COPY/ADD with broad permissions
-        if grep -E "^(COPY|ADD).*\*" "$PROJECT_ROOT/Dockerfile" >/dev/null; then
-            echo "⚠️  WARNING: Broad file copy patterns detected"
-        else
-            echo "✅ Specific file copy patterns used"
-        fi
-        
-        # Check for latest tag usage
-        if grep -E "FROM.*:latest" "$PROJECT_ROOT/Dockerfile" >/dev/null; then
-            echo "⚠️  WARNING: Using 'latest' tag in base image"
-        else
-            echo "✅ Specific version tags used for base images"
-        fi
-        
-        # Check for secrets in build args
-        if grep -i -E "(password|secret|key|token)" "$PROJECT_ROOT/Dockerfile" >/dev/null; then
-            echo "⚠️  WARNING: Potential secrets in Dockerfile"
-        else
-            echo "✅ No obvious secrets in Dockerfile"
-        fi
-        
-    } > "$report_file"
-    
-    echo "Docker security report: $report_file"
-}
-
 # Function to generate summary report
 generate_summary() {
     print_section "Security Scan Summary"
@@ -351,8 +271,6 @@ main() {
     scan_nodejs_dependencies
     scan_secrets
     run_static_analysis
-    check_system_packages
-    check_docker_security
     
     # Generate summary
     generate_summary

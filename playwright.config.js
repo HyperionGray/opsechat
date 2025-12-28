@@ -72,6 +72,10 @@ module.exports = defineConfig({
   ],
 
   /* Run your local dev server before starting the tests */
-  // Note: The server must be started manually for these tests
-  // since it requires Tor to be running
+  webServer: {
+    command: 'cd tests && python mock_server.py',
+    url: 'http://127.0.0.1:5001',
+    reuseExistingServer: !process.env.CI,
+    timeout: 120 * 1000,
+  }
 });
