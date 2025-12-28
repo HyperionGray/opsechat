@@ -104,7 +104,6 @@ jobs:
           fi
         env:
           CI: true
-          DISPLAY: :99
         continue-on-error: true
 
       - name: Upload Playwright Test Results
