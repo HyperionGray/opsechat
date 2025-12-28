@@ -51,31 +51,6 @@ module.exports = defineConfig({
         headless: true,
       },
     },
-  ] : [
-    // All browsers (headless and headed) for local development
-    {
-      name: 'chromium-headless',
-      use: { 
-        ...devices['Desktop Chrome'],
-        headless: true,
-      },
-    },
-
-    {
-      name: 'firefox-headless',
-      use: { 
-        ...devices['Desktop Firefox'],
-        headless: true,
-      },
-    },
-
-    {
-      name: 'webkit-headless',
-      use: { 
-        ...devices['Desktop Safari'],
-        headless: true,
-      },
-    },
 
     /* Headed browser configurations for manual testing/debugging - only run locally */
     ...(process.env.CI ? [] : [
@@ -99,9 +74,9 @@ module.exports = defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'python tests/mock_server.py',
-    port: 5001,
+    command: 'cd tests && python mock_server.py',
+    url: 'http://127.0.0.1:5001',
     reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000, // 2 minutes
+    timeout: 120 * 1000,
   }
 });
