@@ -1,0 +1,281 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'OpSecChat - ECS Service and Security Configuration'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'staging'
+    AllowedValues: ['staging', 'production']
+    Description: 'Deployment environment'
+  
+  InfrastructureStackName:
+    Type: String
+    Description: 'Name of the infrastructure CloudFormation stack'
+  
+  ContainerImage:
+    Type: String
+    Default: 'opsechat:latest'
+    Description: 'Container image for OpSecChat application'
+  
+  TorControlHost:
+    Type: String
+    Default: '127.0.0.1'
+    Description: 'Tor control host address'
+  
+  TorControlPort:
+    Type: Number
+    Default: 9051
+    Description: 'Tor control port'
+
+Resources:
+  # ECS Cluster
+  OpSecChatCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub 'opsechat-cluster-${Environment}'
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'Security Research Tool'
+
+  # Security Groups
+  OpSecChatSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for OpSecChat application'
+      VpcId:
+        Fn::ImportValue: !Sub '${InfrastructureStackName}-VPC-ID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5000
+          ToPort: 5000
+          SourceSecurityGroupId: !Ref TorProxySecurityGroup
+          Description: 'Flask application port from Tor proxy'
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 9050
+          ToPort: 9051
+          DestinationSecurityGroupId: !Ref TorProxySecurityGroup
+          Description: 'Tor control and SOCKS ports'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTPS outbound for dependencies'
+      Tags:
+        - Key: Name
+          Value: !Sub 'opsechat-app-sg-${Environment}'
+
+  TorProxySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for Tor proxy sidecar'
+      VpcId:
+        Fn::ImportValue: !Sub '${InfrastructureStackName}-VPC-ID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 9050
+          ToPort: 9051
+          SourceSecurityGroupId: !Ref OpSecChatSecurityGroup
+          Description: 'Tor SOCKS and control ports from application'
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 1
+          ToPort: 65535
+          CidrIp: '0.0.0.0/0'
+          Description: 'Tor network connections'
+      Tags:
+        - Key: Name
+          Value: !Sub 'opsechat-tor-sg-${Environment}'
+
+  # IAM Roles
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref OpSecChatSecrets
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: MinimalCloudWatchLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt OpSecChatLogGroup.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Secrets Manager
+  OpSecChatSecrets:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'opsechat-secrets-${Environment}'
+      Description: 'Secrets for OpSecChat application'
+      SecretString: !Sub |
+        {
+          "TOR_CONTROL_HOST": "${TorControlHost}",
+          "TOR_CONTROL_PORT": "${TorControlPort}",
+          "FLASK_SECRET_KEY": "GENERATE_RANDOM_KEY_HERE",
+          "ENVIRONMENT": "${Environment}"
+        }
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'Security Research Tool'
+
+  # CloudWatch Log Group
+  OpSecChatLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/opsechat-${Environment}'
+      RetentionInDays: 7  # Short retention for anonymity
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ECS Task Definition
+  OpSecChatTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub 'opsechat-${Environment}'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: 512
+      Memory: 1024
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: tor-proxy
+          Image: 'dperson/torproxy:latest'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 9050
+              Protocol: tcp
+            - ContainerPort: 9051
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref OpSecChatLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: tor-proxy
+          Environment:
+            - Name: TOR_CONTROL_PORT
+              Value: '9051'
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - 'nc -z localhost 9050 && nc -z localhost 9051'
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 60
+        
+        - Name: opsechat-app
+          Image: !Ref ContainerImage
+          Essential: true
+          DependsOn:
+            - ContainerName: tor-proxy
+              Condition: HEALTHY
+          PortMappings:
+            - ContainerPort: 5000
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref OpSecChatLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: opsechat-app
+          Secrets:
+            - Name: TOR_CONTROL_HOST
+              ValueFrom: !Sub '${OpSecChatSecrets}:TOR_CONTROL_HOST::'
+            - Name: TOR_CONTROL_PORT
+              ValueFrom: !Sub '${OpSecChatSecrets}:TOR_CONTROL_PORT::'
+            - Name: FLASK_SECRET_KEY
+              ValueFrom: !Sub '${OpSecChatSecrets}:FLASK_SECRET_KEY::'
+          Environment:
+            - Name: ENVIRONMENT
+              Value: !Ref Environment
+            - Name: TOR_CONTROL_HOST
+              Value: 'localhost'
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - 'curl -f http://localhost:5000/ || exit 1'
+            Interval: 30
+            Timeout: 10
+            Retries: 3
+            StartPeriod: 120
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  ClusterName:
+    Description: 'ECS Cluster Name'
+    Value: !Ref OpSecChatCluster
+    Export:
+      Name: !Sub '${AWS::StackName}-Cluster-Name'
+
+  TaskDefinitionArn:
+    Description: 'ECS Task Definition ARN'
+    Value: !Ref OpSecChatTaskDefinition
+    Export:
+      Name: !Sub '${AWS::StackName}-TaskDefinition-ARN'
+
+  SecurityGroupId:
+    Description: 'Application Security Group ID'
+    Value: !Ref OpSecChatSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroup-ID'
+
+  SecretsArn:
+    Description: 'Secrets Manager ARN'
+    Value: !Ref OpSecChatSecrets
+    Export:
+      Name: !Sub '${AWS::StackName}-Secrets-ARN'

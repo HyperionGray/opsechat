@@ -26,7 +26,33 @@ module.exports = defineConfig({
   },
 
   /* Configure projects for major browsers */
-  projects: [
+  projects: process.env.CI ? [
+    // Only headless browsers in CI environment
+    {
+      name: 'chromium-headless',
+      use: { 
+        ...devices['Desktop Chrome'],
+        headless: true,
+      },
+    },
+
+    {
+      name: 'firefox-headless',
+      use: { 
+        ...devices['Desktop Firefox'],
+        headless: true,
+      },
+    },
+
+    {
+      name: 'webkit-headless',
+      use: { 
+        ...devices['Desktop Safari'],
+        headless: true,
+      },
+    },
+  ] : [
+    // All browsers (headless and headed) for local development
     {
       name: 'chromium-headless',
       use: { 
@@ -51,22 +77,24 @@ module.exports = defineConfig({
       },
     },
 
-    /* Headed browser configurations for manual testing/debugging */
-    {
-      name: 'chromium-headed',
-      use: { 
-        ...devices['Desktop Chrome'],
-        headless: false,
+    /* Headed browser configurations for manual testing/debugging - only run locally */
+    ...(process.env.CI ? [] : [
+      {
+        name: 'chromium-headed',
+        use: { 
+          ...devices['Desktop Chrome'],
+          headless: false,
+        },
       },
-    },
 
-    {
-      name: 'firefox-headed',
-      use: { 
-        ...devices['Desktop Firefox'],
-        headless: false,
+      {
+        name: 'firefox-headed',
+        use: { 
+          ...devices['Desktop Firefox'],
+          headless: false,
+        },
       },
-    },
+    ]),
   ],
 
   /* Run your local dev server before starting the tests */

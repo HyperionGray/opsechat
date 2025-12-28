@@ -16,6 +16,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write
   checks: write
 
 jobs:
@@ -83,6 +84,15 @@ jobs:
           CI: true
         continue-on-error: true
 
+      - name: Setup Virtual Display for Headed Tests
+        if: matrix.mode == 'headed'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          export DISPLAY=:99
+          Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+          sleep 3
+
       - name: Run Playwright Tests (Headed)
         if: matrix.mode == 'headed'
         run: |
@@ -95,7 +105,6 @@ jobs:
           fi
         env:
           CI: true
-          DISPLAY: :99
         continue-on-error: true
 
       - name: Upload Playwright Test Results
