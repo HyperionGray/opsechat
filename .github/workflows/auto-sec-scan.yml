@@ -7,10 +7,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@main
       - name: Run CodeQL Scan
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@main
         with:
           languages: 'python,javascript'
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@main
