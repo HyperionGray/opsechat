@@ -6,7 +6,10 @@ This server simulates the basic Flask routes for testing purposes
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Add the parent directory to Python path for imports
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
 
 from flask import Flask, render_template, session, request, jsonify, redirect
 import string
@@ -14,21 +17,52 @@ import random
 import datetime
 import re
 
-# Import email system
+# Import email system with better error handling
+email_storage = None
+burner_manager = None
+
 try:
     from email_system import email_storage, burner_manager
+    print("Successfully imported email_system")
 except ImportError as e:
     print(f"Warning: Could not import email_system: {e}")
+    print("Using mock objects for testing")
+    
     # Create mock objects for testing
     class MockEmailStorage:
-        def create_user_inbox(self, user_id): pass
+        def create_user_inbox(self, user_id): 
+            print(f"Mock: Creating inbox for user {user_id}")
+        def get_emails(self, user_id): 
+            return []
+        def add_email(self, user_id, email_data): 
+            print(f"Mock: Adding email for user {user_id}")
+        def get_email(self, user_id, email_id): 
+            return None
+        def update_email_raw(self, user_id, email_id, raw_content): 
+            print(f"Mock: Updating email {email_id} for user {user_id}")
+        def delete_email(self, user_id, email_id): 
+            return True
+    
     class MockBurnerManager:
-        def cleanup_expired(self): pass
-        def generate_burner_email(self, user_id): return f"test{user_id}@example.com"
-        def rotate_burner(self, user_id, old_email): return f"test{user_id}@example.com"
-        def get_user_burners(self, user_id): return []
-        def get_user_for_burner(self, email): return None
-        def expire_burner(self, email): pass
+        def cleanup_expired(self): 
+            print("Mock: Cleaning up expired burners")
+        def generate_burner_email(self, user_id): 
+            email = f"test{user_id}@example.com"
+            print(f"Mock: Generated burner email {email}")
+            return {"email": email, "expires_at": datetime.datetime.now() + datetime.timedelta(hours=1)}
+        def rotate_burner(self, user_id, old_email): 
+            email = f"test{user_id}@example.com"
+            print(f"Mock: Rotated burner email to {email}")
+            return {"email": email, "expires_at": datetime.datetime.now() + datetime.timedelta(hours=1)}
+        def get_user_burners(self, user_id): 
+            return []
+        def get_user_for_burner(self, email): 
+            return None
+        def expire_burner_email(self, user_id, email): 
+            print(f"Mock: Expiring burner {email} for user {user_id}")
+            return True
+        def expire_burner(self, email): 
+            print(f"Mock: Expiring burner {email}")
     
     email_storage = MockEmailStorage()
     burner_manager = MockBurnerManager()
@@ -136,8 +170,16 @@ def get_review_stats():
     }
 
 # Register review routes with the Flask app
-from review_routes import register_review_routes
-register_review_routes(app, id_generator, get_random_color, add_review, get_reviews, get_review_stats)
+try:
+    from review_routes import register_review_routes
+    register_review_routes(app, id_generator, get_random_color, add_review, get_reviews, get_review_stats)
+    print("Successfully registered review routes")
+except ImportError as e:
+    print(f"Warning: Could not import review_routes: {e}")
+    print("Review functionality will not be available")
+except Exception as e:
+    print(f"Warning: Could not register review routes: {e}")
+    print("Review functionality will not be available")
 
 # Remove headers that can be used to fingerprint this server
 @app.after_request
@@ -149,6 +191,19 @@ def remove_headers(response):
 @app.route('/', methods=["GET"])
 def index():
     return ('', 200)
+
+@app.route('/health', methods=["GET"])
+def health_check():
+    """Health check endpoint for testing"""
+    return jsonify({
+        "status": "ok",
+        "server": "mock",
+        "timestamp": datetime.datetime.now().isoformat(),
+        "config": {
+            "hostname": app.config["hostname"],
+            "path": app.config["path"]
+        }
+    }), 200
 
 @app.route('/<string:url_addition>', methods=["GET"])
 def drop_landing(url_addition):
@@ -426,16 +481,33 @@ def email_burner_expire(url_addition, email):
     return redirect(f"/{app.config['path']}/email/burner", code=302)
 
 if __name__ == '__main__':
+    print("=" * 50)
     print("Starting mock server for testing...")
+    print(f"Python version: {sys.version}")
+    print(f"Working directory: {os.getcwd()}")
+    print(f"Project root: {project_root}")
     print(f"Template directory: {template_dir}")
     print(f"Static directory: {static_dir}")
+    print(f"Template directory exists: {os.path.exists(template_dir)}")
+    print(f"Static directory exists: {os.path.exists(static_dir)}")
     print(f"Test URL: http://127.0.0.1:5001/{app.config['path']}")
     print(f"Health check URL: http://127.0.0.1:5001/")
+    print("=" * 50)
+    
+    # Validate critical directories
+    if not os.path.exists(template_dir):
+        print(f"ERROR: Template directory not found: {template_dir}")
+        print("Server may not render templates correctly")
+    
+    if not os.path.exists(static_dir):
+        print(f"WARNING: Static directory not found: {static_dir}")
+        print("Static files may not be served")
     
     try:
+        print("Starting Flask server...")
         app.run(debug=False, host='127.0.0.1', port=5001, threaded=True)
     except Exception as e:
-        print(f"Error starting mock server: {e}")
+        print(f"ERROR: Failed to start mock server: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
