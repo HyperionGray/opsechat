@@ -6,9 +6,6 @@ Compatible with pf-web-poly-compile-helper-runner patterns
 
 import subprocess
 import sys
-import os
-import time
-import requests
 from pathlib import Path
 import argparse
 

@@ -16,6 +16,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write
   checks: write
 
 jobs:
@@ -73,7 +74,7 @@ jobs:
         if: matrix.mode == 'headless'
         run: |
           if [ -f "playwright.config.ts" ] || [ -f "playwright.config.js" ]; then
-            npx playwright test --browser=${{ matrix.browser }}
+            npx playwright test --project=${{ matrix.browser }}-headless
           elif [ -d "tests" ] && find tests -name "*test*.py" -o -name "*_test.py" | grep -q .; then
             pytest tests/ --browser ${{ matrix.browser }} --headed=false
           else
@@ -83,19 +84,27 @@ jobs:
           CI: true
         continue-on-error: true
 
+      - name: Setup Virtual Display for Headed Tests
+        if: matrix.mode == 'headed'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          export DISPLAY=:99
+          Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+          sleep 3
+
       - name: Run Playwright Tests (Headed)
         if: matrix.mode == 'headed'
         run: |
           if [ -f "playwright.config.ts" ] || [ -f "playwright.config.js" ]; then
-            npx playwright test --browser=${{ matrix.browser }} --headed
+            xvfb-run -a npx playwright test --project=${{ matrix.browser }}-headed
           elif [ -d "tests" ] && find tests -name "*test*.py" -o -name "*_test.py" | grep -q .; then
-            pytest tests/ --browser ${{ matrix.browser }} --headed=true
+            xvfb-run -a pytest tests/ --browser ${{ matrix.browser }} --headed=true
           else
             echo "No Playwright tests found - this is OK if not a web project"
           fi
         env:
           CI: true
-          DISPLAY: :99
         continue-on-error: true
 
       - name: Upload Playwright Test Results

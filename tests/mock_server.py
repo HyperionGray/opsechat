@@ -6,7 +6,11 @@ This server simulates the basic Flask routes for testing purposes
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Add parent directory to Python path for imports
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 
 from flask import Flask, render_template, session, request, jsonify, redirect
 import string
@@ -14,7 +18,7 @@ import random
 import datetime
 import re
 
-# Import email system
+# Import email system with fallback
 try:
     from email_system import email_storage, burner_manager
 except ImportError as e:
@@ -33,17 +37,22 @@ except ImportError as e:
     email_storage = MockEmailStorage()
     burner_manager = MockBurnerManager()
 
-# Create Flask app with the correct template directory
-template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'templates')
-static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static')
+# Create Flask app with absolute paths for better CI compatibility
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+template_dir = os.path.join(base_dir, 'templates')
+static_dir = os.path.join(base_dir, 'static')
 
-# Verify directories exist
+# Verify directories exist and provide fallback
 if not os.path.exists(template_dir):
     print(f"Warning: Template directory not found: {template_dir}")
+    template_dir = None
 if not os.path.exists(static_dir):
     print(f"Warning: Static directory not found: {static_dir}")
+    static_dir = None
 
-app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
+app = Flask(__name__, 
+           template_folder=template_dir, 
+           static_folder=static_dir)
 app.secret_key = 'test-secret-key-for-mock-server'
 
 # Mock configuration
@@ -136,8 +145,15 @@ def get_review_stats():
     }
 
 # Register review routes with the Flask app
-from review_routes import register_review_routes
-register_review_routes(app, id_generator, get_random_color, add_review, get_reviews, get_review_stats)
+try:
+    from review_routes import register_review_routes
+    register_review_routes(app, id_generator, get_random_color, add_review, get_reviews, get_review_stats)
+except ImportError as e:
+    print(f"Warning: Could not import review_routes: {e}")
+    # Create a dummy route for testing
+    @app.route('/<string:url_addition>/reviews', methods=["GET", "POST"])
+    def reviews_main_mock(url_addition):
+        return "Reviews system not available in test mode", 200
 
 # Remove headers that can be used to fingerprint this server
 @app.after_request
@@ -149,6 +165,19 @@ def remove_headers(response):
 @app.route('/', methods=["GET"])
 def index():
     return ('', 200)
+
+@app.route('/health', methods=["GET"])
+def health_check():
+    """Health check endpoint for Playwright webServer"""
+    return jsonify({
+        'status': 'ok',
+        'server': 'mock-opsechat',
+        'timestamp': datetime.datetime.now().isoformat(),
+        'config': {
+            'hostname': app.config.get('hostname'),
+            'path': app.config.get('path')
+        }
+    }), 200
 
 @app.route('/<string:url_addition>', methods=["GET"])
 def drop_landing(url_addition):
@@ -426,14 +455,45 @@ def email_burner_expire(url_addition, email):
     return redirect(f"/{app.config['path']}/email/burner", code=302)
 
 if __name__ == '__main__':
+    import logging
+    
+    # Configure logging for CI environments
+    if os.environ.get('CI'):
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+        logger = logging.getLogger(__name__)
+        logger.info("Starting mock server in CI environment")
+    else:
+        logger = logging.getLogger(__name__)
+    
     print("Starting mock server for testing...")
+    print(f"Base directory: {base_dir}")
     print(f"Template directory: {template_dir}")
     print(f"Static directory: {static_dir}")
     print(f"Test URL: http://127.0.0.1:5001/{app.config['path']}")
-    print(f"Health check URL: http://127.0.0.1:5001/")
+    print(f"Health check URL: http://127.0.0.1:5001/health")
+    print(f"CI environment: {os.environ.get('CI', 'false')}")
+    
+    # Verify Flask app is properly configured
+    try:
+        with app.app_context():
+            print(f"Flask app configured successfully")
+            print(f"Available routes: {[rule.rule for rule in app.url_map.iter_rules()]}")
+    except Exception as e:
+        print(f"Warning: Flask app configuration issue: {e}")
+    
+    # Ensure we can bind to the port
+    import socket
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(('127.0.0.1', 5001))
+        sock.close()
+        print("Port 5001 is available")
+    except OSError as e:
+        print(f"Warning: Port 5001 may be in use: {e}")
     
     try:
-        app.run(debug=False, host='127.0.0.1', port=5001, threaded=True)
+        print("Mock server starting on http://127.0.0.1:5001")
+        app.run(debug=False, host='127.0.0.1', port=5001, threaded=True, use_reloader=False)
     except Exception as e:
         print(f"Error starting mock server: {e}")
         import traceback
