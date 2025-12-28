@@ -36,27 +36,6 @@ Examples of unacceptable behavior include:
 * Other conduct which could reasonably be considered inappropriate in a
   professional setting
 
-## Security Research Ethics
-
-Given the security-focused nature of this project, we have additional standards for responsible conduct:
-
-### Responsible Disclosure
-* **Report security vulnerabilities privately** to the maintainers before public disclosure
-* **Allow reasonable time** for fixes to be developed and deployed
-* **Avoid causing harm** to users, systems, or data during security research
-* **Respect privacy** and confidentiality of any data encountered during testing
-
-### Ethical Security Testing
-* **Only test on systems you own** or have explicit permission to test
-* **Use the tools responsibly** - this project is for legitimate security research and education
-* **Respect legal boundaries** - ensure your use complies with applicable laws and regulations
-* **Share knowledge constructively** - contribute findings that benefit the security community
-
-### Privacy and Anonymity
-* **Respect user privacy** - never attempt to de-anonymize users or compromise their privacy
-* **Protect sensitive information** - handle any security-related information with appropriate care
-* **Support the mission** - help maintain and improve the privacy and security features of the project
-
 ## Enforcement Responsibilities
 
 Community leaders are responsible for clarifying and enforcing our standards of
@@ -77,18 +56,11 @@ Examples of representing our community include using an official e-mail address,
 posting via an official social media account, or acting as an appointed
 representative at an online or offline event.
 
-This Code of Conduct also applies to the use of this software and any security
-research conducted with it.
-
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement through the
-project's issue tracker or by contacting the maintainers directly.
-
-For security-related concerns or violations of the security research ethics
-outlined above, please report them privately to the maintainers.
-
+reported to the community leaders responsible for enforcement at
+[INSERT CONTACT METHOD].
 All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the
@@ -134,7 +106,7 @@ Violating these terms may lead to a permanent ban.
 ### 4. Permanent Ban
 
 **Community Impact**: Demonstrating a pattern of violation of community
-standards, including sustained inappropriate behavior, harassment of an
+standards, including sustained inappropriate behavior,  harassment of an
 individual, or aggression toward or disparagement of classes of individuals.
 
 **Consequence**: A permanent ban from any sort of public interaction within
@@ -149,11 +121,26 @@ https://www.contributor-covenant.org/version/2/0/code_of_conduct.html.
 Community Impact Guidelines were inspired by [Mozilla's code of conduct
 enforcement ladder](https://github.com/mozilla/diversity).
 
-The Security Research Ethics section is specifically tailored for this project's
-focus on privacy, security, and anonymous communication tools.
-
 [homepage]: https://www.contributor-covenant.org
 
 For answers to common questions about this code of conduct, see the FAQ at
 https://www.contributor-covenant.org/faq. Translations are available at
 https://www.contributor-covenant.org/translations.
+
+## Security and Privacy Considerations
+
+Given the nature of this project (opsechat - anonymous communication over Tor),
+we take security and privacy seriously:
+
+* **Responsible Disclosure**: Security vulnerabilities should be reported privately
+  to the maintainers before public disclosure
+* **Privacy Protection**: Do not share or request personal information in public
+  discussions
+* **Anonymity Respect**: Respect users' choices to remain anonymous
+* **Security Research**: When discussing security features, consider the impact
+  on user safety and privacy
+
+## Contact
+
+For questions about this Code of Conduct or to report violations, please contact
+the project maintainers through the project's GitHub repository.
