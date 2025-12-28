@@ -95,6 +95,13 @@ jobs:
           python-version: '3.11'
         continue-on-error: true
 
+      - name: Install Python Dependencies
+        run: |
+          if [ -f "requirements.txt" ]; then
+            pip install -r requirements.txt
+          fi
+        continue-on-error: true
+
       - name: Install Playwright for E2E
         if: matrix.test-type == 'e2e'
         run: |
