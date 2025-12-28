@@ -51,22 +51,24 @@ module.exports = defineConfig({
       },
     },
 
-    /* Headed browser configurations for manual testing/debugging */
-    {
-      name: 'chromium-headed',
-      use: { 
-        ...devices['Desktop Chrome'],
-        headless: false,
+    /* Headed browser configurations for manual testing/debugging - only in non-CI environments */
+    ...(process.env.CI ? [] : [
+      {
+        name: 'chromium-headed',
+        use: { 
+          ...devices['Desktop Chrome'],
+          headless: false,
+        },
       },
-    },
 
-    {
-      name: 'firefox-headed',
-      use: { 
-        ...devices['Desktop Firefox'],
-        headless: false,
+      {
+        name: 'firefox-headed',
+        use: { 
+          ...devices['Desktop Firefox'],
+          headless: false,
+        },
       },
-    },
+    ]),
   ],
 
   /* Run your local dev server before starting the tests */
