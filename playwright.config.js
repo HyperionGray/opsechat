@@ -51,7 +51,7 @@ module.exports = defineConfig({
       },
     },
 
-    /* Headed browser configurations for manual testing/debugging - only in non-CI environments */
+    /* Headed browser configurations for manual testing/debugging - only run locally */
     ...(process.env.CI ? [] : [
       {
         name: 'chromium-headed',
@@ -73,11 +73,15 @@ module.exports = defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'python tests/mock_server.py',
-    url: 'http://127.0.0.1:5001/health',
+    command: 'python3 tests/mock_server.py',
+    port: 5001,
     reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
     stdout: 'pipe',
     stderr: 'pipe',
-  }
+    timeout: 120 * 1000, // 2 minutes timeout
+    env: {
+      PYTHONPATH: '.',
+      FLASK_ENV: 'testing'
+    }
+  },
 });

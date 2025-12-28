@@ -481,28 +481,19 @@ if __name__ == '__main__':
     except Exception as e:
         print(f"Warning: Flask app configuration issue: {e}")
     
+    # Ensure we can bind to the port
+    import socket
     try:
-        print("Attempting to start server on 127.0.0.1:5001...")
-        app.run(debug=False, host='127.0.0.1', port=5001, threaded=True, use_reloader=False)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(('127.0.0.1', 5001))
+        sock.close()
+        print("Port 5001 is available")
     except OSError as e:
-        if "Address already in use" in str(e):
-            print("Port 5001 is already in use. This might be expected in CI environments.")
-            print("Attempting to connect to existing server...")
-            import requests
-            try:
-                response = requests.get('http://127.0.0.1:5001/health', timeout=5)
-                if response.status_code == 200:
-                    print("Existing server is responding correctly.")
-                    sys.exit(0)
-                else:
-                    print(f"Existing server returned status {response.status_code}")
-                    sys.exit(1)
-            except requests.RequestException:
-                print("Could not connect to existing server on port 5001")
-                sys.exit(1)
-        else:
-            print(f"Network error starting mock server: {e}")
-            sys.exit(1)
+        print(f"Warning: Port 5001 may be in use: {e}")
+    
+    try:
+        print("Mock server starting on http://127.0.0.1:5001")
+        app.run(debug=False, host='127.0.0.1', port=5001, threaded=True, use_reloader=False)
     except Exception as e:
         print(f"Error starting mock server: {e}")
         import traceback

@@ -83,13 +83,25 @@ jobs:
           CI: true
         continue-on-error: true
 
+      - name: Setup Virtual Display for Headed Tests
+        if: matrix.mode == 'headed'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          export DISPLAY=:99
+          Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+          sleep 3
+
       - name: Run Playwright Tests (Headed)
         if: matrix.mode == 'headed'
         run: |
-          echo "Headed browser tests are not supported in CI environments due to lack of display server."
-          echo "Headed tests are intended for local development and debugging only."
-          echo "All functionality is covered by headless tests in CI."
-          exit 0
+          if [ -f "playwright.config.ts" ] || [ -f "playwright.config.js" ]; then
+            xvfb-run -a npx playwright test --browser=${{ matrix.browser }} --headed
+          elif [ -d "tests" ] && find tests -name "*test*.py" -o -name "*_test.py" | grep -q .; then
+            xvfb-run -a pytest tests/ --browser ${{ matrix.browser }} --headed=true
+          else
+            echo "No Playwright tests found - this is OK if not a web project"
+          fi
         env:
           CI: true
         continue-on-error: true
