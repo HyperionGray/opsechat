@@ -26,7 +26,33 @@ module.exports = defineConfig({
   },
 
   /* Configure projects for major browsers */
-  projects: [
+  projects: process.env.CI ? [
+    // Only headless browsers in CI environment
+    {
+      name: 'chromium-headless',
+      use: { 
+        ...devices['Desktop Chrome'],
+        headless: true,
+      },
+    },
+
+    {
+      name: 'firefox-headless',
+      use: { 
+        ...devices['Desktop Firefox'],
+        headless: true,
+      },
+    },
+
+    {
+      name: 'webkit-headless',
+      use: { 
+        ...devices['Desktop Safari'],
+        headless: true,
+      },
+    },
+  ] : [
+    // All browsers (headless and headed) for local development
     {
       name: 'chromium-headless',
       use: { 
