@@ -67,17 +67,22 @@ except ImportError as e:
     email_storage = MockEmailStorage()
     burner_manager = MockBurnerManager()
 
-# Create Flask app with the correct template directory
-template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'templates')
-static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static')
+# Create Flask app with absolute paths for better CI compatibility
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+template_dir = os.path.join(base_dir, 'templates')
+static_dir = os.path.join(base_dir, 'static')
 
-# Verify directories exist
+# Verify directories exist and provide fallback
 if not os.path.exists(template_dir):
     print(f"Warning: Template directory not found: {template_dir}")
+    template_dir = None
 if not os.path.exists(static_dir):
     print(f"Warning: Static directory not found: {static_dir}")
+    static_dir = None
 
-app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
+app = Flask(__name__, 
+           template_folder=template_dir, 
+           static_folder=static_dir)
 app.secret_key = 'test-secret-key-for-mock-server'
 
 # Mock configuration

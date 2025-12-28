@@ -26,7 +26,8 @@ module.exports = defineConfig({
   },
 
   /* Configure projects for major browsers */
-  projects: [
+  projects: process.env.CI ? [
+    // Only headless browsers in CI environment
     {
       name: 'chromium-headless',
       use: { 

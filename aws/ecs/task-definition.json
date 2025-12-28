@@ -1,0 +1,145 @@
+{
+  "family": "opsechat-production",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/opsechat-execution-role",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/opsechat-task-role",
+  "containerDefinitions": [
+    {
+      "name": "tor-proxy",
+      "image": "dperson/torproxy:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 9050,
+          "protocol": "tcp"
+        },
+        {
+          "containerPort": 9051,
+          "protocol": "tcp"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/opsechat-production",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "tor-proxy"
+        }
+      },
+      "environment": [
+        {
+          "name": "TOR_CONTROL_PORT",
+          "value": "9051"
+        }
+      ],
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "nc -z localhost 9050 && nc -z localhost 9051"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "ulimits": [
+        {
+          "name": "nofile",
+          "softLimit": 65536,
+          "hardLimit": 65536
+        }
+      ]
+    },
+    {
+      "name": "opsechat-app",
+      "image": "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/opsechat:latest",
+      "essential": true,
+      "dependsOn": [
+        {
+          "containerName": "tor-proxy",
+          "condition": "HEALTHY"
+        }
+      ],
+      "portMappings": [
+        {
+          "containerPort": 5000,
+          "protocol": "tcp"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/opsechat-production",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "opsechat-app"
+        }
+      },
+      "secrets": [
+        {
+          "name": "TOR_CONTROL_HOST",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:opsechat-secrets-production:TOR_CONTROL_HOST::"
+        },
+        {
+          "name": "TOR_CONTROL_PORT",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:opsechat-secrets-production:TOR_CONTROL_PORT::"
+        },
+        {
+          "name": "FLASK_SECRET_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:opsechat-secrets-production:FLASK_SECRET_KEY::"
+        }
+      ],
+      "environment": [
+        {
+          "name": "ENVIRONMENT",
+          "value": "production"
+        },
+        {
+          "name": "TOR_CONTROL_HOST",
+          "value": "localhost"
+        },
+        {
+          "name": "PYTHONUNBUFFERED",
+          "value": "1"
+        }
+      ],
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:5000/ || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 10,
+        "retries": 3,
+        "startPeriod": 120
+      },
+      "ulimits": [
+        {
+          "name": "nofile",
+          "softLimit": 65536,
+          "hardLimit": 65536
+        }
+      ],
+      "mountPoints": [],
+      "volumesFrom": []
+    }
+  ],
+  "volumes": [],
+  "placementConstraints": [],
+  "tags": [
+    {
+      "key": "Environment",
+      "value": "production"
+    },
+    {
+      "key": "Purpose",
+      "value": "Security Research Tool"
+    },
+    {
+      "key": "ManagedBy",
+      "value": "CloudFormation"
+    }
+  ]
+}
