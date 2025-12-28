@@ -432,8 +432,19 @@ if __name__ == '__main__':
     print(f"Test URL: http://127.0.0.1:5001/{app.config['path']}")
     print(f"Health check URL: http://127.0.0.1:5001/")
     
+    # Ensure we can bind to the port
+    import socket
     try:
-        app.run(debug=False, host='127.0.0.1', port=5001, threaded=True)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(('127.0.0.1', 5001))
+        sock.close()
+        print("Port 5001 is available")
+    except OSError as e:
+        print(f"Warning: Port 5001 may be in use: {e}")
+    
+    try:
+        print("Mock server starting on http://127.0.0.1:5001")
+        app.run(debug=False, host='127.0.0.1', port=5001, threaded=True, use_reloader=False)
     except Exception as e:
         print(f"Error starting mock server: {e}")
         import traceback
