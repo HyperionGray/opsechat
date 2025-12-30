@@ -91,8 +91,7 @@ jobs:
         run: |
           # Try to run tests if they exist
           if [ -f "package.json" ] && grep -q '"test"' package.json; then
-            # Use headless tests for CI to avoid display issues
-            npm run test:headless 2>/dev/null || npm test || echo "Tests failed or not configured"
+            npm test || echo "Tests failed or not configured"
           fi
           
           if [ -f "pytest.ini" ] || [ -d "tests" ]; then
