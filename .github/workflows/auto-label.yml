@@ -7,10 +7,6 @@ on:
   issues:
     types: [opened]
 
-permissions:
-  issues: write
-  contents: read
-
 jobs:
   label:
     runs-on: ubuntu-latest
