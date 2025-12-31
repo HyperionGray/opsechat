@@ -21,6 +21,7 @@ def create_app():
     from email_routes import email_bp
     from burner_routes import burner_bp
     from security_routes import security_bp
+    from landing_routes import landing_bp
     from review_routes import register_review_routes
     
     # Register all blueprints
@@ -28,6 +29,7 @@ def create_app():
     app.register_blueprint(email_bp)
     app.register_blueprint(burner_bp)
     app.register_blueprint(security_bp)
+    app.register_blueprint(landing_bp)
     
     # Register review routes (existing function-based registration)
     register_review_routes(app)
