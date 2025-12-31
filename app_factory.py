@@ -16,23 +16,22 @@ def create_app():
     # Set secret key for sessions
     app.secret_key = id_generator(size=64)
     
-    # Register blueprints
-    from chat_routes import chat_bp
-    from email_routes import email_bp
+    # Register blueprints and function-based routes
     from burner_routes import burner_bp
     from security_routes import security_bp
     from landing_routes import landing_bp
     from review_routes import register_review_routes
+    from email_routes import register_email_routes
+    from utils import get_random_color
     
-    # Register all blueprints
-    app.register_blueprint(chat_bp)
-    app.register_blueprint(email_bp)
+    # Register blueprints
     app.register_blueprint(burner_bp)
     app.register_blueprint(security_bp)
     app.register_blueprint(landing_bp)
     
-    # Register review routes (existing function-based registration)
+    # Register function-based routes
     register_review_routes(app)
+    register_email_routes(app, id_generator, get_random_color)
     
     # Add security headers
     @app.after_request

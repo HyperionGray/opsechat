@@ -93,5 +93,11 @@ def main():
                 print(f"Warning: Could not cleanly remove hidden service: {e}")
 
 
+# Create a global app instance for testing
+app = create_app()
+
+# Import utility functions for backward compatibility with tests
+from utils import id_generator, check_older_than, process_chat
+
 if __name__ == "__main__":
     main()

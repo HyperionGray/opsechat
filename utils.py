@@ -8,6 +8,8 @@ to improve code organization and maintainability.
 import string
 import random
 import datetime
+import textwrap
+from flask import session
 
 
 def id_generator(size=6, chars=None):
@@ -84,3 +86,37 @@ def add_review(reviews, user_id, rating, review_text):
     
     reviews.append(review)
     return review
+
+
+def process_chat(chat_dic):
+    """
+    Process chat messages for display, handling text wrapping and PGP preservation.
+    
+    Args:
+        chat_dic: Dictionary containing chat message data
+        
+    Returns:
+        List of chat dictionaries (may be split for long messages)
+    """
+    chats = []
+    max_chat_len = 69
+    
+    # Check if this is a PGP encrypted message - don't wrap it
+    is_pgp = "-----BEGIN PGP MESSAGE-----" in chat_dic["msg"]
+    
+    if is_pgp:
+        # Don't wrap PGP messages, keep them as single chat
+        chats = [chat_dic]
+    elif len(chat_dic["msg"]) > max_chat_len:
+        # Split long messages into multiple parts
+        for message in textwrap.wrap(chat_dic["msg"], width=max_chat_len):
+            partial_chat = {}
+            partial_chat["msg"] = message.strip()
+            partial_chat["timestamp"] = datetime.datetime.now()
+            partial_chat["username"] = session["_id"]
+            partial_chat["color"] = session["color"]
+            chats.append(partial_chat)
+    else:
+        chats = [chat_dic]
+
+    return chats
