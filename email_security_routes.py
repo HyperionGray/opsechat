@@ -4,6 +4,7 @@ from email_security_tools import spoofing_tester, phishing_simulator
 from email_transport import transport_manager
 from domain_manager import domain_rotation_manager
 from email_system import EmailComposer, email_storage
+import logging
 
 def create_email_security_blueprint(id_generator, get_random_color):
     """Create and configure the email security routes blueprint"""
@@ -161,7 +162,8 @@ def create_email_security_blueprint(id_generator, get_random_color):
             
             return jsonify(result)
         except Exception as e:
-            return jsonify({"success": False, "error": str(e)})
+            logging.exception("Error in email_send_api")
+            return jsonify({"success": False, "error": "Failed to send email"})
 
     @email_security_bp.route('/<string:url_addition>/email/receive', methods=["POST"])
     def email_receive_api(url_addition):
@@ -183,7 +185,8 @@ def create_email_security_blueprint(id_generator, get_random_color):
             
             return jsonify(result)
         except Exception as e:
-            return jsonify({"success": False, "error": str(e)})
+            logging.exception("Error in email_receive_api")
+            return jsonify({"success": False, "error": "Failed to receive emails"})
 
     @email_security_bp.route('/<string:url_addition>/email/domain/rotate', methods=["POST"])
     def email_domain_rotate(url_addition):
@@ -199,6 +202,7 @@ def create_email_security_blueprint(id_generator, get_random_color):
             result = domain_rotation_manager.rotate_domain()
             return jsonify(result)
         except Exception as e:
-            return jsonify({"success": False, "error": str(e)})
+            logging.exception("Error in email_domain_rotate")
+            return jsonify({"success": False, "error": "Failed to rotate domain"})
 
     return email_security_bp
