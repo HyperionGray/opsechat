@@ -178,13 +178,9 @@ def get_review_stats():
 try:
     from review_routes import register_review_routes
     register_review_routes(app, id_generator, get_random_color, add_review, get_reviews, get_review_stats)
-    print("Successfully registered review routes")
 except ImportError as e:
     print(f"Warning: Could not import review_routes: {e}")
-    print("Review functionality will not be available")
-except Exception as e:
-    print(f"Warning: Could not register review routes: {e}")
-    print("Review functionality will not be available")
+    # Review routes will not be available in this case
 
 # Remove headers that can be used to fingerprint this server
 @app.after_request
@@ -508,8 +504,16 @@ if __name__ == '__main__':
         print(f"WARNING: Static directory not found: {static_dir}")
         print("Static files may not be served")
     
+    # Test basic Flask functionality
     try:
-        print("Starting Flask server...")
+        with app.test_client() as client:
+            response = client.get('/')
+            print(f"Self-test response status: {response.status_code}")
+    except Exception as e:
+        print(f"Self-test failed: {e}")
+    
+    try:
+        print("Starting Flask server on 127.0.0.1:5001...")
         app.run(debug=False, host='127.0.0.1', port=5001, threaded=True)
     except Exception as e:
         print(f"ERROR: Failed to start mock server: {e}")

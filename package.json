@@ -6,7 +6,7 @@
   "scripts": {
     "test": "playwright test",
     "test:headless": "playwright test --project=chromium-headless --project=firefox-headless --project=webkit-headless",
-    "test:headed": "if [ \"$CI\" = \"true\" ]; then echo 'Headed tests are not available in CI environments. Use test:headless instead.'; exit 0; else playwright test --project=chromium-headed --headed; fi",
+    "test:headed": "playwright test --project=chromium-headed --project=firefox-headed --headed",
     "test:basic": "playwright test tests/basic.spec.js",
     "test:e2e": "playwright test tests/e2e.spec.js",
     "test:ui": "playwright test tests/ui-headless.spec.js && if [ \"$CI\" != \"true\" ]; then playwright test tests/ui-headed.spec.js; fi",

@@ -52,7 +52,7 @@ module.exports = defineConfig({
       },
     },
 
-    /* Headed browser configurations for manual testing/debugging - only run locally */
+    /* Headed browser configurations for manual testing/debugging - only run locally, not in CI */
     ...(process.env.CI ? [] : [
       {
         name: 'chromium-headed',
