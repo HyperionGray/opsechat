@@ -7,11 +7,6 @@ on:
   pull_request:
     types: [opened]
 
-permissions:
-  issues: write
-  pull-requests: write
-  contents: read
-
 jobs:
   auto-assign:
     runs-on: ubuntu-latest
