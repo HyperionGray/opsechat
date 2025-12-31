@@ -17,6 +17,7 @@ permissions:
   contents: write
   pull-requests: write
   checks: write
+  issues: write
 
 jobs:
   test-review-and-execution:
