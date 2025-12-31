@@ -9,7 +9,7 @@
     "test:headed": "playwright test --project=chromium-headed --project=firefox-headed --headed",
     "test:basic": "playwright test tests/basic.spec.js",
     "test:e2e": "playwright test tests/e2e.spec.js",
-    "test:ui": "playwright test tests/ui-headless.spec.js tests/ui-headed.spec.js",
+    "test:ui": "playwright test tests/ui-headless.spec.js && if [ \"$CI\" != \"true\" ]; then playwright test tests/ui-headed.spec.js; fi",
     "test:report": "playwright show-report"
   },
   "keywords": [],

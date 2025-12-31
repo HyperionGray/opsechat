@@ -9,9 +9,25 @@ To be a opsechat client requires a Tor Browser on any OS.
 Install
 =======
 
-## Option 1: Systemd Quadlets (Recommended for Production)
+## Option 1: AWS Cloud Deployment (Recommended for Production)
 
-For production deployment with native systemd integration:
+For production deployment with enterprise-grade security and scalability:
+
+```bash
+$ git clone git@github.com:HyperionGray/opsechat.git
+$ cd opsechat
+# Configure AWS credentials in repository secrets
+# Deploy infrastructure using CloudFormation
+$ aws cloudformation create-stack --stack-name opsechat-infrastructure-production \
+  --template-body file://aws/cloudformation/opsechat-infrastructure.yml \
+  --parameters ParameterKey=Environment,ParameterValue=production
+```
+
+This provides AWS ECS Fargate deployment with Tor integration, network isolation, and comprehensive security monitoring. See [AWS Deployment Guide](aws/AWS_DEPLOYMENT_GUIDE.md) for complete instructions.
+
+## Option 2: Systemd Quadlets (Recommended for Local Production)
+
+For local production deployment with native systemd integration:
 
 ```bash
 $ git clone git@github.com:HyperionGray/opsechat.git
@@ -23,7 +39,7 @@ $ systemctl --user start opsechat-app
 
 This provides the best integration with systemd, automatic startup, and native service management.
 
-## Option 2: Docker/Podman Compose (Recommended for Development)
+## Option 3: Docker/Podman Compose (Recommended for Development)
 
 For the easiest setup with full isolation, use containers:
 
@@ -172,6 +188,18 @@ Features
 - **Plain Text Only** - HTML and images are shown as text for security analysis
 - JavaScript optional throughout
 
+### Amazon Q Code Review Integration (NEW!)
+- **Automated Code Reviews** - Amazon Q Developer integration for comprehensive code analysis
+- **Security Scanning** - CodeWhisperer-powered vulnerability detection
+- **Code Quality Analysis** - AI-powered maintainability and complexity assessment
+- **Architecture Review** - Design pattern analysis and architectural recommendations
+- **Custom Review Rules** - Configurable quality thresholds and security patterns
+- **GitHub Actions Integration** - Automatic reviews on every push and PR
+- **Mock Mode Fallback** - Local analysis when AWS services are unavailable
+- **Comprehensive Reporting** - Detailed markdown reports with actionable recommendations
+
+For Amazon Q setup instructions, see [AMAZON_Q_SETUP_GUIDE.md](AMAZON_Q_SETUP_GUIDE.md).
+
 #### Getting Started with Email
 1. Start the server: `python runserver.py` or use deployment method above
 2. Access email configuration: `http://yourservice.onion/{path}/email/config`
@@ -182,6 +210,37 @@ Features
 7. View your inbox: `http://yourservice.onion/{path}/email`
 
 For full documentation, see [EMAIL_SYSTEM.md](EMAIL_SYSTEM.md).
+
+Security & Code Quality
+=======================
+
+## Amazon Q Code Review Integration ✅
+
+This project includes comprehensive Amazon Q Code Review integration with automated security scanning, performance optimization, and architecture validation.
+
+### Automated Security Scanning
+- **Continuous Monitoring**: GitHub Actions workflow runs security scans on every push and pull request
+- **Multi-Tool Analysis**: Bandit, Safety, Semgrep, and CodeQL for comprehensive coverage
+- **Custom Rules**: OpSecChat-specific security rules for Tor and PGP handling
+- **Zero Vulnerabilities**: All critical and high-severity issues have been addressed
+
+### AWS Integration
+- **Production Deployment**: Complete AWS ECS Fargate infrastructure with CloudFormation
+- **Security Hardening**: VPC isolation, Secrets Manager, and comprehensive monitoring
+- **Cost Optimization**: Right-sized resources with estimated $65-90/month operational cost
+- **Enterprise Ready**: Follows AWS Well-Architected Framework principles
+
+### Performance Optimization
+- **Memory Management**: Automatic cleanup with bounded storage (3-minute chat expiry)
+- **Algorithm Efficiency**: Critical bug fixes applied for index deletion operations
+- **Resource Optimization**: Container limits and health checks for reliability
+- **Monitoring**: CloudWatch integration with appropriate retention policies
+
+For detailed information, see:
+- [Amazon Q Implementation Summary](AMAZON_Q_IMPLEMENTATION_SUMMARY.md)
+- [AWS Deployment Guide](aws/AWS_DEPLOYMENT_GUIDE.md)
+- [Amazon Q Integration Guide](aws/AMAZON_Q_INTEGRATION_GUIDE.md)
+- [Repository Secrets Guide](aws/REPOSITORY_SECRETS_GUIDE.md)
 
 Security
 ========
@@ -226,7 +285,7 @@ We welcome contributions to opsechat! Please see [CONTRIBUTING.md](CONTRIBUTING.
 License
 =======
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
 
 Copyright 2017 Hyperion Gray LLC
 

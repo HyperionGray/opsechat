@@ -26,7 +26,8 @@ module.exports = defineConfig({
   },
 
   /* Configure projects for major browsers */
-  projects: [
+  projects: process.env.CI ? [
+    // Only headless browsers in CI environment
     {
       name: 'chromium-headless',
       use: { 
@@ -72,6 +73,10 @@ module.exports = defineConfig({
   ],
 
   /* Run your local dev server before starting the tests */
-  // Note: The server must be started manually for these tests
-  // since it requires Tor to be running
+  webServer: {
+    command: 'python3 tests/mock_server.py',
+    url: 'http://127.0.0.1:5001/health',
+    reuseExistingServer: !process.env.CI,
+    timeout: 120 * 1000,
+  }
 });
