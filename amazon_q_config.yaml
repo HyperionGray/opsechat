@@ -1,0 +1,174 @@
+# Amazon Q Code Review Configuration
+# This file defines custom rules and settings for Amazon Q code review integration
+
+# AWS Configuration
+aws:
+  region: "us-east-1"
+  # Credentials should be set via environment variables or repository secrets:
+  # AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+
+# Amazon Q Review Settings
+review:
+  # Enable/disable different analysis types
+  security_scan: true
+  code_quality_analysis: true
+  architecture_review: true
+  
+  # File types to analyze
+  file_extensions:
+    - ".py"
+    - ".js"
+    - ".ts"
+    - ".java"
+    - ".go"
+    - ".cpp"
+    - ".c"
+    - ".h"
+    - ".hpp"
+  
+  # Directories to exclude from analysis
+  exclude_paths:
+    - "node_modules"
+    - "__pycache__"
+    - ".venv"
+    - "venv"
+    - "dist"
+    - "build"
+    - ".git"
+    - "bak"
+  
+  # Maximum number of files to analyze (to control costs)
+  max_files: 100
+
+# Security Scan Configuration
+security:
+  # Security patterns to detect (in addition to CodeWhisperer)
+  custom_patterns:
+    hardcoded_secrets:
+      - "password\\s*=\\s*[\"'][^\"']+[\"']"
+      - "api_key\\s*=\\s*[\"'][^\"']+[\"']"
+      - "secret\\s*=\\s*[\"'][^\"']+[\"']"
+    
+    sql_injection:
+      - "execute\\s*\\(\\s*[\"'].*%s.*[\"']"
+      - "query\\s*\\(\\s*[\"'].*\\+.*[\"']"
+    
+    xss_vulnerability:
+      - "innerHTML\\s*=\\s*.*user"
+      - "document\\.write\\s*\\(.*user"
+    
+    command_injection:
+      - "os\\.system\\s*\\(.*user"
+      - "subprocess\\.call\\s*\\(.*user"
+  
+  # Severity levels: critical, high, medium, low
+  severity_threshold: "medium"
+
+# Code Quality Configuration
+quality:
+  # Quality metrics thresholds
+  thresholds:
+    maintainability_score: 70
+    complexity_score: 60
+    documentation_score: 80
+    test_coverage_estimate: 60
+  
+  # Custom quality rules
+  rules:
+    max_function_length: 50
+    max_file_length: 500
+    require_docstrings: true
+    max_complexity: 10
+
+# Architecture Review Configuration
+architecture:
+  # Design patterns to detect
+  patterns:
+    - "singleton"
+    - "factory"
+    - "observer"
+    - "strategy"
+    - "decorator"
+    - "adapter"
+    - "facade"
+  
+  # Architecture quality thresholds
+  thresholds:
+    architecture_score: 70
+    pattern_diversity: 3
+    structure_score: 80
+
+# Reporting Configuration
+reporting:
+  # Report format: markdown, json, html
+  format: "markdown"
+  
+  # Include sections in report
+  include_sections:
+    - "summary"
+    - "security_analysis"
+    - "code_quality"
+    - "architecture_review"
+    - "recommendations"
+    - "detailed_findings"
+  
+  # Maximum number of issues to include in report
+  max_issues_per_category: 10
+  
+  # Include mock mode information
+  show_mock_mode_info: true
+
+# Integration Settings
+integration:
+  # Fallback to mock mode if AWS services unavailable
+  enable_mock_fallback: true
+  
+  # Timeout for AWS service calls (seconds)
+  aws_timeout: 30
+  
+  # Retry configuration
+  retry_attempts: 3
+  retry_delay: 5
+  
+  # Enable verbose logging
+  verbose_logging: false
+
+# Custom Rules (can be extended)
+custom_rules:
+  # Example: Detect TODO comments
+  todo_detection:
+    enabled: true
+    patterns:
+      - "TODO:"
+      - "FIXME:"
+      - "HACK:"
+    severity: "low"
+  
+  # Example: Detect print statements in production code
+  debug_statements:
+    enabled: true
+    patterns:
+      - "print\\s*\\("
+      - "console\\.log\\s*\\("
+    severity: "low"
+    exclude_files:
+      - "test_*.py"
+      - "*_test.py"
+      - "*.test.js"
+
+# Environment-specific settings
+environments:
+  development:
+    security:
+      severity_threshold: "low"
+    quality:
+      thresholds:
+        maintainability_score: 60
+  
+  production:
+    security:
+      severity_threshold: "high"
+    quality:
+      thresholds:
+        maintainability_score: 85
+        test_coverage_estimate: 80

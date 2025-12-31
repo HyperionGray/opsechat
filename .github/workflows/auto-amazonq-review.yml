@@ -115,79 +115,129 @@ jobs:
           
           cat /tmp/amazonq-prep.md
 
+      - name: Setup Python for Amazon Q integration
+        uses: actions/setup-python@main
+        with:
+          python-version: '3.11'
+
+      - name: Install Amazon Q integration dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install boto3 botocore pathlib
+
       - name: Run Amazon Q Code Review
         id: amazonq
         run: |
           echo "Running Amazon Q code review..."
           
-          # Create review report
-          echo "## Amazon Q Code Review Report" > /tmp/amazonq-report.md
-          echo "" >> /tmp/amazonq-report.md
-          echo "**Review Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> /tmp/amazonq-report.md
-          echo "" >> /tmp/amazonq-report.md
+          # Use the new Amazon Q integration module
+          python amazon_q_integration.py . > /tmp/amazonq-output.txt 2>&1 || true
           
-          # Note: This is a placeholder for actual Amazon Q integration
-          # Amazon Q CLI or SDK integration would go here
-          # For now, we'll create a comprehensive analysis structure
+          # Check if the integration ran successfully
+          if [ -f "amazon_q_review_results.json" ]; then
+            echo "Amazon Q integration completed successfully"
+            
+            # Extract key information from results
+            python -c "
+import json
+import sys
+
+try:
+    with open('amazon_q_review_results.json', 'r') as f:
+        results = json.load(f)
+    
+    print('## Amazon Q Code Review Results')
+    print('')
+    print(f'**Overall Score:** {results.get(\"overall_score\", \"N/A\")}/100')
+    print(f'**Service Used:** {results.get(\"service_used\", \"Unknown\")}')
+    print(f'**Timestamp:** {results.get(\"timestamp\", \"Unknown\")}')
+    
+    if results.get('mock_mode'):
+        print('**Mode:** Mock Analysis (AWS services not available)')
+    
+    print('')
+    
+    # Security analysis
+    security = results.get('security_analysis', {})
+    print('### Security Analysis')
+    print(f'- Files scanned: {security.get(\"total_files_scanned\", 0)}')
+    print(f'- Vulnerabilities found: {security.get(\"vulnerabilities_found\", 0)}')
+    print('')
+    
+    # Code quality
+    quality = results.get('code_quality', {})
+    metrics = quality.get('metrics', {})
+    print('### Code Quality Metrics')
+    for metric, value in metrics.items():
+        print(f'- {metric.replace(\"_\", \" \").title()}: {value}')
+    print('')
+    
+    # Architecture
+    architecture = results.get('architecture_review', {})
+    print('### Architecture Analysis')
+    print(f'- Architecture Score: {architecture.get(\"architecture_score\", \"N/A\")}')
+    
+    structure = architecture.get('structure', {})
+    if structure:
+        print(f'- Total Files: {structure.get(\"total_files\", \"N/A\")}')
+        print(f'- Has README: {\"✅\" if structure.get(\"has_readme\") else \"❌\"}')
+        print(f'- Has License: {\"✅\" if structure.get(\"has_license\") else \"❌\"}')
+    print('')
+    
+    # Recommendations
+    recommendations = results.get('recommendations', [])
+    if recommendations:
+        print('### Recommendations')
+        for i, rec in enumerate(recommendations[:3], 1):  # Limit to first 3
+            priority_emoji = '🔴' if rec.get('priority') == 'high' else '🟡' if rec.get('priority') == 'medium' else '🟢'
+            print(f'{i}. {priority_emoji} **{rec.get(\"title\", \"Unknown\")}** ({rec.get(\"priority\", \"unknown\")} priority)')
+            print(f'   {rec.get(\"description\", \"No description\")}')
+        print('')
+    
+    # Add integration status
+    if results.get('mock_mode'):
+        print('### Integration Status')
+        print('⚠️ **Mock Mode Active**: AWS credentials not configured or services unavailable')
+        print('- To enable full Amazon Q integration, configure AWS credentials in repository secrets')
+        print('- Add AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to repository secrets')
+        print('- Ensure proper IAM permissions for CodeWhisperer and Bedrock services')
+    else:
+        print('### Integration Status')
+        print('✅ **Full Integration Active**: Amazon Q services are available and configured')
+    
+except Exception as e:
+    print(f'Error processing Amazon Q results: {e}')
+    print('## Amazon Q Integration Error')
+    print('Failed to process review results. Check the integration configuration.')
+" > /tmp/amazonq-report.md
+          else
+            echo "Amazon Q integration failed, creating fallback report..."
+            
+            # Create fallback report
+            echo "## Amazon Q Code Review Report" > /tmp/amazonq-report.md
+            echo "" >> /tmp/amazonq-report.md
+            echo "**Review Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> /tmp/amazonq-report.md
+            echo "" >> /tmp/amazonq-report.md
+            echo "### Integration Status" >> /tmp/amazonq-report.md
+            echo "❌ **Integration Failed**: Unable to run Amazon Q code review" >> /tmp/amazonq-report.md
+            echo "" >> /tmp/amazonq-report.md
+            echo "**Possible Issues:**" >> /tmp/amazonq-report.md
+            echo "- AWS credentials not configured" >> /tmp/amazonq-report.md
+            echo "- Missing dependencies" >> /tmp/amazonq-report.md
+            echo "- Network connectivity issues" >> /tmp/amazonq-report.md
+            echo "" >> /tmp/amazonq-report.md
+            echo "**Setup Instructions:**" >> /tmp/amazonq-report.md
+            echo "1. Add AWS_ACCESS_KEY_ID to repository secrets" >> /tmp/amazonq-report.md
+            echo "2. Add AWS_SECRET_ACCESS_KEY to repository secrets" >> /tmp/amazonq-report.md
+            echo "3. Ensure IAM permissions for CodeWhisperer and Bedrock" >> /tmp/amazonq-report.md
+            echo "" >> /tmp/amazonq-report.md
+            echo "**Error Output:**" >> /tmp/amazonq-report.md
+            echo '```' >> /tmp/amazonq-report.md
+            cat /tmp/amazonq-output.txt >> /tmp/amazonq-report.md 2>/dev/null || echo "No error output available" >> /tmp/amazonq-report.md
+            echo '```' >> /tmp/amazonq-report.md
+          fi
           
-          echo "### Code Quality Assessment" >> /tmp/amazonq-report.md
-          echo "" >> /tmp/amazonq-report.md
-          echo "Following the GitHub Copilot agent reviews, Amazon Q provides additional insights:" >> /tmp/amazonq-report.md
-          echo "" >> /tmp/amazonq-report.md
-          
-          # Analyze code structure
-          echo "#### Code Structure Analysis" >> /tmp/amazonq-report.md
-          find . -type f \( -name "*.py" -o -name "*.js" -o -name "*.ts" -o -name "*.java" -o -name "*.go" \) \
-            ! -path "*/node_modules/*" \
-            ! -path "*/.venv/*" \
-            ! -path "*/dist/*" \
-            ! -path "*/build/*" \
-            | wc -l > /tmp/file_count.txt
-          
-          FILE_COUNT=$(cat /tmp/file_count.txt)
-          echo "- Total source files analyzed: $FILE_COUNT" >> /tmp/amazonq-report.md
-          echo "" >> /tmp/amazonq-report.md
-          
-          echo "#### Security Considerations" >> /tmp/amazonq-report.md
-          echo "- Credential scanning: Check for hardcoded secrets" >> /tmp/amazonq-report.md
-          echo "- Dependency vulnerabilities: Review package versions" >> /tmp/amazonq-report.md
-          echo "- Code injection risks: Validate input handling" >> /tmp/amazonq-report.md
-          echo "" >> /tmp/amazonq-report.md
-          
-          echo "#### Performance Optimization Opportunities" >> /tmp/amazonq-report.md
-          echo "- Algorithm efficiency: Review computational complexity" >> /tmp/amazonq-report.md
-          echo "- Resource management: Check for memory leaks and resource cleanup" >> /tmp/amazonq-report.md
-          echo "- Caching opportunities: Identify repeated computations" >> /tmp/amazonq-report.md
-          echo "" >> /tmp/amazonq-report.md
-          
-          echo "#### Architecture and Design Patterns" >> /tmp/amazonq-report.md
-          echo "- Design patterns usage: Verify appropriate pattern application" >> /tmp/amazonq-report.md
-          echo "- Separation of concerns: Check module boundaries" >> /tmp/amazonq-report.md
-          echo "- Dependency management: Review coupling and cohesion" >> /tmp/amazonq-report.md
-          echo "" >> /tmp/amazonq-report.md
-          
-          echo "### Integration with Previous Reviews" >> /tmp/amazonq-report.md
-          echo "" >> /tmp/amazonq-report.md
-          echo "This review complements the GitHub Copilot agent findings with:" >> /tmp/amazonq-report.md
-          echo "- Additional security analysis" >> /tmp/amazonq-report.md
-          echo "- AWS best practices recommendations" >> /tmp/amazonq-report.md
-          echo "- Performance optimization suggestions" >> /tmp/amazonq-report.md
-          echo "- Enterprise architecture patterns" >> /tmp/amazonq-report.md
-          echo "" >> /tmp/amazonq-report.md
-          
-          echo "### Next Steps" >> /tmp/amazonq-report.md
-          echo "" >> /tmp/amazonq-report.md
-          echo "1. Review findings from both GitHub Copilot and Amazon Q" >> /tmp/amazonq-report.md
-          echo "2. Prioritize issues based on severity and impact" >> /tmp/amazonq-report.md
-          echo "3. Create action items for high-priority findings" >> /tmp/amazonq-report.md
-          echo "4. Schedule follow-up reviews for resolved items" >> /tmp/amazonq-report.md
-          echo "" >> /tmp/amazonq-report.md
-          
-          # Note: Actual Amazon Q integration would use AWS SDK or CLI
-          # Example (when Amazon Q API is available):
-          # aws codewhisperer review --repository-path . --output json > /tmp/amazonq-results.json
-          # Or use Amazon Q Developer CLI when available
-          
+          # Display the report
           cat /tmp/amazonq-report.md
         continue-on-error: true
 
