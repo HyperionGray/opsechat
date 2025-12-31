@@ -1,266 +1,269 @@
-"""
-Email Routes Blueprint for opsechat
-
-This module contains all email-related routes extracted from runserver.py
-to improve code organization and maintainability.
-"""
-
-from flask import Blueprint, render_template, request, session, redirect, current_app
+# Email System Routes Blueprint
+from flask import Blueprint, render_template, jsonify, request, session, redirect, url_for
 from email_system import email_storage, burner_manager, EmailComposer, EmailValidator
 from email_security_tools import spoofing_tester, phishing_simulator
 from email_transport import transport_manager
-from domain_manager import domain_rotation_manager
-from utils import id_generator, get_random_color
+from domain_manager import domain_rotation_manager, PorkbunAPIClient
+import datetime
+import json
 
-
-# Create blueprint
-email_bp = Blueprint('email', __name__)
-
-
-@email_bp.route('/<string:url_addition>/email', methods=["GET"])
-def email_inbox(url_addition):
-    """Email inbox view"""
-    if url_addition != current_app.config["path"]:
-        return ('', 404)
+def create_email_blueprint(id_generator, get_random_color):
+    """Create and configure the email routes blueprint"""
     
-    if "_id" not in session:
-        session["_id"] = id_generator()
-        session["color"] = get_random_color()
+    email_bp = Blueprint('email', __name__)
     
-    email_storage.create_user_inbox(session["_id"])
-    emails = email_storage.get_emails(session["_id"])
-    
-    return render_template("email_inbox.html",
-                          hostname=current_app.config["hostname"],
-                          path=current_app.config["path"],
-                          emails=emails,
-                          script_enabled=True)
-
-
-@email_bp.route('/<string:url_addition>/email/compose', methods=["GET", "POST"])
-def email_compose(url_addition):
-    """Compose and send email"""
-    if url_addition != current_app.config["path"]:
-        return ('', 404)
-    
-    if "_id" not in session:
-        return redirect(f"/{current_app.config['path']}/email", code=302)
-    
-    if request.method == "POST":
-        raw_mode = request.form.get("raw_mode") == "true"
-        send_via_smtp = request.form.get("send_via_smtp") == "true"
+    @email_bp.route('/<string:url_addition>/email', methods=["GET"])
+    def email_inbox(url_addition):
+        """Main email inbox page"""
+        from flask import current_app as app
+        if url_addition != app.config["path"]:
+            return ('', 404)
         
-        if raw_mode:
-            # Parse raw email
-            raw_content = request.form.get("raw_email", "")
-            email = EmailComposer.parse_raw_email(raw_content)
-        else:
-            # Standard compose
-            email = EmailComposer.create_email(
-                from_addr=request.form.get("from", ""),
-                to_addr=request.form.get("to", ""),
-                subject=request.form.get("subject", ""),
-                body=request.form.get("body", ""),
-                headers={}
-            )
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
         
-        # Send via SMTP if configured and requested
-        if send_via_smtp and transport_manager.is_configured()['smtp']:
-            success = transport_manager.send_email(
-                email['from'],
-                email['to'],
-                email['subject'],
-                email['body'],
-                email.get('headers', {})
-            )
-            if not success:
-                # Could add flash message here
-                pass
+        # Initialize inbox for user
+        email_storage.create_user_inbox(session["_id"])
         
-        # Always add to local inbox for reference
-        email_storage.add_email(session["_id"], email)
+        # Get emails
+        emails = email_storage.get_emails(session["_id"])
         
-        return redirect(f"/{current_app.config['path']}/email", code=302)
-    
-    # Check if SMTP is configured for the form
-    smtp_configured = transport_manager.is_configured()['smtp']
-    
-    return render_template("email_compose.html",
-                          hostname=current_app.config["hostname"],
-                          path=current_app.config["path"],
-                          smtp_configured=smtp_configured,
-                          script_enabled=False)
+        return render_template("email_inbox.html",
+                              hostname=app.config["hostname"],
+                              path=app.config["path"],
+                              emails=emails,
+                              script_enabled=False)
 
-
-@email_bp.route('/<string:url_addition>/email/view/<string:email_id>', methods=["GET"])
-def email_view(url_addition, email_id):
-    """View specific email"""
-    if url_addition != current_app.config["path"]:
-        return ('', 404)
-    
-    if "_id" not in session:
-        return redirect(f"/{current_app.config['path']}/email", code=302)
-    
-    email = email_storage.get_email(session["_id"], email_id)
-    if not email:
-        return ('Email not found', 404)
-    
-    return render_template("email_view.html",
-                          hostname=current_app.config["hostname"],
-                          path=current_app.config["path"],
-                          email=email,
-                          script_enabled=False)
-
-
-@email_bp.route('/<string:url_addition>/email/edit/<string:email_id>', methods=["GET", "POST"])
-def email_edit(url_addition, email_id):
-    """Edit email in raw mode"""
-    if url_addition != current_app.config["path"]:
-        return ('', 404)
-    
-    if "_id" not in session:
-        return redirect(f"/{current_app.config['path']}/email", code=302)
-    
-    email = email_storage.get_email(session["_id"], email_id)
-    if not email:
-        return ('Email not found', 404)
-    
-    if request.method == "POST":
-        # Update email with raw content
-        raw_content = request.form.get("raw_email", "")
-        updated_email = EmailComposer.parse_raw_email(raw_content)
-        updated_email['id'] = email_id  # Preserve ID
-        email_storage.update_email(session["_id"], email_id, updated_email)
-        return redirect(f"/{current_app.config['path']}/email/view/{email_id}", code=302)
-    
-    # Convert email back to raw format for editing
-    raw_email = EmailComposer.email_to_raw(email)
-    
-    return render_template("email_edit.html",
-                          hostname=current_app.config["hostname"],
-                          path=current_app.config["path"],
-                          email=email,
-                          raw_email=raw_email,
-                          script_enabled=False)
-
-
-@email_bp.route('/<string:url_addition>/email/config', methods=["GET", "POST"])
-def email_config(url_addition):
-    """Email configuration"""
-    if url_addition != current_app.config["path"]:
-        return ('', 404)
-    
-    if "_id" not in session:
-        return redirect(f"/{current_app.config['path']}/email", code=302)
-    
-    if request.method == "POST":
-        # Update SMTP configuration
-        smtp_config = {
-            'host': request.form.get('smtp_host', ''),
-            'port': int(request.form.get('smtp_port', '587')),
-            'username': request.form.get('smtp_username', ''),
-            'password': request.form.get('smtp_password', ''),
-            'use_tls': request.form.get('smtp_tls') == 'true'
-        }
+    @email_bp.route('/<string:url_addition>/email/yesscript', methods=["GET"])
+    def email_inbox_script(url_addition):
+        """Email inbox with JavaScript enabled"""
+        from flask import current_app as app
+        if url_addition != app.config["path"]:
+            return ('', 404)
         
-        # Update IMAP configuration
-        imap_config = {
-            'host': request.form.get('imap_host', ''),
-            'port': int(request.form.get('imap_port', '993')),
-            'username': request.form.get('imap_username', ''),
-            'password': request.form.get('imap_password', ''),
-            'use_ssl': request.form.get('imap_ssl') == 'true'
-        }
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
         
-        # Update Porkbun API configuration
-        porkbun_config = {
-            'api_key': request.form.get('porkbun_api_key', ''),
-            'secret_key': request.form.get('porkbun_secret_key', ''),
-            'monthly_budget': float(request.form.get('monthly_budget', '10.0'))
-        }
+        email_storage.create_user_inbox(session["_id"])
+        emails = email_storage.get_emails(session["_id"])
         
-        # Configure transport manager
-        transport_manager.configure_smtp(**smtp_config)
-        transport_manager.configure_imap(**imap_config)
+        return render_template("email_inbox.html",
+                              hostname=app.config["hostname"],
+                              path=app.config["path"],
+                              emails=emails,
+                              script_enabled=True)
+
+    @email_bp.route('/<string:url_addition>/email/compose', methods=["GET", "POST"])
+    def email_compose(url_addition):
+        """Compose and send email"""
+        from flask import current_app as app
+        if url_addition != app.config["path"]:
+            return ('', 404)
         
-        # Configure domain rotation manager
-        domain_rotation_manager.configure_porkbun(**porkbun_config)
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
         
-        return redirect(f"/{current_app.config['path']}/email/config", code=302)
+        message = None
+        
+        if request.method == "POST":
+            composer = EmailComposer()
+            
+            # Get form data
+            to_email = request.form.get("to_email", "").strip()
+            subject = request.form.get("subject", "").strip()
+            body = request.form.get("body", "").strip()
+            from_email = request.form.get("from_email", "").strip()
+            raw_mode = request.form.get("raw_mode") == "on"
+            
+            if raw_mode:
+                # Raw mode - user provides complete email
+                raw_email = request.form.get("raw_email", "").strip()
+                if raw_email:
+                    try:
+                        result = composer.send_raw_email(raw_email)
+                        if result["success"]:
+                            message = {"type": "success", "text": "Email sent successfully!"}
+                        else:
+                            message = {"type": "error", "text": f"Failed to send email: {result['error']}"}
+                    except Exception as e:
+                        message = {"type": "error", "text": f"Error sending email: {str(e)}"}
+                else:
+                    message = {"type": "error", "text": "Raw email content is required"}
+            else:
+                # Standard mode
+                if to_email and subject and body:
+                    try:
+                        result = composer.send_email(
+                            to_email=to_email,
+                            subject=subject,
+                            body=body,
+                            from_email=from_email if from_email else None
+                        )
+                        if result["success"]:
+                            message = {"type": "success", "text": "Email sent successfully!"}
+                        else:
+                            message = {"type": "error", "text": f"Failed to send email: {result['error']}"}
+                    except Exception as e:
+                        message = {"type": "error", "text": f"Error sending email: {str(e)}"}
+                else:
+                    message = {"type": "error", "text": "To, Subject, and Body are required"}
+        
+        return render_template("email_compose.html",
+                              hostname=app.config["hostname"],
+                              path=app.config["path"],
+                              message=message)
     
-    # Get current configuration status
-    config_status = transport_manager.is_configured()
-    domain_status = domain_rotation_manager.get_status()
-    
-    return render_template("email_config.html",
-                          hostname=current_app.config["hostname"],
-                          path=current_app.config["path"],
-                          config_status=config_status,
-                          domain_status=domain_status,
-                          script_enabled=False)
+    @email_bp.route('/<string:url_addition>/email/view/<string:email_id>', methods=["GET"])
+    def email_view(url_addition, email_id):
+        """View specific email"""
+        from flask import current_app as app
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
+        
+        email = email_storage.get_email(session["_id"], email_id)
+        if not email:
+            return ('Email not found', 404)
+        
+        return render_template("email_view.html",
+                              hostname=app.config["hostname"],
+                              path=app.config["path"],
+                              email=email)
 
+    @email_bp.route('/<string:url_addition>/email/edit/<string:email_id>', methods=["GET", "POST"])
+    def email_edit(url_addition, email_id):
+        """Edit email in raw mode"""
+        from flask import current_app as app
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
+        
+        email = email_storage.get_email(session["_id"], email_id)
+        if not email:
+            return ('Email not found', 404)
+        
+        message = None
+        
+        if request.method == "POST":
+            raw_content = request.form.get("raw_content", "").strip()
+            if raw_content:
+                email_storage.update_email_raw(session["_id"], email_id, raw_content)
+                message = {"type": "success", "text": "Email updated successfully"}
+            else:
+                message = {"type": "error", "text": "Raw content cannot be empty"}
+        
+        return render_template("email_edit.html",
+                              hostname=app.config["hostname"],
+                              path=app.config["path"],
+                              email=email,
+                              message=message)
 
-@email_bp.route('/<string:url_addition>/email/send', methods=["POST"])
-def email_send_real(url_addition):
-    """Send email via SMTP"""
-    if url_addition != current_app.config["path"]:
-        return ('', 404)
-    
-    if "_id" not in session:
-        return ('Unauthorized', 401)
-    
-    from_addr = request.form.get("from", "")
-    to_addr = request.form.get("to", "")
-    subject = request.form.get("subject", "")
-    body = request.form.get("body", "")
-    
-    # Send via SMTP
-    success = transport_manager.send_email(from_addr, to_addr, subject, body)
-    
-    if success:
-        # Also add to local storage
-        email = EmailComposer.create_email(from_addr, to_addr, subject, body)
-        email_storage.add_email(session["_id"], email)
-    
-    return redirect(f"/{current_app.config['path']}/email", code=302)
+    @email_bp.route('/<string:url_addition>/email/delete/<string:email_id>', methods=["POST"])
+    def email_delete(url_addition, email_id):
+        """Delete email"""
+        from flask import current_app as app
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        
+        if "_id" not in session:
+            return jsonify({"success": False, "error": "No session"})
+        
+        success = email_storage.delete_email(session["_id"], email_id)
+        return jsonify({"success": success})
 
+    @email_bp.route('/<string:url_addition>/email/burner', methods=["GET", "POST"])
+    def email_burner(url_addition):
+        """Burner email management"""
+        from flask import current_app as app
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
+        
+        message = None
+        
+        if request.method == "POST":
+            action = request.form.get("action")
+            
+            if action == "generate":
+                try:
+                    burner_email = burner_manager.generate_burner_email(session["_id"])
+                    message = {
+                        "type": "success", 
+                        "text": f"Generated burner email: {burner_email['email']}"
+                    }
+                except Exception as e:
+                    message = {"type": "error", "text": f"Error generating burner: {str(e)}"}
+        
+        # Get active burners
+        burners = burner_manager.get_user_burners(session["_id"])
+        
+        return render_template("email_burner.html",
+                              hostname=app.config["hostname"],
+                              path=app.config["path"],
+                              burners=burners,
+                              message=message,
+                              script_enabled=False)
 
-@email_bp.route('/<string:url_addition>/email/receive', methods=["POST"])
-def email_receive_real(url_addition):
-    """Fetch emails from IMAP"""
-    if url_addition != current_app.config["path"]:
-        return ('', 404)
-    
-    if "_id" not in session:
-        return ('Unauthorized', 401)
-    
-    # Fetch from IMAP
-    limit = int(request.form.get("limit", "10"))
-    unread_only = request.form.get("unread_only", "false") == "true"
-    
-    emails = transport_manager.receive_emails(limit=limit, unread_only=unread_only)
-    
-    # Add to local storage
-    for email in emails:
-        email_storage.add_email(session["_id"], email)
-    
-    return redirect(f"/{current_app.config['path']}/email", code=302)
+    @email_bp.route('/<string:url_addition>/email/burner/yesscript', methods=["GET"])
+    def email_burner_script(url_addition):
+        """Burner email management with JavaScript"""
+        from flask import current_app as app
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
+        
+        burners = burner_manager.get_user_burners(session["_id"])
+        
+        return render_template("email_burner.html",
+                              hostname=app.config["hostname"],
+                              path=app.config["path"],
+                              burners=burners,
+                              message=None,
+                              script_enabled=True)
 
+    @email_bp.route('/<string:url_addition>/email/burner/list', methods=["GET"])
+    def email_burner_list(url_addition):
+        """API endpoint for burner email list"""
+        from flask import current_app as app
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        
+        if "_id" not in session:
+            return jsonify({"burners": []})
+        
+        burners = burner_manager.get_user_burners(session["_id"])
+        return jsonify({"burners": burners})
 
-@email_bp.route('/<string:url_addition>/email/domain/rotate', methods=["POST"])
-def email_domain_rotate(url_addition):
-    """Rotate to a new domain"""
-    if url_addition != current_app.config["path"]:
-        return ('', 404)
-    
-    if "_id" not in session:
-        return ('Unauthorized', 401)
-    
-    # Attempt domain rotation
-    new_domain = domain_rotation_manager.rotate_domain()
-    
-    if new_domain:
-        # Update burner manager to use new domain
-        burner_manager.set_custom_domain(new_domain)
-    
-    return redirect(f"/{current_app.config['path']}/email/config", code=302)
+    @email_bp.route('/<string:url_addition>/email/burner/expire/<string:email>', methods=["POST"])
+    def email_burner_expire(url_addition, email):
+        """Expire a burner email"""
+        from flask import current_app as app
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        
+        if "_id" not in session:
+            return jsonify({"success": False, "error": "No session"})
+        
+        try:
+            success = burner_manager.expire_burner_email(session["_id"], email)
+            return jsonify({"success": success})
+        except Exception as e:
+            app.logger.exception("Error expiring burner email for user %s and email %s", session.get("_id"), email)
+            return jsonify({"success": False, "error": "An internal error occurred while expiring the burner email."})
+
+    return email_bp
