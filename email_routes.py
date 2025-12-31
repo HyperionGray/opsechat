@@ -263,6 +263,7 @@ def create_email_blueprint(id_generator, get_random_color):
             success = burner_manager.expire_burner_email(session["_id"], email)
             return jsonify({"success": success})
         except Exception as e:
-            return jsonify({"success": False, "error": str(e)})
+            app.logger.exception("Error expiring burner email for user %s and email %s", session.get("_id"), email)
+            return jsonify({"success": False, "error": "An internal error occurred while expiring the burner email."})
 
     return email_bp
