@@ -188,6 +188,18 @@ Features
 - **Plain Text Only** - HTML and images are shown as text for security analysis
 - JavaScript optional throughout
 
+### Amazon Q Code Review Integration (NEW!)
+- **Automated Code Reviews** - Amazon Q Developer integration for comprehensive code analysis
+- **Security Scanning** - CodeWhisperer-powered vulnerability detection
+- **Code Quality Analysis** - AI-powered maintainability and complexity assessment
+- **Architecture Review** - Design pattern analysis and architectural recommendations
+- **Custom Review Rules** - Configurable quality thresholds and security patterns
+- **GitHub Actions Integration** - Automatic reviews on every push and PR
+- **Mock Mode Fallback** - Local analysis when AWS services are unavailable
+- **Comprehensive Reporting** - Detailed markdown reports with actionable recommendations
+
+For Amazon Q setup instructions, see [AMAZON_Q_SETUP_GUIDE.md](AMAZON_Q_SETUP_GUIDE.md).
+
 #### Getting Started with Email
 1. Start the server: `python runserver.py` or use deployment method above
 2. Access email configuration: `http://yourservice.onion/{path}/email/config`
