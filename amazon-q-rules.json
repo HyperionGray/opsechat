@@ -1,0 +1,300 @@
+{
+  "amazon_q_rules": {
+    "version": "1.0",
+    "description": "Custom Amazon Q review rules for opsechat security and privacy application",
+    "rules": {
+      "security": {
+        "high_priority": [
+          {
+            "name": "hardcoded_secrets",
+            "description": "Detect hardcoded passwords, API keys, and tokens",
+            "patterns": [
+              "password\\s*=\\s*['\"][^'\"]+['\"]",
+              "api_key\\s*=\\s*['\"][^'\"]+['\"]",
+              "secret\\s*=\\s*['\"][^'\"]+['\"]",
+              "token\\s*=\\s*['\"][^'\"]+['\"]"
+            ],
+            "severity": "critical",
+            "exclude_patterns": [
+              "password\\s*=\\s*['\"]\\s*['\"]",
+              "# Example",
+              "# Test",
+              "placeholder"
+            ]
+          },
+          {
+            "name": "tor_security_validation",
+            "description": "Validate Tor integration security practices",
+            "patterns": [
+              "Controller\\.from_port\\(",
+              "create_ephemeral_hidden_service\\(",
+              "authenticate\\(\\)"
+            ],
+            "severity": "high",
+            "checks": [
+              "Ensure proper error handling for Tor connection failures",
+              "Validate ephemeral service cleanup on shutdown",
+              "Check authentication method security"
+            ]
+          },
+          {
+            "name": "session_security",
+            "description": "Validate Flask session security",
+            "patterns": [
+              "app\\.secret_key\\s*=",
+              "session\\[",
+              "session\\.get\\("
+            ],
+            "severity": "high",
+            "checks": [
+              "Ensure secret key is randomly generated",
+              "Validate session data sanitization",
+              "Check for session fixation vulnerabilities"
+            ]
+          },
+          {
+            "name": "input_sanitization",
+            "description": "Verify input sanitization and validation",
+            "patterns": [
+              "request\\.form",
+              "request\\.args",
+              "request\\.json"
+            ],
+            "severity": "high",
+            "checks": [
+              "Ensure all user input is sanitized",
+              "Validate regex patterns for security",
+              "Check for SQL injection prevention"
+            ]
+          }
+        ],
+        "medium_priority": [
+          {
+            "name": "email_security",
+            "description": "Email system security validation",
+            "patterns": [
+              "smtp\\.",
+              "imap\\.",
+              "email\\."
+            ],
+            "severity": "medium",
+            "checks": [
+              "Validate SMTP/IMAP credential handling",
+              "Check email header injection prevention",
+              "Ensure PGP message preservation"
+            ]
+          },
+          {
+            "name": "dependency_security",
+            "description": "Check for secure dependency usage",
+            "patterns": [
+              "import\\s+",
+              "from\\s+\\w+\\s+import"
+            ],
+            "severity": "medium",
+            "checks": [
+              "Validate dependency versions",
+              "Check for known vulnerable packages",
+              "Ensure minimal dependency principle"
+            ]
+          }
+        ],
+        "low_priority": [
+          {
+            "name": "logging_security",
+            "description": "Ensure secure logging practices",
+            "patterns": [
+              "print\\(",
+              "log\\.",
+              "logger\\."
+            ],
+            "severity": "low",
+            "checks": [
+              "Avoid logging sensitive information",
+              "Ensure proper log level usage",
+              "Check for information disclosure"
+            ]
+          }
+        ]
+      },
+      "performance": {
+        "high_priority": [
+          {
+            "name": "memory_management",
+            "description": "Validate memory usage and cleanup",
+            "patterns": [
+              "chatlines\\s*=",
+              "reviews\\s*=",
+              "\\[\\]\\s*\\*"
+            ],
+            "severity": "medium",
+            "checks": [
+              "Ensure bounded memory usage",
+              "Validate cleanup mechanisms",
+              "Check for memory leaks"
+            ]
+          }
+        ],
+        "medium_priority": [
+          {
+            "name": "algorithm_efficiency",
+            "description": "Check algorithm complexity and efficiency",
+            "patterns": [
+              "for\\s+\\w+\\s+in\\s+\\w+:",
+              "while\\s+",
+              "\\w+\\.sort\\("
+            ],
+            "severity": "low",
+            "checks": [
+              "Analyze loop complexity",
+              "Check for inefficient operations",
+              "Validate data structure choices"
+            ]
+          }
+        ]
+      },
+      "architecture": {
+        "high_priority": [
+          {
+            "name": "separation_of_concerns",
+            "description": "Validate module separation and responsibilities",
+            "patterns": [
+              "class\\s+\\w+",
+              "def\\s+\\w+\\(",
+              "import\\s+\\w+"
+            ],
+            "severity": "medium",
+            "checks": [
+              "Ensure single responsibility principle",
+              "Validate module boundaries",
+              "Check for circular dependencies"
+            ]
+          }
+        ],
+        "medium_priority": [
+          {
+            "name": "error_handling",
+            "description": "Validate error handling patterns",
+            "patterns": [
+              "try:",
+              "except\\s+\\w+:",
+              "raise\\s+"
+            ],
+            "severity": "medium",
+            "checks": [
+              "Ensure proper exception handling",
+              "Validate error message security",
+              "Check for graceful degradation"
+            ]
+          }
+        ]
+      }
+    },
+    "exclusions": {
+      "files": [
+        "tests/*",
+        "test_*",
+        "*.md",
+        ".github/*",
+        "bak/*",
+        "*.json",
+        "*.yml",
+        "*.yaml"
+      ],
+      "directories": [
+        "__pycache__",
+        ".git",
+        "node_modules",
+        ".pytest_cache"
+      ],
+      "patterns": [
+        "# Test data",
+        "# Example",
+        "# TODO",
+        "# FIXME",
+        "# Placeholder"
+      ]
+    },
+    "custom_checks": {
+      "opsechat_specific": [
+        {
+          "name": "tor_integration_check",
+          "description": "Validate Tor hidden service integration",
+          "files": ["runserver.py"],
+          "checks": [
+            {
+              "pattern": "Controller\\.from_port",
+              "requirement": "Must include proper error handling for Tor connection",
+              "severity": "critical"
+            },
+            {
+              "pattern": "create_ephemeral_hidden_service",
+              "requirement": "Must cleanup service on application shutdown",
+              "severity": "high"
+            }
+          ]
+        },
+        {
+          "name": "ephemeral_data_check",
+          "description": "Ensure data remains ephemeral and in-memory only",
+          "files": ["runserver.py", "email_system.py"],
+          "checks": [
+            {
+              "pattern": "open\\(.*['\"]w['\"]",
+              "requirement": "No persistent file writes except logs",
+              "severity": "high"
+            },
+            {
+              "pattern": "sqlite3\\.|mysql\\.|postgresql\\.",
+              "requirement": "No database persistence allowed",
+              "severity": "critical"
+            }
+          ]
+        },
+        {
+          "name": "privacy_preservation_check",
+          "description": "Ensure privacy-focused design is maintained",
+          "files": ["*.py"],
+          "checks": [
+            {
+              "pattern": "tracking\\.|analytics\\.|telemetry\\.",
+              "requirement": "No user tracking or analytics",
+              "severity": "critical"
+            },
+            {
+              "pattern": "uuid\\.uuid4\\(\\)|random\\.",
+              "requirement": "Use cryptographically secure randomness where appropriate",
+              "severity": "medium"
+            }
+          ]
+        }
+      ]
+    },
+    "reporting": {
+      "format": "markdown",
+      "include_context": true,
+      "severity_levels": ["critical", "high", "medium", "low"],
+      "output_sections": [
+        "executive_summary",
+        "security_findings",
+        "performance_analysis",
+        "architecture_review",
+        "recommendations",
+        "action_items"
+      ]
+    },
+    "integration": {
+      "github_actions": {
+        "trigger_on": ["push", "pull_request"],
+        "fail_on_severity": "high",
+        "create_issues": true,
+        "comment_on_pr": true
+      },
+      "aws_codewhisperer": {
+        "enabled": true,
+        "profile": "amazon-q",
+        "region": "us-east-1"
+      }
+    }
+  }
+}
