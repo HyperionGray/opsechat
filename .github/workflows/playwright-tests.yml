@@ -42,11 +42,60 @@ jobs:
     - name: Install dependencies
       run: npm ci
     
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flask
+    
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
     
+    - name: Start mock server
+      run: |
+        cd tests
+        echo "Starting mock server..."
+        python mock_server.py &
+        SERVER_PID=$!
+        echo $SERVER_PID > mock_server.pid
+        echo "Mock server started with PID: $SERVER_PID"
+        
+        # Wait for server to start with retries
+        for i in {1..30}; do
+          if curl -f -s http://127.0.0.1:5001/ > /dev/null 2>&1; then
+            echo "Mock server is responding after $i seconds"
+            break
+          fi
+          if [ $i -eq 30 ]; then
+            echo "Mock server failed to start after 30 seconds"
+            if [ -f mock_server.pid ]; then
+              kill $(cat mock_server.pid) 2>/dev/null || true
+            fi
+            exit 1
+          fi
+          echo "Waiting for server... ($i/30)"
+          sleep 1
+        done
+        
+        # Additional health check
+        echo "Performing health check..."
+        curl -f http://127.0.0.1:5001/ || (echo "Health check failed" && exit 1)
+        echo "Mock server is ready for testing"
+    
     - name: Run Playwright tests
       run: npm run test:headless
+    
+    - name: Stop mock server
+      if: always()
+      run: |
+        if [ -f tests/mock_server.pid ]; then
+          kill $(cat tests/mock_server.pid) || true
+          rm tests/mock_server.pid
+        fi
     
     - uses: actions/upload-artifact@v4
       if: always()

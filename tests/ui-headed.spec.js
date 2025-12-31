@@ -2,7 +2,10 @@
  * UI Tests for opsechat (Headed Mode)
  * 
  * These tests are meant to run with headed browsers for visual validation
- * Run with: npx playwright test --project=chromium-headed --headed
+ * Run with: npm run test:headed (includes both chromium-headed and firefox-headed)
+ * Or individually: npx playwright test --project=chromium-headed --headed
+ * 
+ * Note: Headed browsers are only available in local development, not in CI
  */
 
 const { test, expect } = require('@playwright/test');

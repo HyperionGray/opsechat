@@ -167,5 +167,42 @@ def main():
         sys.exit(1)
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    print("=" * 50)
+    print("Starting mock server for testing...")
+    print(f"Python version: {sys.version}")
+    print(f"Working directory: {os.getcwd()}")
+    print(f"Project root: {project_root}")
+    print(f"Template directory: {template_dir}")
+    print(f"Static directory: {static_dir}")
+    print(f"Template directory exists: {os.path.exists(template_dir)}")
+    print(f"Static directory exists: {os.path.exists(static_dir)}")
+    print(f"Test URL: http://127.0.0.1:5001/{app.config['path']}")
+    print(f"Health check URL: http://127.0.0.1:5001/")
+    print("=" * 50)
+    
+    # Validate critical directories
+    if not os.path.exists(template_dir):
+        print(f"ERROR: Template directory not found: {template_dir}")
+        print("Server may not render templates correctly")
+    
+    if not os.path.exists(static_dir):
+        print(f"WARNING: Static directory not found: {static_dir}")
+        print("Static files may not be served")
+    
+    # Test basic Flask functionality
+    try:
+        with app.test_client() as client:
+            response = client.get('/')
+            print(f"Self-test response status: {response.status_code}")
+    except Exception as e:
+        print(f"Self-test failed: {e}")
+    
+    try:
+        print("Starting Flask server on 127.0.0.1:5001...")
+        app.run(debug=False, host='127.0.0.1', port=5001, threaded=True)
+    except Exception as e:
+        print(f"ERROR: Failed to start mock server: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
