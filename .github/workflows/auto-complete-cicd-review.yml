@@ -124,7 +124,7 @@ jobs:
               ;;
             e2e)
               # Playwright tests
-              npm run test:headless 2>/dev/null || echo "Playwright JS tests not configured"
+              npx playwright test 2>/dev/null || echo "Playwright JS tests not configured"
               pytest tests/e2e/ 2>/dev/null || pytest --browser chromium 2>/dev/null || echo "Playwright Python tests not configured"
               ;;
           esac
