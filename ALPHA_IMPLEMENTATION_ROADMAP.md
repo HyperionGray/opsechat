@@ -592,17 +592,17 @@ This document provides a detailed implementation roadmap for bringing opsechat t
 ## Definition of Done (Alpha Release)
 
 ### Must Have (Blockers) ✅
-- [x] User signup and authentication flow
-- [x] Plan selection (free tier)
-- [x] Key management UI with education
-- [x] Policy documents displayed and accepted
-- [x] Spam filtering on burner emails
-- [x] Second domain registrar API
-- [x] Rate limiting implemented
-- [x] All existing tests passing
-- [x] Basic E2E tests for new features
-- [x] Security review complete
-- [x] Documentation updated
+- [ ] User signup and authentication flow
+- [ ] Plan selection (free tier)
+- [ ] Key management UI with education
+- [ ] Policy documents displayed and accepted
+- [ ] Spam filtering on burner emails
+- [ ] Second domain registrar API
+- [ ] Rate limiting implemented
+- [ ] All existing tests passing
+- [ ] Basic E2E tests for new features
+- [ ] Security review complete
+- [ ] Documentation updated
 
 ### Should Have (Important) ⚠️
 - [ ] Attachment system (can defer)
