@@ -1,0 +1,6 @@
+./README.md
+./ISSUE_CLEANUP_GUIDE.md
+./workflow-templates/README-AGENTS.md
+./workflow-templates/README.md
+./playwright_loop.py
+./setup_copilot_action.sh

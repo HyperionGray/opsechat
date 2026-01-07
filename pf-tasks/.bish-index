@@ -1,0 +1,5 @@
+./build.py
+./README.md
+./deploy.py
+./clean.py
+./test.py
