@@ -485,7 +485,7 @@ Try adding a new chat command or email feature. Good first tasks are listed belo
 
 **3. Configurable Message Retention Time**
 - **What**: Environment variable for message expiry (default 180s)
-- **Where**: `runserver.py:56` - change hardcoded `180` to `os.environ.get('MESSAGE_EXPIRY', 180)`
+- **Where**: `runserver.py:56` - change default parameter `secs_to_live = 180` to `secs_to_live = int(os.environ.get('MESSAGE_EXPIRY', 180))`
 - **Why**: Some users might want longer/shorter retention
 - **Difficulty**: Simple env var usage
 
@@ -583,10 +583,10 @@ Try adding a new chat command or email feature. Good first tasks are listed belo
 
 | Task | File | Line Range | Notes |
 |------|------|------------|-------|
-| Add new chat route | `runserver.py` or `chat_routes.py` | 246-368 | Use existing routes as template |
+| Add new chat route | `runserver.py` or `chat_routes.py` | 246-368 | Use existing routes as template, verify current line numbers |
 | Add new email feature | `email_routes.py` | 1-150 | Or add to `runserver.py:372-848` |
 | Modify chat UI | `templates/drop.html` | 1-200 | Separate script/noscript sections |
-| Change message expiry | `runserver.py` | 56-64 | `check_older_than()` function |
+| Change message expiry | `runserver.py` | 56 | `check_older_than()` function default parameter |
 | Add security feature | `email_security_tools.py` | 1-300 | Spoofing/phishing tools |
 | Modify Tor setup | `runserver.py` | 850-906 | `main()` function |
 | Add test | `tests/e2e.spec.js` | 1-200 | Playwright test suites |
