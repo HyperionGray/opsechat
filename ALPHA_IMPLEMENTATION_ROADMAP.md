@@ -276,12 +276,12 @@ The following 4 groups contain tasks that can be executed in parallel. Each grou
     - [ ] Return spam score (0-100)
     - [ ] Return detected patterns (list)
   - [ ] Rule-based detection:
-    - [ ] Suspicious keywords (viagra, cialis, lottery, prince, inheritance)
+    - [ ] Suspicious keywords (examples: common spam terms - load from config file)
     - [ ] Excessive links (>5 links)
-    - [ ] Suspicious TLDs (.tk, .ml, .ga)
+    - [ ] Suspicious TLDs (examples: free domains often used for spam - load from config)
     - [ ] All caps subject lines
     - [ ] HTML-only content with no text
-    - [ ] Blacklisted sender domains
+    - [ ] Blacklisted sender domains (configurable list)
   - [ ] Scoring system:
     - [ ] Each rule adds points
     - [ ] Threshold: 50+ = spam, 30-49 = suspicious, <30 = clean
@@ -336,7 +336,7 @@ The following 4 groups contain tasks that can be executed in parallel. Each grou
 - [ ] Implement second domain registrar API
   - [ ] Research Namecheap API
     - [ ] API documentation: https://www.namecheap.com/support/api/
-    - [ ] Pricing: domains from $0.88/year
+    - [ ] Pricing: check current rates (historically very affordable)
     - [ ] Features: search, purchase, manage DNS
   - [ ] Create `domain_providers/namecheap.py`
     - [ ] `NamecheapAPIClient` class
@@ -440,7 +440,7 @@ The following 4 groups contain tasks that can be executed in parallel. Each grou
     - [ ] Cookie usage (session cookies only)
     - [ ] Third-party services (Tor, domain registrars)
     - [ ] Contact for privacy concerns
-  - [ ] Get legal counsel review ($1,000-$3,000 estimate)
+  - [ ] Get legal counsel review (budget accordingly - costs vary by jurisdiction)
     - [ ] Send drafts for review
     - [ ] Address feedback
     - [ ] Finalize versions
