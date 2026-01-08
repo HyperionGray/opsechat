@@ -1,6 +1,7 @@
 # Alpha Release Implementation Roadmap
 
 **Created:** January 6, 2026  
+**Updated:** January 8, 2026  
 **Target Alpha Release:** [TBD]  
 **Current Status:** ~73% Complete  
 **Estimated Time to Alpha:** 3-4 weeks with focused effort
@@ -11,7 +12,615 @@
 
 This document provides a detailed implementation roadmap for bringing opsechat to alpha release, based on the comprehensive assessment in ALPHA_READINESS_ASSESSMENT.md.
 
+**NEW:** Tasks have been organized into **4 parallel work streams** to maximize development velocity. Each group can be worked on independently by different developers or teams.
+
 ---
+
+## 🚀 Parallel Work Streams (Critical Path)
+
+The following 4 groups contain tasks that can be executed in parallel. Each group is independent and has minimal dependencies on the others until final integration.
+
+### 🟦 Group 1: User Authentication & Account Management (3-4 days)
+
+**Team Focus:** Backend authentication, session management, user data structures
+
+**Core Tasks:**
+- [ ] Design ephemeral user storage system (`UserManager` class in `user_manager.py`)
+  - [ ] In-memory user dictionary structure: `{username: {password_hash, created_at, session_id, key_fingerprint}}`
+  - [ ] Password hashing with bcrypt/argon2
+  - [ ] Session token generation and validation
+  - [ ] Automatic cleanup of stale sessions (24hr timeout)
+- [ ] Create signup page template (`templates/signup.html`)
+  - [ ] Username field with validation (alphanumeric, 3-20 chars)
+  - [ ] Password field with strength indicator
+  - [ ] Password confirmation field
+  - [ ] Policy acceptance checkboxes (ToS, AUP)
+  - [ ] Accessible form design
+  - [ ] CAPTCHA integration (optional for alpha)
+- [ ] Create login page template (`templates/login.html`)
+  - [ ] Username/password fields
+  - [ ] "Remember me" option (browser storage)
+  - [ ] Error messaging for invalid credentials
+  - [ ] Link to signup page
+  - [ ] Rate limiting display (lockout after 5 failed attempts)
+- [ ] Implement `/signup` route in `runserver.py`
+  - [ ] Validate username uniqueness
+  - [ ] Validate password strength (min 12 chars, mixed case, numbers, symbols)
+  - [ ] Check policy acceptance
+  - [ ] Create user session
+  - [ ] Redirect to dashboard on success
+- [ ] Implement `/login` route in `runserver.py`
+  - [ ] Authenticate credentials
+  - [ ] Create session cookie (httpOnly, secure, sameSite)
+  - [ ] Rate limiting (max 5 attempts per 15min per IP)
+  - [ ] Redirect to dashboard on success
+- [ ] Implement `/logout` route in `runserver.py`
+  - [ ] Clear session data
+  - [ ] Remove from active sessions
+  - [ ] Clear browser cookies
+  - [ ] Redirect to landing page
+- [ ] Add `@require_auth` decorator for protected routes
+  - [ ] Check session validity
+  - [ ] Verify session not expired
+  - [ ] Redirect to login if not authenticated
+- [ ] Update existing routes to require authentication
+  - [ ] `/chats` → requires auth
+  - [ ] `/email` → requires auth
+  - [ ] `/burner` → requires auth (or session-only for anonymous)
+- [ ] Add CSRF protection
+  - [ ] Generate CSRF tokens
+  - [ ] Validate on POST/PUT/DELETE
+  - [ ] Add to all forms
+- [ ] Create password strength validator
+  - [ ] Minimum length check (12 chars)
+  - [ ] Complexity requirements (upper, lower, number, symbol)
+  - [ ] Common password dictionary check
+  - [ ] Visual strength indicator
+- [ ] Write comprehensive unit tests (`tests/test_user_manager.py`)
+  - [ ] Test user creation
+  - [ ] Test duplicate username rejection
+  - [ ] Test password hashing (never stored in plain)
+  - [ ] Test session creation/validation
+  - [ ] Test session expiration
+  - [ ] Test login rate limiting
+  - [ ] Test CSRF protection
+
+**Files to Create/Modify:**
+- `NEW: user_manager.py` (200-300 lines)
+- `NEW: templates/signup.html` (100-150 lines)
+- `NEW: templates/login.html` (80-100 lines)
+- `MODIFY: runserver.py` - Add auth routes and decorators (50-100 lines added)
+- `NEW: tests/test_user_manager.py` (150-200 lines)
+
+**Testing Strategy:**
+- Unit tests for all authentication logic
+- Manual testing: signup → login → access protected route → logout → verify no access
+- Test session expiration
+- Test rate limiting
+- Test CSRF protection
+
+---
+
+### 🟩 Group 2: UI/UX & Key Management (4-5 days)
+
+**Team Focus:** Frontend, user experience, PGP key management, educational content
+
+**Core Tasks:**
+- [ ] Design new landing page (`templates/landing_new.html`)
+  - [ ] Hero section with tagline: "Private, Encrypted Communication Over Tor"
+  - [ ] Feature highlights (Chat, Email, Burner Emails)
+  - [ ] Security promises (E2E encryption, zero-disk, ephemeral)
+  - [ ] CTA buttons: "Sign Up Free" and "Learn More"
+  - [ ] Responsive design (mobile-first)
+- [ ] Create user dashboard (`templates/dashboard.html`)
+  - [ ] Welcome message with username
+  - [ ] Three main product cards:
+    - [ ] 💬 Encrypted Chat - "Start chatting securely"
+    - [ ] 📧 Secure Email - "Send encrypted emails"
+    - [ ] 🔥 Burner Emails - "Create temporary addresses"
+  - [ ] Key status indicator (has key ✅ / no key ⚠️)
+  - [ ] Quick links: Settings, Key Management, Logout
+  - [ ] Usage stats (messages sent, emails, burners active)
+- [ ] Implement `/dashboard` route in `runserver.py`
+  - [ ] Require authentication
+  - [ ] Load user data (key status, usage stats)
+  - [ ] Render dashboard template
+- [ ] Create plan selection interface (`templates/plan_selection.html`)
+  - [ ] Free tier highlighted (default for alpha)
+    - [ ] "Free Forever" badge
+    - [ ] Features: 100 messages/day, 50 emails/day, 5 burners
+    - [ ] "Start Free" button
+  - [ ] Paid tiers (grayed out - "Coming Soon")
+    - [ ] Pro plan ($5/month) - Higher limits
+    - [ ] Enterprise plan ($20/month) - Unlimited
+  - [ ] Feature comparison table
+  - [ ] FAQ section: "What's included?"
+- [ ] Create key generation wizard (`templates/key_wizard.html`)
+  - [ ] Modal-based workflow (4 steps)
+  - [ ] Step 1: Introduction
+    - [ ] "Encryption protects your privacy"
+    - [ ] "Generate your PGP key pair now"
+    - [ ] Educational tooltip: What is PGP?
+  - [ ] Step 2: Key generation options
+    - [ ] Radio buttons: "Generate new key" (default) vs "Import existing"
+    - [ ] Name/email fields (optional, for key metadata)
+    - [ ] Key strength selector (2048-bit default, 4096-bit option)
+  - [ ] Step 3: Generation progress
+    - [ ] Progress spinner with message "Generating in your browser..."
+    - [ ] Educational note: "This happens client-side only"
+    - [ ] Real-time generation using OpenPGP.js
+  - [ ] Step 4: Success and backup
+    - [ ] ✅ "Key generated successfully!"
+    - [ ] Display public key (read-only textarea)
+    - [ ] Display key fingerprint
+    - [ ] 🔑 "Download Private Key" button (secure export)
+    - [ ] ⚠️ Warning: "Save this key - we cannot recover it for you"
+    - [ ] "I've saved my key" checkbox (required to proceed)
+- [ ] Create key management page (`templates/key_management.html`)
+  - [ ] Current key status section
+    - [ ] Display: "Active Key" or "No Key Installed"
+    - [ ] Key fingerprint (if exists)
+    - [ ] Creation date
+    - [ ] Last backup timestamp
+  - [ ] Public key display (read-only, copyable)
+  - [ ] Key actions
+    - [ ] Export private key button
+    - [ ] Import key interface (file upload + paste)
+    - [ ] Delete key (with confirmation modal)
+    - [ ] Backup reminder notification
+  - [ ] Key health indicators
+    - [ ] Key strength score
+    - [ ] Expiration date (if set)
+    - [ ] Usage stats (messages encrypted)
+- [ ] Create onboarding flow (`templates/onboarding.html`)
+  - [ ] First-time user modal (shown after signup)
+  - [ ] Multi-step tutorial:
+    - [ ] Welcome screen
+    - [ ] Key generation prompt
+    - [ ] Tour of dashboard
+    - [ ] How to send encrypted message
+    - [ ] Security best practices
+  - [ ] "Skip tour" option (with reminder)
+  - [ ] Progress indicator (step 1 of 5)
+- [ ] Enhance `static/pgp-manager.js`
+  - [ ] `generateKeyPair()` function
+    - [ ] Accept name, email, passphrase
+    - [ ] Use OpenPGP.js to generate
+    - [ ] Return public/private keys
+    - [ ] Store in localStorage
+  - [ ] `importKey()` function
+    - [ ] Validate PGP key format
+    - [ ] Parse and verify key
+    - [ ] Store in localStorage
+    - [ ] Show success/error feedback
+  - [ ] `exportPrivateKey()` function
+    - [ ] Retrieve from localStorage
+    - [ ] Format for download
+    - [ ] Trigger browser download
+    - [ ] Warn about security
+  - [ ] `deleteKey()` function
+    - [ ] Confirmation dialog
+    - [ ] Clear from localStorage
+    - [ ] Update UI state
+  - [ ] Key strength calculator
+    - [ ] Check key length (2048/4096)
+    - [ ] Check algorithm
+    - [ ] Display strength score
+  - [ ] Backup reminder system
+    - [ ] Check last backup timestamp
+    - [ ] Show reminder if >30 days
+    - [ ] Snooze option
+- [ ] Create educational tooltips system
+  - [ ] Tooltip component (CSS + JS)
+  - [ ] Help icons next to complex features
+  - [ ] Tooltips for:
+    - [ ] "What is E2E encryption?"
+    - [ ] "Why do I need a key?"
+    - [ ] "How do burner emails work?"
+    - [ ] "What is Tor?"
+    - [ ] "What data do you store?"
+  - [ ] Dismissible and persistent preferences
+- [ ] Add breadcrumb navigation
+  - [ ] Dashboard > Chat
+  - [ ] Dashboard > Email > Compose
+  - [ ] Dashboard > Settings > Key Management
+  - [ ] Consistent across all pages
+- [ ] Implement responsive design
+  - [ ] Mobile breakpoints (320px, 768px, 1024px)
+  - [ ] Touch-friendly buttons (min 44px)
+  - [ ] Readable font sizes (16px base)
+  - [ ] Collapsible navigation menu
+- [ ] Write E2E tests for UI flows (`tests/ui-dashboard.spec.js`)
+  - [ ] Test: Complete signup flow
+  - [ ] Test: Generate new key
+  - [ ] Test: Navigate to chat from dashboard
+  - [ ] Test: Navigate to email from dashboard
+  - [ ] Test: Export and re-import key
+  - [ ] Test: Mobile responsive layout
+
+**Files to Create/Modify:**
+- `NEW: templates/landing_new.html` (150-200 lines)
+- `NEW: templates/dashboard.html` (100-150 lines)
+- `NEW: templates/plan_selection.html` (120-150 lines)
+- `NEW: templates/key_wizard.html` (200-250 lines)
+- `NEW: templates/key_management.html` (150-180 lines)
+- `NEW: templates/onboarding.html` (100-120 lines)
+- `MODIFY: static/pgp-manager.js` - Add UI integration (200-300 lines added)
+- `NEW: static/key-management.css` (150-200 lines)
+- `NEW: static/dashboard.css` (100-150 lines)
+- `MODIFY: runserver.py` - Add dashboard and key routes (30-50 lines added)
+- `NEW: tests/ui-dashboard.spec.js` (150-200 lines)
+
+**Testing Strategy:**
+- Playwright E2E tests for all user flows
+- Manual testing in Tor Browser
+- Test on multiple screen sizes
+- Accessibility testing (screen readers, keyboard navigation)
+- User testing with 3-5 beta testers
+
+---
+
+### 🟥 Group 3: Security & Abuse Prevention (4-5 days)
+
+**Team Focus:** Spam filtering, rate limiting, abuse detection, API integrations
+
+**Core Tasks:**
+- [ ] Research and select spam filter solution
+  - [ ] Option 1: SpamAssassin (comprehensive but heavyweight)
+  - [ ] Option 2: rspamd (fast and modern)
+  - [ ] Option 3: Simple rule-based (lightweight for alpha)
+  - [ ] **Decision:** Implement rule-based for alpha, plan rspamd for production
+- [ ] Implement spam filter wrapper (`spam_filter.py`)
+  - [ ] `SpamFilter` class
+    - [ ] `analyze_email(from_addr, to_addr, subject, body)` method
+    - [ ] Return spam score (0-100)
+    - [ ] Return detected patterns (list)
+  - [ ] Rule-based detection:
+    - [ ] Suspicious keywords (viagra, cialis, lottery, prince, inheritance)
+    - [ ] Excessive links (>5 links)
+    - [ ] Suspicious TLDs (.tk, .ml, .ga)
+    - [ ] All caps subject lines
+    - [ ] HTML-only content with no text
+    - [ ] Blacklisted sender domains
+  - [ ] Scoring system:
+    - [ ] Each rule adds points
+    - [ ] Threshold: 50+ = spam, 30-49 = suspicious, <30 = clean
+  - [ ] Configurable thresholds
+  - [ ] Logging (metadata only, no content)
+- [ ] Implement rate limiter (`rate_limiter.py`)
+  - [ ] `RateLimiter` class
+    - [ ] In-memory storage: `{user_id: {action: [(timestamp, count)]}}`
+    - [ ] `check_limit(user_id, action, limit, window_seconds)` method
+    - [ ] Sliding window algorithm
+    - [ ] Automatic cleanup of old entries
+  - [ ] Rate limits:
+    - [ ] Burner generation: 10 per hour per user
+    - [ ] Email sending: 50 per hour per user
+    - [ ] Chat messages: 100 per hour per user
+    - [ ] Login attempts: 5 per 15 minutes per IP
+    - [ ] Signup: 3 per hour per IP
+  - [ ] HTTP 429 responses when exceeded
+  - [ ] Retry-After header
+  - [ ] Exponential backoff calculation
+- [ ] Implement abuse detection patterns
+  - [ ] Detect repeated identical messages (spam signature)
+  - [ ] Detect high-volume burst activity
+  - [ ] Detect unusual patterns:
+    - [ ] Creating many burners quickly
+    - [ ] Sending to many recipients
+    - [ ] Large attachment uploads
+  - [ ] Flag suspicious users (not auto-ban for alpha)
+  - [ ] Log abuse events for manual review
+- [ ] Integrate spam checking into email flow
+  - [ ] Modify `email_routes.py`:
+    - [ ] Add spam check before accepting email
+    - [ ] If spam score > 50: reject with 550 SMTP error
+    - [ ] If spam score 30-49: accept but mark as [SUSPICIOUS]
+    - [ ] If spam score < 30: accept normally
+  - [ ] Add spam indicator to email UI
+  - [ ] Allow manual "not spam" feedback
+- [ ] Integrate rate limiting into all routes
+  - [ ] Modify `burner_routes.py`:
+    - [ ] Check rate limit before generating burner
+    - [ ] Return 429 if exceeded
+    - [ ] Show user-friendly error message
+  - [ ] Modify `chat_routes.py`:
+    - [ ] Check rate limit on message send
+    - [ ] Return 429 with retry time
+  - [ ] Modify `email_routes.py`:
+    - [ ] Check rate limit on send
+    - [ ] Show remaining quota to user
+  - [ ] Modify auth routes:
+    - [ ] Rate limit login attempts
+    - [ ] Rate limit signup by IP
+- [ ] Implement second domain registrar API
+  - [ ] Research Namecheap API
+    - [ ] API documentation: https://www.namecheap.com/support/api/
+    - [ ] Pricing: domains from $0.88/year
+    - [ ] Features: search, purchase, manage DNS
+  - [ ] Create `domain_providers/namecheap.py`
+    - [ ] `NamecheapAPIClient` class
+    - [ ] `search_domains(tld_list, keywords)` method
+    - [ ] `purchase_domain(domain, contact_info)` method
+    - [ ] `check_availability(domain)` method
+    - [ ] Error handling for API failures
+    - [ ] Retry logic with exponential backoff
+  - [ ] Extend `domain_manager.py`
+    - [ ] Support multiple providers in registry
+    - [ ] Provider selection strategy:
+      - [ ] Round-robin for load balancing
+      - [ ] Failover if one provider unavailable
+      - [ ] Budget tracking per provider
+      - [ ] Prefer cheapest available domain
+    - [ ] Multi-provider rotation algorithm
+  - [ ] Add environment configuration
+    - [ ] `NAMECHEAP_API_KEY`
+    - [ ] `NAMECHEAP_API_USER`
+    - [ ] `NAMECHEAP_BUDGET_MONTHLY`
+    - [ ] `DOMAIN_ROTATION_STRATEGY` (round-robin/cheapest)
+- [ ] Add API health checks
+  - [ ] `/health/domains` endpoint
+  - [ ] Check each registrar API status
+  - [ ] Return: available/degraded/down per provider
+  - [ ] Show in admin dashboard
+  - [ ] Alert if both providers down
+- [ ] Write comprehensive tests
+  - [ ] `tests/test_spam_filter.py`
+    - [ ] Test spam detection rules
+    - [ ] Test scoring algorithm
+    - [ ] Test threshold boundaries
+    - [ ] Test false positive scenarios
+  - [ ] `tests/test_rate_limiter.py`
+    - [ ] Test rate limit enforcement
+    - [ ] Test sliding window
+    - [ ] Test concurrent requests
+    - [ ] Test limit reset
+  - [ ] `tests/test_namecheap_api.py`
+    - [ ] Mock API responses
+    - [ ] Test domain search
+    - [ ] Test domain purchase
+    - [ ] Test error handling
+  - [ ] `tests/test_domain_rotation.py`
+    - [ ] Test multi-provider selection
+    - [ ] Test failover logic
+    - [ ] Test budget limits
+
+**Files to Create/Modify:**
+- `NEW: spam_filter.py` (200-250 lines)
+- `NEW: rate_limiter.py` (150-200 lines)
+- `NEW: domain_providers/namecheap.py` (250-300 lines)
+- `MODIFY: domain_manager.py` - Multi-provider support (100-150 lines added)
+- `MODIFY: email_routes.py` - Add spam checking (50-80 lines added)
+- `MODIFY: burner_routes.py` - Add rate limiting (30-50 lines added)
+- `MODIFY: chat_routes.py` - Add rate limiting (20-30 lines added)
+- `NEW: tests/test_spam_filter.py` (150-200 lines)
+- `NEW: tests/test_rate_limiter.py` (120-150 lines)
+- `NEW: tests/test_namecheap_api.py` (100-120 lines)
+
+**Testing Strategy:**
+- Unit tests for all security components
+- Integration tests for API calls
+- Manual testing: trigger rate limits
+- Manual testing: send spam to burner addresses
+- Load testing: concurrent users hitting limits
+
+---
+
+### 🟨 Group 4: Legal & Compliance (2-3 days)
+
+**Team Focus:** Policy documents, legal integration, compliance UI, reporting
+
+**Core Tasks:**
+- [ ] Finalize policy documents (requires legal counsel review)
+  - [ ] Review `ACCEPTABLE_USE_POLICY.md`
+    - [ ] Verify prohibited activities list is comprehensive
+    - [ ] Confirm law enforcement cooperation language
+    - [ ] Update contact information
+    - [ ] Set effective date
+    - [ ] Add last updated timestamp
+  - [ ] Review `TERMS_OF_SERVICE.md`
+    - [ ] Verify liability limitations
+    - [ ] Confirm dispute resolution process
+    - [ ] Update jurisdiction information
+    - [ ] Add arbitration clause (if applicable)
+    - [ ] Set effective date
+  - [ ] Create `PRIVACY_POLICY.md`
+    - [ ] What data we collect (very minimal)
+      - [ ] Session IDs (temporary)
+      - [ ] Usage timestamps (temporary)
+      - [ ] No IP addresses (Tor)
+      - [ ] No email content (encrypted)
+    - [ ] What data we don't collect (most things)
+    - [ ] Zero-disk policy explanation
+    - [ ] Tor anonymity explanation
+    - [ ] Encryption practices (E2E, client-side)
+    - [ ] Law enforcement requests policy
+    - [ ] User rights (GDPR, CCPA if applicable)
+    - [ ] Data retention (automatic deletion)
+    - [ ] Cookie usage (session cookies only)
+    - [ ] Third-party services (Tor, domain registrars)
+    - [ ] Contact for privacy concerns
+  - [ ] Get legal counsel review ($1,000-$3,000 estimate)
+    - [ ] Send drafts for review
+    - [ ] Address feedback
+    - [ ] Finalize versions
+    - [ ] Sign off for production use
+- [ ] Create policy display pages
+  - [ ] `templates/terms.html`
+    - [ ] Render TERMS_OF_SERVICE.md as HTML
+    - [ ] Clean, readable typography
+    - [ ] Table of contents with anchor links
+    - [ ] Print-friendly CSS
+    - [ ] "Last updated" timestamp
+    - [ ] Contact information footer
+  - [ ] `templates/aup.html`
+    - [ ] Render ACCEPTABLE_USE_POLICY.md as HTML
+    - [ ] Highlight prohibited activities
+    - [ ] Contact for abuse reports
+    - [ ] Law enforcement cooperation notice
+  - [ ] `templates/privacy.html`
+    - [ ] Render PRIVACY_POLICY.md as HTML
+    - [ ] Clear data collection section
+    - [ ] FAQ-style format
+    - [ ] Icon indicators (✅ we do / ❌ we don't)
+  - [ ] Implement markdown-to-HTML rendering
+    - [ ] Use Python-Markdown or similar
+    - [ ] Sanitize output (XSS protection)
+    - [ ] Cache rendered HTML (in-memory)
+- [ ] Add policy routes to `runserver.py`
+  - [ ] `/terms` route (public, no auth required)
+  - [ ] `/aup` route (public)
+  - [ ] `/privacy` route (public)
+  - [ ] `/policies` route (shows all three with tabs)
+- [ ] Integrate policy acceptance into signup flow
+  - [ ] Modify `templates/signup.html`
+    - [ ] Add checkboxes:
+      - [ ] "I accept the Terms of Service" (required)
+      - [ ] "I accept the Acceptable Use Policy" (required)
+    - [ ] Add links to open policies in modal or new tab
+    - [ ] Disable submit button until checked
+    - [ ] Client-side validation
+  - [ ] Modify `/signup` route
+    - [ ] Verify checkboxes checked (server-side validation)
+    - [ ] Store acceptance timestamp in user record
+    - [ ] Log acceptance (metadata only, per legal requirement)
+    - [ ] Return error if not accepted
+- [ ] Add policy links to site footer
+  - [ ] Create `templates/footer_partial.html`
+  - [ ] Include on all pages:
+    - [ ] Terms of Service
+    - [ ] Acceptable Use Policy
+    - [ ] Privacy Policy
+    - [ ] Contact / Report Abuse
+    - [ ] Security disclosure
+  - [ ] Style footer (subtle, non-intrusive)
+- [ ] Add warning banners to appropriate pages
+  - [ ] Landing page banner:
+    - [ ] ⚠️ "This service cooperates with law enforcement"
+    - [ ] ⚠️ "Illegal activity will be reported"
+  - [ ] Dashboard banner (dismissible):
+    - [ ] "Review our Acceptable Use Policy"
+    - [ ] Link to AUP
+  - [ ] First-time chat banner:
+    - [ ] "Use at your own risk - See Terms of Service"
+    - [ ] "This service is for legal use only"
+  - [ ] Banner styling (yellow background, clear message)
+  - [ ] Dismissible with cookie preference
+- [ ] Create abuse reporting mechanism
+  - [ ] `templates/report_abuse.html`
+    - [ ] Form fields:
+      - [ ] Type of abuse (dropdown: spam, harassment, illegal, other)
+      - [ ] Description (textarea, 500 char max)
+      - [ ] Evidence (optional screenshot/text)
+      - [ ] Contact email (optional, for follow-up)
+    - [ ] Submit button
+    - [ ] CAPTCHA to prevent spam reports
+  - [ ] Implement `/report-abuse` route
+    - [ ] Validate form input
+    - [ ] Rate limit (3 reports per hour per IP)
+    - [ ] Store report in memory (24hr retention)
+    - [ ] Send email notification to admin
+    - [ ] Show confirmation message
+    - [ ] Thank user for report
+  - [ ] Add "Report Abuse" link in:
+    - [ ] Site footer
+    - [ ] Email view page (report spam)
+    - [ ] Chat page (report user)
+- [ ] Store policy acceptance metadata
+  - [ ] Extend user record in `user_manager.py`
+  - [ ] Fields: `tos_accepted_at`, `aup_accepted_at`
+  - [ ] In-memory only (consistent with zero-disk)
+  - [ ] Lost on server restart (acceptable for alpha)
+  - [ ] Re-prompt on policy updates
+- [ ] Create admin view for reports (simple)
+  - [ ] `/admin/reports` route (requires admin auth)
+  - [ ] List all abuse reports
+  - [ ] Show: timestamp, type, description
+  - [ ] Action buttons: dismiss, investigate, ban user
+  - [ ] For alpha: read-only view sufficient
+- [ ] Write tests for policy integration
+  - [ ] `tests/test_policy_acceptance.py`
+    - [ ] Test signup without accepting policies (should fail)
+    - [ ] Test signup with policies accepted (should succeed)
+    - [ ] Test policy page rendering
+    - [ ] Test abuse report submission
+    - [ ] Test rate limiting on reports
+    - [ ] Test policy links in footer
+
+**Files to Create/Modify:**
+- `NEW: PRIVACY_POLICY.md` (400-500 lines)
+- `NEW: templates/terms.html` (100-120 lines)
+- `NEW: templates/aup.html` (100-120 lines)
+- `NEW: templates/privacy.html` (120-150 lines)
+- `NEW: templates/report_abuse.html` (80-100 lines)
+- `NEW: templates/footer_partial.html` (30-40 lines)
+- `MODIFY: templates/signup.html` - Add policy checkboxes (20-30 lines added)
+- `MODIFY: runserver.py` - Add policy and report routes (80-100 lines added)
+- `MODIFY: user_manager.py` - Add acceptance tracking (20-30 lines added)
+- `NEW: tests/test_policy_acceptance.py` (100-120 lines)
+- `NEW: static/policy-modal.css` (50-80 lines)
+
+**Testing Strategy:**
+- Manual review of all policy documents
+- Legal counsel review (external)
+- Manual testing: signup flow with/without acceptance
+- Test all policy page renders correctly
+- Test abuse report submission
+- Test footer displays on all pages
+
+---
+
+## 🔄 Integration Phase (After Parallel Work - 3-4 days)
+
+Once all 4 groups complete their work, these sequential tasks integrate everything:
+
+- [ ] **Cross-Group Integration Testing**
+  - [ ] Test complete user journey: signup → key generation → dashboard → chat → email → burner
+  - [ ] Verify authentication works with all features
+  - [ ] Verify policies are enforced across all features
+  - [ ] Verify rate limits apply to authenticated users
+  - [ ] Verify spam filter works with authenticated email
+
+- [ ] **End-to-End Testing**
+  - [ ] Full signup flow E2E test
+  - [ ] Complete chat conversation E2E test
+  - [ ] Complete email send/receive E2E test
+  - [ ] Burner email generation and use E2E test
+  - [ ] Key export and re-import E2E test
+
+- [ ] **Security Audit**
+  - [ ] Penetration testing
+  - [ ] Memory leak verification
+  - [ ] Session isolation testing
+  - [ ] Input validation review
+  - [ ] XSS/CSRF vulnerability scan
+  - [ ] Authentication bypass attempts
+
+- [ ] **Performance Testing**
+  - [ ] Load testing (100 concurrent users)
+  - [ ] Stress testing (find breaking point)
+  - [ ] Memory usage monitoring
+  - [ ] Response time measurement
+  - [ ] Optimization of slow endpoints
+
+- [ ] **Documentation Updates**
+  - [ ] Update README.md with new signup flow
+  - [ ] Create user guide with screenshots
+  - [ ] Update API documentation
+  - [ ] Create troubleshooting guide
+  - [ ] Update CHANGELOG for alpha
+
+- [ ] **Bug Fixes**
+  - [ ] Address any issues found in testing
+  - [ ] Polish rough edges
+  - [ ] Improve error messages
+  - [ ] Fix any race conditions
+
+---
+
+## 📋 Original Roadmap Sections
+
+The following sections contain the original detailed implementation plans for reference.
 
 ## Critical Path Items (Must Complete for Alpha)
 
