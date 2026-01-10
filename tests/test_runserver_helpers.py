@@ -4,10 +4,11 @@ import string
 from flask import session
 
 import runserver
+from utils import id_generator, check_older_than, process_chat
 
 
 def test_id_generator_uses_expected_charset_and_length():
-    token = runserver.id_generator()
+    token = id_generator()
     allowed = set(string.ascii_uppercase + string.digits + string.ascii_lowercase)
     assert len(token) == 6
     assert set(token) <= allowed
@@ -15,12 +16,12 @@ def test_id_generator_uses_expected_charset_and_length():
 
 def test_check_older_than_detects_stale_entry():
     chat = {"timestamp": datetime.datetime.now() - datetime.timedelta(seconds=200)}
-    assert runserver.check_older_than(chat) is True
+    assert check_older_than(chat) is True
 
 
 def test_check_older_than_keeps_recent_entry():
     chat = {"timestamp": datetime.datetime.now() - datetime.timedelta(seconds=30)}
-    assert runserver.check_older_than(chat) is False
+    assert check_older_than(chat) is False
 
 
 def test_process_chat_wraps_long_messages(monkeypatch):
@@ -34,7 +35,7 @@ def test_process_chat_wraps_long_messages(monkeypatch):
             "username": session["_id"],
             "color": session["color"],
         }
-        chats = runserver.process_chat(chat)
+        chats = process_chat(chat)
 
     assert len(chats) > 1
     assert all(len(chunk["msg"]) <= 69 for chunk in chats)
@@ -52,7 +53,7 @@ def test_process_chat_preserves_pgp_blocks():
             "username": session["_id"],
             "color": session["color"],
         }
-        chats = runserver.process_chat(chat)
+        chats = process_chat(chat)
 
     assert len(chats) == 1
     assert chats[0]["msg"] == pgp_message
