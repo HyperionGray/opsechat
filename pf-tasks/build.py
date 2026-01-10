@@ -6,7 +6,6 @@ Compatible with pf-web-poly-compile-helper-runner patterns
 
 import subprocess
 import sys
-import os
 from pathlib import Path
 
 def run_command(cmd, cwd=None, check=True):
