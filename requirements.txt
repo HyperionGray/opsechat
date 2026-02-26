@@ -4,6 +4,7 @@ requests>=2.31.0,<3.0.0
 PyYAML>=6.0
 urllib3>=1.26.0,<3.0.0
 twisted>=24.7.0,<25.0.0
+urwid>=2.1.0,<3.0.0
 
 # AWS SDK for Amazon Q integration
 # AWS SDK for Amazon Q integration (optional)
