@@ -10,7 +10,8 @@ import socket
 import json
 import time
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+# Add parent directory's src to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 def test_client(host='127.0.0.1', port=5555):
     """Test basic client functionality"""

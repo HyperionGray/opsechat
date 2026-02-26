@@ -287,7 +287,7 @@ class ChatClient:
         if self.socket:
             try:
                 self.socket.close()
-            except:
+            except (OSError, socket.error):
                 pass
 
 

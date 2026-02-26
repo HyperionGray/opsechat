@@ -150,14 +150,17 @@ class ChatServer:
                             except json.JSONDecodeError:
                                 pass
                 
-                except Exception as e:
+                except (OSError, socket.error) as e:
                     break
         
         finally:
             with self.lock:
                 if client_socket in self.clients:
                     del self.clients[client_socket]
-            client_socket.close()
+            try:
+                client_socket.close()
+            except (OSError, socket.error):
+                pass
     
     def broadcast_message(self, username: str, message: str):
         """Broadcast a message to all connected clients"""
@@ -174,7 +177,7 @@ class ChatServer:
             for client_socket in list(self.clients.keys()):
                 try:
                     client_socket.send(msg_json.encode())
-                except:
+                except (OSError, socket.error):
                     dead_clients.append(client_socket)
             
             # Remove dead clients
@@ -183,7 +186,7 @@ class ChatServer:
                     del self.clients[client]
                 try:
                     client.close()
-                except:
+                except (OSError, socket.error):
                     pass
     
     def start(self):
@@ -211,6 +214,8 @@ class ChatServer:
                     client_thread.start()
                 except KeyboardInterrupt:
                     break
+                except (OSError, socket.error):
+                    continue
         finally:
             self.stop()
     
@@ -223,13 +228,16 @@ class ChatServer:
             for client in list(self.clients.keys()):
                 try:
                     client.close()
-                except:
+                except (OSError, socket.error):
                     pass
             self.clients.clear()
         
         # Close server socket
         if self.server_socket:
-            self.server_socket.close()
+            try:
+                self.server_socket.close()
+            except (OSError, socket.error):
+                pass
         
         # Overwrite and clear messages (security)
         with self.lock:
