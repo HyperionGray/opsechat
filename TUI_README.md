@@ -13,39 +13,68 @@ This is a serious privacy and opsec tool for serious privacy and opsec people. I
 ✅ **Message Validation** - Max 1000 chars, prevents b64 image encoding  
 ✅ **Secure Deletion** - Messages overwritten before removal  
 ✅ **Zero Disk** - Nothing touches disk except the application code  
-✅ **Tor Ready** - Designed to work with Tor hidden services  
+✅ **Tor Integration** - Full support for Tor hidden services (.onion)  
+✅ **SOCKS Proxy** - Client supports connecting via Tor SOCKS proxy  
 
 ## Quick Start
 
-### 1. Start the Server
+### Prerequisites
 
 ```bash
-# Local testing
+# Install dependencies
+pip install -r requirements.txt
+
+# For Tor integration (optional but recommended)
+sudo apt-get install tor  # or your package manager
+```
+
+### 1. Start the Server (with Tor)
+
+```bash
+# Start Tor daemon first
+tor --ControlPort 9051 --CookieAuthentication 1
+
+# In another terminal, start server with Tor
+python tui-server.py --tor
+
+# Output will show:
+# [*] Creating ephemeral hidden service...
+# [*] Hidden service created: abc123...xyz.onion
+# 🧅 Tor Hidden Service: abc123...xyz.onion
+# 📡 Local Server: 127.0.0.1:5555
+```
+
+### 2. Start the Server (without Tor - testing)
+
+```bash
+# Local testing only
 python tui-server.py
 
-# Bind to specific interface
+# Bind to all interfaces
 python tui-server.py --host 0.0.0.0 --port 5555
 ```
 
-The server will display:
-```
-[*] OpSecChat TUI Server running on 127.0.0.1:5555
-[*] Messages burn after 240 seconds
-[*] Max message length: 1000 chars
-[*] Press Ctrl+C to stop
-```
-
-### 2. Connect with Client(s)
+### 3. Connect with Client
 
 ```bash
-# Connect to local server
+# Connect to local server (no Tor)
 python tui-client.py
 
-# Connect to remote server
-python tui-client.py --host <server-ip> --port 5555
+# Connect to Tor hidden service
+python tui-client.py --host abc123...xyz.onion --port 5555
+
+# Connect via Tor SOCKS proxy (for .onion or extra privacy)
+python tui-client.py --host <server> --port 5555 --tor
+
+# Specify custom Tor SOCKS port
+python tui-client.py --host <server> --port 5555 --tor --tor-port 9050
 ```
 
-### 3. Chat!
+The client will automatically use Tor SOCKS proxy if:
+- The hostname ends with `.onion`, OR
+- You specify `--tor` flag
+
+### 4. Chat!
 
 - Type your message and press **Enter** to send
 - Press **Ctrl+C** to quit
@@ -77,16 +106,29 @@ This prevents:
 - Detects and rejects likely b64-encoded data
 - **No images, no video, no binary data**
 
-### Tor Integration (Advanced)
+### Tor Integration
 
-To run over Tor hidden service:
+The server can create an **ephemeral Tor hidden service** (.onion address):
+- New .onion address each time server starts
+- No configuration files on disk
+- Tor handles all encryption
+- Server accessible only via Tor network
+
+The client supports:
+- Direct connections (testing)
+- .onion address connections (via SOCKS proxy)
+- Force Tor for any connection (extra anonymity)
+
+**Prerequisites for Tor:**
+1. Tor daemon running with ControlPort (server)
+2. Tor SOCKS proxy running on port 9050 (client)
 
 ```bash
-# Start Tor daemon with control port
+# Start Tor with ControlPort (for server)
 tor --ControlPort 9051 --CookieAuthentication 1
 
-# In another terminal, modify tui-server.py or use socat
-# (Full Tor integration coming in next update)
+# Or use system Tor (usually has SOCKS on 9050 by default)
+sudo systemctl start tor
 ```
 
 ## Message Limits & Rules

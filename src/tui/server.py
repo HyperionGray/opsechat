@@ -20,7 +20,7 @@ import secrets
 import threading
 import socket
 import json
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 # Message storage (in-memory only)
 class ChatServer:
@@ -241,22 +241,95 @@ class ChatServer:
         print("\n[*] Server stopped. All messages overwritten and cleared.")
 
 
+def setup_tor_hidden_service(port: int) -> Optional[tuple]:
+    """
+    Setup Tor hidden service for the chat server
+    
+    Returns:
+        tuple: (hostname, service_id) or None if Tor unavailable
+    """
+    try:
+        from stem.control import Controller
+        from stem import SocketError
+        
+        with Controller.from_port(port=9051) as controller:
+            controller.authenticate()
+            
+            print('[*] Creating ephemeral hidden service, this may take a minute or two')
+            result = controller.create_ephemeral_hidden_service(
+                {80: port}, await_publication=True
+            )
+            
+            if result.service_id:
+                hostname = result.service_id + ".onion"
+                print(f"[*] Hidden service created: {hostname}")
+                return hostname, result.service_id
+            else:
+                print("[!] Unable to determine ephemeral service's hostname")
+                return None
+    
+    except ImportError:
+        print("[!] stem library not found. Install with: pip install stem")
+        print("[*] Running without Tor integration")
+        return None
+    except SocketError as e:
+        print(f"[!] Tor proxy or Control Port not running: {e}")
+        print("[*] To use Tor: Start Tor daemon with ControlPort 9051")
+        print("[*] Running without Tor integration")
+        return None
+    except Exception as e:
+        print(f"[!] Tor configuration error: {e}")
+        print("[*] Running without Tor integration")
+        return None
+
+
 def main():
     """Main entry point for TUI server"""
     import argparse
     
     parser = argparse.ArgumentParser(description='OpSecChat TUI Server')
-    parser.add_argument('--host', default='127.0.0.1', help='Host to bind to')
+    parser.add_argument('--host', default='127.0.0.1', help='Host to bind to (use 0.0.0.0 for all interfaces)')
     parser.add_argument('--port', type=int, default=5555, help='Port to bind to')
+    parser.add_argument('--tor', action='store_true', help='Enable Tor hidden service')
+    parser.add_argument('--test', action='store_true', help='Test mode (skip Tor even if --tor specified)')
     args = parser.parse_args()
     
+    # Tor integration
+    tor_info = None
+    if args.tor and not args.test:
+        print("[*] Starting with Tor integration...")
+        tor_info = setup_tor_hidden_service(args.port)
+        if tor_info:
+            hostname, service_id = tor_info
+            print(f"[*] Share this address: {hostname}:{args.port}")
+            print(f"[*] Clients should connect to: {hostname}")
+    
+    # Create and start server
     server = ChatServer(host=args.host, port=args.port)
+    
+    print("\n" + "="*60)
+    if tor_info:
+        print(f"🧅 Tor Hidden Service: {tor_info[0]}")
+    print(f"📡 Local Server: {args.host}:{args.port}")
+    print("="*60 + "\n")
     
     try:
         server.start()
     except KeyboardInterrupt:
         print("\n[*] Shutting down...")
+    finally:
         server.stop()
+        
+        # Remove Tor hidden service
+        if tor_info:
+            try:
+                from stem.control import Controller
+                with Controller.from_port(port=9051) as controller:
+                    controller.authenticate()
+                    controller.remove_ephemeral_hidden_service(tor_info[1])
+                    print("[*] Tor hidden service removed")
+            except Exception as e:
+                print(f"[!] Could not remove hidden service: {e}")
 
 
 if __name__ == '__main__':

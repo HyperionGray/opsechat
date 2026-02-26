@@ -10,6 +10,7 @@ Features:
 - Randomized username (server-assigned)
 - Text-only interface (no images/video)
 - Messages auto-burn after 4 minutes
+- Tor/SOCKS proxy support for .onion addresses
 """
 
 import sys
@@ -17,12 +18,42 @@ import socket
 import json
 import threading
 import urwid
+import socks  # PySocks for SOCKS proxy support
+
+
+def create_socket_connection(host, port, use_tor=False, tor_port=9050):
+    """
+    Create a socket connection, optionally through Tor
+    
+    Args:
+        host: Target host (can be .onion)
+        port: Target port
+        use_tor: Whether to use Tor SOCKS proxy
+        tor_port: Tor SOCKS proxy port (default 9050)
+    
+    Returns:
+        socket: Connected socket
+    """
+    if use_tor or host.endswith('.onion'):
+        # Use SOCKS proxy for Tor
+        sock = socks.socksocket()
+        sock.set_proxy(socks.SOCKS5, "127.0.0.1", tor_port)
+        sock.connect((host, port))
+        return sock
+    else:
+        # Direct connection
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect((host, port))
+        return sock
+
 
 
 class ChatClient:
-    def __init__(self, host='127.0.0.1', port=5555):
+    def __init__(self, host='127.0.0.1', port=5555, use_tor=False, tor_port=9050):
         self.host = host
         self.port = port
+        self.use_tor = use_tor or host.endswith('.onion')
+        self.tor_port = tor_port
         self.socket = None
         self.username = "Unknown"
         self.running = False
@@ -124,8 +155,12 @@ class ChatClient:
     def connect(self):
         """Connect to the chat server"""
         try:
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket.connect((self.host, self.port))
+            if self.use_tor:
+                self.add_message("System", f"Connecting via Tor to {self.host}:{self.port}...", is_system=True)
+            else:
+                self.add_message("System", f"Connecting to {self.host}:{self.port}...", is_system=True)
+            
+            self.socket = create_socket_connection(self.host, self.port, self.use_tor, self.tor_port)
             self.running = True
             
             # Start receive thread
@@ -133,6 +168,9 @@ class ChatClient:
             receive_thread.start()
             
             return True
+        except ImportError as e:
+            self.add_message("System", f"Missing dependency: {e}. Install with: pip install PySocks", is_system=True)
+            return False
         except Exception as e:
             self.add_message("System", f"Failed to connect: {e}", is_system=True)
             return False
@@ -258,11 +296,18 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description='OpSecChat TUI Client')
-    parser.add_argument('--host', default='127.0.0.1', help='Server host')
+    parser.add_argument('--host', default='127.0.0.1', help='Server host (can be .onion address)')
     parser.add_argument('--port', type=int, default=5555, help='Server port')
+    parser.add_argument('--tor', action='store_true', help='Force use of Tor SOCKS proxy')
+    parser.add_argument('--tor-port', type=int, default=9050, help='Tor SOCKS proxy port (default: 9050)')
     args = parser.parse_args()
     
-    client = ChatClient(host=args.host, port=args.port)
+    client = ChatClient(
+        host=args.host,
+        port=args.port,
+        use_tor=args.tor,
+        tor_port=args.tor_port
+    )
     client.run()
 
 
