@@ -15,6 +15,10 @@ jobs:
     name: Python Tests
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    
+    permissions:
+      contents: read
+    
     strategy:
       matrix:
         python-version: ['3.10', '3.11', '3.12']
@@ -46,6 +50,9 @@ jobs:
     name: Playwright E2E Tests
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    
+    permissions:
+      contents: read
     
     env:
       MAX_SERVER_RETRIES: 30

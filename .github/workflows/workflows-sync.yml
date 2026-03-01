@@ -8,6 +8,10 @@ on:
 jobs:
   sync:
     runs-on: [self-hosted, linux, x64, big]
+    
+    permissions:
+      contents: write
+    
     steps:
       - name: Workflows Sync
         uses: wow-actions/workflows-sync@v2
