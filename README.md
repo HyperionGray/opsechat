@@ -2,6 +2,42 @@
 **Documentation:** [docs/README.md](docs/README.md)  
 **License:** MIT
 
+## 🆕 NEW: Terminal UI (TUI) Chat
+
+**Privacy-focused, OpSec-first terminal chat - No GUI, no nonsense.**
+
+OpSecChat now includes a **Terminal User Interface (TUI)** for maximum privacy and security:
+
+- ✅ **TUI Only** - No web browser required
+- ✅ **Tor Integration** - Built-in Tor hidden service support
+- ✅ **Messages Burn** - Auto-delete after 4 minutes with overwriting
+- ✅ **Randomized Usernames** - Server-assigned, no reuse
+- ✅ **Text Only** - No images, videos, or encoded data
+- ✅ **In-Memory Only** - Zero disk writes
+
+### Quick Start (TUI)
+
+```bash
+# Terminal 1: Start server
+python tui-server.py
+
+# Terminal 2: Connect client
+python tui-client.py
+```
+
+**With Tor:**
+```bash
+# Start Tor
+tor --ControlPort 9051 --CookieAuthentication 1
+
+# Start server with Tor hidden service
+python tui-server.py --tor
+```
+
+📖 **Full TUI Guide:** [TUI_README.md](TUI_README.md) | [Quick Start](docs/TUI_QUICKSTART.md)
+
+---
+
 Platform
 ========
 
