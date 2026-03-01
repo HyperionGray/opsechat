@@ -47,6 +47,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     
+    env:
+      MAX_SERVER_RETRIES: 30
+      SERVER_RETRY_DELAY: 1
+    
     steps:
       - uses: actions/checkout@v4
       
@@ -66,20 +70,20 @@ jobs:
           echo "Mock server started with PID: $SERVER_PID"
           
           # Wait for server to start with retries
-          for i in {1..30}; do
+          for i in $(seq 1 $MAX_SERVER_RETRIES); do
             if curl -f -s http://127.0.0.1:5001/ > /dev/null 2>&1; then
               echo "Mock server is responding after $i seconds"
               break
             fi
-            if [ $i -eq 30 ]; then
-              echo "Mock server failed to start after 30 seconds"
+            if [ $i -eq $MAX_SERVER_RETRIES ]; then
+              echo "Mock server failed to start after $MAX_SERVER_RETRIES seconds"
               if [ -f mock_server.pid ]; then
                 kill $(cat mock_server.pid) 2>/dev/null || true
               fi
               exit 1
             fi
-            echo "Waiting for server... ($i/30)"
-            sleep 1
+            echo "Waiting for server... ($i/$MAX_SERVER_RETRIES)"
+            sleep $SERVER_RETRY_DELAY
           done
           
           # Additional health check

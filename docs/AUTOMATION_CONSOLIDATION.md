@@ -32,7 +32,7 @@ This document summarizes the automation consolidation changes made to reduce noi
 
 ### 3. Removed Workflows (moved to bak/workflows-removed/)
 
-The following 11 workflows were removed as they created noise by running on every push/PR:
+The following 13 workflows were removed as they created noise by running on every push/PR:
 
 1. `amazon-q-review.yml` - Auto-triggered on push/PR
 2. `amazon-q-security-scan.yml` - Auto-triggered on push/PR

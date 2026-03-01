@@ -46,7 +46,7 @@
 - [ ] Check GitHub Actions usage/costs to confirm reduction
 
 ## Notes
-- The bi-weekly cron for security scan (`0 2 */14 * *`) will run every 14 days
+- The bi-weekly cron for security scan runs on 1st and 3rd Sunday of each month (approximately every 2 weeks)
 - All workflows now have proper timeouts to prevent runaway jobs
 - Concurrency groups will automatically cancel redundant runs
 - Composite actions enable consistent environment setup across all workflows
