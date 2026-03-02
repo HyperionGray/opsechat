@@ -231,6 +231,19 @@
 
 ## COMPLETED ✅
 
+### Simple Chat Rooms (NEW - March 2026)
+- [x] Simple web-based chat room system
+- [x] E2E encryption using Web Crypto API
+- [x] Terminal-style UI with minimal JavaScript
+- [x] 3-minute message auto-delete
+- [x] Memory overwriting on deletion
+- [x] Randomized usernames with color distinction
+- [x] Room-based chat (create/join rooms)
+- [x] CLI script for easy room creation (`chat-room.py`)
+- [x] Comprehensive documentation in `docs/SIMPLE_CHAT_ROOMS.md`
+- [x] E2E tests for new chat functionality
+- [x] Tor hidden service support
+
 ### Repository Assessment
 - [x] Comprehensive assessment of current state
 - [x] Gap analysis for production readiness

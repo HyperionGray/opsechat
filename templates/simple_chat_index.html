@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpSecChat - Secure Chat Rooms</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: #0f0;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2em;
+            text-shadow: 0 0 10px #0f0;
+        }
+        
+        .info-box {
+            border: 1px solid #0f0;
+            padding: 20px;
+            margin-bottom: 20px;
+            background-color: #001100;
+        }
+        
+        .info-box h2 {
+            color: #0f0;
+            margin-bottom: 10px;
+            font-size: 1.3em;
+        }
+        
+        .info-box ul {
+            list-style-type: none;
+            padding-left: 20px;
+        }
+        
+        .info-box li:before {
+            content: "> ";
+            color: #0f0;
+        }
+        
+        .create-room {
+            text-align: center;
+            margin: 40px 0;
+        }
+        
+        button {
+            background-color: #0f0;
+            color: #000;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            background-color: #0d0;
+            box-shadow: 0 0 20px #0f0;
+        }
+        
+        button:active {
+            transform: scale(0.95);
+        }
+        
+        .status {
+            text-align: center;
+            margin-top: 20px;
+            color: #0f0;
+        }
+        
+        a {
+            color: #0ff;
+            text-decoration: none;
+        }
+        
+        a:hover {
+            text-decoration: underline;
+        }
+        
+        .warning {
+            color: #ff0;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚡ OpSecChat ⚡</h1>
+        
+        <div class="info-box">
+            <h2>Security Features</h2>
+            <ul>
+                <li>Messages disappear after 3 minutes</li>
+                <li>In-memory only - no disk storage</li>
+                <li>Memory overwritten on message deletion</li>
+                <li>Randomized usernames with color distinction</li>
+                <li>Optional E2E encryption with Web Crypto API</li>
+                <li>Text-only - no media or file sharing</li>
+                <li>Tor hidden service ready</li>
+            </ul>
+        </div>
+        
+        <div class="info-box">
+            <h2>How It Works</h2>
+            <ul>
+                <li>Click "Create New Chat Room" below</li>
+                <li>Share the room URL with your contacts</li>
+                <li>Chat securely and anonymously</li>
+                <li>Messages auto-delete after 3 minutes</li>
+                <li>Enable E2E encryption in room settings</li>
+            </ul>
+        </div>
+        
+        <div class="create-room">
+            <button id="createRoomBtn">Create New Chat Room</button>
+            <div id="status" class="status"></div>
+        </div>
+        
+        <div class="info-box">
+            <h2 class="warning">⚠ Security Reminder</h2>
+            <ul>
+                <li>Only share room URLs with trusted contacts</li>
+                <li>Use Tor Browser for maximum anonymity</li>
+                <li>Rooms expire after 1 hour of inactivity</li>
+                <li>Do not share sensitive credentials</li>
+                <li>This is for operational security communications only</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        // Simple room creation with no external dependencies
+        document.getElementById('createRoomBtn').addEventListener('click', async function() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = 'Creating room...';
+            
+            try {
+                const response = await fetch('/chat/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to create room');
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusDiv.innerHTML = `Room created! Redirecting...<br><a href="${data.room_url}">${window.location.origin}${data.room_url}</a>`;
+                    setTimeout(() => {
+                        window.location.href = data.room_url;
+                    }, 1000);
+                } else {
+                    statusDiv.textContent = 'Error creating room';
+                }
+            } catch (error) {
+                statusDiv.textContent = 'Error: ' + error.message;
+            }
+        });
+    </script>
+</body>
+</html>

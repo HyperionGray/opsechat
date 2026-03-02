@@ -25,7 +25,7 @@ from typing import Dict, List, Any, Optional
 # Message storage (in-memory only)
 class ChatServer:
     MAX_MESSAGE_LENGTH = 1000  # Prevent b64 encoded images
-    MESSAGE_LIFETIME = 240  # 4 minutes in seconds
+    MESSAGE_LIFETIME = 180  # 3 minutes in seconds
     
     def __init__(self, host='127.0.0.1', port=5555):
         self.host = host
@@ -113,7 +113,7 @@ class ChatServer:
             welcome = {
                 'type': 'welcome',
                 'username': username,
-                'message': f'Welcome! You are {username}. Messages burn in 4 minutes.'
+                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
             }
             client_socket.send((json.dumps(welcome) + '\n').encode())
             

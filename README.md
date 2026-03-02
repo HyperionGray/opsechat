@@ -2,15 +2,38 @@
 **Documentation:** [docs/README.md](docs/README.md)  
 **License:** MIT
 
-## 🆕 NEW: Terminal UI (TUI) Chat
+## 🆕 NEW: Simple Web-Based Chat Rooms
 
-**Privacy-focused, OpSec-first terminal chat - No GUI, no nonsense.**
+**Secure, ephemeral chat rooms with one command - Web or TUI.**
 
-OpSecChat now includes a **Terminal User Interface (TUI)** for maximum privacy and security:
+OpSecChat now includes both **Web-Based Chat Rooms** and **Terminal UI (TUI)** for maximum flexibility:
 
+### Web Chat Rooms (NEW!)
+- ✅ **Simple Room Creation** - One command to create a secure chat room
+- ✅ **E2E Encryption** - Optional encryption using Web Crypto API (simple & reviewable)
+- ✅ **Terminal-Style UI** - Clean, minimal interface with no flashy elements
+- ✅ **Messages Burn** - Auto-delete after 3 minutes with memory overwriting
+- ✅ **Randomized Usernames** - Color-coded for easy distinction
+- ✅ **Text Only** - No images, videos, or media sharing
+- ✅ **In-Memory Only** - Zero disk writes
+- ✅ **Tor Ready** - Works seamlessly with Tor hidden services
+
+### Quick Start (Web Chat)
+
+```bash
+# Create a local chat room
+python chat-room.py
+
+# Create a Tor hidden service chat room
+python chat-room.py --tor
+```
+
+Access the chat at `/chat` to create rooms and share with your contacts.
+
+### Terminal UI (TUI)
 - ✅ **TUI Only** - No web browser required
 - ✅ **Tor Integration** - Built-in Tor hidden service support
-- ✅ **Messages Burn** - Auto-delete after 4 minutes with overwriting
+- ✅ **Messages Burn** - Auto-delete after 3 minutes with overwriting
 - ✅ **Randomized Usernames** - Server-assigned, no reuse
 - ✅ **Text Only** - No images, videos, or encoded data
 - ✅ **In-Memory Only** - Zero disk writes
@@ -198,17 +221,21 @@ Features
 ========
 
 ### Chat System
+- **Simple Web Chat Rooms** - Create secure chat rooms with one command (`python chat-room.py`)
+- **E2E Encryption** - Optional encryption using Web Crypto API (simple, reviewable JavaScript)
+- **Terminal-Style UI** - Clean, minimal interface focused on security over aesthetics
 - As chat happens inside the Tor network via ephemeral hidden services, everything is encrypted and attribution of chatters is virtually impossible
 - *Nothing* touches disk except the app, everything happens in-memory, no chat, image, video, or ANYTHING caching to storage.
 - This chat is meant to help you with opsec, disappearing messages, randomized usernames, encrypted comms are the default (much more to come)
 - **PGP encryption support** - Optional end-to-end encryption using PGP keys (see [PGP Usage Guide](docs/user-guide/PGP_USAGE.md))
 - No configuration required
 - Low barrier to entry, few dependencies
-- No need for a client
+- No need for a client (web-based or TUI available)
 - Chats are deleted every 3 minutes
-- Randomized usernames - this is for your own safety, so as to decrease chances of username reuse
+- Randomized usernames with color distinction - this is for your own safety, so as to decrease chances of username reuse
 - New chat service created every time the server is started
 - No frills, no fancy CSS, code is easy to follow and review to ensure your safety
+- **Memory Overwriting** - Messages are overwritten in memory before deletion for enhanced security
 
 ### Email System (NEW - REAL EMAIL SUPPORT!)
 - **Real SMTP/IMAP Integration** - Send and receive actual emails via configured email servers (see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md))
