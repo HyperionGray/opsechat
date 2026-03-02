@@ -177,10 +177,36 @@
     </div>
     
     <div class="input-container">
-        <input type="text" id="messageInput" placeholder="Type your message..." maxlength="1000" autofocus>
+        <input type="text" id="messageInput" placeholder="Type your message (max 500 chars)..." maxlength="500" autofocus>
         <button id="sendBtn">Send</button>
     </div>
     <div class="status" id="statusMsg"></div>
+    
+    <!-- Security Warning Modal -->
+    <div id="securityWarning" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 1000; padding: 20px;">
+        <div style="max-width: 600px; margin: 50px auto; background: #001100; border: 2px solid #f00; padding: 30px; color: #0f0;">
+            <h2 style="color: #f00; text-align: center;">⚠️ CRITICAL SECURITY NOTICE ⚠️</h2>
+            <p style="margin: 20px 0; line-height: 1.6;">
+                <strong>THIS IS FOR SERIOUS OPERATIONAL SECURITY ONLY.</strong><br><br>
+                
+                ❌ <strong>NO MEDIA SHARING</strong> - Text only. Images, videos, or any encoded content is STRICTLY PROHIBITED.<br><br>
+                
+                ❌ <strong>NO ABUSE</strong> - This service is for secure communication only.<br><br>
+                
+                ⚠️ <strong>VIOLATIONS = CONSEQUENCES:</strong> Any attempts to circumvent these rules will result in:<br>
+                • Immediate removal from chat<br>
+                • Chat logs preserved (not burned as promised)<br>
+                • Potential reporting to authorities<br><br>
+                
+                ✅ <strong>APPROVED USE:</strong> Secure text communication for operational security, whistleblowing, journalism, activism.<br><br>
+                
+                🔒 <strong>YOUR SAFETY:</strong> Messages auto-delete after 3 minutes. Rooms expire after 1 hour. Everything in-memory only.
+            </p>
+            <button onclick="acceptSecurityWarning()" style="width: 100%; padding: 15px; background: #0f0; color: #000; border: none; font-weight: bold; font-size: 1.1em; cursor: pointer; margin-top: 20px;">
+                I UNDERSTAND AND AGREE
+            </button>
+        </div>
+    </div>
     
     <script>
         // Simple E2E encryption using Web Crypto API (reviewable and minimal)
@@ -188,6 +214,42 @@
         let encryptionEnabled = false;
         let encryptionKey = null;
         let pollInterval = null;
+        let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+        
+        // Show security warning on first load
+        function showSecurityWarning() {
+            if (!securityWarningAccepted) {
+                document.getElementById('securityWarning').style.display = 'block';
+                document.getElementById('messageInput').disabled = true;
+                document.getElementById('sendBtn').disabled = true;
+            }
+        }
+        
+        function acceptSecurityWarning() {
+            securityWarningAccepted = true;
+            sessionStorage.setItem('securityWarningAccepted', 'true');
+            document.getElementById('securityWarning').style.display = 'none';
+            document.getElementById('messageInput').disabled = false;
+            document.getElementById('sendBtn').disabled = false;
+            document.getElementById('messageInput').focus();
+        }
+        
+        // Automated key exchange - fetch room's shared key
+        async function fetchRoomKey() {
+            try {
+                const response = await fetch(`/chat/room/${roomId}/key`);
+                if (response.ok) {
+                    const data = await response.json();
+                    // Import the room's key
+                    const keyData = Uint8Array.from(atob(data.encryption_key), c => c.charCodeAt(0));
+                    encryptionKey = await importKey(Array.from(keyData));
+                    return true;
+                }
+            } catch (e) {
+                console.error('Failed to fetch room key:', e);
+            }
+            return false;
+        }
         
         // Simple encryption using AES-GCM with Web Crypto API
         async function generateKey() {
@@ -390,14 +452,18 @@
             
             if (encryptionEnabled) {
                 if (!encryptionKey) {
-                    // Generate new key
-                    encryptionKey = await generateKey();
-                    const keyArray = await exportKey(encryptionKey);
+                    // Automatically fetch the room's shared key
+                    showStatus('Fetching room encryption key...', 2000);
+                    const success = await fetchRoomKey();
                     
-                    // Store in sessionStorage for this tab only
-                    sessionStorage.setItem(`chatroom_${roomId}_key`, JSON.stringify(keyArray));
-                    
-                    showStatus('Encryption enabled. Share this room URL only with trusted contacts who also enable encryption.');
+                    if (success) {
+                        showStatus('Encryption enabled with automatic key exchange. All messages in this room use the same key.', 5000);
+                    } else {
+                        showStatus('Failed to enable encryption. Try again.', 3000);
+                        e.target.checked = false;
+                        encryptionEnabled = false;
+                        return;
+                    }
                 }
                 statusSpan.textContent = 'Encryption: ON';
                 statusSpan.className = 'encryption-status enabled';
@@ -412,18 +478,16 @@
         
         // Check for existing key on load
         window.addEventListener('load', async function() {
-            const storedKey = sessionStorage.getItem(`chatroom_${roomId}_key`);
-            if (storedKey) {
-                try {
-                    const keyArray = JSON.parse(storedKey);
-                    encryptionKey = await importKey(keyArray);
-                    document.getElementById('encryptionToggle').checked = true;
-                    encryptionEnabled = true;
-                    document.getElementById('encryptionStatus').textContent = 'Encryption: ON';
-                    document.getElementById('encryptionStatus').className = 'encryption-status enabled';
-                } catch (e) {
-                    // Ignore invalid keys
-                }
+            // Show security warning first
+            showSecurityWarning();
+            
+            // Auto-enable encryption with room key
+            const keyFetched = await fetchRoomKey();
+            if (keyFetched) {
+                document.getElementById('encryptionToggle').checked = true;
+                encryptionEnabled = true;
+                document.getElementById('encryptionStatus').textContent = 'Encryption: ON';
+                document.getElementById('encryptionStatus').className = 'encryption-status enabled';
             }
             
             // Start polling
