@@ -9,6 +9,7 @@ import string
 import random
 import datetime
 import textwrap
+import re
 from flask import session
 
 
@@ -86,6 +87,56 @@ def add_review(reviews, user_id, rating, review_text):
     
     reviews.append(review)
     return review
+
+
+def sanitize_emojis(text):
+    """
+    Remove all emojis from text. Users are restricted to ASCII only.
+    The skull emoji (💀) is reserved for system use only and will also be removed from user input.
+    
+    Args:
+        text: Input text that may contain emojis
+        
+    Returns:
+        Text with all emojis removed
+    """
+    # Emoji ranges in Unicode
+    # This pattern matches most common emojis
+    emoji_pattern = re.compile(
+        "["
+        "\U0001F600-\U0001F64F"  # emoticons
+        "\U0001F300-\U0001F5FF"  # symbols & pictographs
+        "\U0001F680-\U0001F6FF"  # transport & map symbols
+        "\U0001F1E0-\U0001F1FF"  # flags (iOS)
+        "\U00002702-\U000027B0"
+        "\U000024C2-\U0001F251"
+        "\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
+        "\U0001FA00-\U0001FA6F"  # Chess Symbols
+        "\U0001FA70-\U0001FAFF"  # Symbols and Pictographs Extended-A
+        "\U00002600-\U000026FF"  # Miscellaneous Symbols
+        "\U00002700-\U000027BF"  # Dingbats
+        "]+",
+        flags=re.UNICODE
+    )
+    
+    # Remove all emojis from user input
+    # The skull emoji (💀) is reserved for system notifications only
+    return emoji_pattern.sub('', text)
+
+
+def filter_to_ascii(text):
+    """
+    Filter text to only allow ASCII characters (and the system skull emoji).
+    Users are limited to ASCII-only input.
+    
+    Args:
+        text: Input text
+        
+    Returns:
+        Text with non-ASCII characters removed
+    """
+    # Allow only ASCII printable characters and whitespace
+    return ''.join(char for char in text if ord(char) < 128)
 
 
 def process_chat(chat_dic):

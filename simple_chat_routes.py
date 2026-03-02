@@ -16,7 +16,7 @@ import secrets
 import threading
 import base64
 from flask import render_template, request, session, jsonify, Blueprint
-from utils import get_random_color
+from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
 
 # Global room storage (in-memory only)
 chat_rooms = {}
@@ -249,10 +249,12 @@ def register_simple_chat_routes(app):
                     # Might be base64 or encoded content
                     return jsonify({"error": "Invalid message format. Only plain text allowed."}), 400
             
-            # Sanitize message (remove HTML tags and encode special chars)
-            message_text = re.sub(r'<[^>]+>', '', message_text)  # Remove HTML tags
-            # Output encode special characters to prevent XSS
-            message_text = message_text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#x27;')
+            # Filter to ASCII only and remove emojis
+            message_text = filter_to_ascii(message_text)
+            message_text = sanitize_emojis(message_text)
+            
+            # Sanitize message (remove HTML tags)
+            message_text = re.sub(r'[<>&"\']', '', message_text)
             
             # Add message to room
             room.add_message(
