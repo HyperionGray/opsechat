@@ -89,17 +89,16 @@ def add_review(reviews, user_id, rating, review_text):
     return review
 
 
-def sanitize_emojis(text, allowed_emoji='💀'):
+def sanitize_emojis(text):
     """
-    Remove all emojis from text except the allowed skull emoji.
-    Users are restricted to ASCII only; only the system can use the skull emoji.
+    Remove all emojis from text. Users are restricted to ASCII only.
+    The skull emoji (💀) is reserved for system use only and will also be removed from user input.
     
     Args:
         text: Input text that may contain emojis
-        allowed_emoji: The only emoji allowed (default: skull emoji 💀)
         
     Returns:
-        Text with all emojis removed except the allowed one
+        Text with all emojis removed
     """
     # Emoji ranges in Unicode
     # This pattern matches most common emojis
@@ -120,15 +119,9 @@ def sanitize_emojis(text, allowed_emoji='💀'):
         flags=re.UNICODE
     )
     
-    # Remove all emojis except the allowed one
-    # We do this by replacing the allowed emoji temporarily, removing all emojis,
-    # then restoring the allowed emoji
-    if allowed_emoji in text:
-        # For user input, we don't allow ANY emojis (including skull)
-        # The skull emoji is only used by the system for notifications
-        return emoji_pattern.sub('', text)
-    else:
-        return emoji_pattern.sub('', text)
+    # Remove all emojis from user input
+    # The skull emoji (💀) is reserved for system notifications only
+    return emoji_pattern.sub('', text)
 
 
 def filter_to_ascii(text):
