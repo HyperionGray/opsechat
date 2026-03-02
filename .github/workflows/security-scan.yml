@@ -1,15 +1,16 @@
 name: Security Scan
 
 on:
-  push:
-    branches: [ master, main, develop ]
-  pull_request:
-    branches: [ master, main ]
   schedule:
-    # Run weekly security scans on Sundays at 2 AM UTC
-    - cron: '0 2 * * 0'
+    # Run bi-weekly security scans on Sundays at 2 AM UTC
+    # Runs on 1st and 3rd Sunday of each month (approximately every 2 weeks)
+    - cron: '0 2 1-7,15-21 * 0'
   workflow_dispatch:
     # Allow manual triggering
+
+concurrency:
+  group: security-scan-${{ github.repository }}
+  cancel-in-progress: false
 
 jobs:
   security-scan:
@@ -147,7 +148,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Download security reports
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v4.1.3
       with:
         name: security-reports-${{ github.run_number }}
         path: security-reports/
