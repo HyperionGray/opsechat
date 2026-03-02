@@ -11,6 +11,7 @@ This module contains Flask routes for the core chat functionality including:
 import re
 import datetime
 from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 
 
 def register_chat_routes(app, chatlines, chatters, id_generator, get_random_color, 
@@ -88,6 +89,9 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
             # Process new message
             message_text = request.form.get("message", "").strip()
             if message_text:
+                # Filter to ASCII and remove emojis
+                message_text = filter_to_ascii(message_text)
+                message_text = sanitize_emojis(message_text)
                 # Sanitize message
                 message_text = re.sub(r'[<>&"\']', '', message_text)
                 
@@ -140,6 +144,9 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
             if data and "message" in data:
                 message_text = data["message"].strip()
                 if message_text:
+                    # Filter to ASCII and remove emojis
+                    message_text = filter_to_ascii(message_text)
+                    message_text = sanitize_emojis(message_text)
                     # Sanitize message
                     message_text = re.sub(r'[<>&"\']', '', message_text)
                     

@@ -15,7 +15,7 @@ import datetime
 import secrets
 import threading
 from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color
+from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
 
 # Global room storage (in-memory only)
 chat_rooms = {}
@@ -195,6 +195,10 @@ def register_simple_chat_routes(app):
             
             if len(message_text) > 1000:
                 return jsonify({"error": "Message too long"}), 400
+            
+            # Filter to ASCII only and remove emojis
+            message_text = filter_to_ascii(message_text)
+            message_text = sanitize_emojis(message_text)
             
             # Sanitize message (remove HTML tags)
             message_text = re.sub(r'[<>&"\']', '', message_text)
