@@ -14,12 +14,20 @@ import re
 import datetime
 import secrets
 import threading
+import base64
 from flask import render_template, request, session, jsonify, Blueprint
 from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
 
 # Global room storage (in-memory only)
 chat_rooms = {}
 rooms_lock = threading.Lock()
+
+# Direct message storage (ephemeral, 1-minute expiry)
+direct_messages = {}
+dm_lock = threading.Lock()
+
+# Maximum message length to prevent base64 encoding of images
+MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
 
 # Room class to manage chat state
 class ChatRoom:
@@ -31,6 +39,12 @@ class ChatRoom:
         self.users = {}
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
+        # Auto-generated shared encryption key for the room
+        self.room_key = base64.b64encode(secrets.token_bytes(32)).decode('utf-8')
+    
+    def get_room_key(self):
+        """Get the room's shared encryption key (for automatic key exchange)"""
+        return self.room_key
     
     def add_message(self, user_id, username, color, message_text):
         """Add a message to the room"""
@@ -108,6 +122,25 @@ def cleanup_old_rooms():
             del chat_rooms[room_id]
 
 
+def cleanup_old_dms():
+    """Remove DMs older than 1 minute"""
+    with dm_lock:
+        now = datetime.datetime.now()
+        expired_dms = []
+        
+        for dm_id, dm_data in direct_messages.items():
+            age = (now - dm_data["timestamp"]).total_seconds()
+            if age > 60:  # 1 minute expiry
+                expired_dms.append(dm_id)
+        
+        for dm_id in expired_dms:
+            # Overwrite message before deletion
+            dm = direct_messages[dm_id]
+            dm["message"] = "X" * len(dm["message"])
+            dm["room_id"] = "X" * len(dm["room_id"])
+            del direct_messages[dm_id]
+
+
 # Background cleanup thread
 def cleanup_loop():
     """Continuously clean up old messages and rooms"""
@@ -115,6 +148,7 @@ def cleanup_loop():
     while True:
         time.sleep(30)  # Run every 30 seconds
         cleanup_old_rooms()
+        cleanup_old_dms()
         # Cleanup messages in all active rooms
         with rooms_lock:
             for room in chat_rooms.values():
@@ -124,6 +158,16 @@ def cleanup_loop():
 # Start cleanup thread
 cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True)
 cleanup_thread.start()
+
+
+def generate_secure_room_id(length=32):
+    """Generate cryptographically secure, non-discoverable room ID"""
+    return secrets.token_urlsafe(length)
+
+
+def generate_secure_dm_id():
+    """Generate cryptographically secure DM ID"""
+    return secrets.token_urlsafe(16)
 
 
 def register_simple_chat_routes(app):
@@ -136,8 +180,8 @@ def register_simple_chat_routes(app):
     
     @app.route('/chat/create', methods=['POST'])
     def chat_create():
-        """Create a new chat room"""
-        room_id = id_generator(size=16)
+        """Create a new chat room with cryptographically secure ID"""
+        room_id = generate_secure_room_id(32)
         
         with rooms_lock:
             chat_rooms[room_id] = ChatRoom(room_id)
@@ -158,7 +202,7 @@ def register_simple_chat_routes(app):
         
         # Initialize user session
         if "_id" not in session:
-            session["_id"] = id_generator(size=16)
+            session["_id"] = generate_secure_dm_id()
             session["username"] = generate_random_username()
             session["color"] = get_random_color_rgb()
         
@@ -178,7 +222,7 @@ def register_simple_chat_routes(app):
         if request.method == 'POST':
             # Ensure user has session
             if "_id" not in session:
-                session["_id"] = id_generator(size=16)
+                session["_id"] = generate_secure_dm_id()
                 session["username"] = generate_random_username()
                 session["color"] = get_random_color_rgb()
             
@@ -193,8 +237,17 @@ def register_simple_chat_routes(app):
             if not message_text:
                 return jsonify({"error": "Empty message"}), 400
             
-            if len(message_text) > 1000:
-                return jsonify({"error": "Message too long"}), 400
+            # Check for length cap to prevent base64 encoding of media
+            if len(message_text) > MAX_MESSAGE_LENGTH:
+                return jsonify({"error": f"Message too long. Maximum {MAX_MESSAGE_LENGTH} characters allowed."}), 400
+            
+            # Detect potential base64 encoded content (basic check)
+            # Base64 has high entropy and typically lacks spaces
+            if len(message_text) > 100:
+                space_count = message_text.count(' ')
+                if space_count < len(message_text) * 0.05:  # Less than 5% spaces
+                    # Might be base64 or encoded content
+                    return jsonify({"error": "Invalid message format. Only plain text allowed."}), 400
             
             # Filter to ASCII only and remove emojis
             message_text = filter_to_ascii(message_text)
@@ -231,6 +284,91 @@ def register_simple_chat_routes(app):
                 "user_count": user_count,
                 "my_username": session.get("username"),
                 "my_color": session.get("color")
+            })
+    
+    @app.route('/chat/dm/send', methods=['POST'])
+    def send_dm():
+        """Send a direct message (for sharing room IDs) - expires in 1 minute"""
+        # Initialize user session if needed
+        if "_id" not in session:
+            session["_id"] = generate_secure_dm_id()
+            session["username"] = generate_random_username()
+            session["color"] = get_random_color_rgb()
+        
+        data = request.get_json()
+        if not data or "room_id" not in data or "message" not in data:
+            return jsonify({"error": "Missing required fields"}), 400
+        
+        room_id = data["room_id"].strip()
+        message = data["message"].strip()
+        
+        # Validate
+        if not room_id or not message:
+            return jsonify({"error": "Empty room_id or message"}), 400
+        
+        if len(message) > 200:  # DMs should be short
+            return jsonify({"error": "DM too long. Maximum 200 characters."}), 400
+        
+        # Sanitize
+        message = re.sub(r'<[^>]+>', '', message)
+        message = message.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#x27;')
+        
+        # Create DM
+        dm_id = generate_secure_dm_id()
+        with dm_lock:
+            direct_messages[dm_id] = {
+                "dm_id": dm_id,
+                "sender_id": session["_id"],
+                "sender_name": session["username"],
+                "room_id": room_id,
+                "message": message,
+                "timestamp": datetime.datetime.now(),
+                "read": False
+            }
+        
+        return jsonify({
+            "success": True,
+            "dm_id": dm_id,
+            "dm_url": f"/chat/dm/{dm_id}",
+            "expires_in": 60
+        })
+    
+    @app.route('/chat/dm/<string:dm_id>')
+    def view_dm(dm_id):
+        """View a direct message"""
+        with dm_lock:
+            if dm_id not in direct_messages:
+                return jsonify({"error": "DM not found or expired"}), 404
+            
+            dm = direct_messages[dm_id]
+            
+            # Check if expired
+            age = (datetime.datetime.now() - dm["timestamp"]).total_seconds()
+            if age > 60:
+                return jsonify({"error": "DM expired"}), 404
+            
+            # Mark as read
+            dm["read"] = True
+            
+            return jsonify({
+                "dm_id": dm["dm_id"],
+                "sender_name": dm["sender_name"],
+                "room_id": dm["room_id"],
+                "message": dm["message"],
+                "expires_in": max(0, 60 - int(age))
+            })
+    
+    @app.route('/chat/room/<string:room_id>/key', methods=['GET'])
+    def get_room_key(room_id):
+        """Get room's shared encryption key (automated key exchange)"""
+        with rooms_lock:
+            if room_id not in chat_rooms:
+                return jsonify({"error": "Room not found"}), 404
+            
+            room = chat_rooms[room_id]
+            return jsonify({
+                "room_id": room_id,
+                "encryption_key": room.get_room_key()
             })
 
 

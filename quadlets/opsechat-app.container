@@ -50,11 +50,15 @@ Label=app=opsechat
 Label=component=flask-app
 
 [Service]
-# Restart on failure
-Restart=on-failure
+# Auto-restart policy - keep service running at all times
+Restart=always
 RestartSec=5
+# Maximum restart attempts before giving up (0 = infinite)
+StartLimitBurst=0
 # Stop timeout - give time for graceful shutdown
 TimeoutStopSec=60
+# Health check settings
+TimeoutStartSec=120
 
 [Install]
 # Start when multi-user target is reached

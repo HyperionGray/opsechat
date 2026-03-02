@@ -186,6 +186,10 @@ class BurnerEmailManager:
         self.burner_addresses: Dict[str, Dict] = {}  # email -> {user_id, expires_at}
         self.custom_domain: Optional[str] = None  # Custom domain from domain manager
         self.user_burners: Dict[str, List[str]] = {}  # user_id -> list of burner emails
+        # Rate limiting for sending emails
+        self.send_limits: Dict[str, Dict] = {}  # user_id -> {count, reset_time}
+        self.max_sends_per_hour = 10  # Maximum emails per hour
+        self.max_receives_unlimited = True  # Receiving is unlimited (main use case)
     
     def set_custom_domain(self, domain: str) -> None:
         """Set custom domain for burner emails"""
@@ -311,6 +315,65 @@ class BurnerEmailManager:
             return f"{minutes}m"
         else:
             return f"{seconds}s"
+    
+    def check_send_rate_limit(self, user_id: str) -> tuple[bool, Optional[str]]:
+        """
+        Check if user has exceeded send rate limit
+        
+        Returns:
+            (allowed, error_message)
+        """
+        now = datetime.datetime.now()
+        
+        # Check if user has send history
+        if user_id not in self.send_limits:
+            self.send_limits[user_id] = {
+                'count': 0,
+                'reset_time': now + datetime.timedelta(hours=1)
+            }
+        
+        limit_info = self.send_limits[user_id]
+        
+        # Reset counter if hour has passed
+        if now >= limit_info['reset_time']:
+            limit_info['count'] = 0
+            limit_info['reset_time'] = now + datetime.timedelta(hours=1)
+        
+        # Check if limit exceeded
+        if limit_info['count'] >= self.max_sends_per_hour:
+            time_remaining = limit_info['reset_time'] - now
+            minutes = int(time_remaining.total_seconds() / 60)
+            return False, f"Rate limit exceeded. You can send {self.max_sends_per_hour} emails per hour. Try again in {minutes} minutes."
+        
+        return True, None
+    
+    def record_sent_email(self, user_id: str):
+        """Record that user sent an email (for rate limiting)"""
+        if user_id not in self.send_limits:
+            now = datetime.datetime.now()
+            self.send_limits[user_id] = {
+                'count': 0,
+                'reset_time': now + datetime.timedelta(hours=1)
+            }
+        
+        self.send_limits[user_id]['count'] += 1
+    
+    def get_send_limit_status(self, user_id: str) -> Dict:
+        """Get current send limit status for user"""
+        if user_id not in self.send_limits:
+            return {
+                'sends_used': 0,
+                'sends_remaining': self.max_sends_per_hour,
+                'max_sends_per_hour': self.max_sends_per_hour
+            }
+        
+        limit_info = self.send_limits[user_id]
+        return {
+            'sends_used': limit_info['count'],
+            'sends_remaining': self.max_sends_per_hour - limit_info['count'],
+            'max_sends_per_hour': self.max_sends_per_hour,
+            'reset_time': limit_info['reset_time']
+        }
 
 
 # Global instances

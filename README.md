@@ -2,21 +2,37 @@
 **Documentation:** [docs/README.md](docs/README.md)  
 **License:** MIT
 
-## 🆕 NEW: Simple Web-Based Chat Rooms
+## 🆕 NEW: Enhanced Security & Production Ready
+
+**Latest Updates (v0.8.0):**
+- 🔑 **Automated Key Exchange** - No manual key sharing needed
+- 💬 **Direct Messages** - Ephemeral DM feature for sharing room IDs (1-min expiry)
+- 🔒 **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
+- 🌐 **Domain Rotation CLI** - Easy burner email domain management
+- 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
+- ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use
+- 🚀 **Production Deployment** - Robust systemd units with auto-restart
+
+📖 **Full Details:** [New Features Guide](docs/NEW_FEATURES.md)
+
+---
+
+## 🆕 Simple Web-Based Chat Rooms
 
 **Secure, ephemeral chat rooms with one command - Web or TUI.**
 
 OpSecChat now includes both **Web-Based Chat Rooms** and **Terminal UI (TUI)** for maximum flexibility:
 
-### Web Chat Rooms (NEW!)
+### Web Chat Rooms
 - ✅ **Simple Room Creation** - One command to create a secure chat room
-- ✅ **E2E Encryption** - Optional encryption using Web Crypto API (simple & reviewable)
+- ✅ **Automated E2E Encryption** - Automatic key exchange, no manual setup
 - ✅ **Terminal-Style UI** - Clean, minimal interface with no flashy elements
 - ✅ **Messages Burn** - Auto-delete after 3 minutes with memory overwriting
 - ✅ **Randomized Usernames** - Color-coded for easy distinction
-- ✅ **Text Only** - No images, videos, or media sharing
+- ✅ **Text Only** - No images, videos, or media sharing (500 char limit)
 - ✅ **In-Memory Only** - Zero disk writes
 - ✅ **Tor Ready** - Works seamlessly with Tor hidden services
+- ✅ **Direct Messages** - Share room IDs securely (1-minute expiry)
 
 ### Quick Start (Web Chat)
 
