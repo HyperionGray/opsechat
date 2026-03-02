@@ -1,6 +1,6 @@
-# New Features Guide - OpSecChat v0.8.0
+# New Features Guide - OpSecHat v0.8.0
 
-This guide covers the new features added in the final push for OpSecChat production readiness.
+This guide covers the new features added in the final push for OpSecHat production readiness.
 
 ## 🔑 Automated Key Exchange
 
@@ -471,4 +471,4 @@ curl http://localhost:5001/chat/dm/{dm_id}
 
 **Last Updated**: March 2, 2026
 **Version**: 0.8.0-alpha
-**Author**: OpSecChat Development Team
+**Author**: OpSecHat Development Team

@@ -239,7 +239,7 @@ def register_simple_chat_routes(app):
             
             # Check for length cap to prevent base64 encoding of media
             if len(message_text) > MAX_MESSAGE_LENGTH:
-                return jsonify({"error": f"Message too long. Maximum {MAX_MESSAGE_LENGTH} characters allowed. This prevents encoding images or videos."}), 400
+                return jsonify({"error": f"Message too long. Maximum {MAX_MESSAGE_LENGTH} characters allowed."}), 400
             
             # Detect potential base64 encoded content (basic check)
             # Base64 has high entropy and typically lacks spaces
@@ -247,7 +247,7 @@ def register_simple_chat_routes(app):
                 space_count = message_text.count(' ')
                 if space_count < len(message_text) * 0.05:  # Less than 5% spaces
                     # Might be base64 or encoded content
-                    return jsonify({"error": "Message appears to contain encoded data. Only plain text allowed."}), 400
+                    return jsonify({"error": "Invalid message format. Only plain text allowed."}), 400
             
             # Sanitize message (remove HTML tags and encode special chars)
             message_text = re.sub(r'<[^>]+>', '', message_text)  # Remove HTML tags

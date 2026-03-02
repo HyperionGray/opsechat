@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Simple test for new features in OpSecChat v0.8.0
+Simple test for new features in OpSecHat v0.8.0
 
 Tests:
 1. Cryptographically secure ID generation
@@ -179,7 +179,7 @@ def test_dm_structure():
 def run_all_tests():
     """Run all tests"""
     print("=" * 60)
-    print("OpSecChat v0.8.0 - New Features Test Suite")
+    print("OpSecHat v0.8.0 - New Features Test Suite")
     print("=" * 60)
     
     tests = [
