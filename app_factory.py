@@ -66,8 +66,13 @@ def create_app():
     register_chat_routes(app, chatlines, chatters, id_generator, get_random_color, 
                         check_older_than, process_chat, remove_headers)
     
+    # Register simple chat routes (new simplified interface)
+    from simple_chat_routes import register_simple_chat_routes
+    register_simple_chat_routes(app)
+    
     # Register review routes (existing function-based registration)
-    register_review_routes(app)
+    register_review_routes(app, id_generator, get_random_color, 
+                          add_review_wrapper, get_reviews, get_review_stats)
     
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])

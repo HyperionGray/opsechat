@@ -110,9 +110,10 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
                         "timestamp": datetime.datetime.now()
                     })
         
-        # Clean up old messages
-        global chatlines
-        chatlines = [msg for msg in chatlines if not check_older_than(msg)]
+        # Clean up old messages (modify in place to preserve reference)
+        to_remove = [msg for msg in chatlines if check_older_than(msg)]
+        for msg in to_remove:
+            chatlines.remove(msg)
         
         # Process messages for display
         processed_messages = [process_chat(msg) for msg in chatlines]
@@ -161,9 +162,10 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
                             "timestamp": datetime.datetime.now()
                         })
         
-        # Clean up old messages
-        global chatlines
-        chatlines = [msg for msg in chatlines if not check_older_than(msg)]
+        # Clean up old messages (modify in place to preserve reference)
+        to_remove = [msg for msg in chatlines if check_older_than(msg)]
+        for msg in to_remove:
+            chatlines.remove(msg)
         
         # Process messages for JSON response
         processed_messages = [process_chat(msg) for msg in chatlines]
