@@ -2,32 +2,25 @@
 const { defineConfig, devices } = require('@playwright/test');
 
 /**
- * @see https://playwright.dev/docs/test-configuration
+ * Configuration for Product Release Tests
+ * These tests don't require a running server - they check file structure, imports, etc.
  */
 module.exports = defineConfig({
   testDir: './tests',
-  /* Run tests in files in parallel */
+  testMatch: 'product-release.spec.js',
   fullyParallel: true,
-  /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
-  /* Opt out of parallel tests on CI. */
   workers: process.env.CI ? 1 : undefined,
-  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: 'html',
-  /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
+  
   use: {
-    /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: 'http://127.0.0.1:5001',
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
 
   /* Configure projects for major browsers */
   projects: [
-    // Only headless browsers in CI environment
     {
       name: 'chromium-headless',
       use: { 
@@ -52,7 +45,7 @@ module.exports = defineConfig({
       },
     },
 
-    /* Headed browser configurations for manual testing/debugging - only run locally, not in CI */
+    /* Headed browser configurations for manual testing/debugging */
     ...(process.env.CI ? [] : [
       {
         name: 'chromium-headed',
@@ -71,12 +64,6 @@ module.exports = defineConfig({
       },
     ]),
   ],
-
-  /* Run your local dev server before starting the tests */
-  webServer: {
-    command: 'python3 tests/mock_server.py',
-    url: 'http://127.0.0.1:5001/health',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
-  }
+  
+  // No webServer needed for these tests
 });
