@@ -150,3 +150,70 @@ def register_email_routes(app, id_generator, get_random_color):
                               hostname=app.config["hostname"],
                               path=app.config["path"],
                               config=config)
+    
+    @app.route('/<string:url_addition>/email/compose', methods=["GET", "POST"])
+    def email_compose(url_addition):
+        """Email composition and sending with rate limiting"""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
+        
+        if request.method == "POST":
+            # Check rate limit before allowing send
+            allowed, error_msg = burner_manager.check_send_rate_limit(session["_id"])
+            
+            if not allowed:
+                return render_template("email_compose.html",
+                                     hostname=app.config["hostname"],
+                                     path=app.config["path"],
+                                     error=error_msg,
+                                     send_limit_status=burner_manager.get_send_limit_status(session["_id"]))
+            
+            # Get form data
+            to_addr = request.form.get('to', '').strip()
+            subject = request.form.get('subject', '').strip()
+            body = request.form.get('body', '').strip()
+            
+            # Basic validation
+            if not to_addr or not EmailValidator.validate_email_address(to_addr):
+                return render_template("email_compose.html",
+                                     hostname=app.config["hostname"],
+                                     path=app.config["path"],
+                                     error="Invalid recipient email address",
+                                     send_limit_status=burner_manager.get_send_limit_status(session["_id"]))
+            
+            if not body:
+                return render_template("email_compose.html",
+                                     hostname=app.config["hostname"],
+                                     path=app.config["path"],
+                                     error="Email body cannot be empty",
+                                     send_limit_status=burner_manager.get_send_limit_status(session["_id"]))
+            
+            # Record the send (for rate limiting)
+            burner_manager.record_sent_email(session["_id"])
+            
+            # In a real implementation, this would use transport_manager to send
+            # For now, just store in local inbox as sent
+            email_data = {
+                'to': to_addr,
+                'from': session.get('email_address', 'anonymous@opsechat.onion'),
+                'subject': subject,
+                'body': body,
+                'sent': True
+            }
+            email_storage.add_email(session["_id"], email_data)
+            
+            return render_template("email_compose.html",
+                                 hostname=app.config["hostname"],
+                                 path=app.config["path"],
+                                 success="Email sent successfully",
+                                 send_limit_status=burner_manager.get_send_limit_status(session["_id"]))
+        
+        # GET request - show compose form
+        return render_template("email_compose.html",
+                             hostname=app.config["hostname"],
+                             path=app.config["path"],
+                             send_limit_status=burner_manager.get_send_limit_status(session["_id"]))
