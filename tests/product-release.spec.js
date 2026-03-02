@@ -16,9 +16,10 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const projectRoot = path.join(__dirname, '..');
 
@@ -69,9 +70,11 @@ test.describe('Product Release - TUI Server Functionality', () => {
   
   test('TUI server should import without errors', async () => {
     try {
-      const { stdout } = await execAsync(
-        `cd ${projectRoot} && python3 -c "import sys; sys.path.insert(0, 'src'); from tui.server import ChatServer; print('OK')"`,
-        { timeout: 5000 }
+      const pythonCode = "import sys; sys.path.insert(0, 'src'); from tui.server import ChatServer; print('OK')";
+      const { stdout } = await execFileAsync(
+        'python3',
+        ['-c', pythonCode],
+        { cwd: projectRoot, timeout: 5000 }
       );
       expect(stdout.trim()).toBe('OK');
     } catch (error) {
