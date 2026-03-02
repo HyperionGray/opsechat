@@ -4,6 +4,12 @@ on:
   schedule:
     # Run every 12 hours (at 00:00 and 12:00 UTC)
     - cron: '0 0,12 * * *'
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
     inputs:
       skip_tests:
