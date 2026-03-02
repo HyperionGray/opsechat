@@ -8,10 +8,21 @@ extracted from mock_server.py for better organization and maintainability.
 import datetime
 import re
 from flask import render_template, session, request, jsonify, redirect
+from utils import sanitize_emojis, filter_to_ascii
+import secrets
 
 
 def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_random_color):
     """Create and register mock route handlers"""
+    chat_rooms = {}
+    adjectives = ['Swift', 'Silent', 'Dark', 'Ghost', 'Shadow', 'Phantom', 
+                  'Cipher', 'Echo', 'Rogue', 'Viper', 'Stealth', 'Void']
+    nouns = ['Raven', 'Wolf', 'Fox', 'Hawk', 'Lynx', 'Owl', 'Cobra', 
+             'Tiger', 'Falcon', 'Spider', 'Serpent', 'Dragon']
+
+    def generate_room_username():
+        number = secrets.randbelow(9999)
+        return f"{secrets.choice(adjectives)}{secrets.choice(nouns)}{number:04d}"
     
     def check_older_than(chat_dic, secs_to_live=180):
         """Check if a chat message is older than specified seconds"""
@@ -137,8 +148,14 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         
         if request.method == "POST":
             if request.form.get("dropdata", "").strip():
+                message_text = request.form["dropdata"].strip()
+                # Enforce ASCII-only and remove emojis
+                message_text = filter_to_ascii(message_text)
+                message_text = sanitize_emojis(message_text)
+                # Basic HTML sanitization
+                message_text = re.sub(r"[<>&\"']", '', message_text)
                 chat = {
-                    "msg": request.form["dropdata"].strip(),
+                    "msg": message_text,
                     "timestamp": datetime.datetime.now(),
                     "username": session.get("_id", "anonymous"),
                     "color": session.get("color", "black")
@@ -187,8 +204,12 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         
         if request.method == "POST":
             if request.form.get("dropdata", "").strip():
+                message_text = request.form["dropdata"].strip()
+                message_text = filter_to_ascii(message_text)
+                message_text = sanitize_emojis(message_text)
+                message_text = re.sub(r"[<>&\"']", '', message_text)
                 chat = {
-                    "msg": request.form["dropdata"].strip(),
+                    "msg": message_text,
                     "timestamp": datetime.datetime.now().isoformat(),
                     "username": session.get("_id", "anonymous"),
                     "color": [255, 0, 0],  # Mock color as RGB tuple
@@ -285,6 +306,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/chat/create', methods=["POST"])
     def chat_create():
         room_id = id_generator(16)
+        chat_rooms[room_id] = []
         return jsonify({
             "success": True,
             "room_id": room_id,
@@ -293,25 +315,45 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
 
     @app.route('/chat/room/<string:room_id>', methods=["GET"])
     def chat_room(room_id):
+        if room_id not in chat_rooms:
+            return '<html><body><h1>Room not found or expired</h1></body></html>', 404
         if "_id" not in session:
             session["_id"] = id_generator(16)
-            session["username"] = f"User{id_generator(4)}"
+            session["username"] = generate_room_username()
             session["color"] = get_random_color()
         
         return f'<html><body><h1>OpSecChat Room {room_id}</h1></body></html>', 200
 
     @app.route('/chat/room/<string:room_id>/messages', methods=["GET", "POST"])
     def chat_room_messages(room_id):
+        if room_id not in chat_rooms:
+            return jsonify({"error": "Room not found"}), 404
         if "_id" not in session:
             session["_id"] = id_generator(16)
-            session["username"] = f"User{id_generator(4)}"
+            session["username"] = generate_room_username()
             session["color"] = get_random_color()
         
         if request.method == "POST":
+            data = request.get_json() or {}
+            message_text = data.get("message", "").strip()
+            if not message_text:
+                return jsonify({"error": "Empty message"}), 400
+            message_text = filter_to_ascii(message_text)
+            message_text = sanitize_emojis(message_text)
+            message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
+            message_text = re.sub(r"[<>&\"']", '', message_text)
+            chat_rooms[room_id].append({
+                "message": message_text,
+                "user_id": session["_id"],
+                "username": session.get("username", "Anonymous"),
+                "color": session.get("color", "blue"),
+                "timestamp": datetime.datetime.now().isoformat()
+            })
             return jsonify({"success": True})
         else:
+            messages = chat_rooms.get(room_id, [])
             return jsonify({
-                "messages": [],
+                "messages": messages,
                 "user_count": 1,
                 "my_username": session.get("username", "Anonymous"),
                 "my_color": session.get("color", "blue")
@@ -339,6 +381,9 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         if request.method == "POST":
             message_text = request.form.get("message", "").strip()
             if message_text:
+                message_text = filter_to_ascii(message_text)
+                message_text = sanitize_emojis(message_text)
+                message_text = re.sub(r"[<>&\"']", '', message_text)
                 chat = {
                     "msg": message_text,
                     "timestamp": datetime.datetime.now(),
@@ -362,13 +407,17 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         if request.method == "POST":
             data = request.get_json()
             if data and "message" in data:
-                message_text = data["message"].strip()
-                if message_text:
-                    chat = {
-                        "msg": message_text,
-                        "timestamp": datetime.datetime.now(),
-                        "username": session["_id"],
-                        "color": session["color"]
+                    message_text = data["message"].strip()
+                    if message_text:
+                        message_text = filter_to_ascii(message_text)
+                        message_text = sanitize_emojis(message_text)
+                        message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
+                        message_text = re.sub(r"[<>&\"']", '', message_text)
+                        chat = {
+                            "msg": message_text,
+                            "timestamp": datetime.datetime.now(),
+                            "username": session["_id"],
+                            "color": session["color"]
                     }
                     chatlines.append(chat)
         

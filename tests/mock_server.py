@@ -85,7 +85,9 @@ except ImportError as e:
 # Add security headers
 @app.after_request
 def remove_headers(response):
-    response.headers["Server"] = ""
+    # Strip framework-identifying headers and avoid version leakage
+    response.headers.pop("Server", None)
+    response.headers["Server"] = "OpSecChat"
     response.headers["Date"] = ""
     return response
 
