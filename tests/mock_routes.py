@@ -21,7 +21,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
              'Tiger', 'Falcon', 'Spider', 'Serpent', 'Dragon']
 
     def generate_room_username():
-        number = secrets.randbelow(9999)
+        number = secrets.randbelow(10000)
         return f"{secrets.choice(adjectives)}{secrets.choice(nouns)}{number:04d}"
     
     def check_older_than(chat_dic, secs_to_live=180):
@@ -341,6 +341,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             message_text = filter_to_ascii(message_text)
             message_text = sanitize_emojis(message_text)
             message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
+            message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
             message_text = re.sub(r"[<>&\"']", '', message_text)
             chat_rooms[room_id].append({
                 "message": message_text,
@@ -412,6 +413,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
                         message_text = filter_to_ascii(message_text)
                         message_text = sanitize_emojis(message_text)
                         message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
+                        message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
                         message_text = re.sub(r"[<>&\"']", '', message_text)
                         chat = {
                             "msg": message_text,
