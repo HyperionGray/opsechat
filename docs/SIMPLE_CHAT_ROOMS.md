@@ -246,11 +246,11 @@ python chat-room.py --port 8080
 
 The implementation is intentionally simple and reviewable:
 
-- **simple_chat_routes.py** (~250 lines): Server-side logic
-- **simple_chat_room.html** (~350 lines): Client-side UI and encryption
+- **simple_chat_routes.py** (~260 lines): Server-side logic
+- **simple_chat_room.html** (~440 lines): Client-side UI and encryption
 - **simple_chat_index.html** (~150 lines): Landing page
 
-Total: ~750 lines of reviewable code for the entire system.
+Total: ~850 lines of reviewable code for the entire system.
 
 ## License
 

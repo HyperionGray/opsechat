@@ -2,6 +2,38 @@
 
 Get started with OpSecChat in 5 minutes! This guide covers the fastest path to running your first secure, anonymous chat session.
 
+## 🆕 NEW: Simple Chat Rooms (Fastest Start!)
+
+**The quickest way to get started:**
+
+```bash
+# Clone and enter directory
+git clone https://github.com/HyperionGray/opsechat.git
+cd opsechat
+
+# Install dependencies
+pip install Flask stem
+
+# Create a chat room (local)
+python chat-room.py
+
+# OR create with Tor hidden service
+python chat-room.py --tor
+```
+
+**What you get:**
+- ✅ Simple web interface at `/chat`
+- ✅ Create rooms with one click
+- ✅ Messages auto-delete after 3 minutes
+- ✅ Optional E2E encryption (Web Crypto API)
+- ✅ Randomized usernames with colors
+- ✅ Text-only, no media
+- ✅ In-memory only (no disk writes)
+
+Access at `http://localhost:5000/chat` or your `.onion` address.
+
+---
+
 ## Prerequisites
 
 - Linux machine (any distribution)
