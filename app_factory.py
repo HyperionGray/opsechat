@@ -70,6 +70,10 @@ def create_app():
     from simple_chat_routes import register_simple_chat_routes
     register_simple_chat_routes(app)
     
+    # Register email routes
+    from email_routes import register_email_routes
+    register_email_routes(app, id_generator, get_random_color)
+    
     # Register review routes (existing function-based registration)
     register_review_routes(app, id_generator, get_random_color, 
                           add_review_wrapper, get_reviews, get_review_stats)

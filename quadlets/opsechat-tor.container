@@ -42,11 +42,15 @@ Label=app=opsechat
 Label=component=tor
 
 [Service]
-# Restart on failure
-Restart=on-failure
+# Auto-restart policy - keep Tor running at all times
+Restart=always
 RestartSec=5
+# Maximum restart attempts (0 = infinite)
+StartLimitBurst=0
 # Stop timeout
 TimeoutStopSec=30
+# Startup timeout
+TimeoutStartSec=60
 
 [Install]
 # Start when multi-user target is reached
