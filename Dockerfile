@@ -26,11 +26,16 @@ RUN pip install --no-cache-dir -r requirements.txt || \
 
 # Copy application code
 COPY runserver.py .
+COPY app_factory.py .
+COPY utils.py .
+COPY chat_routes.py .
+COPY simple_chat_routes.py .
+COPY email_routes.py .
+COPY review_routes.py .
 COPY email_system.py .
 COPY email_security_tools.py .
 COPY email_transport.py .
 COPY domain_manager.py .
-COPY review_routes.py .
 COPY setup.py .
 COPY MANIFEST.in .
 
