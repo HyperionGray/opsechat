@@ -83,4 +83,24 @@ def create_app():
     def index():
         return ('', 200)
     
+    # Health check endpoint for monitoring
+    @app.route('/health', methods=["GET"])
+    def health():
+        """
+        Health check endpoint for monitoring and deployment verification.
+        Returns basic status and version information.
+        """
+        import os
+        try:
+            with open('VERSION', 'r') as f:
+                version = f.read().strip()
+        except:
+            version = '0.8.0-alpha'  # fallback
+        
+        return {
+            'status': 'ok',
+            'version': version,
+            'service': 'opsechat'
+        }, 200
+    
     return app

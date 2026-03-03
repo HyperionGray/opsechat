@@ -1,5 +1,10 @@
 deadenv/
 deadenv/*
+
+# BISH build artifacts
+.bish-index
+.bish.sqlite
+
 # Python
 __pycache__/
 *.py[cod]
