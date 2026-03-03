@@ -103,4 +103,22 @@ def create_app():
             'service': 'opsechat'
         }, 200
     
+    # Error handlers
+    @app.errorhandler(404)
+    def not_found(error):
+        """Handle 404 errors with a simple message"""
+        return ('Not found', 404)
+    
+    @app.errorhandler(500)
+    def internal_error(error):
+        """Handle 500 errors"""
+        # Log the error but don't expose details to users
+        app.logger.error(f'Server Error: {error}')
+        return ('Internal server error', 500)
+    
+    @app.errorhandler(403)
+    def forbidden(error):
+        """Handle 403 errors"""
+        return ('Forbidden', 403)
+    
     return app
