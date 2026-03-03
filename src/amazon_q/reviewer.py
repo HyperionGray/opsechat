@@ -109,7 +109,8 @@ class AmazonQReviewer:
         Returns:
             Dictionary containing review results and recommendations
         """
-        # Import mock implementation here to avoid circular imports
+        # Import mock implementation locally to avoid circular import
+        # (mock_reviewer imports from this module's parent package)
         from .mock_reviewer import mock_review
         
         if not self.is_available():

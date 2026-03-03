@@ -11,6 +11,8 @@
  * - error-validation.e2e.spec.js - Error handling tests (98 lines)
  * 
  * Total: 686 lines across 6 focused test files (vs 641 lines in single file)
+ * Note: Slight increase due to file headers and better organization
+ * Each file is focused and maintainable (all < 200 lines)
  * 
  * This file is kept for backward compatibility. All tests now run from the new files.
  * Original file preserved as: tests/e2e.spec.js.deprecated

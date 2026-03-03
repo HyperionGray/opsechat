@@ -116,9 +116,18 @@ def analyze_dependencies(repo_path: str) -> Dict[str, Any]:
                 'devDependencies': package_data.get('devDependencies', {})
             }
         
+        # Calculate dependency count
+        dep_count = 0
+        for deps in dependencies.values():
+            if isinstance(deps, list):
+                dep_count += len(deps)
+            else:
+                dep_count += len(deps.get('dependencies', {}))
+                dep_count += len(deps.get('devDependencies', {}))
+        
         return {
             'dependencies': dependencies,
-            'dependency_count': sum(len(deps) if isinstance(deps, list) else len(deps.get('dependencies', {})) + len(deps.get('devDependencies', {})) for deps in dependencies.values()),
+            'dependency_count': dep_count,
             'has_lockfile': any((repo_path_obj / name).exists() for name in ['package-lock.json', 'yarn.lock', 'Pipfile.lock'])
         }
         
