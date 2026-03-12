@@ -176,7 +176,14 @@ def register_simple_chat_routes(app):
     @app.route('/chat')
     def chat_index():
         """Landing page for creating/joining chat rooms"""
-        return render_template("simple_chat_index.html")
+        # Read version from VERSION file
+        try:
+            with open('VERSION', 'r') as f:
+                version = f.read().strip()
+        except:
+            version = '0.8.0-alpha'  # fallback
+        
+        return render_template("simple_chat_index.html", version=version)
     
     @app.route('/chat/create', methods=['POST'])
     def chat_create():

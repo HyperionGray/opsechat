@@ -83,4 +83,42 @@ def create_app():
     def index():
         return ('', 200)
     
+    # Health check endpoint for monitoring
+    @app.route('/health', methods=["GET"])
+    def health():
+        """
+        Health check endpoint for monitoring and deployment verification.
+        Returns basic status and version information.
+        """
+        import os
+        try:
+            with open('VERSION', 'r') as f:
+                version = f.read().strip()
+        except:
+            version = '0.8.0-alpha'  # fallback
+        
+        return {
+            'status': 'ok',
+            'version': version,
+            'service': 'opsechat'
+        }, 200
+    
+    # Error handlers
+    @app.errorhandler(404)
+    def not_found(error):
+        """Handle 404 errors with a simple message"""
+        return ('Not found', 404)
+    
+    @app.errorhandler(500)
+    def internal_error(error):
+        """Handle 500 errors"""
+        # Log the error but don't expose details to users
+        app.logger.error(f'Server Error: {error}')
+        return ('Internal server error', 500)
+    
+    @app.errorhandler(403)
+    def forbidden(error):
+        """Handle 403 errors"""
+        return ('Forbidden', 403)
+    
     return app
