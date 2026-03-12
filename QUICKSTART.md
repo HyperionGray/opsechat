@@ -12,7 +12,7 @@ git clone https://github.com/HyperionGray/opsechat.git
 cd opsechat
 
 # Install dependencies
-pip install Flask stem
+pip install -r requirements.txt
 
 # Create a chat room (local)
 python chat-room.py
@@ -29,8 +29,16 @@ python chat-room.py --tor
 - ✅ Randomized usernames with colors
 - ✅ Text-only, no media
 - ✅ In-memory only (no disk writes)
+- ✅ Rate limiting: 30 messages/min, 10 room creates/min per session
 
 Access at `http://localhost:5000/chat` or your `.onion` address.
+
+### Verify the server is healthy
+
+```bash
+curl http://localhost:5000/health
+# {"active_rooms":0,"status":"healthy","version":"0.8.0-alpha"}
+```
 
 ---
 
