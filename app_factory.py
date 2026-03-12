@@ -5,7 +5,7 @@ This module handles Flask application creation and configuration,
 extracted from runserver.py to improve code organization.
 """
 
-from flask import Flask
+from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
 
 
@@ -78,6 +78,13 @@ def create_app():
     register_review_routes(app, id_generator, get_random_color, 
                           add_review_wrapper, get_reviews, get_review_stats)
     
+    # Health check endpoint
+    from monitoring import get_health_status
+
+    @app.route('/health', methods=["GET"])
+    def health():
+        return jsonify(get_health_status())
+
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
     def index():

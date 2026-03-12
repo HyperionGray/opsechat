@@ -311,13 +311,23 @@ def monitor_performance(operation_name: str):
 apm = ApplicationPerformanceMonitor()
 
 # Health check endpoint data
+def _read_version() -> str:
+    """Read version from VERSION file, falling back to 'unknown'"""
+    version_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'VERSION')
+    try:
+        with open(version_file) as f:
+            return f.read().strip()
+    except OSError:
+        return 'unknown'
+
+
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
     return {
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
-        'version': '1.0.0',  # This should be dynamically determined
+        'version': _read_version(),
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',
