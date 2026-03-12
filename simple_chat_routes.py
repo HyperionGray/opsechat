@@ -153,11 +153,21 @@ def cleanup_old_dms():
             del direct_messages[dm_id]
 
 
-def check_rate_limit(session_id, endpoint):
+def check_rate_limit(session_id: str, endpoint: str) -> tuple:
     """
     Check if a session has exceeded its rate limit for an endpoint.
-    Returns (allowed: bool, retry_after: int) where retry_after is seconds to wait.
-    Uses sliding window algorithm with in-memory storage.
+
+    Uses a sliding-window algorithm with in-memory storage.
+
+    Args:
+        session_id: Unique identifier for the requesting session.
+        endpoint: Name of the endpoint to check (must be a key in RATE_LIMITS).
+
+    Returns:
+        tuple[bool, int]: (allowed, retry_after_seconds).
+            - allowed=True, retry_after=0 when the request is permitted.
+            - allowed=False, retry_after>=1 when the limit is exceeded.
+            - For unknown endpoints (not in RATE_LIMITS) always returns (True, 0).
     """
     config = RATE_LIMITS.get(endpoint)
     if not config:

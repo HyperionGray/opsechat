@@ -9,8 +9,11 @@ import os
 # Ensure the project root is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import runserver
+from app_factory import create_app
 from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+
+# Shared test Flask app (avoids importing all of runserver.py)
+_test_app = create_app()
 
 
 # ---------------------------------------------------------------------------
@@ -89,13 +92,13 @@ def test_rate_limit_chat_message_limit():
 # ---------------------------------------------------------------------------
 
 def test_health_endpoint_returns_200():
-    client = runserver.app.test_client()
+    client = _test_app.test_client()
     response = client.get("/health")
     assert response.status_code == 200
 
 
 def test_health_endpoint_returns_json_with_required_fields():
-    client = runserver.app.test_client()
+    client = _test_app.test_client()
     response = client.get("/health")
     data = response.get_json()
     assert data is not None
@@ -105,7 +108,7 @@ def test_health_endpoint_returns_json_with_required_fields():
 
 
 def test_health_endpoint_active_rooms_is_integer():
-    client = runserver.app.test_client()
+    client = _test_app.test_client()
     response = client.get("/health")
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)

@@ -29,7 +29,7 @@ python chat-room.py --tor
 - ✅ Randomized usernames with colors
 - ✅ Text-only, no media
 - ✅ In-memory only (no disk writes)
-- ✅ Rate limiting: 30 messages/min, 10 room creates/min per session
+- ✅ Rate limiting: 30 messages/min, 10 room creates/min, 5 DMs/min per session
 
 Access at `http://localhost:5000/chat` or your `.onion` address.
 
