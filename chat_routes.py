@@ -15,7 +15,7 @@ from utils import sanitize_emojis, filter_to_ascii
 
 
 def register_chat_routes(app, chatlines, chatters, id_generator, get_random_color, 
-                        check_older_than, process_chat, remove_headers):
+                        check_older_than, process_chat, add_security_headers=None):
     """Register all chat-related routes with the Flask app"""
     
     @app.route('/<string:url_addition>')
@@ -177,10 +177,8 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
         # Process messages for JSON response
         processed_messages = [process_chat(msg) for msg in chatlines]
         
-        response = jsonify({
+        return jsonify({
             "messages": processed_messages,
             "user_id": session["_id"],
             "user_color": session["color"]
         })
-        
-        return remove_headers(response)
