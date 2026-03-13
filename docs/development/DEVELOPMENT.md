@@ -10,6 +10,18 @@ This guide helps developers set up their development environment and understand 
 - Podman or Docker (optional, for containerized development)
 - Git
 
+### Cursor Cloud Environment
+
+This repository includes a checked-in Cursor Cloud environment at `.cursor/environment.json`.
+It bootstraps a project-local virtual environment, installs Python and Node dependencies,
+and caches Playwright browsers for future agents.
+
+You can run the same bootstrap locally:
+
+```bash
+./scripts/bootstrap-dev-environment.sh
+```
+
 ### Setting Up Development Environment
 
 ```bash
