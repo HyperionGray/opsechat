@@ -6,26 +6,46 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV_DIR="${PROJECT_ROOT}/.venv"
 PLAYWRIGHT_CACHE_DIR="${PROJECT_ROOT}/.cache/ms-playwright"
 
+install_apt_packages_if_possible() {
+  if ! command -v apt-get >/dev/null 2>&1; then
+    return 1
+  fi
+
+  if [ "$(id -u)" -eq 0 ]; then
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
+    return 0
+  fi
+
+  if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+    sudo apt-get update
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
+    return 0
+  fi
+
+  return 1
+}
+
+ensure_venv_support() {
+  if python3 -m venv "${VENV_DIR}" >/dev/null 2>&1; then
+    rm -rf "${VENV_DIR}"
+    return
+  fi
+
+  echo "[*] Installing python3-venv so project virtualenv creation works"
+  if ! install_apt_packages_if_possible python3-venv; then
+    echo "[!] Unable to install python3-venv automatically"
+    return 1
+  fi
+}
+
 install_tor_if_possible() {
   if command -v tor >/dev/null 2>&1; then
     echo "[*] Tor is already installed"
     return
   fi
 
-  if ! command -v apt-get >/dev/null 2>&1; then
-    echo "[*] Skipping Tor install: apt-get is not available"
-    return
-  fi
-
-  if [ "$(id -u)" -eq 0 ]; then
-    apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y tor
-    return
-  fi
-
-  if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
-    sudo apt-get update
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y tor
+  if install_apt_packages_if_possible tor; then
     return
   fi
 
@@ -35,6 +55,8 @@ install_tor_if_possible() {
 echo "[*] Bootstrapping development environment in ${PROJECT_ROOT}"
 
 mkdir -p "${PLAYWRIGHT_CACHE_DIR}"
+
+ensure_venv_support
 
 python3 -m venv "${VENV_DIR}"
 "${VENV_DIR}/bin/python" -m pip install --upgrade pip
