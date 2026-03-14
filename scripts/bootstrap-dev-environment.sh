@@ -28,7 +28,7 @@ install_apt_packages_if_possible() {
 
 ensure_venv_support() {
   if python3 -m venv "${VENV_DIR}" >/dev/null 2>&1; then
-    rm -rf "${VENV_DIR}"
+    [ -n "${VENV_DIR}" ] && [ "${VENV_DIR}" != "/" ] && rm -rf "${VENV_DIR}"
     return
   fi
 
