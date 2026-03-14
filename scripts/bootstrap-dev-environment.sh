@@ -63,6 +63,15 @@ fi
 
 python3 -m venv "${VENV_DIR}"
 "${VENV_DIR}/bin/python" -m pip install --upgrade pip
+if [ ! -f "${PROJECT_ROOT}/requirements.txt" ]; then
+  echo "[!] requirements.txt not found in ${PROJECT_ROOT}"
+  exit 1
+fi
+if [ ! -f "${PROJECT_ROOT}/requirements-dev.txt" ]; then
+  echo "[!] requirements-dev.txt not found in ${PROJECT_ROOT}"
+  exit 1
+fi
+
 "${VENV_DIR}/bin/pip" install -r "${PROJECT_ROOT}/requirements.txt"
 "${VENV_DIR}/bin/pip" install -r "${PROJECT_ROOT}/requirements-dev.txt"
 "${VENV_DIR}/bin/pip" install -e "${PROJECT_ROOT}"
