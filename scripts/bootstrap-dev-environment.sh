@@ -11,19 +11,17 @@ install_apt_packages_if_possible() {
     return 1
   fi
 
-  if [ "$(id -u)" -eq 0 ]; then
-    apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
-    return 0
+  local cmd_prefix=""
+  if [ "$(id -u)" -ne 0 ]; then
+    if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+      cmd_prefix="sudo"
+    else
+      return 1
+    fi
   fi
-
-  if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
-    sudo apt-get update
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
-    return 0
-  fi
-
-  return 1
+  ${cmd_prefix} apt-get update
+  ${cmd_prefix} DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
+  return 0
 }
 
 ensure_venv_support() {
