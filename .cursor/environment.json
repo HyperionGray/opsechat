@@ -3,7 +3,7 @@
   "env": {
     "VIRTUAL_ENV": "/workspace/.venv",
     "PATH": "/workspace/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-    "FLASK_ENV": "development",
+    "FLASK_DEBUG": "1",
     "TOR_CONTROL_PORT": "9051",
     "PLAYWRIGHT_BROWSERS_PATH": "/workspace/.cache/ms-playwright"
   },
