@@ -29,7 +29,7 @@ install_apt_packages_if_possible() {
 ensure_venv_support() {
   if python3 -m venv "${VENV_DIR}" >/dev/null 2>&1; then
     [ -n "${VENV_DIR}" ] && [ "${VENV_DIR}" != "/" ] && rm -rf "${VENV_DIR}"
-    return
+    return 0
   fi
 
   echo "[*] Installing python3-venv so project virtualenv creation works"
