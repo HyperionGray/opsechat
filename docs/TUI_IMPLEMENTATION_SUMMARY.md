@@ -34,7 +34,8 @@ Successfully implemented a Terminal User Interface (TUI) based chat system for O
    - `tui-client.py` - Client launcher
 
 4. **Testing**
-   - `tests/test-tui-client.py` - Automated integration test
+   - `tests/test_tui_server_rate_limit.py` - Automated rate-limit unit tests
+   - `scripts/tui_smoke_client.py` - Manual integration smoke test client
    - Verified E2E message flow
    - All tests passing
 
@@ -56,6 +57,7 @@ Successfully implemented a Terminal User Interface (TUI) based chat system for O
 ### ✅ Security Features
 - **Text-Only**: Max 1000 chars, no images/videos/binary
 - **Input Validation**: Strips HTML, detects base64 encoding
+- **Rate Limiting**: Per-client server-side throttling with explicit feedback
 - **Secure Deletion**: Overwrite with 'X' before clearing
 - **Tor Integration**: Hidden service support with ephemeral .onion
 - **SOCKS Proxy**: Client supports Tor connections
@@ -118,6 +120,9 @@ Simple JSON-based protocol over TCP sockets:
 // Chat message
 {"type": "message", "username": "...", "message": "...", "timestamp": "..."}
 
+// Rate limit notice (server -> client)
+{"type": "rate_limited", "message": "...", "retry_after_seconds": 1.25}
+
 // Client sends
 {"type": "message", "message": "Hello!"}
 ```
@@ -136,7 +141,8 @@ Simple JSON-based protocol over TCP sockets:
 - `src/tui/client.py` (314 lines)
 - `tui-server.py` (launcher)
 - `tui-client.py` (launcher)
-- `tests/test-tui-client.py`
+- `tests/test_tui_server_rate_limit.py`
+- `scripts/tui_smoke_client.py`
 - `TUI_README.md`
 - `docs/TUI_QUICKSTART.md`
 - `docs/TUI_TODO.md`
@@ -224,7 +230,6 @@ See `docs/TUI_TODO.md` for detailed roadmap:
 
 - PGP encryption (E2E)
 - Multi-room support
-- Rate limiting
 - Admin commands
 - Performance optimizations
 
@@ -241,7 +246,7 @@ See `docs/TUI_TODO.md` for detailed roadmap:
 ### Remaining Considerations
 - No E2E encryption yet (Tor provides transport encryption)
 - No user authentication (ephemeral by design)
-- No spam prevention (future: rate limiting)
+- Rate-limit thresholds may need tuning based on real-world usage
 
 ## Conclusion
 

@@ -13,28 +13,45 @@ Features:
 - Optional PGP encryption
 """
 
-import sys
 import time
 import datetime
 import secrets
 import threading
 import socket
 import json
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 
 # Message storage (in-memory only)
 class ChatServer:
     MAX_MESSAGE_LENGTH = 1000  # Prevent b64 encoded images
-    MESSAGE_LIFETIME = 180  # 3 minutes in seconds
+    MESSAGE_LIFETIME = 240  # 4 minutes in seconds
+    DEFAULT_RATE_LIMIT_COUNT = 8
+    DEFAULT_RATE_LIMIT_WINDOW_SECONDS = 10
     
-    def __init__(self, host='127.0.0.1', port=5555):
+    def __init__(
+        self,
+        host='127.0.0.1',
+        port=5555,
+        rate_limit_count: Optional[int] = None,
+        rate_limit_window_seconds: Optional[int] = None
+    ):
         self.host = host
         self.port = port
         self.messages: List[Dict[str, Any]] = []
         self.clients: Dict[socket.socket, str] = {}
+        self.client_message_timestamps: Dict[socket.socket, List[float]] = {}
         self.lock = threading.Lock()
         self.server_socket = None
         self.running = False
+        self.stop_event = threading.Event()
+        self.rate_limit_count = (
+            self.DEFAULT_RATE_LIMIT_COUNT if rate_limit_count is None else max(0, rate_limit_count)
+        )
+        self.rate_limit_window_seconds = (
+            self.DEFAULT_RATE_LIMIT_WINDOW_SECONDS
+            if rate_limit_window_seconds is None
+            else max(1, rate_limit_window_seconds)
+        )
         
         # Start cleanup thread
         self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
@@ -49,9 +66,12 @@ class ChatServer:
     
     def _cleanup_loop(self):
         """Continuously clean up old messages"""
-        while True:
-            time.sleep(10)  # Check every 10 seconds
-            self._cleanup_old_messages()
+        while not self.stop_event.is_set():
+            # Wait up to 10 seconds between cleanup cycles.
+            if self.stop_event.wait(timeout=10):
+                break
+            if self.running:
+                self._cleanup_old_messages()
     
     def _cleanup_old_messages(self):
         """Remove and overwrite messages older than MESSAGE_LIFETIME"""
@@ -92,6 +112,44 @@ class ChatServer:
             })
         
         return True
+
+    def _check_rate_limit(self, client_socket: socket.socket) -> Tuple[bool, float]:
+        """
+        Enforce per-client message rate limit.
+        
+        Returns:
+            tuple: (allowed, retry_after_seconds)
+        """
+        if self.rate_limit_count <= 0:
+            return True, 0.0
+
+        now = time.monotonic()
+        with self.lock:
+            timestamps = self.client_message_timestamps.setdefault(client_socket, [])
+            cutoff = now - self.rate_limit_window_seconds
+            timestamps[:] = [ts for ts in timestamps if ts > cutoff]
+
+            if len(timestamps) >= self.rate_limit_count:
+                retry_after = self.rate_limit_window_seconds - (now - timestamps[0])
+                return False, max(0.1, retry_after)
+
+            timestamps.append(now)
+            return True, 0.0
+
+    def _send_rate_limit_notice(self, client_socket: socket.socket, retry_after_seconds: float) -> None:
+        """Send a rate limit warning to just one client."""
+        notice = {
+            'type': 'rate_limited',
+            'message': (
+                f'Rate limit exceeded: max {self.rate_limit_count} messages '
+                f'per {self.rate_limit_window_seconds}s window.'
+            ),
+            'retry_after_seconds': round(retry_after_seconds, 2)
+        }
+        try:
+            client_socket.send((json.dumps(notice) + '\n').encode())
+        except (OSError, socket.error):
+            pass
     
     def get_messages(self, since: datetime.datetime = None) -> List[Dict[str, Any]]:
         """Get messages (optionally since a specific time)"""
@@ -107,13 +165,17 @@ class ChatServer:
         
         with self.lock:
             self.clients[client_socket] = username
+            self.client_message_timestamps[client_socket] = []
         
         try:
             # Send welcome message
             welcome = {
                 'type': 'welcome',
                 'username': username,
-                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
+                'message': (
+                    f'Welcome! You are {username}. Messages burn in 4 minutes. '
+                    f'Rate limit: {self.rate_limit_count} msgs/{self.rate_limit_window_seconds}s.'
+                )
             }
             client_socket.send((json.dumps(welcome) + '\n').encode())
             
@@ -144,6 +206,11 @@ class ChatServer:
                                 msg_obj = json.loads(line)
                                 if msg_obj.get('type') == 'message':
                                     message = msg_obj.get('message', '')
+                                    allowed, retry_after = self._check_rate_limit(client_socket)
+                                    if not allowed:
+                                        self._send_rate_limit_notice(client_socket, retry_after)
+                                        continue
+
                                     if self.add_message(username, message):
                                         # Broadcast to all clients
                                         self.broadcast_message(username, message)
@@ -157,6 +224,8 @@ class ChatServer:
             with self.lock:
                 if client_socket in self.clients:
                     del self.clients[client_socket]
+                if client_socket in self.client_message_timestamps:
+                    del self.client_message_timestamps[client_socket]
             try:
                 client_socket.close()
             except (OSError, socket.error):
@@ -184,6 +253,8 @@ class ChatServer:
             for client in dead_clients:
                 if client in self.clients:
                     del self.clients[client]
+                if client in self.client_message_timestamps:
+                    del self.client_message_timestamps[client]
                 try:
                     client.close()
                 except (OSError, socket.error):
@@ -200,6 +271,13 @@ class ChatServer:
         print(f"[*] OpSecChat TUI Server running on {self.host}:{self.port}")
         print(f"[*] Messages burn after {self.MESSAGE_LIFETIME} seconds")
         print(f"[*] Max message length: {self.MAX_MESSAGE_LENGTH} chars")
+        if self.rate_limit_count > 0:
+            print(
+                "[*] Rate limit: "
+                f"{self.rate_limit_count} messages/{self.rate_limit_window_seconds} seconds per client"
+            )
+        else:
+            print("[*] Rate limit: disabled")
         print(f"[*] Press Ctrl+C to stop")
         
         try:
@@ -222,6 +300,7 @@ class ChatServer:
     def stop(self):
         """Stop the chat server"""
         self.running = False
+        self.stop_event.set()
         
         # Close all client connections
         with self.lock:
@@ -231,6 +310,7 @@ class ChatServer:
                 except (OSError, socket.error):
                     pass
             self.clients.clear()
+            self.client_message_timestamps.clear()
         
         # Close server socket
         if self.server_socket:
@@ -245,6 +325,10 @@ class ChatServer:
                 msg['message'] = 'X' * len(msg['message'])
                 msg['username'] = 'X' * len(msg['username'])
             self.messages.clear()
+
+        # Let the cleanup thread exit gracefully.
+        if self.cleanup_thread.is_alive() and threading.current_thread() is not self.cleanup_thread:
+            self.cleanup_thread.join(timeout=1.0)
         
         print("\n[*] Server stopped. All messages overwritten and cleared.")
 
@@ -300,6 +384,18 @@ def main():
     parser.add_argument('--port', type=int, default=5555, help='Port to bind to')
     parser.add_argument('--tor', action='store_true', help='Enable Tor hidden service')
     parser.add_argument('--test', action='store_true', help='Test mode (skip Tor even if --tor specified)')
+    parser.add_argument(
+        '--rate-limit-count',
+        type=int,
+        default=ChatServer.DEFAULT_RATE_LIMIT_COUNT,
+        help='Max messages per window per client (0 disables rate limiting)'
+    )
+    parser.add_argument(
+        '--rate-limit-window',
+        type=int,
+        default=ChatServer.DEFAULT_RATE_LIMIT_WINDOW_SECONDS,
+        help='Rate-limit window size in seconds'
+    )
     args = parser.parse_args()
     
     # Tor integration
@@ -313,7 +409,12 @@ def main():
             print(f"[*] Clients should connect to: {hostname}")
     
     # Create and start server
-    server = ChatServer(host=args.host, port=args.port)
+    server = ChatServer(
+        host=args.host,
+        port=args.port,
+        rate_limit_count=args.rate_limit_count,
+        rate_limit_window_seconds=args.rate_limit_window
+    )
     
     print("\n" + "="*60)
     if tor_info:

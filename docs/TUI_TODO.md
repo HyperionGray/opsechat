@@ -28,14 +28,14 @@ This file tracks what needs to be done for the TUI chat system.
 
 ## 🔄 IN PROGRESS (Phase 2: Tor Integration)
 
-- [ ] Integrate Tor hidden service in TUI server
-  - [ ] Modify `src/tui/server.py` to support Tor
-  - [ ] Add ephemeral hidden service creation
-  - [ ] Display .onion address to share
-  - [ ] Handle Tor connection failures gracefully
+- [x] Integrate Tor hidden service in TUI server
+  - [x] Modify `src/tui/server.py` to support Tor
+  - [x] Add ephemeral hidden service creation
+  - [x] Display .onion address to share
+  - [x] Handle Tor connection failures gracefully
 - [ ] Update client for Tor connections
-  - [ ] Support connecting to .onion addresses
-  - [ ] Add SOCKS proxy support
+  - [x] Support connecting to .onion addresses
+  - [x] Add SOCKS proxy support
   - [ ] Connection status indicator
 
 ## 📋 TODO (Phase 3: Security & OpSec)
@@ -59,10 +59,10 @@ This file tracks what needs to be done for the TUI chat system.
 - [ ] Implement message overwrite verification
   - [ ] Test memory overwriting actually works
   - [ ] Add optional wipe methods (zeros, random)
-- [ ] Add message rate limiting
-  - [ ] Prevent spam/flooding
-  - [ ] Per-user limits
-  - [ ] Configurable thresholds
+- [x] Add message rate limiting
+  - [x] Prevent spam/flooding
+  - [x] Per-user limits
+  - [x] Configurable thresholds (`--rate-limit-count`, `--rate-limit-window`)
 - [ ] Improve message history management
   - [ ] Server-side message limit (not just client)
   - [ ] Memory usage monitoring
@@ -157,7 +157,7 @@ This file tracks what needs to be done for the TUI chat system.
 
 ## 🎯 Next Steps (Priority Order)
 
-1. **Tor Integration** (HIGH) - Complete Phase 2
+1. **Tor UX** (HIGH) - Add connection status indicator
 2. **PGP Encryption** (HIGH) - Add optional E2E encryption
 3. **Security Testing** (HIGH) - Penetration testing, code review
 4. **Multi-Room** (MEDIUM) - Support multiple chat rooms
@@ -174,11 +174,11 @@ This file tracks what needs to be done for the TUI chat system.
 - ✅ Text-only validation
 - ⚠️ No E2E encryption yet (transport only via Tor)
 - ⚠️ No authentication (ephemeral by design)
-- ⚠️ No rate limiting yet
+- ✅ Per-client message rate limiting (configurable)
 
 ### Future Improvements
 - Add PGP for E2E encryption
-- Add rate limiting for spam prevention
+- Tune and stress-test rate-limit thresholds
 - Consider adding captchas (for burner emails)
 - Improve b64 detection
 - Add timing attack mitigations
@@ -186,5 +186,5 @@ This file tracks what needs to be done for the TUI chat system.
 ---
 
 **Created**: 2026-02-26  
-**Last Updated**: 2026-02-26  
+**Last Updated**: 2026-03-14  
 **Status**: Phase 1 Complete, Phase 2 In Progress
