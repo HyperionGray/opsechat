@@ -82,4 +82,8 @@ install_tor_if_possible
     PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_CACHE_DIR}" npx playwright install
 )
 
-PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_CACHE_DIR}" "${VENV_DIR}/bin/python" "${PROJECT_ROOT}/scripts/check-dev-env.py"
+if [ ! -f "${PROJECT_ROOT}/scripts/check-dev-env.py" ]; then
+  echo "[!] scripts/check-dev-env.py not found. Skipping environment verification."
+else
+  PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_CACHE_DIR}" "${VENV_DIR}/bin/python" "${PROJECT_ROOT}/scripts/check-dev-env.py"
+fi
