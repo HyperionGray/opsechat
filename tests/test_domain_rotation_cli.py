@@ -2,7 +2,7 @@
 Tests for domain_rotation_cli state persistence and budget rollover behavior.
 """
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 
 import domain_rotation_cli as cli
@@ -10,7 +10,7 @@ from domain_manager import DomainRotationManager
 
 
 def _previous_month_key():
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if now.month == 1:
         return f"{now.year - 1}-12"
     return f"{now.year}-{now.month - 1:02d}"

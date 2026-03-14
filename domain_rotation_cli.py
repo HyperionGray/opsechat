@@ -19,7 +19,7 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
-from datetime import datetime
+from datetime import datetime, timezone
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
@@ -29,7 +29,7 @@ CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
 def _current_month_key(now=None):
     """Return YYYY-MM for budget tracking."""
     if now is None:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
     return now.strftime('%Y-%m')
 
 
