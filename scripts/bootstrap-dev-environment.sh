@@ -56,7 +56,10 @@ echo "[*] Bootstrapping development environment in ${PROJECT_ROOT}"
 
 mkdir -p "${PLAYWRIGHT_CACHE_DIR}"
 
-ensure_venv_support
+if ! ensure_venv_support; then
+  echo "[!] Failed to ensure Python venv support. Cannot proceed."
+  exit 1
+fi
 
 python3 -m venv "${VENV_DIR}"
 "${VENV_DIR}/bin/python" -m pip install --upgrade pip
