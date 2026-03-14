@@ -210,7 +210,7 @@ Enterprise-focused with comprehensive API.
 
 **"Budget exceeded"**
 - Increase monthly budget in configuration
-- Wait for next month's budget reset
+- Wait for automatic reset at the start of next month
 - Check actual spending in registrar dashboard
 
 ### Domain Issues
@@ -233,7 +233,7 @@ Enterprise-focused with comprehensive API.
 - Monitor auto-renewal settings
 
 **Budget tracking inaccurate**
-- Budget resets monthly, not rolling
+- Budget resets automatically each calendar month (not rolling)
 - Check registrar account for actual spending
 - Consider API rate limits affecting purchases
 
