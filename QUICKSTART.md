@@ -37,7 +37,7 @@ Access at `http://localhost:5000/chat` or your `.onion` address.
 
 ```bash
 curl http://localhost:5000/health
-# {"active_rooms":0,"status":"healthy","version":"0.8.0-alpha"}
+# {"status":"healthy","service":"opsechat","version":"0.8.0-alpha","timestamp":"2026-03-14T21:00:00Z","uptime_seconds":12,"active_rooms":0,"direct_messages":0,"rate_limiter_sessions":0,"rate_limiter_entries":0}
 ```
 
 ---

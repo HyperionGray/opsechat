@@ -220,6 +220,30 @@ def cleanup_rate_limits():
             del _rate_limit_store[sid]
 
 
+def get_chat_runtime_metrics() -> dict:
+    """Return runtime-safe aggregate metrics for health reporting."""
+    with rooms_lock:
+        active_rooms = len(chat_rooms)
+
+    with dm_lock:
+        direct_message_count = len(direct_messages)
+
+    with _rate_limit_lock:
+        rate_limit_sessions = len(_rate_limit_store)
+        rate_limit_entries = sum(
+            len(timestamps)
+            for endpoints in _rate_limit_store.values()
+            for timestamps in endpoints.values()
+        )
+
+    return {
+        "active_rooms": active_rooms,
+        "direct_messages": direct_message_count,
+        "rate_limiter_sessions": rate_limit_sessions,
+        "rate_limiter_entries": rate_limit_entries,
+    }
+
+
 # Background cleanup thread
 def cleanup_loop():
     """Continuously clean up old messages and rooms"""

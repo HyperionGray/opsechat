@@ -103,8 +103,14 @@ def test_health_endpoint_returns_json_with_required_fields():
     data = response.get_json()
     assert data is not None
     assert data.get("status") == "healthy"
+    assert data.get("service") == "opsechat"
     assert "version" in data
+    assert "timestamp" in data
+    assert "uptime_seconds" in data
     assert "active_rooms" in data
+    assert "direct_messages" in data
+    assert "rate_limiter_sessions" in data
+    assert "rate_limiter_entries" in data
 
 
 def test_health_endpoint_active_rooms_is_integer():
@@ -113,3 +119,11 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+    assert isinstance(data["direct_messages"], int)
+    assert data["direct_messages"] >= 0
+    assert isinstance(data["rate_limiter_sessions"], int)
+    assert data["rate_limiter_sessions"] >= 0
+    assert isinstance(data["rate_limiter_entries"], int)
+    assert data["rate_limiter_entries"] >= 0
+    assert isinstance(data["uptime_seconds"], int)
+    assert data["uptime_seconds"] >= 0
