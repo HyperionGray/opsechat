@@ -71,9 +71,7 @@ if [ ! -f "${PROJECT_ROOT}/requirements-dev.txt" ]; then
   exit 1
 fi
 
-"${VENV_DIR}/bin/pip" install -r "${PROJECT_ROOT}/requirements.txt"
-"${VENV_DIR}/bin/pip" install -r "${PROJECT_ROOT}/requirements-dev.txt"
-"${VENV_DIR}/bin/pip" install -e "${PROJECT_ROOT}"
+"/${VENV_DIR}/bin/pip" install -r "${PROJECT_ROOT}/requirements.txt" -r "${PROJECT_ROOT}/requirements-dev.txt" -e "${PROJECT_ROOT}"
 
 install_tor_if_possible
 
