@@ -12,5 +12,5 @@
     ".cache",
     "node_modules"
   ],
-  "start": "python scripts/check-dev-env.py || true"
+  "start": "python scripts/check-dev-env.py"
 }
