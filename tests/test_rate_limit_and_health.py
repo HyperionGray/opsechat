@@ -105,6 +105,7 @@ def test_health_endpoint_returns_json_with_required_fields():
     assert data.get("status") == "healthy"
     assert "version" in data
     assert "active_rooms" in data
+    assert "service" in data
 
 
 def test_health_endpoint_active_rooms_is_integer():
@@ -113,3 +114,42 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_returns_rate_limit_metadata():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    data = response.get_json()
+
+    assert isinstance(data["rate_limited_sessions"], int)
+    assert data["rate_limited_sessions"] >= 0
+    assert isinstance(data["rate_limits"], dict)
+    assert "chat_create" in data["rate_limits"]
+    assert "chat_message" in data["rate_limits"]
+    assert "dm_send" in data["rate_limits"]
+
+
+def test_chat_create_rate_limit_returns_retry_after_header_and_metadata():
+    _clear_store()
+    client = _test_app.test_client()
+
+    # chat_create allows 10 requests/minute; the 11th should be blocked
+    for _ in range(10):
+        response = client.post("/chat/create")
+        assert response.status_code == 200
+
+    blocked = client.post("/chat/create")
+    assert blocked.status_code == 429
+
+    data = blocked.get_json()
+    assert data is not None
+    assert data["code"] == "rate_limited"
+    assert data["endpoint"] == "chat_create"
+    assert data["limit"] == 10
+    assert data["window_seconds"] == 60
+    assert isinstance(data["retry_after"], int)
+    assert data["retry_after"] >= 1
+    assert blocked.headers.get("Retry-After") == str(data["retry_after"])
+    assert blocked.headers.get("X-RateLimit-Limit") == "10"
+    assert blocked.headers.get("X-RateLimit-Window") == "60"
+    assert blocked.headers.get("X-RateLimit-Remaining") == "0"

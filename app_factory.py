@@ -92,37 +92,29 @@ def create_app():
     # Health check endpoint for monitoring and deployment readiness
     @app.route('/health', methods=["GET"])
     def health_check():
-        from simple_chat_routes import chat_rooms
+        from simple_chat_routes import (
+            chat_rooms,
+            RATE_LIMITS,
+            _rate_limit_store,
+            _rate_limit_lock,
+        )
+
+        with _rate_limit_lock:
+            tracked_sessions = len(_rate_limit_store)
+
         return jsonify({
             "status": "healthy",
+            "service": "opsechat",
             "version": _read_version(),
             "active_rooms": len(chat_rooms),
+            "rate_limited_sessions": tracked_sessions,
+            "rate_limits": RATE_LIMITS,
         }), 200
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # Health check endpoint for monitoring
-    @app.route('/health', methods=["GET"])
-    def health():
-        """
-        Health check endpoint for monitoring and deployment verification.
-        Returns basic status and version information.
-        """
-        import os
-        try:
-            with open('VERSION', 'r') as f:
-                version = f.read().strip()
-        except:
-            version = '0.8.0-alpha'  # fallback
-        
-        return {
-            'status': 'ok',
-            'version': version,
-            'service': 'opsechat'
-        }, 200
     
     # Error handlers
     @app.errorhandler(404)

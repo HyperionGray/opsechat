@@ -37,8 +37,22 @@ Access at `http://localhost:5000/chat` or your `.onion` address.
 
 ```bash
 curl http://localhost:5000/health
-# {"active_rooms":0,"status":"healthy","version":"0.8.0-alpha"}
+# {
+#   "status":"healthy",
+#   "service":"opsechat",
+#   "version":"0.8.0-alpha",
+#   "active_rooms":0,
+#   "rate_limited_sessions":0,
+#   "rate_limits":{
+#     "chat_create":{"max_requests":10,"window_seconds":60},
+#     "chat_message":{"max_requests":30,"window_seconds":60},
+#     "dm_send":{"max_requests":5,"window_seconds":60}
+#   }
+# }
 ```
+
+When a rate limit is exceeded, endpoints return HTTP `429` with structured JSON and
+`Retry-After` headers so clients can back off automatically.
 
 ---
 
