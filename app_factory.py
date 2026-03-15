@@ -91,11 +91,12 @@ def create_app():
     
     # Health check endpoint for monitoring and deployment readiness
     @app.route('/health', methods=["GET"])
-    def health_check():
+    def health():
         from simple_chat_routes import chat_rooms
         return jsonify({
             "status": "healthy",
             "version": _read_version(),
+            "service": "opsechat",
             "active_rooms": len(chat_rooms),
         }), 200
 
@@ -103,26 +104,6 @@ def create_app():
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # Health check endpoint for monitoring
-    @app.route('/health', methods=["GET"])
-    def health():
-        """
-        Health check endpoint for monitoring and deployment verification.
-        Returns basic status and version information.
-        """
-        import os
-        try:
-            with open('VERSION', 'r') as f:
-                version = f.read().strip()
-        except:
-            version = '0.8.0-alpha'  # fallback
-        
-        return {
-            'status': 'ok',
-            'version': version,
-            'service': 'opsechat'
-        }, 200
     
     # Error handlers
     @app.errorhandler(404)

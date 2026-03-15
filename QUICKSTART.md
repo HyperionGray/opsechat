@@ -30,6 +30,7 @@ python chat-room.py --tor
 - ✅ Text-only, no media
 - ✅ In-memory only (no disk writes)
 - ✅ Rate limiting: 30 messages/min, 10 room creates/min, 5 DMs/min per session
+- ✅ Standardized 429 headers: `Retry-After` + `X-RateLimit-*`
 
 Access at `http://localhost:5000/chat` or your `.onion` address.
 
@@ -37,7 +38,18 @@ Access at `http://localhost:5000/chat` or your `.onion` address.
 
 ```bash
 curl http://localhost:5000/health
-# {"active_rooms":0,"status":"healthy","version":"0.8.0-alpha"}
+# {"status":"healthy","version":"0.8.0-alpha","service":"opsechat","active_rooms":0}
+```
+
+If you hit a chat rate limit, the API now returns metadata headers you can use for retry logic:
+
+```text
+HTTP/1.1 429 TOO MANY REQUESTS
+Retry-After: 12
+X-RateLimit-Limit: 30
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 12
+X-RateLimit-Window: 60
 ```
 
 ---

@@ -10,7 +10,15 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_lock,
+    chat_rooms,
+    rooms_lock,
+    direct_messages,
+    dm_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -24,6 +32,27 @@ def _clear_store():
     """Helper: wipe the rate limit store between tests."""
     with _rate_limit_lock:
         _rate_limit_store.clear()
+
+
+def _clear_chat_state():
+    """Helper: wipe in-memory chat/DM storage between integration tests."""
+    with rooms_lock:
+        chat_rooms.clear()
+    with dm_lock:
+        direct_messages.clear()
+
+
+def _assert_rate_limit_headers(response, expected_limit):
+    """Validate common 429 rate-limit headers."""
+    retry_after = response.headers.get("Retry-After")
+    assert retry_after is not None
+    retry_after = int(retry_after)
+    assert retry_after >= 1
+
+    assert response.headers.get("X-RateLimit-Limit") == str(expected_limit)
+    assert response.headers.get("X-RateLimit-Remaining") == "0"
+    assert response.headers.get("X-RateLimit-Reset") == str(retry_after)
+    assert response.headers.get("X-RateLimit-Window") == "60"
 
 
 def test_rate_limit_allows_requests_within_window():
@@ -87,6 +116,52 @@ def test_rate_limit_chat_message_limit():
     assert retry_after >= 1
 
 
+def test_chat_create_rate_limit_returns_standard_headers():
+    _clear_store()
+    _clear_chat_state()
+    client = _test_app.test_client()
+
+    for _ in range(10):
+        response = client.post("/chat/create")
+        assert response.status_code == 200
+
+    blocked = client.post("/chat/create")
+    assert blocked.status_code == 429
+    _assert_rate_limit_headers(blocked, expected_limit=10)
+
+
+def test_chat_message_rate_limit_returns_standard_headers():
+    _clear_store()
+    _clear_chat_state()
+    client = _test_app.test_client()
+
+    create_response = client.post("/chat/create")
+    assert create_response.status_code == 200
+    room_id = create_response.get_json()["room_id"]
+
+    for _ in range(30):
+        response = client.post(f"/chat/room/{room_id}/messages", json={"message": "hello"})
+        assert response.status_code == 200
+
+    blocked = client.post(f"/chat/room/{room_id}/messages", json={"message": "hello"})
+    assert blocked.status_code == 429
+    _assert_rate_limit_headers(blocked, expected_limit=30)
+
+
+def test_dm_send_rate_limit_returns_standard_headers():
+    _clear_store()
+    _clear_chat_state()
+    client = _test_app.test_client()
+
+    for _ in range(5):
+        response = client.post("/chat/dm/send", json={"room_id": "room-a", "message": "ping"})
+        assert response.status_code == 200
+
+    blocked = client.post("/chat/dm/send", json={"room_id": "room-a", "message": "ping"})
+    assert blocked.status_code == 429
+    _assert_rate_limit_headers(blocked, expected_limit=5)
+
+
 # ---------------------------------------------------------------------------
 # Health endpoint integration tests
 # ---------------------------------------------------------------------------
@@ -104,6 +179,7 @@ def test_health_endpoint_returns_json_with_required_fields():
     assert data is not None
     assert data.get("status") == "healthy"
     assert "version" in data
+    assert data.get("service") == "opsechat"
     assert "active_rooms" in data
 
 
