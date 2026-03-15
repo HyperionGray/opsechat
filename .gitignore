@@ -50,6 +50,7 @@ env/
 .coverage
 htmlcov/
 .tox/
+.cache/
 node_modules/
 playwright-report/
 test-results/

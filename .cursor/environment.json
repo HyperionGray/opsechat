@@ -1,0 +1,16 @@
+{
+  "install": "./scripts/bootstrap-dev-environment.sh",
+  "env": {
+    "VIRTUAL_ENV": "/workspace/.venv",
+    "PATH": "/workspace/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    "FLASK_DEBUG": "1",
+    "TOR_CONTROL_PORT": "9051",
+    "PLAYWRIGHT_BROWSERS_PATH": "/workspace/.cache/ms-playwright"
+  },
+  "persistedDirectories": [
+    ".venv",
+    ".cache",
+    "node_modules"
+  ],
+  "start": "python scripts/check-dev-env.py"
+}
