@@ -28,6 +28,18 @@ rooms_lock = threading.Lock()
 direct_messages = {}
 dm_lock = threading.Lock()
 
+# In-memory rate limiter: tracks requests per session per endpoint
+# Structure: { session_id: { endpoint: [timestamp, ...] } }
+_rate_limit_store = {}
+_rate_limit_lock = threading.Lock()
+
+# Rate limit configuration
+RATE_LIMITS = {
+    "chat_create": {"max_requests": 10, "window_seconds": 60},
+    "chat_message": {"max_requests": 30, "window_seconds": 60},
+    "dm_send": {"max_requests": 5, "window_seconds": 60},
+}
+
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
 
@@ -143,6 +155,73 @@ def cleanup_old_dms():
             del direct_messages[dm_id]
 
 
+def check_rate_limit(session_id: str, endpoint: str) -> tuple:
+    """
+    Check if a session has exceeded its rate limit for an endpoint.
+
+    Uses a sliding-window algorithm with in-memory storage.
+
+    Args:
+        session_id: Unique identifier for the requesting session.
+        endpoint: Name of the endpoint to check (must be a key in RATE_LIMITS).
+
+    Returns:
+        tuple[bool, int]: (allowed, retry_after_seconds).
+            - allowed=True, retry_after=0 when the request is permitted.
+            - allowed=False, retry_after>=1 when the limit is exceeded.
+            - For unknown endpoints (not in RATE_LIMITS) always returns (True, 0).
+    """
+    config = RATE_LIMITS.get(endpoint)
+    if not config:
+        return True, 0
+
+    max_requests = config["max_requests"]
+    window = config["window_seconds"]
+    now = datetime.datetime.now()
+    cutoff = now - datetime.timedelta(seconds=window)
+
+    with _rate_limit_lock:
+        if session_id not in _rate_limit_store:
+            _rate_limit_store[session_id] = {}
+
+        session_limits = _rate_limit_store[session_id]
+        if endpoint not in session_limits:
+            session_limits[endpoint] = []
+
+        # Remove timestamps outside the current window
+        session_limits[endpoint] = [
+            ts for ts in session_limits[endpoint] if ts > cutoff
+        ]
+
+        if len(session_limits[endpoint]) >= max_requests:
+            oldest = session_limits[endpoint][0]
+            retry_after = int(window - (now - oldest).total_seconds()) + 1
+            return False, max(retry_after, 1)
+
+        session_limits[endpoint].append(now)
+        return True, 0
+
+
+def cleanup_rate_limits():
+    """Remove stale rate limit entries to prevent unbounded memory growth"""
+    with _rate_limit_lock:
+        now = datetime.datetime.now()
+        stale_sessions = []
+        max_window = max(c["window_seconds"] for c in RATE_LIMITS.values())
+        cutoff = now - datetime.timedelta(seconds=max_window)
+
+        for sid, endpoints in _rate_limit_store.items():
+            for ep in list(endpoints.keys()):
+                endpoints[ep] = [ts for ts in endpoints[ep] if ts > cutoff]
+                if not endpoints[ep]:
+                    del endpoints[ep]
+            if not endpoints:
+                stale_sessions.append(sid)
+
+        for sid in stale_sessions:
+            del _rate_limit_store[sid]
+
+
 # Background cleanup thread
 def cleanup_loop():
     """Continuously clean up old messages and rooms"""
@@ -151,6 +230,7 @@ def cleanup_loop():
         time.sleep(30)  # Run every 30 seconds
         cleanup_old_rooms()
         cleanup_old_dms()
+        cleanup_rate_limits()
         # Cleanup messages in all active rooms
         with rooms_lock:
             for room in chat_rooms.values():
@@ -178,12 +258,31 @@ def register_simple_chat_routes(app):
     @app.route('/chat')
     def chat_index():
         """Landing page for creating/joining chat rooms"""
-        return render_template("simple_chat_index.html")
+        # Read version from VERSION file
+        try:
+            with open('VERSION', 'r') as f:
+                version = f.read().strip()
+        except:
+            version = '0.8.0-alpha'  # fallback
+        
+        return render_template("simple_chat_index.html", version=version)
     
     @app.route('/chat/create', methods=['POST'])
     @limiter.limit("10 per hour; 3 per minute")
     def chat_create():
         """Create a new chat room with cryptographically secure ID"""
+        # Ensure session exists for rate limiting
+        if "_id" not in session:
+            session["_id"] = generate_secure_dm_id()
+            session["username"] = generate_random_username()
+            session["color"] = get_random_color_rgb()
+
+        allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
+        if not allowed:
+            return jsonify({
+                "error": f"Rate limit exceeded. Try again in {retry_after} seconds."
+            }), 429
+
         room_id = generate_secure_room_id(32)
         
         with rooms_lock:
@@ -229,6 +328,13 @@ def register_simple_chat_routes(app):
                 session["_id"] = generate_secure_dm_id()
                 session["username"] = generate_random_username()
                 session["color"] = get_random_color_rgb()
+
+            # Check rate limit before processing message
+            allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
+            if not allowed:
+                return jsonify({
+                    "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds."
+                }), 429
             
             # Get message from request
             data = request.get_json()
@@ -299,6 +405,13 @@ def register_simple_chat_routes(app):
             session["_id"] = generate_secure_dm_id()
             session["username"] = generate_random_username()
             session["color"] = get_random_color_rgb()
+
+        # Check rate limit for DMs
+        allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
+        if not allowed:
+            return jsonify({
+                "error": f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds."
+            }), 429
         
         data = request.get_json()
         if not data or "room_id" not in data or "message" not in data:

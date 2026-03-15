@@ -1,5 +1,10 @@
 deadenv/
 deadenv/*
+
+# BISH build artifacts
+.bish-index
+.bish.sqlite
+
 # Python
 __pycache__/
 *.py[cod]
@@ -45,6 +50,7 @@ env/
 .coverage
 htmlcov/
 .tox/
+.cache/
 node_modules/
 playwright-report/
 test-results/

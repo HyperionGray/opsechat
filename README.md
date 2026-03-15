@@ -288,11 +288,11 @@ For Amazon Q setup instructions, see [Amazon Q Setup Guide](docs/setup/AMAZON_Q_
 2. Access email configuration: `http://yourservice.onion/{path}/email/config`
 3. Configure SMTP for sending (optional): Add your email server settings
 4. Configure IMAP for receiving (optional): Add your IMAP server settings
-5. Configure Porkbun API for domain rotation (optional): Add API credentials and budget (see [DOMAIN_API_SETUP.md](DOMAIN_API_SETUP.md))
+5. Configure Porkbun API for domain rotation (optional): Add API credentials and budget (see [Domain API Setup Guide](docs/setup/DOMAIN_API_SETUP.md))
 6. Compose and send emails: `http://yourservice.onion/{path}/email/compose`
 7. View your inbox: `http://yourservice.onion/{path}/email`
 
-For full documentation, see [EMAIL_SYSTEM.md](EMAIL_SYSTEM.md).
+For full documentation, see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md).
 
 Security & Code Quality
 =======================

@@ -100,6 +100,15 @@
             color: #ff0;
             font-weight: bold;
         }
+        
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            color: #0a0;
+            font-size: 0.8em;
+            border-top: 1px solid #0a0;
+        }
     </style>
 </head>
 <body>
@@ -145,6 +154,10 @@
                 <li>This is for operational security communications only</li>
             </ul>
         </div>
+    </div>
+    
+    <div class="footer">
+        OpSecChat {{ version|default('0.8.0-alpha') }} | <a href="https://github.com/HyperionGray/opsechat">GitHub</a> | MIT License
     </div>
     
     <script>
