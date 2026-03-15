@@ -54,6 +54,7 @@ htmlcov/
 node_modules/
 playwright-report/
 test-results/
+security-reports/
 __pycache__/
 *.pyc
 *.pyo
