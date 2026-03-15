@@ -46,6 +46,11 @@ python chat-room.py --tor
 
 Access the chat at `/chat` to create rooms and share with your contacts.
 
+### Operational Endpoints
+
+- `GET /health` - Liveness/health payload with uptime, version, and active room count
+- `GET /version` - Lightweight service/version metadata for deployment verification
+
 ### Terminal UI (TUI)
 - ✅ **TUI Only** - No web browser required
 - ✅ **Tor Integration** - Built-in Tor hidden service support

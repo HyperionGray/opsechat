@@ -7,16 +7,7 @@ extracted from runserver.py to improve code organization.
 
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
-
-
-def _read_version():
-    """Read application version from VERSION file"""
-    version_file = os.path.join(os.path.dirname(__file__), "VERSION")
-    try:
-        with open(version_file) as f:
-            return f.read().strip()
-    except OSError:
-        return "unknown"
+from version_utils import read_version
 
 
 def create_app():
@@ -77,7 +68,7 @@ def create_app():
                         check_older_than, process_chat, remove_headers)
     
     # Register simple chat routes (new simplified interface)
-    from simple_chat_routes import register_simple_chat_routes
+    from simple_chat_routes import register_simple_chat_routes, get_active_room_count
     register_simple_chat_routes(app)
     
     # Register email routes
@@ -93,32 +84,20 @@ def create_app():
 
     @app.route('/health', methods=["GET"])
     def health():
-        return jsonify(get_health_status())
+        return jsonify(get_health_status(active_rooms=get_active_room_count()))
+
+    @app.route('/version', methods=["GET"])
+    def version():
+        """Version endpoint for deployment and release verification."""
+        return jsonify({
+            "service": "opsechat",
+            "version": read_version(),
+        })
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # Health check endpoint for monitoring
-    @app.route('/health', methods=["GET"])
-    def health():
-        """
-        Health check endpoint for monitoring and deployment verification.
-        Returns basic status and version information.
-        """
-        import os
-        try:
-            with open('VERSION', 'r') as f:
-                version = f.read().strip()
-        except:
-            version = '0.8.0-alpha'  # fallback
-        
-        return {
-            'status': 'ok',
-            'version': version,
-            'service': 'opsechat'
-        }, 200
     
     # Error handlers
     @app.errorhandler(404)

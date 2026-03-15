@@ -15,8 +15,9 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
+from flask import render_template, request, session, jsonify
 from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from version_utils import read_version
 
 # Global room storage (in-memory only)
 chat_rooms = {}
@@ -132,6 +133,12 @@ def cleanup_old_rooms():
             room = chat_rooms[room_id]
             room.cleanup_old_messages()
             del chat_rooms[room_id]
+
+
+def get_active_room_count() -> int:
+    """Get current number of active in-memory chat rooms."""
+    with rooms_lock:
+        return len(chat_rooms)
 
 
 def cleanup_old_dms():
@@ -256,13 +263,8 @@ def register_simple_chat_routes(app):
     @app.route('/chat')
     def chat_index():
         """Landing page for creating/joining chat rooms"""
-        # Read version from VERSION file
-        try:
-            with open('VERSION', 'r') as f:
-                version = f.read().strip()
-        except:
-            version = '0.8.0-alpha'  # fallback
-        
+        version = read_version(default='0.8.0-alpha')
+
         return render_template("simple_chat_index.html", version=version)
     
     @app.route('/chat/create', methods=['POST'])

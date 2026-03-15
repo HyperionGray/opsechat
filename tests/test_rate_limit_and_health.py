@@ -113,3 +113,18 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_version_endpoint_returns_200():
+    client = _test_app.test_client()
+    response = client.get("/version")
+    assert response.status_code == 200
+
+
+def test_version_endpoint_returns_service_and_version():
+    client = _test_app.test_client()
+    response = client.get("/version")
+    data = response.get_json()
+    assert data is not None
+    assert data.get("service") == "opsechat"
+    assert "version" in data
