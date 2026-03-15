@@ -16,8 +16,8 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Global room storage (in-memory only)
@@ -30,6 +30,25 @@ dm_lock = threading.Lock()
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
+# Encrypted payloads are ASCII-encoded and larger than plaintext due to IV/tag/base64.
+MAX_ENCRYPTED_MESSAGE_LENGTH = 1200
+ENCRYPTED_MESSAGE_PREFIX = "ENC:"
+
+
+def is_valid_encrypted_message(message_text):
+    """Validate encrypted payload format produced by client-side encryption."""
+    if not message_text.startswith(ENCRYPTED_MESSAGE_PREFIX):
+        return False
+
+    encrypted_payload = message_text[len(ENCRYPTED_MESSAGE_PREFIX):]
+    if not encrypted_payload:
+        return False
+
+    if len(message_text) > MAX_ENCRYPTED_MESSAGE_LENGTH:
+        return False
+
+    # Base64 payload with optional '=' padding.
+    return bool(re.fullmatch(r"[A-Za-z0-9+/=]+", encrypted_payload))
 
 # Room class to manage chat state
 class ChatRoom:
@@ -241,24 +260,30 @@ def register_simple_chat_routes(app):
             if not message_text:
                 return jsonify({"error": "Empty message"}), 400
             
-            # Check for length cap to prevent base64 encoding of media
-            if len(message_text) > MAX_MESSAGE_LENGTH:
-                return jsonify({"error": f"Message too long. Maximum {MAX_MESSAGE_LENGTH} characters allowed."}), 400
-            
-            # Detect potential base64 encoded content (basic check)
-            # Base64 has high entropy and typically lacks spaces
-            if len(message_text) > 100:
-                space_count = message_text.count(' ')
-                if space_count < len(message_text) * 0.05:  # Less than 5% spaces
-                    # Might be base64 or encoded content
-                    return jsonify({"error": "Invalid message format. Only plain text allowed."}), 400
-            
-            # Filter to ASCII only and remove emojis
-            message_text = filter_to_ascii(message_text)
-            message_text = sanitize_emojis(message_text)
-            
-            # Sanitize message (remove HTML tags)
-            message_text = re.sub(r'[<>&"\']', '', message_text)
+            is_encrypted = is_valid_encrypted_message(message_text)
+
+            if not is_encrypted:
+                # Check for length cap to prevent base64 encoding of media
+                if len(message_text) > MAX_MESSAGE_LENGTH:
+                    return jsonify({"error": f"Message too long. Maximum {MAX_MESSAGE_LENGTH} characters allowed."}), 400
+
+                # Detect potential base64 encoded content (basic check)
+                # Base64 has high entropy and typically lacks spaces
+                if len(message_text) > 100:
+                    space_count = message_text.count(' ')
+                    if space_count < len(message_text) * 0.05:  # Less than 5% spaces
+                        # Might be base64 or encoded content
+                        return jsonify({"error": "Invalid message format. Only plain text allowed."}), 400
+
+                # Filter to ASCII only and remove emojis
+                message_text = filter_to_ascii(message_text)
+                message_text = sanitize_emojis(message_text)
+
+                # Sanitize message
+                message_text = re.sub(r'[<>&"\']', '', message_text)
+
+                if not message_text:
+                    return jsonify({"error": "Empty message"}), 400
             
             # Add message to room
             room.add_message(

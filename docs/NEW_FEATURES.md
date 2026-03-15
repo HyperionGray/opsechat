@@ -2,6 +2,24 @@
 
 This guide covers the new features added in the final push for OpSecHat production readiness.
 
+## ✅ PR #133 Follow-up Fixes (March 2026)
+
+### 1) Security headers now preserve legacy iframe chat flows
+- Updated global hardening headers to allow **same-origin** framing:
+  - `X-Frame-Options: SAMEORIGIN`
+  - `Content-Security-Policy: frame-ancestors 'self'`
+- This keeps clickjacking protections against third-party origins while restoring existing embedded chat routes that use same-origin iframes.
+
+### 2) ARIA chat announcements no longer re-read full conversations
+- The room UI now uses incremental DOM updates for new messages instead of clearing/rebuilding the entire message log every poll.
+- Added a dedicated, screen-reader-only status region for announcing only newly appended messages.
+- Result: better accessibility behavior without repeated full-conversation announcements.
+
+### 3) Encrypted message transport made ASCII-safe
+- Added an explicit encrypted payload prefix: `ENC:`.
+- Server-side validation now recognizes valid encrypted payloads and preserves them unchanged.
+- Plain-text anti-abuse checks (length cap and encoded-content heuristics) still apply to non-encrypted messages.
+
 ## 🔑 Automated Key Exchange
 
 ### What Changed

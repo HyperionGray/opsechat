@@ -8,6 +8,9 @@
 - 🔑 **Automated Key Exchange** - No manual key sharing needed
 - 💬 **Direct Messages** - Ephemeral DM feature for sharing room IDs (1-min expiry)
 - 🔒 **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
+- ♿ **Improved Accessible Chat Updates** - Incremental message rendering avoids screen-reader re-reading loops
+- 🧱 **Safer Framing Policy** - Same-origin iframe support restored for legacy chat views while blocking third-party framing
+- 🔐 **ASCII-Safe Encrypted Payloads** - `ENC:` format keeps encrypted chat messages compatible with strict text-only validation
 - 🌐 **Domain Rotation CLI** - Easy burner email domain management
 - 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
 - ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use
