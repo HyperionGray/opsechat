@@ -13,7 +13,6 @@ import os
 import datetime
 import string
 import random
-import secrets
 
 # Add parent directory to Python path for imports
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -22,6 +21,7 @@ if parent_dir not in sys.path:
 
 from flask import Flask, session
 from mock_routes import create_mock_routes
+from mock_email_fallbacks import MockBurnerManager, MockEmailStorage
 
 # Create Flask app with absolute paths for better CI compatibility
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -61,68 +61,6 @@ def get_random_color():
     """Get a random color for testing"""
     colors = ["red", "blue", "green", "orange", "purple", "brown", "pink", "gray", "olive", "cyan"]
     return random.choice(colors)
-
-
-class MockEmailStorage:
-    """In-memory fallback inbox storage for isolated tests."""
-
-    def __init__(self):
-        self._inboxes = {}
-
-    def create_user_inbox(self, user_id):
-        self._inboxes.setdefault(user_id, [])
-
-    def get_user_inbox(self, user_id):
-        self.create_user_inbox(user_id)
-        return self._inboxes[user_id]
-
-    def add_email(self, user_id, email):
-        self.get_user_inbox(user_id).append(email)
-
-
-class MockBurnerManager:
-    """Simple in-memory burner manager when email_system is unavailable."""
-
-    def __init__(self):
-        self._burners = {}
-        self._owner_by_email = {}
-
-    def cleanup_expired(self):
-        now = datetime.datetime.now()
-        expired = [email for email, meta in self._burners.items() if meta["expires_at"] <= now]
-        for email in expired:
-            self.expire_burner(email)
-        return len(expired)
-
-    def _new_email(self, user_id):
-        token = secrets.token_hex(4)
-        return f"test-{user_id}-{token}@example.com"
-
-    def generate_burner_email(self, user_id):
-        self.cleanup_expired()
-        email = self._new_email(user_id)
-        self._burners[email] = {
-            "user_id": user_id,
-            "expires_at": datetime.datetime.now() + datetime.timedelta(minutes=10),
-        }
-        self._owner_by_email[email] = user_id
-        return email
-
-    def rotate_burner(self, user_id, old_email):
-        self.expire_burner(old_email)
-        return self.generate_burner_email(user_id)
-
-    def get_user_burners(self, user_id):
-        self.cleanup_expired()
-        return [email for email, owner in self._owner_by_email.items() if owner == user_id]
-
-    def get_user_for_burner(self, email):
-        self.cleanup_expired()
-        return self._owner_by_email.get(email)
-
-    def expire_burner(self, email):
-        self._burners.pop(email, None)
-        self._owner_by_email.pop(email, None)
 
 
 # Import email system with fallback for testing
