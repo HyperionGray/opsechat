@@ -10,6 +10,7 @@ Usage:
     python domain_rotation_cli.py search        # Search for available cheap domains
     python domain_rotation_cli.py rotate        # Rotate to a new domain
     python domain_rotation_cli.py status        # Show budget status
+    python domain_rotation_cli.py cleanup       # Remove expired domains from local state
     python domain_rotation_cli.py config        # Configure API credentials
 """
 
@@ -109,10 +110,9 @@ def get_manager():
     )
     
     # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+    if config.get('current_spending') is not None:
+        manager.current_spending = float(config['current_spending'])
+    manager.load_owned_domains(config.get('owned_domains', []))
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +122,7 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = manager.serialize_owned_domains()
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -144,8 +144,21 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        purchased_at = domain.get('purchased_at')
+        expires_at = domain.get('expires_at')
+
+        if hasattr(purchased_at, 'strftime'):
+            purchased_display = purchased_at.strftime('%Y-%m-%d %H:%M')
+        else:
+            purchased_display = str(purchased_at or 'unknown')
+
+        if hasattr(expires_at, 'strftime'):
+            expires_display = expires_at.strftime('%Y-%m-%d')
+        else:
+            expires_display = str(expires_at or 'unknown')
+
+        print(f"   Purchased: {purchased_display}")
+        print(f"   Expires: {expires_display}")
         print()
 
 
@@ -233,6 +246,18 @@ def show_status():
         print(f"   Configure your email system to use: user@{manager.active_domain}")
 
 
+def cleanup_domains():
+    """Remove expired domains from locally persisted state."""
+    manager, config = get_manager()
+    result = manager.cleanup_expired_domains()
+    save_manager_state(manager, config)
+
+    print("\n=== Domain Cleanup ===\n")
+    print(f"Removed expired domains: {result['removed_count']}")
+    print(f"Remaining domains: {result['remaining_count']}")
+    print(f"Active domain: {result['active_domain'] or 'None'}")
+
+
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
@@ -245,12 +270,13 @@ Examples:
   python domain_rotation_cli.py search     # Search for available domains
   python domain_rotation_cli.py rotate     # Rotate to a new domain
   python domain_rotation_cli.py list       # List owned domains
+  python domain_rotation_cli.py cleanup    # Remove expired domains from state
         """
     )
     
     parser.add_argument(
         'command',
-        choices=['config', 'status', 'search', 'rotate', 'list'],
+        choices=['config', 'status', 'search', 'rotate', 'list', 'cleanup'],
         help='Command to execute'
     )
     
@@ -266,6 +292,8 @@ Examples:
         rotate_domain()
     elif args.command == 'list':
         list_domains()
+    elif args.command == 'cleanup':
+        cleanup_domains()
 
 
 if __name__ == '__main__':

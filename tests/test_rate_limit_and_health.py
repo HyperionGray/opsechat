@@ -113,3 +113,14 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_includes_baseline_security_headers():
+    client = _test_app.test_client()
+    response = client.get("/health")
+
+    assert response.headers.get("X-Content-Type-Options") == "nosniff"
+    assert response.headers.get("X-Frame-Options") == "DENY"
+    assert response.headers.get("Referrer-Policy") == "no-referrer"
+    assert response.headers.get("Permissions-Policy") == "geolocation=(), microphone=(), camera=()"
+    assert "default-src 'self'" in response.headers.get("Content-Security-Policy", "")

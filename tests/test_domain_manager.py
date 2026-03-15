@@ -2,6 +2,7 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +175,69 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_serialize_and_load_owned_domains_round_trip(self):
+        """Owned domain state should round-trip via JSON-safe serialization."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        now = datetime.now()
+        manager.owned_domains = [{
+            "domain": "alpha.xyz",
+            "price": 1.99,
+            "purchased_at": now,
+            "expires_at": now + timedelta(days=365),
+        }]
+        manager.active_domain = "alpha.xyz"
+
+        serialized = manager.serialize_owned_domains()
+        assert isinstance(serialized[0]["purchased_at"], str)
+        assert isinstance(serialized[0]["expires_at"], str)
+
+        restored = DomainRotationManager(monthly_budget=50.0)
+        loaded_count = restored.load_owned_domains(serialized)
+        restored.active_domain = manager.active_domain
+
+        assert loaded_count == 1
+        assert restored.owned_domains[0]["domain"] == "alpha.xyz"
+        assert isinstance(restored.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(restored.owned_domains[0]["expires_at"], datetime)
+
+    def test_cleanup_expired_domains_removes_only_expired(self):
+        """Cleanup should remove expired entries and keep active valid domain."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        now = datetime.now()
+        manager.owned_domains = [
+            {
+                "domain": "old.xyz",
+                "price": 1.0,
+                "purchased_at": now - timedelta(days=400),
+                "expires_at": now - timedelta(days=1),
+            },
+            {
+                "domain": "new.xyz",
+                "price": 2.0,
+                "purchased_at": now - timedelta(days=1),
+                "expires_at": now + timedelta(days=364),
+            },
+        ]
+        manager.active_domain = "old.xyz"
+
+        result = manager.cleanup_expired_domains(now=now)
+
+        assert result["removed_count"] == 1
+        assert result["remaining_count"] == 1
+        assert manager.active_domain == "new.xyz"
+        assert manager.owned_domains[0]["domain"] == "new.xyz"
+
+    def test_find_cheap_available_domain_skips_invalid_price(self):
+        """Invalid price payloads should be skipped without raising errors."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.side_effect = [
+            {"available": True, "price": "N/A"},
+            {"available": True, "price": "$2.49"},
+        ]
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=2)
+
+        assert result is not None
+        assert result["price"] == 2.49

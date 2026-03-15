@@ -172,6 +172,25 @@ When limit exceeded:
 
 ---
 
+## 🛡️ HTTP Response Hardening
+
+### What Changed
+The Flask app now applies baseline browser security headers on all responses from a centralized `after_request` hook.
+
+### Headers Added
+- `Content-Security-Policy`
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Referrer-Policy: no-referrer`
+- `Permissions-Policy: geolocation=(), microphone=(), camera=()`
+
+### Why This Matters
+- Reduces XSS and clickjacking risk
+- Lowers accidental data leakage through referrers or browser features
+- Standardizes security behavior across endpoints (including `/health`)
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose
@@ -272,6 +291,24 @@ Output:
    Purchased: 2026-03-02 10:15
    Expires: 2027-03-02
 ```
+
+#### Cleanup Expired Domains
+```bash
+python domain_rotation_cli.py cleanup
+
+Output:
+=== Domain Cleanup ===
+
+Removed expired domains: 2
+Remaining domains: 3
+Active domain: n5x8q2k7.xyz
+```
+
+### Persistence Improvements
+- Owned domain timestamps are now stored in JSON-safe ISO-8601 format
+- State is safely restored back into datetime objects when loading config
+- Invalid or stale records no longer break `list`/`status` flows
+- Expired records can be pruned with `cleanup` to keep state tidy
 
 ### Integration with Burner Email
 After rotating domains, update your email configuration:
@@ -469,6 +506,6 @@ curl http://localhost:5001/chat/dm/{dm_id}
 
 ---
 
-**Last Updated**: March 2, 2026
+**Last Updated**: March 15, 2026
 **Version**: 0.8.0-alpha
 **Author**: OpSecHat Development Team
