@@ -6,7 +6,7 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -134,10 +134,54 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+        self._api_key: Optional[str] = None
+        self._secret_key: Optional[str] = None
+        self.test_mode = False
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+
+    def configure(self, api_key: str, secret_key: str, monthly_budget: float = 10.0) -> Dict[str, Any]:
+        """
+        Configure domain rotation manager with registrar credentials.
+        """
+        api_key = (api_key or "").strip()
+        secret_key = (secret_key or "").strip()
+        if not api_key or not secret_key:
+            raise ValueError("Both api_key and secret_key are required")
+        if monthly_budget < 0:
+            raise ValueError("monthly_budget must be >= 0")
+
+        self._api_key = api_key
+        self._secret_key = secret_key
+        self.monthly_budget = float(monthly_budget)
+        self.api_client = PorkbunAPIClient(api_key, secret_key)
+        return self.get_config()
+
+    def get_config(self) -> Dict[str, Any]:
+        """Return sanitized configuration and current state."""
+        return {
+            "configured": self.api_client is not None,
+            "has_api_key": bool(self._api_key),
+            "has_secret_key": bool(self._secret_key),
+            "api_key_hint": f"...{self._api_key[-4:]}" if self._api_key and len(self._api_key) >= 4 else "",
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "active_domain": self.active_domain,
+            "domains_owned": len(self.owned_domains),
+            "test_mode": self.test_mode,
+        }
+
+    def set_monthly_budget(self, amount: float):
+        """Set monthly spending budget."""
+        if amount < 0:
+            raise ValueError("Budget must be >= 0")
+        self.monthly_budget = float(amount)
+
+    def set_test_mode(self, enabled: bool = True):
+        """Enable/disable test mode (simulates purchases)."""
+        self.test_mode = bool(enabled)
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -147,9 +191,43 @@ class DomainRotationManager:
         chars = string.ascii_lowercase + string.digits
         random_name = ''.join(random.choice(chars) for _ in range(length))
         return f"{random_name}.{tld}"
+
+    def generate_random_domain_name(self, length: int = 8, tld: str = "xyz") -> str:
+        """Compatibility alias used in docs/examples."""
+        return self.generate_random_domain(tld=tld, length=length)
+
+    def generate_domain_from_pattern(self, pattern: str, tld: str = "xyz") -> str:
+        """
+        Generate domain from simple placeholders:
+        - {timestamp}: UTC timestamp YYYYMMDDHHMMSS
+        - {random}: 4 random lowercase alnum chars
+        """
+        token = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(4))
+        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        domain_label = pattern.replace("{timestamp}", timestamp).replace("{random}", token)
+        domain_label = domain_label.lower().replace("_", "-")
+        allowed = string.ascii_lowercase + string.digits + "-"
+        sanitized = ''.join(ch for ch in domain_label if ch in allowed).strip("-")
+        if not sanitized:
+            sanitized = token
+        return f"{sanitized}.{tld}"
+
+    @staticmethod
+    def _normalize_price(value: Any, default: float = 999.0) -> float:
+        """Convert registrar price formats into a float."""
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            cleaned = value.strip().replace("$", "").replace("€", "").replace(",", "")
+            try:
+                return float(cleaned)
+            except ValueError:
+                return default
+        return default
     
     def find_cheap_available_domain(self, max_price: float = 5.0, 
-                                   max_attempts: int = 10) -> Optional[Dict]:
+                                   max_attempts: int = 10,
+                                   tlds: Optional[List[str]] = None) -> Optional[Dict]:
         """
         Find a cheap available domain
         Returns domain info or None
@@ -159,20 +237,16 @@ class DomainRotationManager:
             return None
         
         # Try cheap TLDs
-        cheap_tlds = ["xyz", "club", "online", "site", "website"]
+        cheap_tlds = tlds or ["xyz", "club", "online", "site", "website"]
         
-        for attempt in range(max_attempts):
+        for _ in range(max_attempts):
             tld = random.choice(cheap_tlds)
             domain = self.generate_random_domain(tld)
             
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
+                price = self._normalize_price(result.get("price"), default=max_price + 1.0)
                 
                 if price <= max_price:
                     return {
@@ -182,6 +256,40 @@ class DomainRotationManager:
                     }
         
         return None
+
+    def search_cheap_domains(
+        self,
+        tlds: Optional[List[str]] = None,
+        max_price: float = 5.0,
+        limit: int = 5,
+        max_attempts: int = 20,
+    ) -> List[Dict]:
+        """
+        Search for multiple available domains within a price threshold.
+        """
+        if limit <= 0:
+            return []
+
+        results: List[Dict] = []
+        seen = set()
+
+        for _ in range(max_attempts):
+            if len(results) >= limit:
+                break
+            found = self.find_cheap_available_domain(
+                max_price=max_price,
+                max_attempts=1,
+                tlds=tlds,
+            )
+            if not found:
+                continue
+            domain = found.get("domain")
+            if not domain or domain in seen:
+                continue
+            seen.add(domain)
+            results.append(found)
+
+        return results
     
     def purchase_domain_if_budget_allows(self, domain: str, price: float) -> bool:
         """
@@ -220,28 +328,45 @@ class DomainRotationManager:
             logger.error(f"Failed to purchase domain: {result.get('message')}")
             return False
     
+    def rotate_to_new_domain(self, max_price: float = 5.0) -> Dict[str, Any]:
+        """
+        Rotate to a new domain and return a structured result.
+        """
+        domain_info = self.find_cheap_available_domain(max_price=max_price)
+        if not domain_info:
+            return {"success": False, "error": "Could not find an available cheap domain"}
+
+        if self.test_mode:
+            self.active_domain = domain_info["domain"]
+            return {
+                "success": True,
+                "domain": domain_info["domain"],
+                "cost": domain_info["price"],
+                "test_mode": True,
+            }
+
+        success = self.purchase_domain_if_budget_allows(
+            domain_info["domain"],
+            domain_info["price"],
+        )
+        if not success:
+            return {"success": False, "error": "Could not purchase selected domain"}
+        return {
+            "success": True,
+            "domain": domain_info["domain"],
+            "cost": domain_info["price"],
+            "test_mode": False,
+        }
+
     def rotate_domain(self) -> Optional[str]:
         """
         Rotate to a new domain
         Finds and purchases a new cheap domain
         """
-        # Find cheap domain
-        domain_info = self.find_cheap_available_domain()
-        
-        if not domain_info:
-            logger.error("Could not find available cheap domain")
-            return None
-        
-        # Purchase domain
-        success = self.purchase_domain_if_budget_allows(
-            domain_info["domain"], 
-            domain_info["price"]
-        )
-        
-        if success:
-            self.active_domain = domain_info["domain"]
-            return self.active_domain
-        
+        result = self.rotate_to_new_domain()
+        if result.get("success"):
+            return result.get("domain")
+        logger.error(result.get("error", "Could not rotate domain"))
         return None
     
     def get_active_domain(self) -> Optional[str]:

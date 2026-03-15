@@ -174,3 +174,80 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_search_cheap_domains_limit_and_uniqueness(self):
+        """Search returns unique domains up to requested limit"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": "1.25",
+        }
+
+        manager = DomainRotationManager(mock_client)
+        manager.generate_random_domain = Mock(side_effect=[
+            "dup.xyz",
+            "dup.xyz",
+            "unique1.xyz",
+            "unique2.xyz",
+            "unique3.xyz",
+        ])
+
+        results = manager.search_cheap_domains(
+            tlds=["xyz"],
+            max_price=2.0,
+            limit=3,
+            max_attempts=5,
+        )
+
+        assert len(results) == 3
+        assert len({item["domain"] for item in results}) == 3
+
+    def test_rotate_to_new_domain_structured_result(self):
+        """Structured rotation API returns success details"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": 2.50,
+        }
+        mock_client.purchase_domain.return_value = {"success": True}
+
+        manager = DomainRotationManager(mock_client, monthly_budget=10.0)
+        result = manager.rotate_to_new_domain(max_price=3.0)
+
+        assert result["success"] is True
+        assert result["domain"].endswith((".xyz", ".club", ".online", ".site", ".website"))
+        assert result["cost"] == 2.50
+        assert result["test_mode"] is False
+        assert manager.active_domain == result["domain"]
+
+    def test_rotate_to_new_domain_test_mode(self):
+        """Test mode rotates without purchasing or spending"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": 1.99,
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=10.0)
+        manager.set_test_mode(True)
+        result = manager.rotate_to_new_domain(max_price=3.0)
+
+        assert result["success"] is True
+        assert result["test_mode"] is True
+        assert manager.current_spending == 0.0
+        assert len(manager.owned_domains) == 0
+
+    @patch('domain_manager.PorkbunAPIClient')
+    def test_configure_and_get_config(self, mock_porkbun):
+        """Configuration helper initializes API client and exposes safe config"""
+        mock_porkbun.return_value = Mock(spec=DomainAPIClient)
+        manager = DomainRotationManager()
+
+        config = manager.configure("apikey1234", "secret9999", monthly_budget=12.0)
+
+        assert manager.api_client is not None
+        assert config["configured"] is True
+        assert config["has_api_key"] is True
+        assert config["has_secret_key"] is True
+        assert config["api_key_hint"] == "...1234"
+        assert config["monthly_budget"] == 12.0

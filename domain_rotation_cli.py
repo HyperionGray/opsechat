@@ -19,10 +19,47 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _serialize_domain_record(record):
+    """Convert domain record datetimes to ISO strings for JSON."""
+    serialized = dict(record)
+    for field in ("purchased_at", "expires_at"):
+        value = serialized.get(field)
+        if isinstance(value, datetime):
+            serialized[field] = value.isoformat()
+    return serialized
+
+
+def _deserialize_domain_record(record):
+    """Convert serialized domain record date strings back to datetime."""
+    parsed = dict(record)
+    for field in ("purchased_at", "expires_at"):
+        value = parsed.get(field)
+        if isinstance(value, str):
+            try:
+                parsed[field] = datetime.fromisoformat(value)
+            except ValueError:
+                # Keep original string if legacy/non-ISO format.
+                pass
+    return parsed
+
+
+def _format_dt(value):
+    """Format datetime or datetime-like value for CLI output."""
+    if isinstance(value, datetime):
+        return value.strftime('%Y-%m-%d %H:%M')
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value).strftime('%Y-%m-%d %H:%M')
+        except ValueError:
+            return value
+    return "Unknown"
 
 
 def load_config():
@@ -31,7 +68,7 @@ def load_config():
         return {}
     
     try:
-        with open(CONFIG_FILE, 'r') as f:
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
         print(f"Error loading config: {e}")
@@ -43,7 +80,7 @@ def save_config(config):
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     
     try:
-        with open(CONFIG_FILE, 'w') as f:
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2)
         os.chmod(CONFIG_FILE, 0o600)  # Secure permissions
         print(f"Configuration saved to {CONFIG_FILE}")
@@ -112,7 +149,10 @@ def get_manager():
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = [
+            _deserialize_domain_record(record)
+            for record in config['owned_domains']
+        ]
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +162,10 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = [
+        _serialize_domain_record(record)
+        for record in manager.owned_domains
+    ]
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -144,8 +187,18 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_dt(domain.get('purchased_at'))}")
+        expires_at = domain.get('expires_at')
+        if isinstance(expires_at, datetime):
+            expires_text = expires_at.strftime('%Y-%m-%d')
+        elif isinstance(expires_at, str):
+            try:
+                expires_text = datetime.fromisoformat(expires_at).strftime('%Y-%m-%d')
+            except ValueError:
+                expires_text = expires_at
+        else:
+            expires_text = "Unknown"
+        print(f"   Expires: {expires_text}")
         print()
 
 
@@ -236,7 +289,7 @@ def show_status():
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
-        description='OpSecHat Domain Rotation CLI',
+        description='OpSecChat Domain Rotation CLI',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
