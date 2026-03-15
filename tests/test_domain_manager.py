@@ -2,6 +2,7 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +175,77 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_and_get_config_masks_secrets(self):
+        """Test manager credential configuration and masked config output."""
+        manager = DomainRotationManager()
+        manager.configure(
+            api_key="pk1_test_api_1234",
+            secret_key="sk1_test_secret_9876",
+            monthly_budget=25.0
+        )
+
+        config = manager.get_config()
+
+        assert config["api_configured"] is True
+        assert config["monthly_budget"] == 25.0
+        assert config["api_key"].endswith("1234")
+        assert config["secret_key"].endswith("9876")
+        assert "*" in config["api_key"]
+        assert "*" in config["secret_key"]
+
+    def test_rotate_to_new_domain_returns_structured_result(self):
+        """Test structured rotate result for API usage."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "rotation-test.xyz",
+            "price": "2.49"
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "rotation-test.xyz"
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        result = manager.rotate_to_new_domain(max_price=5.0)
+
+        assert result["success"] is True
+        assert result["domain"] == "rotation-test.xyz"
+        assert result["cost"] == 2.49
+        assert manager.active_domain == "rotation-test.xyz"
+
+    def test_rotate_to_new_domain_in_test_mode_without_api_client(self):
+        """Test simulated rotation when API credentials are unavailable."""
+        manager = DomainRotationManager()
+        manager.set_test_mode(True)
+
+        result = manager.rotate_to_new_domain(max_price=5.0)
+
+        assert result["success"] is True
+        assert result["simulated"] is True
+        assert manager.current_spending == 0.0
+        assert manager.active_domain == result["domain"]
+
+    def test_state_round_trip_serializes_and_restores_datetimes(self):
+        """Test get_state/load_state for CLI-safe persistence."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        now = datetime.now()
+        manager.current_spending = 3.5
+        manager.active_domain = "state-test.xyz"
+        manager.owned_domains = [{
+            "domain": "state-test.xyz",
+            "price": 3.5,
+            "purchased_at": now,
+            "expires_at": now + timedelta(days=365)
+        }]
+
+        state = manager.get_state()
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+
+        restored = DomainRotationManager()
+        restored.load_state(state)
+
+        assert restored.current_spending == 3.5
+        assert restored.active_domain == "state-test.xyz"
+        assert isinstance(restored.owned_domains[0]["purchased_at"], datetime)
