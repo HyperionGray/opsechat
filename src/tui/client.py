@@ -213,6 +213,11 @@ class ChatClient:
             welcome_msg = msg.get('message', 'Welcome!')
             self.add_message("System", welcome_msg, is_system=True)
         
+        elif msg_type == 'system':
+            system_message = msg.get('message', '')
+            if system_message:
+                self.add_message("System", system_message, is_system=True)
+
         elif msg_type == 'message':
             username = msg.get('username', 'Unknown')
             message = msg.get('message', '')

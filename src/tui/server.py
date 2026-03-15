@@ -25,13 +25,17 @@ from typing import Dict, List, Any, Optional
 # Message storage (in-memory only)
 class ChatServer:
     MAX_MESSAGE_LENGTH = 1000  # Prevent b64 encoded images
-    MESSAGE_LIFETIME = 180  # 3 minutes in seconds
+    MESSAGE_LIFETIME = 240  # 4 minutes in seconds
+    MAX_STORED_MESSAGES = 500
+    RATE_LIMIT_WINDOW_SECONDS = 30
+    RATE_LIMIT_MAX_MESSAGES = 12
     
     def __init__(self, host='127.0.0.1', port=5555):
         self.host = host
         self.port = port
         self.messages: List[Dict[str, Any]] = []
         self.clients: Dict[socket.socket, str] = {}
+        self.user_message_timestamps: Dict[str, List[datetime.datetime]] = {}
         self.lock = threading.Lock()
         self.server_socket = None
         self.running = False
@@ -70,6 +74,45 @@ class ChatServer:
                     msg['username'] = 'X' * len(msg['username'])
             
             self.messages = new_messages
+            self._cleanup_rate_limit_data_locked(now)
+
+    def _cleanup_rate_limit_data_locked(self, now: datetime.datetime):
+        """Prune stale rate-limit timestamps and empty entries."""
+        window_start = now - datetime.timedelta(seconds=self.RATE_LIMIT_WINDOW_SECONDS)
+        for username in list(self.user_message_timestamps.keys()):
+            kept = [ts for ts in self.user_message_timestamps[username] if ts >= window_start]
+            if kept:
+                self.user_message_timestamps[username] = kept
+            else:
+                del self.user_message_timestamps[username]
+
+    def _check_user_rate_limit(self, username: str, now: Optional[datetime.datetime] = None) -> tuple[bool, int]:
+        """
+        Enforce per-user message rate limit.
+
+        Returns:
+            tuple: (allowed, retry_after_seconds)
+        """
+        if now is None:
+            now = datetime.datetime.now()
+
+        window_start = now - datetime.timedelta(seconds=self.RATE_LIMIT_WINDOW_SECONDS)
+
+        with self.lock:
+            timestamps = self.user_message_timestamps.get(username, [])
+            timestamps = [ts for ts in timestamps if ts >= window_start]
+
+            if len(timestamps) >= self.RATE_LIMIT_MAX_MESSAGES:
+                oldest_in_window = min(timestamps)
+                elapsed = int((now - oldest_in_window).total_seconds())
+                retry_after = max(1, self.RATE_LIMIT_WINDOW_SECONDS - elapsed)
+                self.user_message_timestamps[username] = timestamps
+                return False, retry_after
+
+            timestamps.append(now)
+            self.user_message_timestamps[username] = timestamps
+
+        return True, 0
     
     def add_message(self, username: str, message: str) -> bool:
         """Add a message to the chat (with validation)"""
@@ -90,8 +133,22 @@ class ChatServer:
                 'message': message,
                 'timestamp': datetime.datetime.now()
             })
+            self._enforce_message_history_limit_locked()
         
         return True
+
+    def _enforce_message_history_limit_locked(self):
+        """Keep server message history bounded to prevent unbounded RAM growth."""
+        overflow = len(self.messages) - self.MAX_STORED_MESSAGES
+        if overflow <= 0:
+            return
+
+        stale_messages = self.messages[:overflow]
+        for msg in stale_messages:
+            msg['message'] = 'X' * len(msg['message'])
+            msg['username'] = 'X' * len(msg['username'])
+
+        self.messages = self.messages[overflow:]
     
     def get_messages(self, since: datetime.datetime = None) -> List[Dict[str, Any]]:
         """Get messages (optionally since a specific time)"""
@@ -113,7 +170,11 @@ class ChatServer:
             welcome = {
                 'type': 'welcome',
                 'username': username,
-                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
+                'message': (
+                    f'Welcome! You are {username}. Messages burn in 4 minutes. '
+                    f'Rate limit: {self.RATE_LIMIT_MAX_MESSAGES} messages/'
+                    f'{self.RATE_LIMIT_WINDOW_SECONDS}s.'
+                )
             }
             client_socket.send((json.dumps(welcome) + '\n').encode())
             
@@ -144,6 +205,17 @@ class ChatServer:
                                 msg_obj = json.loads(line)
                                 if msg_obj.get('type') == 'message':
                                     message = msg_obj.get('message', '')
+                                    allowed, retry_after = self._check_user_rate_limit(username)
+                                    if not allowed:
+                                        warning = {
+                                            'type': 'system',
+                                            'message': (
+                                                f'Rate limit exceeded. Try again in '
+                                                f'{retry_after} second(s).'
+                                            )
+                                        }
+                                        client_socket.send((json.dumps(warning) + '\n').encode())
+                                        continue
                                     if self.add_message(username, message):
                                         # Broadcast to all clients
                                         self.broadcast_message(username, message)
@@ -157,6 +229,7 @@ class ChatServer:
             with self.lock:
                 if client_socket in self.clients:
                     del self.clients[client_socket]
+                self.user_message_timestamps.pop(username, None)
             try:
                 client_socket.close()
             except (OSError, socket.error):
@@ -200,6 +273,11 @@ class ChatServer:
         print(f"[*] OpSecChat TUI Server running on {self.host}:{self.port}")
         print(f"[*] Messages burn after {self.MESSAGE_LIFETIME} seconds")
         print(f"[*] Max message length: {self.MAX_MESSAGE_LENGTH} chars")
+        print(f"[*] Max server history: {self.MAX_STORED_MESSAGES} messages")
+        print(
+            f"[*] Rate limit: {self.RATE_LIMIT_MAX_MESSAGES} messages/"
+            f"{self.RATE_LIMIT_WINDOW_SECONDS}s per user"
+        )
         print(f"[*] Press Ctrl+C to stop")
         
         try:
@@ -245,6 +323,7 @@ class ChatServer:
                 msg['message'] = 'X' * len(msg['message'])
                 msg['username'] = 'X' * len(msg['username'])
             self.messages.clear()
+            self.user_message_timestamps.clear()
         
         print("\n[*] Server stopped. All messages overwritten and cleared.")
 
