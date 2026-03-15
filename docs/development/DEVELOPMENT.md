@@ -22,6 +22,22 @@ You can run the same bootstrap locally:
 ./scripts/bootstrap-dev-environment.sh
 ```
 
+Useful bootstrap flags:
+
+```bash
+# Only verify an existing setup
+./scripts/bootstrap-dev-environment.sh --verify-only
+
+# Recreate virtualenv and skip heavyweight browser downloads
+./scripts/bootstrap-dev-environment.sh --recreate-venv --skip-playwright
+```
+
+Environment verification supports machine-readable output:
+
+```bash
+python scripts/check-dev-env.py --json
+```
+
 ### Setting Up Development Environment
 
 ```bash
@@ -44,6 +60,9 @@ npx playwright install
 # Run the development server
 python runserver.py
 ```
+
+For most contributors, the bootstrap script above is the preferred path because it is
+idempotent and keeps local/cursor setup behavior aligned.
 
 ## Project Structure
 
@@ -221,7 +240,7 @@ npm run lint
 
 - `TOR_CONTROL_PORT` - Tor control port (default: 9051)
 - `PORT` - Flask server port (default: 5000)
-- `FLASK_ENV` - Development/production mode
+- `FLASK_DEBUG` - Debug mode toggle for Flask (use `1` in development)
 
 ## Troubleshooting
 
