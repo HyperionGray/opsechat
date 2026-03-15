@@ -5,7 +5,7 @@ Welcome to the OpSecChat documentation. All documentation has been organized int
 ## Quick Links
 
 - **[Main README](../README.md)** - Start here for project overview
-- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes (TODO)
+- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes
 - **[Security](../SECURITY.md)** - Security information and best practices
 - **[License](../LICENSE.md)** - MIT License
 
@@ -42,6 +42,7 @@ Documentation for end users and operators.
 - [PGP Usage](user-guide/PGP_USAGE.md) - PGP encryption guide
 - [PGP Test Examples](user-guide/PGP_TEST_EXAMPLE.md) - PGP testing examples
 - [Testing Guide](user-guide/TESTING.md) - How to run tests
+- [Rate Limiting Guide](user-guide/RATE_LIMITING.md) - 429 handling and backoff behavior
 
 ### 👨‍💻 Development
 Information for developers contributing to the project.

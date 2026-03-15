@@ -40,6 +40,11 @@ def test_post_is_rate_limited_get_is_not():
 
         r = client.post("/chat/create", content_type="application/json")
         assert r.status_code == 429, f"4th POST should be rate-limited (429), got {r.status_code}"
+        data = r.get_json()
+        assert data is not None, "429 response should be JSON"
+        assert data.get("error_code") == "rate_limit_exceeded"
+        assert data.get("retry_after_seconds", 0) >= 1
+        assert r.headers.get("Retry-After"), "Retry-After header should be present"
 
     print("✅ POST /chat/create is rate-limited after 3 requests; GET / is never throttled")
     return True
@@ -71,6 +76,34 @@ def test_separate_sessions_have_independent_limits():
     return True
 
 
+def test_chat_message_custom_limit_includes_retry_metadata():
+    """Custom in-route limiter returns Retry-After metadata for chat messages."""
+    print("\nTesting: custom chat message limiter includes retry metadata...")
+    app = _make_app()
+
+    with app.test_client() as client:
+        create_resp = client.post("/chat/create", content_type="application/json")
+        assert create_resp.status_code == 200, f"Failed to create room: {create_resp.status_code}"
+        room_id = create_resp.get_json()["room_id"]
+
+        endpoint = f"/chat/room/{room_id}/messages"
+        for i in range(30):
+            r = client.post(endpoint, json={"message": f"msg-{i}"})
+            assert r.status_code == 200, f"Message {i + 1} should succeed, got {r.status_code}"
+
+        blocked = client.post(endpoint, json={"message": "blocked"})
+        assert blocked.status_code == 429, f"31st message should be rate-limited, got {blocked.status_code}"
+        blocked_data = blocked.get_json()
+        assert blocked_data is not None, "Custom 429 should be JSON"
+        assert blocked_data.get("error_code") == "rate_limit_exceeded"
+        assert blocked_data.get("endpoint") == "chat_message"
+        assert blocked_data.get("retry_after_seconds", 0) >= 1
+        assert blocked.headers.get("Retry-After") == str(blocked_data["retry_after_seconds"])
+
+    print("✅ Custom chat message limiter returns retry metadata")
+    return True
+
+
 def main():
     print("=== Rate Limiter Integration Tests ===\n")
     results = []
@@ -78,6 +111,7 @@ def main():
     tests = [
         test_post_is_rate_limited_get_is_not,
         test_separate_sessions_have_independent_limits,
+        test_chat_message_custom_limit_includes_retry_metadata,
     ]
 
     for test_fn in tests:
