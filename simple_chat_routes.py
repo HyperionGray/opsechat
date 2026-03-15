@@ -220,6 +220,35 @@ def cleanup_rate_limits():
             del _rate_limit_store[sid]
 
 
+def get_runtime_health_snapshot(include_limits: bool = False) -> dict:
+    """
+    Build a non-sensitive runtime snapshot for health/readiness endpoints.
+
+    Args:
+        include_limits: When True, include rate limit configuration.
+    """
+    with rooms_lock:
+        active_rooms = len(chat_rooms)
+    with dm_lock:
+        active_dms = len(direct_messages)
+    with _rate_limit_lock:
+        rate_limiter_sessions = len(_rate_limit_store)
+        rate_limit_buckets = sum(len(endpoints) for endpoints in _rate_limit_store.values())
+
+    snapshot = {
+        "active_rooms": active_rooms,
+        "active_dms": active_dms,
+        "rate_limiter_sessions": rate_limiter_sessions,
+        "rate_limit_buckets": rate_limit_buckets,
+        "cleanup_thread_alive": cleanup_thread.is_alive(),
+    }
+    if include_limits:
+        snapshot["rate_limits"] = {
+            endpoint: config.copy() for endpoint, config in RATE_LIMITS.items()
+        }
+    return snapshot
+
+
 # Background cleanup thread
 def cleanup_loop():
     """Continuously clean up old messages and rooms"""

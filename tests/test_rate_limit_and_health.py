@@ -10,7 +10,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    RATE_LIMITS,
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -103,7 +108,9 @@ def test_health_endpoint_returns_json_with_required_fields():
     data = response.get_json()
     assert data is not None
     assert data.get("status") == "healthy"
+    assert data.get("service") == "opsechat"
     assert "version" in data
+    assert "uptime_seconds" in data
     assert "active_rooms" in data
 
 
@@ -113,3 +120,32 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_uptime_is_non_negative_integer():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    data = response.get_json()
+    assert isinstance(data["uptime_seconds"], int)
+    assert data["uptime_seconds"] >= 0
+
+
+def test_health_endpoint_verbose_includes_runtime_diagnostics():
+    client = _test_app.test_client()
+    response = client.get("/health?verbose=1")
+    data = response.get_json()
+    assert response.status_code == 200
+    assert isinstance(data["active_dms"], int)
+    assert isinstance(data["rate_limiter_sessions"], int)
+    assert isinstance(data["rate_limit_buckets"], int)
+    assert isinstance(data["cleanup_thread_alive"], bool)
+    assert set(data["rate_limits"].keys()) == set(RATE_LIMITS.keys())
+
+
+def test_health_readiness_endpoint_returns_ready():
+    client = _test_app.test_client()
+    response = client.get("/health/ready")
+    data = response.get_json()
+    assert response.status_code == 200
+    assert data["status"] == "ready"
+    assert data["service"] == "opsechat"
