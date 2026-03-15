@@ -172,6 +172,43 @@ When limit exceeded:
 
 ---
 
+## 🚦 Chat Rate-Limit Telemetry (NEW)
+
+Simple chat write endpoints now return explicit rate-limit metadata so clients can show accurate cooldown UX.
+
+### What's Included
+
+- **Response headers on chat write endpoints** (`/chat/create`, `POST /chat/room/<id>/messages`, `/chat/dm/send`):
+  - `X-RateLimit-Limit`
+  - `X-RateLimit-Remaining`
+  - `X-RateLimit-Window`
+  - `Retry-After` (only when throttled)
+- **Session status endpoint**: `GET /chat/rate-limit/status`
+  - Returns per-endpoint counters for the current session.
+
+### Example (Throttled Response)
+
+```http
+HTTP/1.1 429 TOO MANY REQUESTS
+X-RateLimit-Limit: 30
+X-RateLimit-Remaining: 0
+X-RateLimit-Window: 60
+Retry-After: 12
+Content-Type: application/json
+
+{
+  "error": "Rate limit exceeded. Maximum 30 messages per minute. Try again in 12 seconds."
+}
+```
+
+### Why This Matters
+
+- Frontends can show precise cooldown timers.
+- API clients can back off deterministically.
+- Limits are easier to monitor and debug during load/security testing.
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

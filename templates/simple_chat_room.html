@@ -418,7 +418,20 @@
                     input.value = '';
                     await pollMessages();
                 } else {
-                    showStatus('Error sending message');
+                    const retryAfter = response.headers.get('Retry-After');
+                    let errorMessage = 'Error sending message';
+                    try {
+                        const err = await response.json();
+                        if (err && err.error) {
+                            errorMessage = err.error;
+                        }
+                    } catch (e) {
+                        // Keep default error message if response is not JSON.
+                    }
+                    if (response.status === 429 && retryAfter) {
+                        errorMessage += ` Retry in ${retryAfter}s.`;
+                    }
+                    showStatus(errorMessage, 5000);
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);

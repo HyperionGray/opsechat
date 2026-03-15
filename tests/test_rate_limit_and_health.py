@@ -10,7 +10,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    get_rate_limit_status,
+    _rate_limit_store,
+    _rate_limit_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -87,6 +92,21 @@ def test_rate_limit_chat_message_limit():
     assert retry_after >= 1
 
 
+def test_rate_limit_status_reports_remaining_and_retry_after():
+    _clear_store()
+    sid = "session-status"
+
+    for _ in range(5):
+        check_rate_limit(sid, "dm_send")
+
+    status = get_rate_limit_status(sid, "dm_send")
+    assert status["limit"] == 5
+    assert status["used"] == 5
+    assert status["remaining"] == 0
+    assert status["allowed"] is False
+    assert status["retry_after"] >= 1
+
+
 # ---------------------------------------------------------------------------
 # Health endpoint integration tests
 # ---------------------------------------------------------------------------
@@ -113,3 +133,49 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_chat_rate_limit_status_endpoint_returns_limit_data():
+    client = _test_app.test_client()
+    response = client.get("/chat/rate-limit/status")
+    assert response.status_code == 200
+
+    data = response.get_json()
+    assert "limits" in data
+    assert "chat_create" in data["limits"]
+    assert data["limits"]["chat_create"]["limit"] == 3
+    assert data["limits"]["chat_message"]["limit"] == 30
+    assert data["limits"]["dm_send"]["limit"] == 5
+
+
+def test_chat_message_rate_limit_headers_present_on_success():
+    client = _test_app.test_client()
+    create_resp = client.post("/chat/create")
+    assert create_resp.status_code == 200
+    room_id = create_resp.get_json()["room_id"]
+
+    post_resp = client.post(
+        f"/chat/room/{room_id}/messages",
+        json={"message": "hello rate limit headers"},
+    )
+    assert post_resp.status_code == 200
+    assert post_resp.headers.get("X-RateLimit-Limit") == "30"
+    assert post_resp.headers.get("X-RateLimit-Remaining") is not None
+    assert post_resp.headers.get("X-RateLimit-Window") == "60"
+
+
+def test_chat_message_rate_limit_headers_present_on_429():
+    client = _test_app.test_client()
+    create_resp = client.post("/chat/create")
+    assert create_resp.status_code == 200
+    room_id = create_resp.get_json()["room_id"]
+
+    for _ in range(30):
+        ok = client.post(f"/chat/room/{room_id}/messages", json={"message": "x"})
+        assert ok.status_code == 200
+
+    blocked = client.post(f"/chat/room/{room_id}/messages", json={"message": "blocked"})
+    assert blocked.status_code == 429
+    assert blocked.headers.get("X-RateLimit-Limit") == "30"
+    assert blocked.headers.get("X-RateLimit-Remaining") == "0"
+    assert blocked.headers.get("Retry-After") is not None

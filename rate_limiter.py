@@ -31,6 +31,7 @@ limiter = Limiter(
     key_func=_get_client_identifier,
     default_limits=["200 per hour", "50 per minute"],
     storage_uri="memory://",
+    headers_enabled=True,
 )
 
 

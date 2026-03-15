@@ -175,7 +175,20 @@
                 });
                 
                 if (!response.ok) {
-                    throw new Error('Failed to create room');
+                    const retryAfter = response.headers.get('Retry-After');
+                    let errorMessage = 'Failed to create room';
+                    try {
+                        const err = await response.json();
+                        if (err && err.error) {
+                            errorMessage = err.error;
+                        }
+                    } catch (e) {
+                        // Ignore JSON parse errors and keep generic message.
+                    }
+                    if (response.status === 429 && retryAfter) {
+                        errorMessage += ` Retry in ${retryAfter}s.`;
+                    }
+                    throw new Error(errorMessage);
                 }
                 
                 const data = await response.json();
