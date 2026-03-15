@@ -190,6 +190,23 @@ Tests cover:
 
 For full testing documentation, see [Testing Guide](docs/user-guide/TESTING.md).
 
+Operations
+==========
+
+### Health and readiness checks
+
+OpSecChat includes two operational endpoints for monitoring:
+
+- `GET /health` - Runtime metrics and service health
+- `GET /health/ready` - Readiness probe (returns `503` when not ready)
+
+```bash
+curl -s http://127.0.0.1:5000/health | python -m json.tool
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:5000/health/ready
+```
+
+See the [Operations Guide](docs/user-guide/OPERATIONS.md) for payload details.
+
 
 How it works
 ============

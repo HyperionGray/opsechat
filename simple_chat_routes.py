@@ -15,7 +15,7 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
+from flask import render_template, request, session, jsonify
 from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
 
 # Global room storage (in-memory only)
@@ -238,6 +238,23 @@ def cleanup_loop():
 # Start cleanup thread
 cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True)
 cleanup_thread.start()
+
+
+def get_runtime_health_snapshot():
+    """Return lightweight runtime metrics for health/readiness checks."""
+    with rooms_lock:
+        active_rooms = len(chat_rooms)
+    with dm_lock:
+        active_direct_messages = len(direct_messages)
+    with _rate_limit_lock:
+        rate_limiter_sessions = len(_rate_limit_store)
+
+    return {
+        "active_rooms": active_rooms,
+        "active_direct_messages": active_direct_messages,
+        "rate_limiter_sessions": rate_limiter_sessions,
+        "cleanup_thread_alive": cleanup_thread.is_alive(),
+    }
 
 
 def generate_secure_room_id(length=32):

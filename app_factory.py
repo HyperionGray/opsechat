@@ -6,6 +6,7 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
+from datetime import datetime, timezone
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
 
@@ -20,9 +21,15 @@ def _read_version():
         return "unknown"
 
 
+def _utc_now():
+    """Return current UTC datetime."""
+    return datetime.now(timezone.utc)
+
+
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
+    app.config["STARTED_AT_UTC"] = _utc_now()
     
     # Set secret key for sessions
     app.secret_key = id_generator(size=64)
@@ -89,40 +96,43 @@ def create_app():
     register_review_routes(app, id_generator, get_random_color, 
                           add_review_wrapper, get_reviews, get_review_stats)
     
-    # Health check endpoint for monitoring and deployment readiness
+    # Health and readiness endpoints for monitoring and deployment readiness
     @app.route('/health', methods=["GET"])
     def health_check():
-        from simple_chat_routes import chat_rooms
+        from simple_chat_routes import get_runtime_health_snapshot
+        runtime = get_runtime_health_snapshot()
+        started_at = app.config.get("STARTED_AT_UTC", _utc_now())
+        uptime_seconds = max(int((_utc_now() - started_at).total_seconds()), 0)
+
         return jsonify({
             "status": "healthy",
             "version": _read_version(),
-            "active_rooms": len(chat_rooms),
+            "service": "opsechat",
+            "timestamp_utc": _utc_now().isoformat().replace("+00:00", "Z"),
+            "uptime_seconds": uptime_seconds,
+            "active_rooms": runtime["active_rooms"],
+            "active_direct_messages": runtime["active_direct_messages"],
+            "rate_limiter_sessions": runtime["rate_limiter_sessions"],
+            "cleanup_thread_alive": runtime["cleanup_thread_alive"],
         }), 200
+
+    @app.route('/health/ready', methods=["GET"])
+    def readiness_check():
+        from simple_chat_routes import get_runtime_health_snapshot
+        runtime = get_runtime_health_snapshot()
+        is_ready = runtime["cleanup_thread_alive"]
+        status_code = 200 if is_ready else 503
+
+        return jsonify({
+            "status": "ready" if is_ready else "not_ready",
+            "service": "opsechat",
+            "cleanup_thread_alive": runtime["cleanup_thread_alive"],
+        }), status_code
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # Health check endpoint for monitoring
-    @app.route('/health', methods=["GET"])
-    def health():
-        """
-        Health check endpoint for monitoring and deployment verification.
-        Returns basic status and version information.
-        """
-        import os
-        try:
-            with open('VERSION', 'r') as f:
-                version = f.read().strip()
-        except:
-            version = '0.8.0-alpha'  # fallback
-        
-        return {
-            'status': 'ok',
-            'version': version,
-            'service': 'opsechat'
-        }, 200
     
     # Error handlers
     @app.errorhandler(404)

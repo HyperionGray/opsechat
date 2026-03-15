@@ -103,8 +103,14 @@ def test_health_endpoint_returns_json_with_required_fields():
     data = response.get_json()
     assert data is not None
     assert data.get("status") == "healthy"
+    assert data.get("service") == "opsechat"
     assert "version" in data
     assert "active_rooms" in data
+    assert "active_direct_messages" in data
+    assert "rate_limiter_sessions" in data
+    assert "cleanup_thread_alive" in data
+    assert "uptime_seconds" in data
+    assert "timestamp_utc" in data
 
 
 def test_health_endpoint_active_rooms_is_integer():
@@ -113,3 +119,31 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_runtime_fields_have_expected_types():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    data = response.get_json()
+
+    assert isinstance(data["active_direct_messages"], int)
+    assert data["active_direct_messages"] >= 0
+    assert isinstance(data["rate_limiter_sessions"], int)
+    assert data["rate_limiter_sessions"] >= 0
+    assert isinstance(data["cleanup_thread_alive"], bool)
+    assert isinstance(data["uptime_seconds"], int)
+    assert data["uptime_seconds"] >= 0
+    assert isinstance(data["timestamp_utc"], str)
+    assert data["timestamp_utc"].endswith("Z")
+
+
+def test_readiness_endpoint_returns_200_and_ready_status():
+    client = _test_app.test_client()
+    response = client.get("/health/ready")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data is not None
+    assert data["status"] == "ready"
+    assert data["service"] == "opsechat"
+    assert data["cleanup_thread_alive"] is True
