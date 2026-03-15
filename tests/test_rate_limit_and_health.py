@@ -103,8 +103,13 @@ def test_health_endpoint_returns_json_with_required_fields():
     data = response.get_json()
     assert data is not None
     assert data.get("status") == "healthy"
+    assert data.get("service") == "opsechat"
     assert "version" in data
     assert "active_rooms" in data
+    assert "rate_limits" in data
+    assert "started_at" in data
+    assert "uptime_seconds" in data
+    assert "timestamp" in data
 
 
 def test_health_endpoint_active_rooms_is_integer():
@@ -113,3 +118,24 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_uptime_is_non_negative_integer():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    data = response.get_json()
+    assert isinstance(data["uptime_seconds"], int)
+    assert data["uptime_seconds"] >= 0
+
+
+def test_response_includes_security_headers():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    assert response.headers.get("X-Content-Type-Options") == "nosniff"
+    assert response.headers.get("X-Frame-Options") == "DENY"
+    assert response.headers.get("Referrer-Policy") == "no-referrer"
+    assert response.headers.get("Permissions-Policy") == "camera=(), microphone=(), geolocation=()"
+    assert response.headers.get("Cache-Control") == "no-store, no-cache, must-revalidate, max-age=0"
+    assert response.headers.get("Pragma") == "no-cache"
+    csp = response.headers.get("Content-Security-Policy", "")
+    assert "default-src 'self'" in csp

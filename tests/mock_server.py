@@ -19,7 +19,7 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from flask import Flask, session
+from flask import Flask
 from mock_routes import create_mock_routes
 
 # Create Flask app with absolute paths for better CI compatibility
@@ -69,14 +69,50 @@ except ImportError as e:
     print(f"Warning: Could not import email_system: {e}")
     # Create mock objects for testing
     class MockEmailStorage:
-        def create_user_inbox(self, user_id): pass
+        def __init__(self):
+            self.inboxes = {}
+
+        def create_user_inbox(self, user_id):
+            self.inboxes.setdefault(user_id, [])
+            return self.inboxes[user_id]
+
     class MockBurnerManager:
-        def cleanup_expired(self): pass
-        def generate_burner_email(self, user_id): return f"test{user_id}@example.com"
-        def rotate_burner(self, user_id, old_email): return f"test{user_id}@example.com"
-        def get_user_burners(self, user_id): return []
-        def get_user_for_burner(self, email): return None
-        def expire_burner(self, email): pass
+        def __init__(self):
+            self.user_burners = {}
+            self.email_owner = {}
+
+        def cleanup_expired(self):
+            return 0
+
+        def generate_burner_email(self, user_id):
+            email = f"test{user_id}@example.com"
+            self.user_burners.setdefault(user_id, [])
+            if email not in self.user_burners[user_id]:
+                self.user_burners[user_id].append(email)
+            self.email_owner[email] = user_id
+            return email
+
+        def rotate_burner(self, user_id, old_email):
+            self.expire_burner(old_email)
+            return self.generate_burner_email(user_id)
+
+        def get_user_burners(self, user_id):
+            return list(self.user_burners.get(user_id, []))
+
+        def get_user_for_burner(self, email):
+            return self.email_owner.get(email)
+
+        def expire_burner(self, email):
+            owner = self.email_owner.pop(email, None)
+            if owner is None:
+                return False
+
+            user_entries = self.user_burners.get(owner, [])
+            if email in user_entries:
+                user_entries.remove(email)
+                if not user_entries:
+                    self.user_burners.pop(owner, None)
+            return True
     
     email_storage = MockEmailStorage()
     burner_manager = MockBurnerManager()
@@ -87,7 +123,7 @@ except ImportError as e:
 def remove_headers(response):
     # Strip framework-identifying headers and avoid version leakage
     response.headers.pop("Server", None)
-    response.headers["Server"] = "OpSecChat"
+    response.headers["Server"] = ""
     response.headers["Date"] = ""
     return response
 

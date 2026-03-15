@@ -10,7 +10,6 @@ Original file was 906 lines, refactored to ~70 lines for better maintainability.
 """
 
 import sys
-import os
 import logging
 from stem.control import Controller
 from stem import SocketError
