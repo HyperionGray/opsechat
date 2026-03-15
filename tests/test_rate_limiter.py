@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Integration tests for Flask-Limiter rate limiting behavior.
+Integration tests for chat endpoint rate limiting behavior.
 
 Tests:
 1. Write (POST) endpoints are rate-limited; read (GET) endpoints are not.
@@ -11,7 +11,7 @@ import sys
 
 
 def _make_app():
-    """Return a fresh Flask test app with rate limiter enabled."""
+    """Return a fresh Flask test app with chat throttling enabled."""
     from app_factory import create_app
     app = create_app()
     app.config["TESTING"] = True
