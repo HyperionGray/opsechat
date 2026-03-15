@@ -92,7 +92,7 @@ def create_app():
                         check_older_than, process_chat)
     
     # Register simple chat routes (new simplified interface)
-    from simple_chat_routes import register_simple_chat_routes
+    from simple_chat_routes import register_simple_chat_routes, chat_rooms, rooms_lock
     register_simple_chat_routes(app)
     
     # Register email routes
@@ -108,7 +108,10 @@ def create_app():
 
     @app.route('/health', methods=["GET"])
     def health():
-        return jsonify(get_health_status())
+        health_status = get_health_status()
+        with rooms_lock:
+            health_status["active_rooms"] = len(chat_rooms)
+        return jsonify(health_status)
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
