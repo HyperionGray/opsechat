@@ -10,7 +10,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    RATE_LIMITS,
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -85,6 +90,42 @@ def test_rate_limit_chat_message_limit():
     allowed, retry_after = check_rate_limit("session-msg", "chat_message")
     assert allowed is False
     assert retry_after >= 1
+
+
+def test_chat_create_includes_rate_limit_headers_on_success():
+    _clear_store()
+    client = _test_app.test_client()
+    response = client.post("/chat/create")
+    assert response.status_code == 200
+
+    assert response.headers.get("X-RateLimit-Limit") == str(RATE_LIMITS["chat_create"]["max_requests"])
+    assert "X-RateLimit-Remaining" in response.headers
+    assert "X-RateLimit-Reset" in response.headers
+
+
+def test_chat_create_limit_exceeded_sets_retry_after_header():
+    _clear_store()
+    client = _test_app.test_client()
+
+    limit = RATE_LIMITS["chat_create"]["max_requests"]
+    for _ in range(limit):
+        ok = client.post("/chat/create")
+        assert ok.status_code == 200
+
+    blocked = client.post("/chat/create")
+    assert blocked.status_code == 429
+    assert blocked.headers.get("Retry-After") is not None
+    assert blocked.headers.get("X-RateLimit-Remaining") == "0"
+
+
+def test_rate_limit_configuration_endpoint_returns_runtime_values():
+    client = _test_app.test_client()
+    response = client.get("/chat/rate-limits")
+    assert response.status_code == 200
+
+    data = response.get_json()
+    assert data is not None
+    assert data == RATE_LIMITS
 
 
 # ---------------------------------------------------------------------------

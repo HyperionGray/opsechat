@@ -131,6 +131,30 @@ First-time users see a prominent security warning:
 - **VIOLATIONS = CONSEQUENCES** - Logs preserved, not burned, potential reporting
 - Users must click "I UNDERSTAND AND AGREE" before chatting
 
+### Simple Chat Rate-Limit Headers and Runtime Config
+
+Simple chat endpoints now return explicit rate-limit headers so clients can back off cleanly:
+
+- `X-RateLimit-Limit`
+- `X-RateLimit-Remaining`
+- `X-RateLimit-Reset`
+- `Retry-After` (when throttled)
+
+You can inspect active limits at:
+
+```bash
+GET /chat/rate-limits
+```
+
+Limits are configurable at startup via environment variables:
+
+- `OPSECHAT_RATE_LIMIT_CHAT_CREATE_MAX`
+- `OPSECHAT_RATE_LIMIT_CHAT_CREATE_WINDOW`
+- `OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_MAX`
+- `OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_WINDOW`
+- `OPSECHAT_RATE_LIMIT_DM_SEND_MAX`
+- `OPSECHAT_RATE_LIMIT_DM_SEND_WINDOW`
+
 ---
 
 ## 📧 Email Rate Limiting

@@ -29,7 +29,7 @@ python chat-room.py --tor
 - ✅ Randomized usernames with colors
 - ✅ Text-only, no media
 - ✅ In-memory only (no disk writes)
-- ✅ Rate limiting: 30 messages/min, 10 room creates/min, 5 DMs/min per session
+- ✅ Rate limiting (configurable): 30 messages/min, 10 room creates/min, 5 DMs/min per session by default
 
 Access at `http://localhost:5000/chat` or your `.onion` address.
 
@@ -39,6 +39,20 @@ Access at `http://localhost:5000/chat` or your `.onion` address.
 curl http://localhost:5000/health
 # {"active_rooms":0,"status":"healthy","version":"0.8.0-alpha"}
 ```
+
+### Inspect chat rate limits
+
+```bash
+curl http://localhost:5000/chat/rate-limits
+# {"chat_create":{"max_requests":10,"window_seconds":60},"chat_message":{"max_requests":30,"window_seconds":60},"dm_send":{"max_requests":5,"window_seconds":60}}
+```
+
+Rate-limited endpoints also return standard headers:
+
+- `X-RateLimit-Limit`
+- `X-RateLimit-Remaining`
+- `X-RateLimit-Reset`
+- `Retry-After` (when limited)
 
 ---
 
