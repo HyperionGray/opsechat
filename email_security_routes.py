@@ -83,46 +83,59 @@ def create_email_security_blueprint(id_generator, get_random_color):
             session["color"] = get_random_color()
         
         message = None
-        current_config = transport_manager.get_config()
+        current_config = transport_manager.is_configured()
         domain_config = domain_rotation_manager.get_config()
         
         if request.method == "POST":
-            config_type = request.form.get("config_type")
+            action = request.form.get("action", "").strip()
+            config_type = request.form.get("config_type", "").strip()
             
-            if config_type == "smtp":
+            if action == "configure_smtp" or config_type == "smtp":
                 smtp_config = {
                     "smtp_server": request.form.get("smtp_server", "").strip(),
                     "smtp_port": int(request.form.get("smtp_port", 587)),
-                    "smtp_username": request.form.get("smtp_username", "").strip(),
-                    "smtp_password": request.form.get("smtp_password", "").strip(),
+                    "username": request.form.get("smtp_username", "").strip(),
+                    "password": request.form.get("smtp_password", "").strip(),
                     "use_tls": request.form.get("use_tls") == "on"
                 }
                 
                 try:
-                    transport_manager.configure_smtp(**smtp_config)
-                    message = {"type": "success", "text": "SMTP configuration saved successfully"}
+                    configured = transport_manager.configure_smtp(**smtp_config)
+                    if configured:
+                        message = {"type": "success", "text": "SMTP configuration saved successfully"}
+                    else:
+                        message = {"type": "error", "text": "SMTP configuration failed (connection test failed)"}
                 except Exception as e:
                     message = {"type": "error", "text": f"SMTP configuration failed: {str(e)}"}
             
-            elif config_type == "imap":
+            elif action == "configure_imap" or config_type == "imap":
                 imap_config = {
                     "imap_server": request.form.get("imap_server", "").strip(),
                     "imap_port": int(request.form.get("imap_port", 993)),
-                    "imap_username": request.form.get("imap_username", "").strip(),
-                    "imap_password": request.form.get("imap_password", "").strip(),
+                    "username": request.form.get("imap_username", "").strip(),
+                    "password": request.form.get("imap_password", "").strip(),
                     "use_ssl": request.form.get("use_ssl") == "on"
                 }
                 
                 try:
-                    transport_manager.configure_imap(**imap_config)
-                    message = {"type": "success", "text": "IMAP configuration saved successfully"}
+                    configured = transport_manager.configure_imap(**imap_config)
+                    if configured:
+                        message = {"type": "success", "text": "IMAP configuration saved successfully"}
+                    else:
+                        message = {"type": "error", "text": "IMAP configuration failed (connection test failed)"}
                 except Exception as e:
                     message = {"type": "error", "text": f"IMAP configuration failed: {str(e)}"}
             
-            elif config_type == "domain":
+            elif action == "configure_domain_api" or config_type == "domain":
                 domain_config_data = {
-                    "api_key": request.form.get("porkbun_api_key", "").strip(),
-                    "secret_key": request.form.get("porkbun_secret_key", "").strip(),
+                    "api_key": (
+                        request.form.get("api_key", "").strip()
+                        or request.form.get("porkbun_api_key", "").strip()
+                    ),
+                    "secret_key": (
+                        request.form.get("api_secret", "").strip()
+                        or request.form.get("porkbun_secret_key", "").strip()
+                    ),
                     "monthly_budget": float(request.form.get("monthly_budget", 10.0))
                 }
                 
@@ -132,12 +145,18 @@ def create_email_security_blueprint(id_generator, get_random_color):
                 except Exception as e:
                     message = {"type": "error", "text": f"Domain configuration failed: {str(e)}"}
         
+        config_status = transport_manager.is_configured()
+        budget_status = domain_rotation_manager.get_budget_status()
+
         return render_template("email_config.html",
                               hostname=app.config["hostname"],
                               path=app.config["path"],
                               message=message,
                               current_config=current_config,
-                              domain_config=domain_config)
+                              domain_config=domain_config,
+                              config_status=config_status,
+                              budget_status=budget_status,
+                              active_domain=domain_rotation_manager.get_active_domain())
 
     @email_security_bp.route('/<string:url_addition>/email/send', methods=["POST"])
     def email_send_api(url_addition):
@@ -199,7 +218,7 @@ def create_email_security_blueprint(id_generator, get_random_color):
             return jsonify({"success": False, "error": "No session"})
         
         try:
-            result = domain_rotation_manager.rotate_domain()
+            result = domain_rotation_manager.rotate_domain(return_details=True)
             return jsonify(result)
         except Exception as e:
             logging.exception("Error in email_domain_rotate")
