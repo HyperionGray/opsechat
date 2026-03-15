@@ -5,18 +5,55 @@ This module handles Flask application creation and configuration,
 extracted from runserver.py to improve code organization.
 """
 
+import os
+
 from flask import Flask
 from utils import id_generator, get_random_color, check_older_than, process_chat
-from rate_limiter import init_limiter
+from rate_limiter import init_limiter, ensure_rate_limit_client_id
 
 
-def create_app():
-    """Create and configure the Flask application"""
+def create_app(config_overrides=None):
+    """Create and configure the Flask application."""
     app = Flask(__name__)
-    
+
     # Set secret key for sessions
-    app.secret_key = id_generator(size=64)
-    
+    app.secret_key = os.getenv("OPSECHAT_SECRET_KEY", id_generator(size=64))
+
+    strict_csp = os.getenv("OPSECHAT_STRICT_CSP", "0").lower() in {"1", "true", "yes"}
+    default_csp_compatible = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "frame-ancestors 'self';"
+    )
+    default_csp_strict = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self'; "
+        "img-src 'self' data:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "frame-ancestors 'self';"
+    )
+
+    app.config.setdefault("RATE_LIMIT_CHAT_CREATE", "10 per hour; 3 per minute")
+    app.config.setdefault("RATE_LIMIT_CHAT_MESSAGES_POST", "60 per minute")
+    app.config.setdefault("RATE_LIMIT_CHAT_DM_SEND", "20 per hour; 5 per minute")
+    app.config.setdefault("CONTENT_SECURITY_POLICY", default_csp_strict if strict_csp else default_csp_compatible)
+    app.config.setdefault("X_FRAME_OPTIONS", "SAMEORIGIN")
+    app.config.setdefault("REFERRER_POLICY", "no-referrer")
+
+    if config_overrides:
+        app.config.update(config_overrides)
+
+    # Ensure each client gets a stable session key before limiter accounting.
+    @app.before_request
+    def initialize_rate_limit_identity():
+        ensure_rate_limit_client_id()
+
     # Initialize rate limiter
     init_limiter(app)
     
@@ -64,26 +101,15 @@ def create_app():
     def add_security_headers(response):
         response.headers["Server"] = ""
         response.headers["Date"] = ""
-        # Content Security Policy: restrict resources to same origin, block inline scripts
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self'; "
-            "style-src 'self'; "
-            "img-src 'self' data:; "
-            "font-src 'self'; "
-            "connect-src 'self'; "
-            "frame-ancestors 'none';"
-        )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
+        response.headers["Content-Security-Policy"] = app.config["CONTENT_SECURITY_POLICY"]
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Frame-Options"] = app.config["X_FRAME_OPTIONS"]
+        response.headers["Referrer-Policy"] = app.config["REFERRER_POLICY"]
         return response
     
     # Register chat routes
     register_chat_routes(app, chatlines, chatters, id_generator, get_random_color, 
-                        check_older_than, process_chat, add_security_headers)
+                        check_older_than, process_chat)
     
     # Register simple chat routes (new simplified interface)
     from simple_chat_routes import register_simple_chat_routes

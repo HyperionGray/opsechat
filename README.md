@@ -8,6 +8,7 @@
 - 🔑 **Automated Key Exchange** - No manual key sharing needed
 - 💬 **Direct Messages** - Ephemeral DM feature for sharing room IDs (1-min expiry)
 - 🔒 **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
+- 🛡️ **Session-Aware Rate Limiting** - Fair limits per client session (Tor/proxy friendly)
 - 🌐 **Domain Rotation CLI** - Easy burner email domain management
 - 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
 - ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use
@@ -33,6 +34,7 @@ OpSecChat now includes both **Web-Based Chat Rooms** and **Terminal UI (TUI)** f
 - ✅ **In-Memory Only** - Zero disk writes
 - ✅ **Tor Ready** - Works seamlessly with Tor hidden services
 - ✅ **Direct Messages** - Share room IDs securely (1-minute expiry)
+- ✅ **Configurable Abuse Controls** - Tune chat write limits via app config
 
 ### Quick Start (Web Chat)
 
@@ -45,6 +47,19 @@ python chat-room.py --tor
 ```
 
 Access the chat at `/chat` to create rooms and share with your contacts.
+
+### Rate-limit and security-header tuning
+
+You can tune chat write limits and CSP behavior via app config/environment:
+
+```bash
+export OPSECHAT_STRICT_CSP=0  # set to 1 after removing inline scripts/styles
+```
+
+For app-factory integrations, override:
+- `RATE_LIMIT_CHAT_CREATE` (default: `10 per hour; 3 per minute`)
+- `RATE_LIMIT_CHAT_MESSAGES_POST` (default: `60 per minute`)
+- `RATE_LIMIT_CHAT_DM_SEND` (default: `20 per hour; 5 per minute`)
 
 ### Terminal UI (TUI)
 - ✅ **TUI Only** - No web browser required
@@ -252,6 +267,7 @@ Features
 - New chat service created every time the server is started
 - No frills, no fancy CSS, code is easy to follow and review to ensure your safety
 - **Memory Overwriting** - Messages are overwritten in memory before deletion for enhanced security
+- **Session-Aware Rate Limiting** - Limits are keyed to a stable session id, with IP fallback
 
 ### Email System (NEW - REAL EMAIL SUPPORT!)
 - **Real SMTP/IMAP Integration** - Send and receive actual emails via configured email servers (see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md))

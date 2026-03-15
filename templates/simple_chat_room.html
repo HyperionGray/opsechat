@@ -217,6 +217,7 @@
         let encryptionKey = null;
         let pollInterval = null;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+        let renderedMessageOrder = [];
         
         // Show security warning on first load
         function showSecurityWarning() {
@@ -348,48 +349,79 @@
             const container = document.getElementById('messagesContainer');
             container.scrollTop = container.scrollHeight;
         }
+
+        function getMessageId(msg) {
+            return `${msg.timestamp}|${msg.username}|${msg.message}|${msg.is_mine ? '1' : '0'}`;
+        }
+
+        async function createMessageElement(msg) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message' + (msg.is_mine ? ' mine' : '');
+            messageDiv.dataset.messageId = getMessageId(msg);
+
+            const usernameSpan = document.createElement('span');
+            usernameSpan.className = 'username';
+            usernameSpan.style.color = `rgb(${msg.color[0]}, ${msg.color[1]}, ${msg.color[2]})`;
+            usernameSpan.textContent = msg.username + ':';
+
+            const messageText = document.createElement('span');
+
+            if (isEncrypted(msg.message)) {
+                const lockIcon = document.createElement('span');
+                lockIcon.className = 'lock-icon';
+                lockIcon.textContent = '🔒 ';
+                messageText.appendChild(lockIcon);
+
+                if (encryptionEnabled && encryptionKey) {
+                    const encryptedData = msg.message.substring(1); // Remove lock emoji
+                    const decrypted = await decryptMessage(encryptedData, encryptionKey);
+                    messageText.appendChild(document.createTextNode(decrypted));
+                } else {
+                    messageText.appendChild(document.createTextNode('[Encrypted - Enable encryption to view]'));
+                }
+            } else {
+                messageText.textContent = msg.message;
+            }
+
+            messageDiv.appendChild(usernameSpan);
+            messageDiv.appendChild(document.createTextNode(' '));
+            messageDiv.appendChild(messageText);
+            return messageDiv;
+        }
         
         async function renderMessages(messages) {
             const container = document.getElementById('messagesContainer');
-            container.innerHTML = '';
-            
-            for (const msg of messages) {
-                const messageDiv = document.createElement('div');
-                messageDiv.className = 'message' + (msg.is_mine ? ' mine' : '');
-                
-                const usernameSpan = document.createElement('span');
-                usernameSpan.className = 'username';
-                usernameSpan.style.color = `rgb(${msg.color[0]}, ${msg.color[1]}, ${msg.color[2]})`;
-                usernameSpan.textContent = msg.username + ':';
-                
-                const messageText = document.createElement('span');
-                
-                // Check if message is encrypted
-                if (isEncrypted(msg.message)) {
-                    const lockIcon = document.createElement('span');
-                    lockIcon.className = 'lock-icon';
-                    lockIcon.textContent = '🔒 ';
-                    messageText.appendChild(lockIcon);
-                    
-                    if (encryptionEnabled && encryptionKey) {
-                        const encryptedData = msg.message.substring(1); // Remove lock emoji
-                        const decrypted = await decryptMessage(encryptedData, encryptionKey);
-                        messageText.appendChild(document.createTextNode(decrypted));
-                    } else {
-                        messageText.appendChild(document.createTextNode('[Encrypted - Enable encryption to view]'));
-                    }
-                } else {
-                    messageText.textContent = msg.message;
-                }
-                
-                messageDiv.appendChild(usernameSpan);
-                messageDiv.appendChild(document.createTextNode(' '));
-                messageDiv.appendChild(messageText);
-                
-                container.appendChild(messageDiv);
+
+            const incomingOrder = messages.map(getMessageId);
+            const existingIsPrefix = (
+                renderedMessageOrder.length <= incomingOrder.length &&
+                renderedMessageOrder.every((id, index) => incomingOrder[index] === id)
+            );
+
+            // Rebuild only when messages expire/reorder; otherwise append incrementally.
+            if (!existingIsPrefix) {
+                container.innerHTML = '';
+                renderedMessageOrder = [];
             }
-            
-            scrollToBottom();
+
+            const renderedIds = new Set(renderedMessageOrder);
+            let appendedCount = 0;
+
+            for (const msg of messages) {
+                const messageId = getMessageId(msg);
+                if (renderedIds.has(messageId)) {
+                    continue;
+                }
+                const messageDiv = await createMessageElement(msg);
+                container.appendChild(messageDiv);
+                renderedMessageOrder.push(messageId);
+                renderedIds.add(messageId);
+                appendedCount += 1;
+            }
+
+            if (appendedCount > 0 || !existingIsPrefix) {
+                scrollToBottom();
+            }
         }
         
         async function sendMessage() {
@@ -475,6 +507,8 @@
             }
             
             // Re-render messages with new encryption status
+            renderedMessageOrder = [];
+            document.getElementById('messagesContainer').innerHTML = '';
             await pollMessages();
         });
         

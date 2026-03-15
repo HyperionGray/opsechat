@@ -12,7 +12,7 @@ git clone https://github.com/HyperionGray/opsechat.git
 cd opsechat
 
 # Install dependencies
-pip install Flask stem
+pip install -r requirements.txt
 
 # Create a chat room (local)
 python chat-room.py
@@ -31,6 +31,16 @@ python chat-room.py --tor
 - ✅ In-memory only (no disk writes)
 
 Access at `http://localhost:5000/chat` or your `.onion` address.
+
+### Optional hardening/tuning
+
+```bash
+# Keep compatibility mode while templates still use inline JS/CSS
+export OPSECHAT_STRICT_CSP=0
+```
+
+Rate limits for write endpoints are configurable in app-factory deployments via:
+`RATE_LIMIT_CHAT_CREATE`, `RATE_LIMIT_CHAT_MESSAGES_POST`, and `RATE_LIMIT_CHAT_DM_SEND`.
 
 ---
 
