@@ -22,6 +22,19 @@ You can run the same bootstrap locally:
 ./scripts/bootstrap-dev-environment.sh
 ```
 
+Bootstrap also supports lightweight setup modes:
+
+```bash
+# Preview everything without changing your machine
+./scripts/bootstrap-dev-environment.sh --dry-run
+
+# Fast Python-only setup (skip Node/Playwright/Tor)
+./scripts/bootstrap-dev-environment.sh --skip-node --skip-playwright --skip-tor
+
+# Run only the environment verification step
+./scripts/bootstrap-dev-environment.sh --verify-only
+```
+
 ### Setting Up Development Environment
 
 ```bash
@@ -49,7 +62,7 @@ python runserver.py
 
 ```
 opsechat/
-├── src/                    # Python source modules (WIP - being organized)
+├── src/                    # Python source modules
 │   └── tui/               # Terminal UI implementation
 ├── templates/             # Jinja2 HTML templates
 ├── static/                # Static assets (CSS, JS)
@@ -221,7 +234,7 @@ npm run lint
 
 - `TOR_CONTROL_PORT` - Tor control port (default: 9051)
 - `PORT` - Flask server port (default: 5000)
-- `FLASK_ENV` - Development/production mode
+- `FLASK_DEBUG` - Flask debug mode in local development (`1` enables debug)
 
 ## Troubleshooting
 
