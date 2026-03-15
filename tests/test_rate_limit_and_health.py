@@ -103,8 +103,12 @@ def test_health_endpoint_returns_json_with_required_fields():
     data = response.get_json()
     assert data is not None
     assert data.get("status") == "healthy"
+    assert data.get("ready") is True
+    assert data.get("service") == "opsechat"
     assert "version" in data
     assert "active_rooms" in data
+    assert "uptime_seconds" in data
+    assert "timestamp" in data
 
 
 def test_health_endpoint_active_rooms_is_integer():
@@ -113,3 +117,31 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_uptime_is_non_negative_integer():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    data = response.get_json()
+    assert isinstance(data["uptime_seconds"], int)
+    assert data["uptime_seconds"] >= 0
+
+
+def test_readiness_endpoint_returns_ready():
+    client = _test_app.test_client()
+    response = client.get("/health/ready")
+    data = response.get_json()
+    assert response.status_code == 200
+    assert data["status"] == "ready"
+    assert data["ready"] is True
+    assert data["service"] == "opsechat"
+
+
+def test_health_endpoint_sets_security_headers():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
+    assert "default-src 'self'" in response.headers["Content-Security-Policy"]
+    assert response.headers["Cache-Control"] == "no-store, no-cache, must-revalidate, max-age=0"
