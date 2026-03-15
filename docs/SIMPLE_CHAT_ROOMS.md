@@ -142,6 +142,43 @@ POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
 
+#### Inspect Effective Limits
+```
+GET /chat/limits
+Response: {
+  "session_limits": {
+    "chat_create": {"max_requests": 3, "window_seconds": 60},
+    "chat_message": {"max_requests": 30, "window_seconds": 60},
+    "dm_send": {"max_requests": 5, "window_seconds": 60}
+  },
+  "global_write_limits": {
+    "chat_create": "10 per hour; 3 per minute",
+    "chat_message": "30 per minute",
+    "dm_send": "20 per hour; 5 per minute"
+  },
+  "max_message_length": 500
+}
+```
+
+When a write request is throttled, OpSecChat now includes a `Retry-After` response
+header so clients can back off cleanly.
+
+### Runtime Configuration
+
+Simple chat limits can be tuned at startup with environment variables:
+
+```bash
+OPSECHAT_CHAT_CREATE_PER_MINUTE=3
+OPSECHAT_CHAT_CREATE_PER_HOUR=10
+OPSECHAT_CHAT_MESSAGE_PER_MINUTE=30
+OPSECHAT_DM_SEND_PER_MINUTE=5
+OPSECHAT_DM_SEND_PER_HOUR=20
+OPSECHAT_MAX_MESSAGE_LENGTH=500
+```
+
+All values must be positive integers. Invalid values are ignored and safe defaults
+are used.
+
 ### Encryption Implementation
 
 The E2E encryption uses native Web Crypto API:

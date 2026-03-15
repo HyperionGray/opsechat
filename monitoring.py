@@ -323,11 +323,38 @@ def _read_version() -> str:
 
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
+    active_rooms = 0
+    active_direct_messages = 0
+    rate_limiter_sessions = 0
+    try:
+        # Import lazily to avoid circular import at module load time.
+        from simple_chat_routes import (
+            chat_rooms,
+            direct_messages,
+            _rate_limit_store,
+            rooms_lock,
+            dm_lock,
+            _rate_limit_lock,
+        )
+
+        with rooms_lock:
+            active_rooms = len(chat_rooms)
+        with dm_lock:
+            active_direct_messages = len(direct_messages)
+        with _rate_limit_lock:
+            rate_limiter_sessions = len(_rate_limit_store)
+    except Exception:
+        # Keep health endpoint resilient even if optional chat internals change.
+        pass
+
     return {
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
+        'active_rooms': active_rooms,
+        'active_direct_messages': active_direct_messages,
+        'rate_limiter_sessions': rate_limiter_sessions,
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',

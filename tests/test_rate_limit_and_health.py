@@ -10,7 +10,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_lock,
+    RATE_LIMITS,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -87,6 +92,18 @@ def test_rate_limit_chat_message_limit():
     assert retry_after >= 1
 
 
+def test_rate_limit_chat_create_limit_matches_config():
+    _clear_store()
+    sid = "session-create"
+    limit = RATE_LIMITS["chat_create"]["max_requests"]
+    for _ in range(limit):
+        allowed, _ = check_rate_limit(sid, "chat_create")
+        assert allowed is True
+    allowed, retry_after = check_rate_limit(sid, "chat_create")
+    assert allowed is False
+    assert retry_after >= 1
+
+
 # ---------------------------------------------------------------------------
 # Health endpoint integration tests
 # ---------------------------------------------------------------------------
@@ -105,6 +122,8 @@ def test_health_endpoint_returns_json_with_required_fields():
     assert data.get("status") == "healthy"
     assert "version" in data
     assert "active_rooms" in data
+    assert "active_direct_messages" in data
+    assert "rate_limiter_sessions" in data
 
 
 def test_health_endpoint_active_rooms_is_integer():
@@ -113,3 +132,20 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_chat_limits_endpoint_returns_expected_structure():
+    client = _test_app.test_client()
+    response = client.get("/chat/limits")
+    assert response.status_code == 200
+
+    data = response.get_json()
+    assert "session_limits" in data
+    assert "global_write_limits" in data
+    assert "max_message_length" in data
+
+    assert "chat_create" in data["session_limits"]
+    assert "chat_message" in data["session_limits"]
+    assert "dm_send" in data["session_limits"]
+    assert isinstance(data["max_message_length"], int)
+    assert data["max_message_length"] > 0
