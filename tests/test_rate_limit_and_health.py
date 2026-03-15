@@ -102,9 +102,14 @@ def test_health_endpoint_returns_json_with_required_fields():
     response = client.get("/health")
     data = response.get_json()
     assert data is not None
-    assert data.get("status") == "healthy"
+    assert data.get("status") in {"healthy", "degraded"}
+    assert data.get("service") == "opsechat"
     assert "version" in data
     assert "active_rooms" in data
+    assert "rate_limited_sessions" in data
+    assert "checks" in data
+    assert "timestamp" in data
+    assert "uptime_seconds" in data
 
 
 def test_health_endpoint_active_rooms_is_integer():
@@ -113,3 +118,22 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_checks_shape():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    data = response.get_json()
+    assert isinstance(data["checks"], dict)
+    assert "version_file" in data["checks"]
+    assert "cleanup_worker" in data["checks"]
+    assert data["checks"]["version_file"] in {"ok", "degraded"}
+    assert data["checks"]["cleanup_worker"] in {"ok", "degraded"}
+
+
+def test_health_endpoint_timestamp_is_iso8601():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    data = response.get_json()
+    parsed = datetime.datetime.fromisoformat(data["timestamp"])
+    assert isinstance(parsed, datetime.datetime)

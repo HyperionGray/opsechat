@@ -16,7 +16,7 @@ import secrets
 import threading
 import base64
 from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from utils import sanitize_emojis, filter_to_ascii, read_version
 
 # Global room storage (in-memory only)
 chat_rooms = {}
@@ -256,13 +256,7 @@ def register_simple_chat_routes(app):
     @app.route('/chat')
     def chat_index():
         """Landing page for creating/joining chat rooms"""
-        # Read version from VERSION file
-        try:
-            with open('VERSION', 'r') as f:
-                version = f.read().strip()
-        except:
-            version = '0.8.0-alpha'  # fallback
-        
+        version = read_version(default="0.8.0-alpha")
         return render_template("simple_chat_index.html", version=version)
     
     @app.route('/chat/create', methods=['POST'])

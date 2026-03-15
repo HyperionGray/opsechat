@@ -10,7 +10,26 @@ import random
 import datetime
 import textwrap
 import re
+import os
 from flask import session
+
+
+def read_version(default="unknown"):
+    """
+    Read application version from the VERSION file.
+
+    Args:
+        default: Fallback value when VERSION cannot be read.
+
+    Returns:
+        Version string.
+    """
+    version_file = os.path.join(os.path.dirname(__file__), "VERSION")
+    try:
+        with open(version_file, encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return default
 
 
 def id_generator(size=6, chars=None):
