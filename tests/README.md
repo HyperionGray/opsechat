@@ -51,7 +51,7 @@ Current tests validate:
 - ✅ Python dependencies and imports
 - ✅ Flask route handlers
 - ✅ Session management
-- ✅ Security headers (Server and Date removal)
+- ✅ Security headers (Server/Date stripping + baseline hardening headers)
 - ✅ Multiple browser compatibility (Chromium, Firefox, WebKit)
 - ✅ Responsive design
 - ✅ Form interactions

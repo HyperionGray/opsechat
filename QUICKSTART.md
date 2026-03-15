@@ -37,8 +37,10 @@ Access at `http://localhost:5000/chat` or your `.onion` address.
 
 ```bash
 curl http://localhost:5000/health
-# {"active_rooms":0,"status":"healthy","version":"0.8.0-alpha"}
+# {"status":"healthy","service":"opsechat","version":"0.8.0-alpha","active_rooms":0,"uptime_seconds":12,...}
 ```
+
+The health payload now includes runtime metadata (`started_at`, `uptime_seconds`, `timestamp`) and current chat endpoint rate-limit settings.
 
 ---
 
