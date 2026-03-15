@@ -3,11 +3,30 @@ Email system module for opsechat
 Provides encrypted email inbox functionality with PGP support
 """
 import datetime
+import os
 import string
 import random
 import re
 from hashlib import sha256
 from typing import Dict, List, Optional
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def _get_positive_int_from_env(var_name: str, default: int) -> int:
+    """Read a positive integer from env or fall back to default."""
+    value = os.getenv(var_name)
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+        if parsed <= 0:
+            raise ValueError("must be > 0")
+        return parsed
+    except (TypeError, ValueError):
+        logger.warning("Invalid %s=%r, using default %d", var_name, value, default)
+        return default
 
 
 class EmailStorage:
@@ -188,7 +207,14 @@ class BurnerEmailManager:
         self.user_burners: Dict[str, List[str]] = {}  # user_id -> list of burner emails
         # Rate limiting for sending emails
         self.send_limits: Dict[str, Dict] = {}  # user_id -> {count, reset_time}
-        self.max_sends_per_hour = 10  # Maximum emails per hour
+        self.send_window_seconds = _get_positive_int_from_env(
+            "OPSECHAT_EMAIL_RATE_LIMIT_WINDOW_SECONDS", 3600
+        )
+        self.max_sends_per_window = _get_positive_int_from_env(
+            "OPSECHAT_EMAIL_SENDS_PER_HOUR", 10
+        )
+        # Backwards-compatible alias used by older docs/tests.
+        self.max_sends_per_hour = self.max_sends_per_window
         self.max_receives_unlimited = True  # Receiving is unlimited (main use case)
     
     def set_custom_domain(self, domain: str) -> None:
@@ -275,7 +301,8 @@ class BurnerEmailManager:
     def expire_burner(self, email: str) -> bool:
         """Immediately expire a burner email"""
         if email in self.burner_addresses:
-            del self.burner_addresses[email]
+            burner_info = self.burner_addresses.pop(email)
+            self._remove_user_burner_reference(burner_info.get('user_id'), email)
             return True
         return False
     
@@ -292,12 +319,30 @@ class BurnerEmailManager:
         expired = [email for email, info in self.burner_addresses.items() 
                    if info['expires_at'] <= now]
         for email in expired:
-            del self.burner_addresses[email]
-            # Also remove from user_burners
-            user_id = self.burner_addresses.get(email, {}).get('user_id')
-            if user_id and user_id in self.user_burners:
-                if email in self.user_burners[user_id]:
-                    self.user_burners[user_id].remove(email)
+            burner_info = self.burner_addresses.pop(email, None)
+            if burner_info:
+                self._remove_user_burner_reference(burner_info.get('user_id'), email)
+
+    def _remove_user_burner_reference(self, user_id: Optional[str], email: str) -> None:
+        """Remove an email from the user's burner index and prune empty lists."""
+        if not user_id:
+            return
+        user_burners = self.user_burners.get(user_id)
+        if not user_burners:
+            return
+        if email in user_burners:
+            user_burners.remove(email)
+        if not user_burners:
+            del self.user_burners[user_id]
+
+    def _format_send_window(self) -> str:
+        """Format the current rate-limit window for user-facing messages."""
+        if self.send_window_seconds == 3600:
+            return "hour"
+        if self.send_window_seconds % 60 == 0:
+            minutes = self.send_window_seconds // 60
+            return f"{minutes} minute{'s' if minutes != 1 else ''}"
+        return f"{self.send_window_seconds} second{'s' if self.send_window_seconds != 1 else ''}"
     
     def _format_time_remaining(self, time_delta: datetime.timedelta) -> str:
         """Format time remaining in human-readable format"""
@@ -329,7 +374,7 @@ class BurnerEmailManager:
         if user_id not in self.send_limits:
             self.send_limits[user_id] = {
                 'count': 0,
-                'reset_time': now + datetime.timedelta(hours=1)
+                'reset_time': now + datetime.timedelta(seconds=self.send_window_seconds)
             }
         
         limit_info = self.send_limits[user_id]
@@ -337,13 +382,20 @@ class BurnerEmailManager:
         # Reset counter if hour has passed
         if now >= limit_info['reset_time']:
             limit_info['count'] = 0
-            limit_info['reset_time'] = now + datetime.timedelta(hours=1)
+            limit_info['reset_time'] = now + datetime.timedelta(seconds=self.send_window_seconds)
         
         # Check if limit exceeded
-        if limit_info['count'] >= self.max_sends_per_hour:
+        if limit_info['count'] >= self.max_sends_per_window:
             time_remaining = limit_info['reset_time'] - now
-            minutes = int(time_remaining.total_seconds() / 60)
-            return False, f"Rate limit exceeded. You can send {self.max_sends_per_hour} emails per hour. Try again in {minutes} minutes."
+            minutes = max(1, int(time_remaining.total_seconds() / 60))
+            return (
+                False,
+                (
+                    "Rate limit exceeded. You can send "
+                    f"{self.max_sends_per_window} emails per {self._format_send_window()}. "
+                    f"Try again in {minutes} minutes."
+                ),
+            )
         
         return True, None
     
@@ -353,7 +405,7 @@ class BurnerEmailManager:
             now = datetime.datetime.now()
             self.send_limits[user_id] = {
                 'count': 0,
-                'reset_time': now + datetime.timedelta(hours=1)
+                'reset_time': now + datetime.timedelta(seconds=self.send_window_seconds)
             }
         
         self.send_limits[user_id]['count'] += 1
@@ -363,16 +415,20 @@ class BurnerEmailManager:
         if user_id not in self.send_limits:
             return {
                 'sends_used': 0,
-                'sends_remaining': self.max_sends_per_hour,
-                'max_sends_per_hour': self.max_sends_per_hour
+                'sends_remaining': self.max_sends_per_window,
+                'max_sends_per_hour': self.max_sends_per_window,
+                'max_sends_per_window': self.max_sends_per_window,
+                'window_seconds': self.send_window_seconds,
             }
         
         limit_info = self.send_limits[user_id]
         return {
             'sends_used': limit_info['count'],
-            'sends_remaining': self.max_sends_per_hour - limit_info['count'],
-            'max_sends_per_hour': self.max_sends_per_hour,
-            'reset_time': limit_info['reset_time']
+            'sends_remaining': max(0, self.max_sends_per_window - limit_info['count']),
+            'max_sends_per_hour': self.max_sends_per_window,
+            'max_sends_per_window': self.max_sends_per_window,
+            'window_seconds': self.send_window_seconds,
+            'reset_time': limit_info['reset_time'],
         }
 
 

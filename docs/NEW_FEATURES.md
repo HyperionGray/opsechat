@@ -143,6 +143,18 @@ Prevent spam and abuse while allowing legitimate use (receiving emails for servi
 - **Receiving**: Unlimited (main use case)
 - **Reset**: Hourly rolling window
 
+### Configuration via environment variables
+
+You can tune limits without changing code:
+
+```bash
+export OPSECHAT_EMAIL_SENDS_PER_HOUR=10
+export OPSECHAT_EMAIL_RATE_LIMIT_WINDOW_SECONDS=3600
+```
+
+- `OPSECHAT_EMAIL_SENDS_PER_HOUR` sets max sends per window
+- `OPSECHAT_EMAIL_RATE_LIMIT_WINDOW_SECONDS` sets window length (default `3600`)
+
 ### Implementation
 ```python
 # Check if user can send
@@ -155,7 +167,7 @@ burner_manager.record_sent_email(user_id)
 
 # Check status
 status = burner_manager.get_send_limit_status(user_id)
-# Returns: {sends_used: 3, sends_remaining: 7, max_sends_per_hour: 10}
+# Returns: {sends_used: 3, sends_remaining: 7, max_sends_per_window: 10, window_seconds: 3600}
 ```
 
 ### User Experience
@@ -169,6 +181,21 @@ When limit exceeded:
 ```
 ❌ Rate limit exceeded. You can send 10 emails per hour. Try again in 42 minutes.
 ```
+
+### Chat endpoint rate limit configuration
+
+Simple chat routes are also configurable with environment variables:
+
+```bash
+export OPSECHAT_CHAT_CREATE_MAX_REQUESTS=10
+export OPSECHAT_CHAT_CREATE_WINDOW_SECONDS=60
+export OPSECHAT_CHAT_MESSAGE_MAX_REQUESTS=30
+export OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS=60
+export OPSECHAT_DM_SEND_MAX_REQUESTS=5
+export OPSECHAT_DM_SEND_WINDOW_SECONDS=60
+```
+
+`/health` now includes both chat and email rate-limit settings so deployments can verify active runtime policy.
 
 ---
 

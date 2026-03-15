@@ -10,7 +10,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_lock,
+    _load_rate_limits_from_env,
+    DEFAULT_RATE_LIMITS,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -87,6 +93,33 @@ def test_rate_limit_chat_message_limit():
     assert retry_after >= 1
 
 
+def test_rate_limit_configuration_loads_from_environment(monkeypatch):
+    monkeypatch.setenv("OPSECHAT_CHAT_CREATE_MAX_REQUESTS", "2")
+    monkeypatch.setenv("OPSECHAT_CHAT_CREATE_WINDOW_SECONDS", "15")
+    monkeypatch.setenv("OPSECHAT_CHAT_MESSAGE_MAX_REQUESTS", "3")
+    monkeypatch.setenv("OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS", "20")
+    monkeypatch.setenv("OPSECHAT_DM_SEND_MAX_REQUESTS", "1")
+    monkeypatch.setenv("OPSECHAT_DM_SEND_WINDOW_SECONDS", "10")
+
+    configured = _load_rate_limits_from_env()
+
+    assert configured["chat_create"] == {"max_requests": 2, "window_seconds": 15}
+    assert configured["chat_message"] == {"max_requests": 3, "window_seconds": 20}
+    assert configured["dm_send"] == {"max_requests": 1, "window_seconds": 10}
+
+
+def test_rate_limit_configuration_invalid_values_fall_back_to_defaults(monkeypatch):
+    monkeypatch.setenv("OPSECHAT_CHAT_CREATE_MAX_REQUESTS", "0")
+    monkeypatch.setenv("OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS", "-9")
+    monkeypatch.setenv("OPSECHAT_DM_SEND_MAX_REQUESTS", "invalid")
+
+    configured = _load_rate_limits_from_env()
+
+    assert configured["chat_create"] == DEFAULT_RATE_LIMITS["chat_create"]
+    assert configured["chat_message"] == DEFAULT_RATE_LIMITS["chat_message"]
+    assert configured["dm_send"] == DEFAULT_RATE_LIMITS["dm_send"]
+
+
 # ---------------------------------------------------------------------------
 # Health endpoint integration tests
 # ---------------------------------------------------------------------------
@@ -113,3 +146,14 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_includes_rate_limit_metadata():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    data = response.get_json()
+
+    assert "rate_limits" in data
+    assert data["rate_limits"]["chat_message"]["max_requests"] >= 1
+    assert "email_send_rate_limit" in data
+    assert data["email_send_rate_limit"]["max_sends_per_window"] >= 1

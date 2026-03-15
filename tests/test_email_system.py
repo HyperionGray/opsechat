@@ -209,6 +209,17 @@ class TestBurnerEmailManager:
         manager.cleanup_expired()
         assert email not in manager.burner_addresses
     
+    def test_cleanup_expired_removes_user_index_entries(self):
+        manager = BurnerEmailManager()
+        email = manager.generate_burner_email("user1")
+        assert email in manager.user_burners["user1"]
+
+        manager.burner_addresses[email]['expires_at'] = datetime.datetime.now() - datetime.timedelta(hours=1)
+        manager.cleanup_expired()
+
+        assert email not in manager.burner_addresses
+        assert "user1" not in manager.user_burners
+    
     def test_get_user_burners(self):
         """Test retrieving all active burners for a user"""
         manager = BurnerEmailManager()
@@ -242,6 +253,24 @@ class TestBurnerEmailManager:
         
         assert result is True
         assert email not in manager.burner_addresses
+        assert "user1" not in manager.user_burners
+
+    def test_send_rate_limit_can_be_configured_from_env(self, monkeypatch):
+        monkeypatch.setenv("OPSECHAT_EMAIL_SENDS_PER_HOUR", "3")
+        monkeypatch.setenv("OPSECHAT_EMAIL_RATE_LIMIT_WINDOW_SECONDS", "120")
+
+        manager = BurnerEmailManager()
+        user_id = "user-config"
+        for _ in range(3):
+            manager.record_sent_email(user_id)
+
+        allowed, message = manager.check_send_rate_limit(user_id)
+        assert allowed is False
+        assert "3 emails per 2 minutes" in message
+
+        status = manager.get_send_limit_status(user_id)
+        assert status["max_sends_per_window"] == 3
+        assert status["window_seconds"] == 120
     
     def test_custom_domain(self):
         """Test setting custom domain for burners"""

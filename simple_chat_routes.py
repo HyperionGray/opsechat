@@ -11,12 +11,16 @@ This module provides a simplified, security-focused chat system with:
 """
 
 import re
+import os
 import datetime
 import secrets
 import threading
 import base64
+import logging
 from flask import render_template, request, session, jsonify, Blueprint
 from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+
+logger = logging.getLogger(__name__)
 
 # Global room storage (in-memory only)
 chat_rooms = {}
@@ -31,12 +35,72 @@ dm_lock = threading.Lock()
 _rate_limit_store = {}
 _rate_limit_lock = threading.Lock()
 
-# Rate limit configuration
-RATE_LIMITS = {
+# Default rate limit configuration
+DEFAULT_RATE_LIMITS = {
     "chat_create": {"max_requests": 10, "window_seconds": 60},
     "chat_message": {"max_requests": 30, "window_seconds": 60},
     "dm_send": {"max_requests": 5, "window_seconds": 60},
 }
+
+# Environment variable names for runtime tuning
+_RATE_LIMIT_ENV_MAPPING = {
+    "chat_create": (
+        "OPSECHAT_CHAT_CREATE_MAX_REQUESTS",
+        "OPSECHAT_CHAT_CREATE_WINDOW_SECONDS",
+    ),
+    "chat_message": (
+        "OPSECHAT_CHAT_MESSAGE_MAX_REQUESTS",
+        "OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS",
+    ),
+    "dm_send": (
+        "OPSECHAT_DM_SEND_MAX_REQUESTS",
+        "OPSECHAT_DM_SEND_WINDOW_SECONDS",
+    ),
+}
+
+
+def _get_positive_int_from_env(var_name: str, default: int) -> int:
+    """Read a positive integer from environment, falling back to default."""
+    value = os.getenv(var_name)
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+        if parsed <= 0:
+            raise ValueError("must be > 0")
+        return parsed
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid %s=%r, using default value %d", var_name, value, default
+        )
+        return default
+
+
+def _load_rate_limits_from_env() -> dict:
+    """Load endpoint rate limits from environment variables."""
+    configured_limits = {}
+    for endpoint, defaults in DEFAULT_RATE_LIMITS.items():
+        max_var, window_var = _RATE_LIMIT_ENV_MAPPING[endpoint]
+        configured_limits[endpoint] = {
+            "max_requests": _get_positive_int_from_env(
+                max_var, defaults["max_requests"]
+            ),
+            "window_seconds": _get_positive_int_from_env(
+                window_var, defaults["window_seconds"]
+            ),
+        }
+    return configured_limits
+
+
+def refresh_rate_limits_from_env() -> dict:
+    """Refresh global RATE_LIMITS from environment variables."""
+    global RATE_LIMITS
+    RATE_LIMITS = _load_rate_limits_from_env()
+    return RATE_LIMITS
+
+
+# Active runtime rate limits
+RATE_LIMITS = _load_rate_limits_from_env()
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
@@ -328,8 +392,13 @@ def register_simple_chat_routes(app):
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
             if not allowed:
+                limit_config = RATE_LIMITS["chat_message"]
                 return jsonify({
-                    "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds."
+                    "error": (
+                        f"Rate limit exceeded. Maximum {limit_config['max_requests']} "
+                        f"messages per {limit_config['window_seconds']} seconds. "
+                        f"Try again in {retry_after} seconds."
+                    )
                 }), 429
             
             # Get message from request
@@ -404,8 +473,13 @@ def register_simple_chat_routes(app):
         # Check rate limit for DMs
         allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
         if not allowed:
+            limit_config = RATE_LIMITS["dm_send"]
             return jsonify({
-                "error": f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds."
+                "error": (
+                    f"Rate limit exceeded. Maximum {limit_config['max_requests']} "
+                    f"DMs per {limit_config['window_seconds']} seconds. "
+                    f"Try again in {retry_after} seconds."
+                )
             }), 429
         
         data = request.get_json()

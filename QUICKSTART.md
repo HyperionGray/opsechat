@@ -40,6 +40,26 @@ curl http://localhost:5000/health
 # {"active_rooms":0,"status":"healthy","version":"0.8.0-alpha"}
 ```
 
+### Configure rate limits (optional)
+
+All chat and email send rate limits can be tuned with environment variables:
+
+```bash
+# Chat room endpoints
+export OPSECHAT_CHAT_CREATE_MAX_REQUESTS=10
+export OPSECHAT_CHAT_CREATE_WINDOW_SECONDS=60
+export OPSECHAT_CHAT_MESSAGE_MAX_REQUESTS=30
+export OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS=60
+export OPSECHAT_DM_SEND_MAX_REQUESTS=5
+export OPSECHAT_DM_SEND_WINDOW_SECONDS=60
+
+# Burner email sends
+export OPSECHAT_EMAIL_SENDS_PER_HOUR=10
+export OPSECHAT_EMAIL_RATE_LIMIT_WINDOW_SECONDS=3600
+```
+
+Restart the server after changing these values.
+
 ---
 
 ## Prerequisites
