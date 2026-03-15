@@ -11,6 +11,7 @@ Previously, users had to manually share encryption keys. Now, each chat room aut
 1. When a room is created, a cryptographically secure 256-bit AES key is generated
 2. When users join the room and enable encryption, the key is automatically fetched from the server
 3. All participants in the room use the same key for E2E encryption
+4. Encrypted payloads are sent with an ASCII-safe `ENC:` prefix so transport filtering does not strip metadata
 
 ### Usage
 ```javascript
@@ -98,6 +99,16 @@ GET /chat/dm/xyz789
 ---
 
 ## 🔒 Enhanced Security Features
+
+### CSP Hardening for Chat Endpoints
+
+Simple chat pages now run under a stricter Content Security Policy (CSP) profile:
+
+- `/chat*` endpoints use strict CSP (`script-src 'self'`, `style-src 'self'`, no inline blocks)
+- Legacy routes keep a compatibility CSP profile while they are migrated
+- Simple chat templates now load CSS/JS from `/static/chat/*` instead of inline `<style>`/`<script>`
+
+This keeps the hardened paths enforceable without breaking older parts of the app during migration.
 
 ### Message Length Caps
 - **Chat messages**: 500 characters maximum

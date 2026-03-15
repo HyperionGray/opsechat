@@ -30,6 +30,7 @@ dm_lock = threading.Lock()
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
+ENCRYPTED_PREFIX = "ENC:"
 
 # Room class to manage chat state
 class ChatRoom:
@@ -236,6 +237,7 @@ def register_simple_chat_routes(app):
                 return jsonify({"error": "No message provided"}), 400
             
             message_text = data["message"].strip()
+            is_encrypted_message = message_text.startswith(ENCRYPTED_PREFIX)
             
             # Validate message
             if not message_text:
@@ -247,11 +249,16 @@ def register_simple_chat_routes(app):
             
             # Detect potential base64 encoded content (basic check)
             # Base64 has high entropy and typically lacks spaces
-            if len(message_text) > 100:
+            if len(message_text) > 100 and not is_encrypted_message:
                 space_count = message_text.count(' ')
                 if space_count < len(message_text) * 0.05:  # Less than 5% spaces
                     # Might be base64 or encoded content
                     return jsonify({"error": "Invalid message format. Only plain text allowed."}), 400
+
+            if is_encrypted_message:
+                encrypted_payload = message_text[len(ENCRYPTED_PREFIX):]
+                if not encrypted_payload or not re.fullmatch(r"[A-Za-z0-9+/=]+", encrypted_payload):
+                    return jsonify({"error": "Invalid encrypted payload format."}), 400
             
             # Filter to ASCII only and remove emojis
             message_text = filter_to_ascii(message_text)

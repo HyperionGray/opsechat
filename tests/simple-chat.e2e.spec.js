@@ -156,7 +156,7 @@ test.describe('Simple Chat Room Tests', () => {
     // Check input has maxlength attribute
     const messageInput = page.locator('#messageInput');
     const maxLength = await messageInput.getAttribute('maxlength');
-    expect(maxLength).toBe('1000');
+    expect(maxLength).toBe('500');
   });
 });
 

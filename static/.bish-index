@@ -1,3 +1,8 @@
 ./pgp-manager.js
 ./jquery.js
 ./openpgp.min.js
+./chat/simple_chat_error.css
+./chat/simple_chat_index.css
+./chat/simple_chat_index.js
+./chat/simple_chat_room.css
+./chat/simple_chat_room.js
