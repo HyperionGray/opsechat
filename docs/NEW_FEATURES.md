@@ -133,6 +133,44 @@ First-time users see a prominent security warning:
 
 ---
 
+## API Hardening Updates
+
+### Configurable Simple-Chat Rate Limits
+
+Simple-chat endpoint limits are now configurable with environment variables:
+
+- `CHAT_CREATE_RATE_LIMIT_MAX_REQUESTS`
+- `CHAT_CREATE_RATE_LIMIT_WINDOW_SECONDS`
+- `CHAT_MESSAGE_RATE_LIMIT_MAX_REQUESTS`
+- `CHAT_MESSAGE_RATE_LIMIT_WINDOW_SECONDS`
+- `DM_SEND_RATE_LIMIT_MAX_REQUESTS`
+- `DM_SEND_RATE_LIMIT_WINDOW_SECONDS`
+
+If variables are not set (or invalid), safe defaults are used.
+
+### Standard 429 Metadata for Clients
+
+When a request is rate-limited, the API now includes:
+
+- `Retry-After`
+- `X-RateLimit-Limit`
+- `X-RateLimit-Remaining`
+- `X-RateLimit-Window`
+
+The JSON body also includes `retry_after`, `limit`, and `window_seconds` to support UI countdowns.
+
+### Expanded Health Probes
+
+The app now exposes:
+
+- `GET /health` (application-level status + room/DM counts + cleanup thread + uptime)
+- `GET /health/live` (liveness probe)
+- `GET /health/ready` (readiness probe)
+
+These endpoints support container orchestrators and service managers with explicit probe targets.
+
+---
+
 ## 📧 Email Rate Limiting
 
 ### Purpose

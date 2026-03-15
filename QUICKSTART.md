@@ -33,11 +33,32 @@ python chat-room.py --tor
 
 Access at `http://localhost:5000/chat` or your `.onion` address.
 
-### Verify the server is healthy
+### Verify health and readiness
 
 ```bash
 curl http://localhost:5000/health
-# {"active_rooms":0,"status":"healthy","version":"0.8.0-alpha"}
+curl http://localhost:5000/health/live
+curl http://localhost:5000/health/ready
+# /health includes: status, version, active_rooms, active_dms, cleanup_thread_alive, uptime_seconds
+```
+
+### Optional: tune simple-chat rate limits
+
+Default limits are:
+- chat room creation: 10 requests / 60 seconds
+- chat messages: 30 requests / 60 seconds
+- direct messages: 5 requests / 60 seconds
+
+You can override them with environment variables before startup:
+
+```bash
+export CHAT_CREATE_RATE_LIMIT_MAX_REQUESTS=20
+export CHAT_CREATE_RATE_LIMIT_WINDOW_SECONDS=60
+export CHAT_MESSAGE_RATE_LIMIT_MAX_REQUESTS=40
+export CHAT_MESSAGE_RATE_LIMIT_WINDOW_SECONDS=60
+export DM_SEND_RATE_LIMIT_MAX_REQUESTS=10
+export DM_SEND_RATE_LIMIT_WINDOW_SECONDS=60
+python runserver.py
 ```
 
 ---

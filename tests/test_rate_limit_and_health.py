@@ -1,5 +1,5 @@
 """
-Tests for rate limiting (simple_chat_routes) and the /health endpoint (app_factory).
+Tests for rate limiting headers and health/readiness endpoints.
 """
 
 import datetime
@@ -87,6 +87,26 @@ def test_rate_limit_chat_message_limit():
     assert retry_after >= 1
 
 
+def test_rate_limited_http_response_includes_retry_headers():
+    _clear_store()
+    client = _test_app.test_client()
+    # chat_create default: 10 requests per 60-second window
+    for _ in range(10):
+        response = client.post("/chat/create")
+        assert response.status_code == 200
+
+    blocked = client.post("/chat/create")
+    assert blocked.status_code == 429
+    assert blocked.headers.get("Retry-After") is not None
+    assert blocked.headers.get("X-RateLimit-Limit") == "10"
+    assert blocked.headers.get("X-RateLimit-Remaining") == "0"
+    assert blocked.headers.get("X-RateLimit-Window") == "60"
+
+    payload = blocked.get_json()
+    assert payload is not None
+    assert payload.get("retry_after", 0) >= 1
+
+
 # ---------------------------------------------------------------------------
 # Health endpoint integration tests
 # ---------------------------------------------------------------------------
@@ -105,6 +125,9 @@ def test_health_endpoint_returns_json_with_required_fields():
     assert data.get("status") == "healthy"
     assert "version" in data
     assert "active_rooms" in data
+    assert "active_dms" in data
+    assert "cleanup_thread_alive" in data
+    assert "uptime_seconds" in data
 
 
 def test_health_endpoint_active_rooms_is_integer():
@@ -113,3 +136,21 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_live_endpoint_returns_alive():
+    client = _test_app.test_client()
+    response = client.get("/health/live")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data == {"status": "alive", "service": "opsechat"}
+
+
+def test_health_ready_endpoint_returns_ready():
+    client = _test_app.test_client()
+    response = client.get("/health/ready")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data is not None
+    assert data.get("status") == "ready"
+    assert data.get("cleanup_thread_alive") is True

@@ -6,6 +6,7 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
+import datetime
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
 
@@ -23,6 +24,7 @@ def _read_version():
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
+    started_at = datetime.datetime.now(datetime.timezone.utc)
     
     # Set secret key for sessions
     app.secret_key = id_generator(size=64)
@@ -92,37 +94,42 @@ def create_app():
     # Health check endpoint for monitoring and deployment readiness
     @app.route('/health', methods=["GET"])
     def health_check():
-        from simple_chat_routes import chat_rooms
+        from simple_chat_routes import chat_rooms, direct_messages, cleanup_thread
+        now = datetime.datetime.now(datetime.timezone.utc)
+        uptime_seconds = int((now - started_at).total_seconds())
         return jsonify({
             "status": "healthy",
             "version": _read_version(),
             "active_rooms": len(chat_rooms),
+            "active_dms": len(direct_messages),
+            "cleanup_thread_alive": cleanup_thread.is_alive(),
+            "uptime_seconds": uptime_seconds,
         }), 200
+
+    @app.route('/health/live', methods=["GET"])
+    def health_live():
+        """Liveness endpoint for container/service probes."""
+        return jsonify({
+            "status": "alive",
+            "service": "opsechat",
+        }), 200
+
+    @app.route('/health/ready', methods=["GET"])
+    def health_ready():
+        """Readiness endpoint verifies essential in-process workers."""
+        from simple_chat_routes import cleanup_thread
+        cleanup_alive = cleanup_thread.is_alive()
+        status_code = 200 if cleanup_alive else 503
+        return jsonify({
+            "status": "ready" if cleanup_alive else "degraded",
+            "version": _read_version(),
+            "cleanup_thread_alive": cleanup_alive,
+        }), status_code
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # Health check endpoint for monitoring
-    @app.route('/health', methods=["GET"])
-    def health():
-        """
-        Health check endpoint for monitoring and deployment verification.
-        Returns basic status and version information.
-        """
-        import os
-        try:
-            with open('VERSION', 'r') as f:
-                version = f.read().strip()
-        except:
-            version = '0.8.0-alpha'  # fallback
-        
-        return {
-            'status': 'ok',
-            'version': version,
-            'service': 'opsechat'
-        }, 200
     
     # Error handlers
     @app.errorhandler(404)

@@ -69,14 +69,48 @@ except ImportError as e:
     print(f"Warning: Could not import email_system: {e}")
     # Create mock objects for testing
     class MockEmailStorage:
-        def create_user_inbox(self, user_id): pass
+        def __init__(self):
+            self._inboxes = {}
+
+        def create_user_inbox(self, user_id):
+            self._inboxes.setdefault(user_id, {
+                "emails": [],
+                "created_at": datetime.datetime.now().isoformat()
+            })
+            return self._inboxes[user_id]
+
     class MockBurnerManager:
-        def cleanup_expired(self): pass
-        def generate_burner_email(self, user_id): return f"test{user_id}@example.com"
-        def rotate_burner(self, user_id, old_email): return f"test{user_id}@example.com"
-        def get_user_burners(self, user_id): return []
-        def get_user_for_burner(self, email): return None
-        def expire_burner(self, email): pass
+        def __init__(self):
+            self._user_burners = {}
+            self._burner_owner = {}
+
+        def cleanup_expired(self):
+            # Mock storage has no TTL semantics; keep API-compatible no-op.
+            return 0
+
+        def generate_burner_email(self, user_id):
+            burner = f"test-{id_generator(size=8)}@example.com"
+            self._burner_owner[burner] = user_id
+            self._user_burners.setdefault(user_id, []).append(burner)
+            return burner
+
+        def rotate_burner(self, user_id, old_email):
+            self.expire_burner(old_email)
+            return self.generate_burner_email(user_id)
+
+        def get_user_burners(self, user_id):
+            return list(self._user_burners.get(user_id, []))
+
+        def get_user_for_burner(self, email):
+            return self._burner_owner.get(email)
+
+        def expire_burner(self, email):
+            owner = self._burner_owner.pop(email, None)
+            if owner is None:
+                return False
+            burners = self._user_burners.get(owner, [])
+            self._user_burners[owner] = [b for b in burners if b != email]
+            return True
     
     email_storage = MockEmailStorage()
     burner_manager = MockBurnerManager()
