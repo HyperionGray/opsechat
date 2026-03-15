@@ -133,6 +133,35 @@ First-time users see a prominent security warning:
 
 ---
 
+## ⚙️ Configurable Chat Rate Limits
+
+### What Changed
+Simple chat rate limits are now configurable at startup via environment variables instead of being hardcoded.
+
+### Defaults
+- `chat_create`: 10 requests per 60 seconds
+- `chat_message`: 30 requests per 60 seconds
+- `dm_send`: 5 requests per 60 seconds
+
+### Environment Variables
+```bash
+OPSECHAT_RATE_LIMIT_CHAT_CREATE_MAX_REQUESTS
+OPSECHAT_RATE_LIMIT_CHAT_CREATE_WINDOW_SECONDS
+OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_MAX_REQUESTS
+OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_WINDOW_SECONDS
+OPSECHAT_RATE_LIMIT_DM_SEND_MAX_REQUESTS
+OPSECHAT_RATE_LIMIT_DM_SEND_WINDOW_SECONDS
+```
+
+### Runtime Visibility
+- `GET /chat/rate-limits` returns effective chat limits
+- `GET /health` now includes `rate_limits` for monitoring systems
+- `429` responses now include:
+  - `Retry-After` response header
+  - structured `rate_limit` details in JSON
+
+---
+
 ## 📧 Email Rate Limiting
 
 ### Purpose
