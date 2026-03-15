@@ -328,6 +328,9 @@ def get_health_status() -> Dict[str, Any]:
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
+        # active_rooms: this app uses a single global chat room. The field is
+        # included for API consistency; it always reports 1 when the service is up.
+        'active_rooms': 1,
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',
