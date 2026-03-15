@@ -217,6 +217,7 @@
         let encryptionKey = null;
         let pollInterval = null;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+        let sendBackoffUntil = 0;
         
         // Show security warning on first load
         function showSecurityWarning() {
@@ -394,7 +395,14 @@
         
         async function sendMessage() {
             const input = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendBtn');
             const message = input.value.trim();
+            const nowMs = Date.now();
+            if (nowMs < sendBackoffUntil) {
+                const retrySeconds = Math.ceil((sendBackoffUntil - nowMs) / 1000);
+                showStatus(`Rate limited. Try again in ${retrySeconds} seconds.`, 2000);
+                return;
+            }
             
             if (!message) return;
             
@@ -418,7 +426,24 @@
                     input.value = '';
                     await pollMessages();
                 } else {
-                    showStatus('Error sending message');
+                    const errorData = await response.json().catch(() => null);
+                    if (response.status === 429 && errorData && errorData.retry_after_seconds) {
+                        const retrySeconds = Number(errorData.retry_after_seconds) || 1;
+                        sendBackoffUntil = Date.now() + (retrySeconds * 1000);
+                        input.disabled = true;
+                        sendButton.disabled = true;
+                        showStatus(`Rate limit exceeded. Retry in ${retrySeconds} seconds.`, retrySeconds * 1000);
+                        setTimeout(() => {
+                            if (!securityWarningAccepted) {
+                                return
+                            }
+                            input.disabled = false;
+                            sendButton.disabled = false;
+                            input.focus();
+                        }, retrySeconds * 1000);
+                        return;
+                    }
+                    showStatus((errorData && errorData.error) || 'Error sending message');
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);

@@ -15,6 +15,7 @@ OpSecChat now includes a simple, security-focused web-based chat room system des
 - **Text-Only**: No media, images, or file sharing
 - **In-Memory Storage**: Zero disk writes
 - **Tor Ready**: Works seamlessly with Tor hidden services
+- **Backoff-Friendly Throttling**: 429 responses include `Retry-After` and retry metadata
 
 ## Quick Start
 
@@ -80,15 +81,11 @@ python chat-room.py --port 8080
 
 1. In the chat room, toggle the "Encryption" switch
 2. All your messages will be encrypted using AES-GCM
-3. Other users must also enable encryption to read your messages
-4. The encryption key is stored in your browser's sessionStorage
-5. Keys are NOT shared - this is for protection against server compromise
+3. A room-scoped encryption key is fetched from `/chat/room/<room_id>/key`
+4. The key is imported into browser memory (Web Crypto) for that session
+5. Messages remain ephemeral and are still deleted after 3 minutes
 
-**Important**: E2E encryption is per-user. If you want to chat with encrypted messages:
-- All participants should enable encryption
-- The encryption protects against server compromise
-- Messages are still deleted after 3 minutes
-- Encryption keys are session-only (lost when you close the tab)
+**Important**: Encryption keys are room-specific and session-scoped in the browser.
 
 ## Security Features
 
@@ -141,6 +138,41 @@ GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
+
+#### Health + Runtime Stats
+```
+GET /health
+Response includes:
+- active_rooms
+- active_dms
+- tracked_rate_limit_sessions
+- rate_limits (effective app-level limits)
+```
+
+### Rate Limiting and Backoff
+
+Write endpoints return structured 429 responses:
+
+```json
+{
+  "error": "Rate limit exceeded",
+  "endpoint": "chat_message",
+  "max_requests": 30,
+  "window_seconds": 60,
+  "retry_after_seconds": 12
+}
+```
+
+The response also sets `Retry-After`, and the web UI now honors this value by disabling actions until the backoff expires.
+
+#### App-level rate limit env vars
+
+- `OPSECHAT_RATE_LIMIT_CHAT_CREATE_MAX`
+- `OPSECHAT_RATE_LIMIT_CHAT_CREATE_WINDOW`
+- `OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_MAX`
+- `OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_WINDOW`
+- `OPSECHAT_RATE_LIMIT_DM_SEND_MAX`
+- `OPSECHAT_RATE_LIMIT_DM_SEND_WINDOW`
 
 ### Encryption Implementation
 

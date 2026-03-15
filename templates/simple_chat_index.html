@@ -164,6 +164,7 @@
         // Simple room creation with no external dependencies
         document.getElementById('createRoomBtn').addEventListener('click', async function() {
             const statusDiv = document.getElementById('status');
+            const createButton = document.getElementById('createRoomBtn');
             statusDiv.textContent = 'Creating room...';
             
             try {
@@ -175,7 +176,19 @@
                 });
                 
                 if (!response.ok) {
-                    throw new Error('Failed to create room');
+                    const errorData = await response.json().catch(() => null);
+                    if (response.status === 429 && errorData && errorData.retry_after_seconds) {
+                        const retrySeconds = Number(errorData.retry_after_seconds) || 1;
+                        statusDiv.textContent = `Rate limit exceeded. Try again in ${retrySeconds} seconds.`;
+                        createButton.disabled = true;
+                        createButton.textContent = `Retry in ${retrySeconds}s`;
+                        setTimeout(() => {
+                            createButton.disabled = false;
+                            createButton.textContent = 'Create New Chat Room';
+                        }, retrySeconds * 1000);
+                        return;
+                    }
+                    throw new Error((errorData && errorData.error) || 'Failed to create room');
                 }
                 
                 const data = await response.json();

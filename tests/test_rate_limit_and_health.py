@@ -105,6 +105,8 @@ def test_health_endpoint_returns_json_with_required_fields():
     assert data.get("status") == "healthy"
     assert "version" in data
     assert "active_rooms" in data
+    assert "active_dms" in data
+    assert "rate_limits" in data
 
 
 def test_health_endpoint_active_rooms_is_integer():
@@ -113,3 +115,39 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_exposes_rate_limit_configuration():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    data = response.get_json()
+    limits = data["rate_limits"]
+    assert "chat_create" in limits
+    assert "chat_message" in limits
+    assert "dm_send" in limits
+    assert limits["chat_message"]["max_requests"] >= 1
+    assert limits["chat_message"]["window_seconds"] >= 1
+
+
+def test_chat_message_rate_limit_response_includes_retry_metadata():
+    _clear_store()
+    client = _test_app.test_client()
+    create_resp = client.post("/chat/create", content_type="application/json")
+    room_id = create_resp.get_json()["room_id"]
+
+    for _ in range(30):
+        response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "hello world"},
+        )
+        assert response.status_code == 200
+
+    blocked = client.post(
+        f"/chat/room/{room_id}/messages",
+        json={"message": "should be throttled"},
+    )
+    assert blocked.status_code == 429
+    payload = blocked.get_json()
+    assert payload["endpoint"] == "chat_message"
+    assert payload["retry_after_seconds"] >= 1
+    assert blocked.headers.get("Retry-After") is not None

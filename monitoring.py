@@ -323,11 +323,28 @@ def _read_version() -> str:
 
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
+    chat_stats = {
+        "active_rooms": 0,
+        "active_dms": 0,
+        "tracked_rate_limit_sessions": 0,
+        "rate_limits": {},
+    }
+    try:
+        from simple_chat_routes import get_chat_runtime_stats
+        chat_stats = get_chat_runtime_stats()
+    except Exception:
+        # Keep /health stable even if chat modules fail to load.
+        pass
+
     return {
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
+        'active_rooms': chat_stats['active_rooms'],
+        'active_dms': chat_stats['active_dms'],
+        'tracked_rate_limit_sessions': chat_stats['tracked_rate_limit_sessions'],
+        'rate_limits': chat_stats['rate_limits'],
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',
