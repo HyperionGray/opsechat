@@ -5,6 +5,7 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV_DIR="${PROJECT_ROOT}/.venv"
 PLAYWRIGHT_CACHE_DIR="${PROJECT_ROOT}/.cache/ms-playwright"
+DEV_ENV_REPORT="${PROJECT_ROOT}/.cache/dev-env-report.json"
 
 install_apt_packages_if_possible() {
   if ! command -v apt-get >/dev/null 2>&1; then
@@ -69,7 +70,7 @@ if [ ! -f "${PROJECT_ROOT}/requirements-dev.txt" ]; then
   exit 1
 fi
 
-"/${VENV_DIR}/bin/pip" install -r "${PROJECT_ROOT}/requirements.txt" -r "${PROJECT_ROOT}/requirements-dev.txt" -e "${PROJECT_ROOT}"
+"${VENV_DIR}/bin/pip" install -r "${PROJECT_ROOT}/requirements.txt" -r "${PROJECT_ROOT}/requirements-dev.txt" -e "${PROJECT_ROOT}"
 
 install_tor_if_possible
 
@@ -89,5 +90,9 @@ install_tor_if_possible
 if [ ! -f "${PROJECT_ROOT}/scripts/check-dev-env.py" ]; then
   echo "[!] scripts/check-dev-env.py not found. Skipping environment verification."
 else
-  PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_CACHE_DIR}" "${VENV_DIR}/bin/python" "${PROJECT_ROOT}/scripts/check-dev-env.py"
+  PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_CACHE_DIR}" \
+    "${VENV_DIR}/bin/python" "${PROJECT_ROOT}/scripts/check-dev-env.py" \
+    --project-root "${PROJECT_ROOT}" \
+    --output "${DEV_ENV_REPORT}"
+  echo "[*] Development environment report written to ${DEV_ENV_REPORT}"
 fi

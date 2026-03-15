@@ -22,6 +22,15 @@ You can run the same bootstrap locally:
 ./scripts/bootstrap-dev-environment.sh
 ```
 
+The bootstrap script now runs `scripts/check-dev-env.py` and writes a machine-readable
+report to `.cache/dev-env-report.json`.
+
+To run the check manually:
+
+```bash
+python scripts/check-dev-env.py --project-root . --json --output .cache/dev-env-report.json
+```
+
 ### Setting Up Development Environment
 
 ```bash
@@ -29,17 +38,11 @@ You can run the same bootstrap locally:
 git clone https://github.com/HyperionGray/opsechat.git
 cd opsechat
 
-# Create a virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Preferred: one command setup (virtualenv + Python + Node + Playwright)
+./scripts/bootstrap-dev-environment.sh
 
-# Install dependencies
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-
-# Install test dependencies
-npm install
-npx playwright install
+# Optional: inspect setup status
+python scripts/check-dev-env.py --project-root .
 
 # Run the development server
 python runserver.py
@@ -221,7 +224,7 @@ npm run lint
 
 - `TOR_CONTROL_PORT` - Tor control port (default: 9051)
 - `PORT` - Flask server port (default: 5000)
-- `FLASK_ENV` - Development/production mode
+- `FLASK_DEBUG` - Flask debug mode (use `1` for enabled)
 
 ## Troubleshooting
 
