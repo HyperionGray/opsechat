@@ -97,6 +97,36 @@ GET /chat/dm/xyz789
 
 ---
 
+## ⏱️ Adaptive Rate-Limit Backoff
+
+### What Changed
+Simple chat endpoint throttling now includes adaptive cooldowns in addition to
+the existing sliding-window limits.
+
+### Why
+Fixed-window limits stop single bursts, but repeated retries can still cause
+noisy abuse patterns. Adaptive backoff increases the retry delay for repeated
+violations from the same session.
+
+### Behavior
+- Sliding-window limits still apply:
+  - Chat create: 10/minute
+  - Chat message: 30/minute
+  - DM send: 5/minute
+- On repeated violations, the server adds an exponential cooldown.
+- Cooldowns decay after a quiet period, so occasional spikes are not
+  permanently penalized.
+- `retry_after` now reflects the stricter of:
+  - Remaining sliding-window time
+  - Current adaptive cooldown
+
+### Security Impact
+- Reduces brute-force and spam retry pressure on chat/DM endpoints
+- Improves endpoint resilience without introducing persistent tracking
+- Keeps behavior in-memory and session-scoped only
+
+---
+
 ## 🔒 Enhanced Security Features
 
 ### Message Length Caps

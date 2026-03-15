@@ -30,6 +30,7 @@ python chat-room.py --tor
 - ✅ Text-only, no media
 - ✅ In-memory only (no disk writes)
 - ✅ Rate limiting: 30 messages/min, 10 room creates/min, 5 DMs/min per session
+- ✅ Adaptive anti-abuse backoff: repeated bursts trigger temporary cooldowns
 
 Access at `http://localhost:5000/chat` or your `.onion` address.
 

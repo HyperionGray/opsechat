@@ -33,9 +33,24 @@ _rate_limit_lock = threading.Lock()
 
 # Rate limit configuration
 RATE_LIMITS = {
-    "chat_create": {"max_requests": 10, "window_seconds": 60},
-    "chat_message": {"max_requests": 30, "window_seconds": 60},
-    "dm_send": {"max_requests": 5, "window_seconds": 60},
+    "chat_create": {
+        "max_requests": 10,
+        "window_seconds": 60,
+        "backoff_base_seconds": 2,
+        "backoff_max_seconds": 30,
+    },
+    "chat_message": {
+        "max_requests": 30,
+        "window_seconds": 60,
+        "backoff_base_seconds": 1,
+        "backoff_max_seconds": 20,
+    },
+    "dm_send": {
+        "max_requests": 5,
+        "window_seconds": 60,
+        "backoff_base_seconds": 3,
+        "backoff_max_seconds": 60,
+    },
 }
 
 # Maximum message length to prevent base64 encoding of images
@@ -183,21 +198,104 @@ def check_rate_limit(session_id: str, endpoint: str) -> tuple:
             _rate_limit_store[session_id] = {}
 
         session_limits = _rate_limit_store[session_id]
-        if endpoint not in session_limits:
-            session_limits[endpoint] = []
+        raw_entry = session_limits.get(endpoint, [])
+        entry = _normalize_rate_limit_entry(raw_entry)
+        session_limits[endpoint] = entry
 
-        # Remove timestamps outside the current window
-        session_limits[endpoint] = [
-            ts for ts in session_limits[endpoint] if ts > cutoff
+        # Remove timestamps outside the current window.
+        entry["requests"] = [
+            ts for ts in entry["requests"]
+            if isinstance(ts, datetime.datetime) and ts > cutoff
         ]
 
-        if len(session_limits[endpoint]) >= max_requests:
-            oldest = session_limits[endpoint][0]
-            retry_after = int(window - (now - oldest).total_seconds()) + 1
-            return False, max(retry_after, 1)
+        # Decay strike counter after a quiet window so occasional bursts
+        # do not permanently penalize a session.
+        last_violation = entry.get("last_violation")
+        if (
+            isinstance(last_violation, datetime.datetime)
+            and (now - last_violation).total_seconds() > window
+        ):
+            entry["violations"] = 0
+            entry["last_violation"] = None
 
-        session_limits[endpoint].append(now)
+        blocked_until = entry.get("blocked_until")
+        if isinstance(blocked_until, datetime.datetime):
+            if blocked_until > now:
+                retry_after = int((blocked_until - now).total_seconds()) + 1
+                return False, max(retry_after, 1)
+            entry["blocked_until"] = None
+
+        if len(entry["requests"]) >= max_requests:
+            entry["violations"] += 1
+            entry["last_violation"] = now
+            oldest = entry["requests"][0]
+            retry_after_window = int(window - (now - oldest).total_seconds()) + 1
+            retry_after_backoff = _calculate_backoff_seconds(config, entry["violations"])
+            entry["blocked_until"] = now + datetime.timedelta(seconds=retry_after_backoff)
+            return False, max(retry_after_window, retry_after_backoff, 1)
+
+        entry["requests"].append(now)
         return True, 0
+
+
+def _normalize_rate_limit_entry(entry):
+    """
+    Convert stored rate-limit data into the current dictionary format.
+
+    Supports legacy list-only entries to remain backward compatible with
+    existing tests and any in-memory state created before adaptive backoff.
+    """
+    if isinstance(entry, list):
+        return {
+            "requests": entry,
+            "violations": 0,
+            "blocked_until": None,
+            "last_violation": None,
+        }
+
+    if isinstance(entry, dict):
+        requests = entry.get("requests", [])
+        if not isinstance(requests, list):
+            requests = []
+
+        violations = entry.get("violations", 0)
+        if not isinstance(violations, int) or violations < 0:
+            violations = 0
+
+        blocked_until = entry.get("blocked_until")
+        if not isinstance(blocked_until, datetime.datetime):
+            blocked_until = None
+
+        last_violation = entry.get("last_violation")
+        if not isinstance(last_violation, datetime.datetime):
+            last_violation = None
+
+        return {
+            "requests": requests,
+            "violations": violations,
+            "blocked_until": blocked_until,
+            "last_violation": last_violation,
+        }
+
+    return {
+        "requests": [],
+        "violations": 0,
+        "blocked_until": None,
+        "last_violation": None,
+    }
+
+
+def _calculate_backoff_seconds(config, violations: int) -> int:
+    """Calculate exponential backoff delay for repeated rate-limit violations."""
+    base = int(config.get("backoff_base_seconds", 1))
+    max_backoff = int(config.get("backoff_max_seconds", config["window_seconds"]))
+    if base < 1:
+        base = 1
+    if max_backoff < 1:
+        max_backoff = 1
+
+    retry_seconds = base * (2 ** max(0, violations - 1))
+    return min(retry_seconds, max_backoff)
 
 
 def cleanup_rate_limits():
@@ -210,8 +308,32 @@ def cleanup_rate_limits():
 
         for sid, endpoints in _rate_limit_store.items():
             for ep in list(endpoints.keys()):
-                endpoints[ep] = [ts for ts in endpoints[ep] if ts > cutoff]
-                if not endpoints[ep]:
+                entry = _normalize_rate_limit_entry(endpoints[ep])
+                endpoints[ep] = entry
+
+                entry["requests"] = [
+                    ts for ts in entry["requests"]
+                    if isinstance(ts, datetime.datetime) and ts > cutoff
+                ]
+
+                if (
+                    isinstance(entry["blocked_until"], datetime.datetime)
+                    and entry["blocked_until"] <= now
+                ):
+                    entry["blocked_until"] = None
+
+                if (
+                    isinstance(entry["last_violation"], datetime.datetime)
+                    and (now - entry["last_violation"]).total_seconds() > max_window
+                ):
+                    entry["violations"] = 0
+                    entry["last_violation"] = None
+
+                if (
+                    not entry["requests"]
+                    and entry["blocked_until"] is None
+                    and entry["violations"] == 0
+                ):
                     del endpoints[ep]
             if not endpoints:
                 stale_sessions.append(sid)

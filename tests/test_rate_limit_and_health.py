@@ -10,7 +10,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    RATE_LIMITS,
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -85,6 +90,64 @@ def test_rate_limit_chat_message_limit():
     allowed, retry_after = check_rate_limit("session-msg", "chat_message")
     assert allowed is False
     assert retry_after >= 1
+
+
+def test_rate_limit_legacy_list_entries_are_supported():
+    _clear_store()
+    sid = "session-legacy"
+    with _rate_limit_lock:
+        _rate_limit_store[sid] = {
+            "dm_send": [datetime.datetime.now() - datetime.timedelta(seconds=120)] * 5
+        }
+
+    allowed, retry_after = check_rate_limit(sid, "dm_send")
+    assert allowed is True
+    assert retry_after == 0
+
+    with _rate_limit_lock:
+        assert isinstance(_rate_limit_store[sid]["dm_send"], dict)
+        assert "requests" in _rate_limit_store[sid]["dm_send"]
+
+
+def test_rate_limit_backoff_escalates_on_repeated_bursts():
+    _clear_store()
+    endpoint = "test_backoff"
+    RATE_LIMITS[endpoint] = {
+        "max_requests": 1,
+        "window_seconds": 1,
+        "backoff_base_seconds": 2,
+        "backoff_max_seconds": 8,
+    }
+    sid = "session-backoff"
+
+    try:
+        allowed, retry_after = check_rate_limit(sid, endpoint)
+        assert allowed is True
+        assert retry_after == 0
+
+        # First violation: should apply initial backoff.
+        allowed, first_retry = check_rate_limit(sid, endpoint)
+        assert allowed is False
+        assert first_retry >= 2
+
+        # While blocked, request remains blocked without creating a new strike.
+        allowed, blocked_retry = check_rate_limit(sid, endpoint)
+        assert allowed is False
+        assert blocked_retry >= 1
+
+        # Force cooldown expiry while keeping request in-window so we hit
+        # the limiter again and trigger a second strike.
+        with _rate_limit_lock:
+            entry = _rate_limit_store[sid][endpoint]
+            entry["blocked_until"] = datetime.datetime.now() - datetime.timedelta(seconds=1)
+            entry["requests"] = [datetime.datetime.now()]
+
+        allowed, second_retry = check_rate_limit(sid, endpoint)
+        assert allowed is False
+        assert second_retry >= 4
+        assert second_retry >= first_retry
+    finally:
+        RATE_LIMITS.pop(endpoint, None)
 
 
 # ---------------------------------------------------------------------------
