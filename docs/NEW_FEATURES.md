@@ -143,6 +143,26 @@ Prevent spam and abuse while allowing legitimate use (receiving emails for servi
 - **Receiving**: Unlimited (main use case)
 - **Reset**: Hourly rolling window
 
+### HTTP Rate-Limit Metadata (NEW)
+Chat write endpoints now return machine-readable rate-limit metadata so clients can
+back off cleanly instead of retrying blindly.
+
+#### Endpoints Covered
+- `POST /chat/create`
+- `POST /chat/room/{room_id}/messages`
+- `POST /chat/dm/send`
+
+#### Response Headers
+- `X-RateLimit-Limit` - Total requests allowed in the window
+- `X-RateLimit-Remaining` - Requests left in the active window
+- `X-RateLimit-Window` - Window size in seconds
+- `X-RateLimit-Reset` - Unix timestamp when the window resets
+- `Retry-After` - Included on `429 Too Many Requests`
+
+#### Policy Discovery Endpoint
+Use `GET /chat/rate-limits` to retrieve current server-side defaults for chat and
+DM limits plus message length constraints.
+
 ### Implementation
 ```python
 # Check if user can send
