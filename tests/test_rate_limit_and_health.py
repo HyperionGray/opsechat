@@ -113,3 +113,32 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_liveness_endpoint_returns_alive_status():
+    client = _test_app.test_client()
+    response = client.get("/health/live")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["status"] == "alive"
+    assert "version" in data
+
+
+def test_health_readiness_endpoint_returns_status_and_checks():
+    client = _test_app.test_client()
+    response = client.get("/health/ready")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["status"] in {"ready", "degraded"}
+    assert isinstance(data["checks"], dict)
+    assert "version_file" in data["checks"]
+
+
+def test_version_endpoint_returns_service_metadata():
+    client = _test_app.test_client()
+    response = client.get("/version")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["service"] == "opsechat"
+    assert "version" in data
+    assert data["source"] == "VERSION"

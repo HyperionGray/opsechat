@@ -7,16 +7,12 @@ extracted from runserver.py to improve code organization.
 
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
-
-
-def _read_version():
-    """Read application version from VERSION file"""
-    version_file = os.path.join(os.path.dirname(__file__), "VERSION")
-    try:
-        with open(version_file) as f:
-            return f.read().strip()
-    except OSError:
-        return "unknown"
+from monitoring import (
+    get_health_status,
+    get_liveness_status,
+    get_readiness_status,
+    get_version_info,
+)
 
 
 def create_app():
@@ -88,37 +84,31 @@ def create_app():
     register_review_routes(app, id_generator, get_random_color, 
                           add_review_wrapper, get_reviews, get_review_stats)
     
-    # Health check endpoint
-    from monitoring import get_health_status
-
-    @app.route('/health', methods=["GET"])
-    def health():
-        return jsonify(get_health_status())
-
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
     
-    # Health check endpoint for monitoring
+    # Status and observability endpoints
     @app.route('/health', methods=["GET"])
     def health():
-        """
-        Health check endpoint for monitoring and deployment verification.
-        Returns basic status and version information.
-        """
-        import os
-        try:
-            with open('VERSION', 'r') as f:
-                version = f.read().strip()
-        except:
-            version = '0.8.0-alpha'  # fallback
-        
-        return {
-            'status': 'ok',
-            'version': version,
-            'service': 'opsechat'
-        }, 200
+        """Compatibility health endpoint used by tests and uptime probes."""
+        return jsonify(get_health_status())
+
+    @app.route('/health/live', methods=["GET"])
+    def health_live():
+        """Liveness endpoint: process is running and serving requests."""
+        return jsonify(get_liveness_status())
+
+    @app.route('/health/ready', methods=["GET"])
+    def health_ready():
+        """Readiness endpoint: service is ready for traffic."""
+        return jsonify(get_readiness_status())
+
+    @app.route('/version', methods=["GET"])
+    def version():
+        """Version metadata endpoint sourced from the VERSION file."""
+        return jsonify(get_version_info())
     
     # Error handlers
     @app.errorhandler(404)

@@ -310,29 +310,98 @@ def monitor_performance(operation_name: str):
 # Global APM instance
 apm = ApplicationPerformanceMonitor()
 
-# Health check endpoint data
+# Health and metadata endpoint data
 def _read_version() -> str:
-    """Read version from VERSION file, falling back to 'unknown'"""
-    version_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'VERSION')
+    """Read version from VERSION file, falling back to 'unknown'."""
+    version_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "VERSION")
     try:
         with open(version_file) as f:
             return f.read().strip()
     except OSError:
-        return 'unknown'
+        return "unknown"
+
+
+def get_runtime_activity() -> Dict[str, int]:
+    """Collect lightweight runtime activity metrics for status endpoints."""
+    try:
+        from simple_chat_routes import (
+            chat_rooms,
+            rooms_lock,
+            direct_messages,
+            dm_lock,
+            _rate_limit_store,
+            _rate_limit_lock,
+        )
+    except Exception:
+        # If chat modules are unavailable we still return a stable shape.
+        return {"active_rooms": 0, "active_dms": 0, "rate_limited_sessions": 0}
+
+    with rooms_lock:
+        active_rooms = len(chat_rooms)
+    with dm_lock:
+        active_dms = len(direct_messages)
+    with _rate_limit_lock:
+        rate_limited_sessions = len(_rate_limit_store)
+
+    return {
+        "active_rooms": active_rooms,
+        "active_dms": active_dms,
+        "rate_limited_sessions": rate_limited_sessions,
+    }
+
+
+def get_version_info() -> Dict[str, str]:
+    """Return version metadata for the /version endpoint."""
+    return {"service": "opsechat", "version": _read_version(), "source": "VERSION"}
+
+
+def get_liveness_status() -> Dict[str, Any]:
+    """Return process liveness data."""
+    return {
+        "status": "alive",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": _read_version(),
+    }
+
+
+def get_readiness_status() -> Dict[str, Any]:
+    """Return readiness checks for deployment orchestration."""
+    version = _read_version()
+    checks = {
+        "version_file": "ok" if version != "unknown" else "degraded",
+        "memory_usage": "ok",
+        "disk_space": "ok",
+    }
+    ready = all(check == "ok" for check in checks.values())
+    activity = get_runtime_activity()
+
+    return {
+        "status": "ready" if ready else "degraded",
+        "timestamp": datetime.utcnow().isoformat(),
+        "uptime_seconds": time.time() - apm.metrics["system"]["start_time"],
+        "version": version,
+        **activity,
+        "checks": checks,
+    }
 
 
 def get_health_status() -> Dict[str, Any]:
-    """Get application health status"""
+    """
+    Return a compatibility health payload used by existing tests and clients.
+
+    Includes active room counters while also exposing operational fields.
+    """
+    activity = get_runtime_activity()
     return {
-        'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
-        'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
-        'version': _read_version(),
-        'checks': {
-            'tor_connection': 'unknown',  # Would need to check actual Tor status
-            'memory_usage': 'ok',
-            'disk_space': 'ok'
-        }
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "uptime_seconds": time.time() - apm.metrics["system"]["start_time"],
+        "version": _read_version(),
+        **activity,
+        "checks": {
+            "memory_usage": "ok",
+            "disk_space": "ok",
+        },
     }
 
 # Security event logging
