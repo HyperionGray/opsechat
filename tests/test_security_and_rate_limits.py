@@ -1,7 +1,9 @@
 from app_factory import create_app
+import pytest
 
 
-def _create_test_client():
+@pytest.fixture(scope="module")
+def client():
     app = create_app(
         {
             "TESTING": True,
@@ -12,9 +14,7 @@ def _create_test_client():
     return app.test_client()
 
 
-def test_security_headers_allow_same_origin_framing():
-    client = _create_test_client()
-
+def test_security_headers_allow_same_origin_framing(client):
     response = client.get("/chat")
     csp = response.headers.get("Content-Security-Policy", "")
 
@@ -25,9 +25,7 @@ def test_security_headers_allow_same_origin_framing():
     assert response.headers.get("Referrer-Policy") == "no-referrer"
 
 
-def test_chat_create_rate_limit_returns_structured_429():
-    client = _create_test_client()
-
+def test_chat_create_rate_limit_returns_structured_429(client):
     first = client.post("/chat/create")
     second = client.post("/chat/create")
     blocked = client.post("/chat/create")
