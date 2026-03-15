@@ -65,9 +65,8 @@ These are development and testing utilities that help during development:
 - **`comprehensive_functionality_test.py`** - Full functional test suite
 
 ### Main Application Files
-- **`runserver.py`** - Main entry point (legacy monolithic)
-- **`runserver_refactored.py`** - Refactored version (blueprint-based)
-- **`app_factory.py`** - Flask app factory pattern
+- **`runserver.py`** - Main entry point (uses app factory)
+- **`app_factory.py`** - Flask app factory pattern and shared security headers
 - **`chat-room.py`** - Standalone chat room creator
 - **`tui-server.py`** - Terminal UI server
 - **`tui-client.py`** - Terminal UI client
@@ -210,6 +209,8 @@ npm run lint
 - `TOR_CONTROL_PORT` - Tor control port (default: 9051)
 - `PORT` - Flask server port (default: 5000)
 - `FLASK_ENV` - Development/production mode
+- `OPSECHAT_CSP` - Override default Content-Security-Policy response header
+- `OPSECHAT_DISABLE_CSP` - Disable CSP header when set to `true`
 
 ## Troubleshooting
 
