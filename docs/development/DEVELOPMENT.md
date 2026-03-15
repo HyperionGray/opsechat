@@ -66,7 +66,6 @@ These are development and testing utilities that help during development:
 
 ### Main Application Files
 - **`runserver.py`** - Main entry point (legacy monolithic)
-- **`runserver_refactored.py`** - Refactored version (blueprint-based)
 - **`app_factory.py`** - Flask app factory pattern
 - **`chat-room.py`** - Standalone chat room creator
 - **`tui-server.py`** - Terminal UI server
@@ -189,7 +188,7 @@ npm run lint
 
 ### Adding a New Route
 1. Create or modify route in appropriate `*_routes.py` file
-2. Register in `app_factory.py` if needed
+2. Register in `app_factory.py` if needed (health probes: `/health`, `/health/live`, `/health/ready`)
 3. Create template in `templates/`
 4. Add tests in `tests/`
 

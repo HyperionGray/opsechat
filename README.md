@@ -190,6 +190,23 @@ Tests cover:
 
 For full testing documentation, see [Testing Guide](docs/user-guide/TESTING.md).
 
+Operational health endpoints
+============================
+
+The application now exposes Kubernetes/container-friendly health probes:
+
+- `GET /health` - Comprehensive health status including uptime, version, and runtime stats
+- `GET /health/live` - Liveness probe (process is up)
+- `GET /health/ready` - Readiness probe (configuration/runtime ready)
+
+Quick check:
+
+```bash
+curl -s http://127.0.0.1:5000/health | python3 -m json.tool
+curl -s http://127.0.0.1:5000/health/live | python3 -m json.tool
+curl -s http://127.0.0.1:5000/health/ready | python3 -m json.tool
+```
+
 
 How it works
 ============

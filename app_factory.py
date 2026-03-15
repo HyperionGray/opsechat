@@ -5,6 +5,8 @@ This module handles Flask application creation and configuration,
 extracted from runserver.py to improve code organization.
 """
 
+import os
+
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
 
@@ -13,10 +15,43 @@ def _read_version():
     """Read application version from VERSION file"""
     version_file = os.path.join(os.path.dirname(__file__), "VERSION")
     try:
-        with open(version_file) as f:
+        with open(version_file, encoding="utf-8") as f:
             return f.read().strip()
     except OSError:
         return "unknown"
+
+
+def _get_runtime_stats():
+    """
+    Return lightweight runtime stats for operational health checks.
+    Falls back to zeros if chat modules are unavailable.
+    """
+    try:
+        from simple_chat_routes import (
+            chat_rooms,
+            direct_messages,
+            rooms_lock,
+            dm_lock,
+            _rate_limit_store,
+            _rate_limit_lock,
+        )
+
+        with rooms_lock:
+            active_rooms = len(chat_rooms)
+        with dm_lock:
+            active_direct_messages = len(direct_messages)
+        with _rate_limit_lock:
+            rate_limited_sessions = len(_rate_limit_store)
+    except Exception:
+        active_rooms = 0
+        active_direct_messages = 0
+        rate_limited_sessions = 0
+
+    return {
+        "active_rooms": active_rooms,
+        "active_direct_messages": active_direct_messages,
+        "rate_limited_sessions": rate_limited_sessions,
+    }
 
 
 def create_app():
@@ -88,37 +123,45 @@ def create_app():
     register_review_routes(app, id_generator, get_random_color, 
                           add_review_wrapper, get_reviews, get_review_stats)
     
-    # Health check endpoint
+    # Health and readiness endpoints
     from monitoring import get_health_status
 
     @app.route('/health', methods=["GET"])
     def health():
-        return jsonify(get_health_status())
+        payload = get_health_status()
+        payload.update(_get_runtime_stats())
+        payload["service"] = "opsechat"
+        return jsonify(payload), 200
+
+    @app.route('/health/live', methods=["GET"])
+    def health_live():
+        """Liveness probe: process is up and serving requests."""
+        return jsonify({
+            "status": "alive",
+            "service": "opsechat",
+            "version": _read_version(),
+        }), 200
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # Health check endpoint for monitoring
-    @app.route('/health', methods=["GET"])
-    def health():
-        """
-        Health check endpoint for monitoring and deployment verification.
-        Returns basic status and version information.
-        """
-        import os
-        try:
-            with open('VERSION', 'r') as f:
-                version = f.read().strip()
-        except:
-            version = '0.8.0-alpha'  # fallback
-        
-        return {
-            'status': 'ok',
-            'version': version,
-            'service': 'opsechat'
-        }, 200
+
+    @app.route('/health/ready', methods=["GET"])
+    def health_ready():
+        """Readiness probe: app configuration and runtime dependencies."""
+        version = _read_version()
+        payload = {
+            "status": "ready" if version != "unknown" else "degraded",
+            "service": "opsechat",
+            "version": version,
+            "checks": {
+                "version_file": "ok" if version != "unknown" else "degraded",
+                "chat_runtime": "ok",
+            },
+        }
+        payload.update(_get_runtime_stats())
+        return jsonify(payload), 200 if version != "unknown" else 503
     
     # Error handlers
     @app.errorhandler(404)
