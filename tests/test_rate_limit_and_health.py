@@ -10,7 +10,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_lock,
+    load_rate_limits_from_env,
+    DEFAULT_RATE_LIMITS,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -87,6 +93,42 @@ def test_rate_limit_chat_message_limit():
     assert retry_after >= 1
 
 
+def test_load_rate_limits_from_env_defaults_unchanged_when_unset():
+    config = load_rate_limits_from_env(env={}, defaults=DEFAULT_RATE_LIMITS)
+    assert config == DEFAULT_RATE_LIMITS
+    assert config is not DEFAULT_RATE_LIMITS
+
+
+def test_load_rate_limits_from_env_applies_valid_overrides():
+    env = {
+        "OPSECHAT_RATE_LIMIT_CHAT_CREATE_MAX_REQUESTS": "12",
+        "OPSECHAT_RATE_LIMIT_CHAT_CREATE_WINDOW_SECONDS": "120",
+        "OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_MAX_REQUESTS": "45",
+        "OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_WINDOW_SECONDS": "90",
+        "OPSECHAT_RATE_LIMIT_DM_SEND_MAX_REQUESTS": "8",
+        "OPSECHAT_RATE_LIMIT_DM_SEND_WINDOW_SECONDS": "75",
+    }
+    config = load_rate_limits_from_env(env=env, defaults=DEFAULT_RATE_LIMITS)
+
+    assert config["chat_create"] == {"max_requests": 12, "window_seconds": 120}
+    assert config["chat_message"] == {"max_requests": 45, "window_seconds": 90}
+    assert config["dm_send"] == {"max_requests": 8, "window_seconds": 75}
+
+
+def test_load_rate_limits_from_env_ignores_invalid_overrides():
+    env = {
+        "OPSECHAT_RATE_LIMIT_CHAT_CREATE_MAX_REQUESTS": "zero",
+        "OPSECHAT_RATE_LIMIT_CHAT_CREATE_WINDOW_SECONDS": "-10",
+        "OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_MAX_REQUESTS": "0",
+        "OPSECHAT_RATE_LIMIT_DM_SEND_WINDOW_SECONDS": "1.5",
+    }
+    config = load_rate_limits_from_env(env=env, defaults=DEFAULT_RATE_LIMITS)
+
+    assert config["chat_create"] == DEFAULT_RATE_LIMITS["chat_create"]
+    assert config["chat_message"] == DEFAULT_RATE_LIMITS["chat_message"]
+    assert config["dm_send"] == DEFAULT_RATE_LIMITS["dm_send"]
+
+
 # ---------------------------------------------------------------------------
 # Health endpoint integration tests
 # ---------------------------------------------------------------------------
@@ -105,6 +147,7 @@ def test_health_endpoint_returns_json_with_required_fields():
     assert data.get("status") == "healthy"
     assert "version" in data
     assert "active_rooms" in data
+    assert "rate_limits" in data
 
 
 def test_health_endpoint_active_rooms_is_integer():
@@ -113,3 +156,19 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_exposes_rate_limit_policy_shape():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    data = response.get_json()
+    policy = data["rate_limits"]
+
+    assert set(policy.keys()) == {"chat_create", "chat_message", "dm_send"}
+    for endpoint, cfg in policy.items():
+        assert "max_requests" in cfg, endpoint
+        assert "window_seconds" in cfg, endpoint
+        assert isinstance(cfg["max_requests"], int), endpoint
+        assert isinstance(cfg["window_seconds"], int), endpoint
+        assert cfg["max_requests"] > 0, endpoint
+        assert cfg["window_seconds"] > 0, endpoint

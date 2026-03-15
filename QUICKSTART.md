@@ -37,8 +37,24 @@ Access at `http://localhost:5000/chat` or your `.onion` address.
 
 ```bash
 curl http://localhost:5000/health
-# {"active_rooms":0,"status":"healthy","version":"0.8.0-alpha"}
+# {"active_rooms":0,"status":"healthy","version":"0.8.0-alpha","rate_limits":{...}}
 ```
+
+### Optional: tune chat rate limits
+
+OpSecChat uses secure defaults, but you can override chat limits with environment variables:
+
+```bash
+export OPSECHAT_RATE_LIMIT_CHAT_CREATE_MAX_REQUESTS=10
+export OPSECHAT_RATE_LIMIT_CHAT_CREATE_WINDOW_SECONDS=60
+export OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_MAX_REQUESTS=30
+export OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_WINDOW_SECONDS=60
+export OPSECHAT_RATE_LIMIT_DM_SEND_MAX_REQUESTS=5
+export OPSECHAT_RATE_LIMIT_DM_SEND_WINDOW_SECONDS=60
+```
+
+Then start the server as usual (`python runserver.py` or `python chat-room.py`). The effective
+policy is visible in `GET /health` under `rate_limits`.
 
 ---
 
