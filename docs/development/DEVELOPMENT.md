@@ -22,6 +22,32 @@ You can run the same bootstrap locally:
 ./scripts/bootstrap-dev-environment.sh
 ```
 
+Bootstrap profiles and utility flags:
+
+```bash
+# Full setup (default): Python + Node + Playwright + environment verification
+./scripts/bootstrap-dev-environment.sh --profile full
+
+# Python-only setup: skip Node.js/Playwright steps
+./scripts/bootstrap-dev-environment.sh --python-only
+
+# Preview actions without making changes
+./scripts/bootstrap-dev-environment.sh --dry-run
+
+# Recreate virtualenv from scratch and skip final verification
+./scripts/bootstrap-dev-environment.sh --recreate-venv --skip-verify
+```
+
+You can also run verification directly:
+
+```bash
+# Full dependency check
+python scripts/check-dev-env.py --profile full
+
+# Backend-only dependency check
+python scripts/check-dev-env.py --profile python-only
+```
+
 ### Setting Up Development Environment
 
 ```bash
@@ -221,7 +247,7 @@ npm run lint
 
 - `TOR_CONTROL_PORT` - Tor control port (default: 9051)
 - `PORT` - Flask server port (default: 5000)
-- `FLASK_ENV` - Development/production mode
+- `FLASK_DEBUG` - Enable debug mode (`1` or `0`)
 
 ## Troubleshooting
 

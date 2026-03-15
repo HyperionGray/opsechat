@@ -4,9 +4,24 @@ Development Environment Check
 Verifies that all required dependencies are installed and accessible.
 """
 
+import argparse
 import sys
 import subprocess
 import os
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Verify OpSecChat development dependencies."
+    )
+    parser.add_argument(
+        "--profile",
+        choices=("full", "python-only"),
+        default="full",
+        help="Validation profile to use (default: full)",
+    )
+    return parser.parse_args()
+
 
 def check_command(cmd, name):
     """Check if a command is available"""
@@ -38,8 +53,10 @@ def check_file(filepath, name):
         return False
 
 def main():
+    args = parse_args()
     print("=" * 60)
     print("OpSecChat Development Environment Check")
+    print(f"Profile: {args.profile}")
     print("=" * 60)
     print()
     
@@ -57,8 +74,11 @@ def main():
     # Check system commands
     print("System Commands:")
     all_good &= check_command('git', 'Git')
-    all_good &= check_command('node', 'Node.js')
-    all_good &= check_command('npm', 'npm')
+    if args.profile == "full":
+        all_good &= check_command('node', 'Node.js')
+        all_good &= check_command('npm', 'npm')
+    else:
+        print("- Skipping Node.js/npm checks for profile=python-only")
     check_command('podman', 'Podman')  # Optional
     check_command('docker', 'Docker')  # Optional
     print()
@@ -72,25 +92,31 @@ def main():
     
     # Check important files
     print("Configuration Files:")
-    check_file('requirements.txt', 'requirements.txt')
-    check_file('requirements-dev.txt', 'requirements-dev.txt')
-    check_file('package.json', 'package.json')
-    check_file('pytest.ini', 'pytest.ini')
-    check_file('VERSION', 'VERSION')
+    all_good &= check_file('requirements.txt', 'requirements.txt')
+    all_good &= check_file('requirements-dev.txt', 'requirements-dev.txt')
+    all_good &= check_file('pytest.ini', 'pytest.ini')
+    all_good &= check_file('VERSION', 'VERSION')
+    if args.profile == "full":
+        all_good &= check_file('package.json', 'package.json')
+    else:
+        print("- Skipping package.json check for profile=python-only")
     print()
     
     # Check Node modules
     print("Node.js Environment:")
-    if os.path.exists('node_modules'):
-        print("✓ node_modules exists")
-        if os.path.exists('node_modules/.bin/playwright'):
-            print("✓ Playwright is installed")
+    if args.profile == "full":
+        if os.path.exists('node_modules'):
+            print("✓ node_modules exists")
+            if os.path.exists('node_modules/.bin/playwright'):
+                print("✓ Playwright is installed")
+            else:
+                print("✗ Playwright is NOT installed (run: npx playwright install)")
+                all_good = False
         else:
-            print("✗ Playwright is NOT installed (run: npx playwright install)")
+            print("✗ node_modules missing (run: npm install)")
             all_good = False
     else:
-        print("✗ node_modules missing (run: npm install)")
-        all_good = False
+        print("- Skipping node_modules/Playwright checks for profile=python-only")
     print()
     
     # Summary
@@ -107,8 +133,9 @@ def main():
         print("To install missing dependencies:")
         print("  pip install -r requirements.txt")
         print("  pip install -r requirements-dev.txt")
-        print("  npm install")
-        print("  npx playwright install")
+        if args.profile == "full":
+            print("  npm install")
+            print("  npx playwright install")
     print("=" * 60)
     
     return 0 if all_good else 1
