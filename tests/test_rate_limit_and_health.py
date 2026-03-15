@@ -113,3 +113,27 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_can_return_detailed_payload():
+    client = _test_app.test_client()
+    response = client.get("/health?details=true")
+    data = response.get_json()
+    assert response.status_code == 200
+    assert data is not None
+    assert "timestamp" in data
+    assert "uptime_seconds" in data
+    assert "checks" in data
+    assert data["checks"]["memory_usage"] == "ok"
+
+
+def test_readiness_endpoints_return_ready_status():
+    client = _test_app.test_client()
+    for endpoint in ("/ready", "/health/ready"):
+        response = client.get(endpoint)
+        data = response.get_json()
+        assert response.status_code == 200
+        assert data is not None
+        assert data.get("status") == "ready"
+        assert data.get("service") == "opsechat"
+        assert "version" in data

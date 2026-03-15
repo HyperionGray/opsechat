@@ -321,18 +321,36 @@ def _read_version() -> str:
         return 'unknown'
 
 
-def get_health_status() -> Dict[str, Any]:
-    """Get application health status"""
+def get_health_status(active_rooms: int = 0, include_details: bool = False) -> Dict[str, Any]:
+    """Get application health status with optional diagnostic details."""
+    payload: Dict[str, Any] = {
+        "status": "healthy",
+        "version": _read_version(),
+        "active_rooms": max(active_rooms, 0),
+    }
+
+    if include_details:
+        payload.update(
+            {
+                "timestamp": datetime.utcnow().isoformat(),
+                "uptime_seconds": time.time() - apm.metrics["system"]["start_time"],
+                "checks": {
+                    "tor_connection": "unknown",  # Would need an active Tor probe
+                    "memory_usage": "ok",
+                    "disk_space": "ok",
+                },
+            }
+        )
+
+    return payload
+
+
+def get_readiness_status() -> Dict[str, Any]:
+    """Get application readiness status for orchestration probes."""
     return {
-        'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
-        'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
-        'version': _read_version(),
-        'checks': {
-            'tor_connection': 'unknown',  # Would need to check actual Tor status
-            'memory_usage': 'ok',
-            'disk_space': 'ok'
-        }
+        "status": "ready",
+        "service": "opsechat",
+        "version": _read_version(),
     }
 
 # Security event logging
