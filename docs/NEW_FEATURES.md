@@ -172,6 +172,33 @@ When limit exceeded:
 
 ---
 
+## ⚙️ Runtime Chat/DM Rate Limit Configuration
+
+### What Changed
+Simple chat room rate limits are now configurable with environment variables, so operators can tune anti-abuse behavior without code changes.
+
+### Supported Variables
+```bash
+OPSECHAT_RATE_LIMIT_CHAT_CREATE_MAX_REQUESTS
+OPSECHAT_RATE_LIMIT_CHAT_CREATE_WINDOW_SECONDS
+OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_MAX_REQUESTS
+OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_WINDOW_SECONDS
+OPSECHAT_RATE_LIMIT_DM_SEND_MAX_REQUESTS
+OPSECHAT_RATE_LIMIT_DM_SEND_WINDOW_SECONDS
+```
+
+### Example
+```bash
+export OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_MAX_REQUESTS=50
+export OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_WINDOW_SECONDS=60
+python runserver.py
+```
+
+### Operational Validation
+`GET /health` now returns the active `rate_limits` object so deployment configuration can be validated by monitoring and CI checks.
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

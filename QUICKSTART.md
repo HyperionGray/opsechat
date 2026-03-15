@@ -33,6 +33,21 @@ python chat-room.py --tor
 
 Access at `http://localhost:5000/chat` or your `.onion` address.
 
+### Optional: Tune chat/DM rate limits via environment variables
+
+Use these variables before starting the server:
+
+```bash
+export OPSECHAT_RATE_LIMIT_CHAT_CREATE_MAX_REQUESTS=10
+export OPSECHAT_RATE_LIMIT_CHAT_CREATE_WINDOW_SECONDS=60
+export OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_MAX_REQUESTS=30
+export OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_WINDOW_SECONDS=60
+export OPSECHAT_RATE_LIMIT_DM_SEND_MAX_REQUESTS=5
+export OPSECHAT_RATE_LIMIT_DM_SEND_WINDOW_SECONDS=60
+```
+
+`/health` now includes an active `rate_limits` object so deployed limits can be verified quickly.
+
 ### Verify the server is healthy
 
 ```bash

@@ -15,8 +15,8 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 
 # Global room storage (in-memory only)
 chat_rooms = {}
@@ -31,11 +31,16 @@ dm_lock = threading.Lock()
 _rate_limit_store = {}
 _rate_limit_lock = threading.Lock()
 
-# Rate limit configuration
-RATE_LIMITS = {
+# Default rate limit configuration
+DEFAULT_RATE_LIMITS = {
     "chat_create": {"max_requests": 10, "window_seconds": 60},
     "chat_message": {"max_requests": 30, "window_seconds": 60},
     "dm_send": {"max_requests": 5, "window_seconds": 60},
+}
+
+# Active rate limits (can be overridden at runtime by app configuration)
+RATE_LIMITS = {
+    endpoint: limits.copy() for endpoint, limits in DEFAULT_RATE_LIMITS.items()
 }
 
 # Maximum message length to prevent base64 encoding of images
@@ -151,6 +156,56 @@ def cleanup_old_dms():
             dm["message"] = "X" * len(dm["message"])
             dm["room_id"] = "X" * len(dm["room_id"])
             del direct_messages[dm_id]
+
+
+def _safe_positive_int(value, fallback):
+    """Convert value to a positive integer with fallback."""
+    try:
+        parsed = int(value)
+        if parsed < 1:
+            return fallback
+        return parsed
+    except (TypeError, ValueError):
+        return fallback
+
+
+def configure_rate_limits(overrides):
+    """
+    Apply runtime rate-limit overrides.
+
+    Expected format:
+    {
+        "chat_create": {"max_requests": 12, "window_seconds": 60},
+        "chat_message": {"max_requests": 45},
+        "dm_send": {"window_seconds": 120}
+    }
+    """
+    if not isinstance(overrides, dict):
+        return
+
+    with _rate_limit_lock:
+        for endpoint, config in overrides.items():
+            if endpoint not in RATE_LIMITS or not isinstance(config, dict):
+                continue
+
+            current = RATE_LIMITS[endpoint]
+            current["max_requests"] = _safe_positive_int(
+                config.get("max_requests", current["max_requests"]),
+                current["max_requests"],
+            )
+            current["window_seconds"] = _safe_positive_int(
+                config.get("window_seconds", current["window_seconds"]),
+                current["window_seconds"],
+            )
+
+        # Reset counters when policy changes to avoid stale enforcement windows.
+        _rate_limit_store.clear()
+
+
+def get_rate_limits():
+    """Return a copy of current endpoint rate limit settings."""
+    with _rate_limit_lock:
+        return {endpoint: limits.copy() for endpoint, limits in RATE_LIMITS.items()}
 
 
 def check_rate_limit(session_id: str, endpoint: str) -> tuple:

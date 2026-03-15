@@ -20,6 +20,51 @@ def _read_version():
         return "unknown"
 
 
+def _parse_positive_int_env(var_name, default):
+    """Read positive integer env var, falling back to default when invalid."""
+    raw_value = os.getenv(var_name)
+    if raw_value is None or raw_value.strip() == "":
+        return default
+
+    try:
+        parsed = int(raw_value)
+        if parsed < 1:
+            return default
+        return parsed
+    except ValueError:
+        return default
+
+
+def _load_rate_limit_overrides_from_env():
+    """Build simple chat rate-limit config overrides from environment variables."""
+    return {
+        "chat_create": {
+            "max_requests": _parse_positive_int_env(
+                "OPSECHAT_RATE_LIMIT_CHAT_CREATE_MAX_REQUESTS", 10
+            ),
+            "window_seconds": _parse_positive_int_env(
+                "OPSECHAT_RATE_LIMIT_CHAT_CREATE_WINDOW_SECONDS", 60
+            ),
+        },
+        "chat_message": {
+            "max_requests": _parse_positive_int_env(
+                "OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_MAX_REQUESTS", 30
+            ),
+            "window_seconds": _parse_positive_int_env(
+                "OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_WINDOW_SECONDS", 60
+            ),
+        },
+        "dm_send": {
+            "max_requests": _parse_positive_int_env(
+                "OPSECHAT_RATE_LIMIT_DM_SEND_MAX_REQUESTS", 5
+            ),
+            "window_seconds": _parse_positive_int_env(
+                "OPSECHAT_RATE_LIMIT_DM_SEND_WINDOW_SECONDS", 60
+            ),
+        },
+    }
+
+
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
@@ -78,7 +123,12 @@ def create_app():
                         check_older_than, process_chat, remove_headers)
     
     # Register simple chat routes (new simplified interface)
-    from simple_chat_routes import register_simple_chat_routes
+    from simple_chat_routes import (
+        register_simple_chat_routes,
+        configure_rate_limits,
+        get_rate_limits,
+    )
+    configure_rate_limits(_load_rate_limit_overrides_from_env())
     register_simple_chat_routes(app)
     
     # Register email routes
@@ -97,32 +147,14 @@ def create_app():
             "status": "healthy",
             "version": _read_version(),
             "active_rooms": len(chat_rooms),
+            "service": "opsechat",
+            "rate_limits": get_rate_limits(),
         }), 200
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # Health check endpoint for monitoring
-    @app.route('/health', methods=["GET"])
-    def health():
-        """
-        Health check endpoint for monitoring and deployment verification.
-        Returns basic status and version information.
-        """
-        import os
-        try:
-            with open('VERSION', 'r') as f:
-                version = f.read().strip()
-        except:
-            version = '0.8.0-alpha'  # fallback
-        
-        return {
-            'status': 'ok',
-            'version': version,
-            'service': 'opsechat'
-        }, 200
     
     # Error handlers
     @app.errorhandler(404)
