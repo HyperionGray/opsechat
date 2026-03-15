@@ -113,3 +113,27 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_healthz_alias_matches_health_contract():
+    client = _test_app.test_client()
+    response = client.get("/healthz")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data is not None
+    assert data.get("status") == "healthy"
+    assert data.get("service") == "opsechat"
+    assert "uptime_seconds" in data
+    assert isinstance(data["uptime_seconds"], int)
+    assert data["uptime_seconds"] >= 0
+
+
+def test_version_endpoint_returns_version_metadata():
+    client = _test_app.test_client()
+    response = client.get("/version")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data is not None
+    assert data.get("service") == "opsechat"
+    assert isinstance(data.get("version"), str)
+    assert len(data["version"]) > 0
