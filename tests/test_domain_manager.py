@@ -174,3 +174,48 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_and_get_config(self):
+        """Test configuring manager from UI inputs"""
+        manager = DomainRotationManager()
+        result = manager.configure("pk_test1234", "sk_test5678", monthly_budget=25.0)
+
+        assert result["success"] is True
+        assert manager.is_configured() is True
+
+        config = manager.get_config()
+        assert config["configured"] is True
+        assert config["monthly_budget"] == 25.0
+        assert config["api_key_masked"].endswith("1234")
+
+    def test_rotate_domain_with_result(self):
+        """Test structured rotate result for API routes"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test789.xyz",
+            "price": 1.99
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "test789.xyz"
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=10.0)
+        result = manager.rotate_domain_with_result()
+
+        assert result["success"] is True
+        assert result["domain"] == manager.active_domain
+        assert result["price"] == 1.99
+        assert "remaining_budget" in result
+
+    def test_rotate_domain_with_result_budget_exhausted(self):
+        """Test structured rotate when budget is exhausted"""
+        mock_client = Mock(spec=DomainAPIClient)
+        manager = DomainRotationManager(mock_client, monthly_budget=1.0)
+        manager.current_spending = 1.0
+
+        result = manager.rotate_domain_with_result()
+
+        assert result["success"] is False
+        assert "budget" in result["error"].lower()

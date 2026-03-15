@@ -2,17 +2,19 @@
 Domain management and API integration
 Supports automated domain purchasing for burner email rotation
 """
-import requests
+from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
+import logging
 import random
 import string
-import logging
-from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
+import requests
 
 logger = logging.getLogger(__name__)
 
 
-class DomainAPIClient:
+class DomainAPIClient(ABC):
     """
     Base class for domain registrar API clients
     """
@@ -21,17 +23,17 @@ class DomainAPIClient:
         self.api_key = api_key
         self.api_secret = api_secret
     
+    @abstractmethod
     def search_domain(self, domain: str) -> Dict:
         """Search if domain is available"""
-        raise NotImplementedError
     
+    @abstractmethod
     def purchase_domain(self, domain: str, years: int = 1) -> Dict:
         """Purchase domain"""
-        raise NotImplementedError
     
+    @abstractmethod
     def get_pricing(self, tld: str) -> Dict:
         """Get pricing for TLD"""
-        raise NotImplementedError
 
 
 class PorkbunAPIClient(DomainAPIClient):
@@ -134,10 +136,61 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+        self._api_key: Optional[str] = getattr(api_client, "api_key", None) if api_client else None
+        self._api_secret: Optional[str] = getattr(api_client, "api_secret", None) if api_client else None
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+        self._api_key = getattr(api_client, "api_key", None)
+        self._api_secret = getattr(api_client, "api_secret", None)
+
+    def configure(self, api_key: str, secret_key: str, monthly_budget: float = 50.0) -> Dict[str, Any]:
+        """Configure the manager with Porkbun API credentials and budget."""
+        if not api_key or not secret_key:
+            return {"success": False, "error": "API key and secret key are required"}
+
+        if monthly_budget <= 0:
+            return {"success": False, "error": "Monthly budget must be greater than zero"}
+
+        self.monthly_budget = float(monthly_budget)
+        self._api_key = api_key
+        self._api_secret = secret_key
+        self.api_client = PorkbunAPIClient(api_key=api_key, api_secret=secret_key)
+        return {"success": True, "message": "Domain rotation configured"}
+
+    @staticmethod
+    def _mask_secret(value: Optional[str]) -> Optional[str]:
+        """Mask a secret for safe display in UI."""
+        if not value:
+            return None
+        if len(value) <= 4:
+            return "*" * len(value)
+        return f"{'*' * (len(value) - 4)}{value[-4:]}"
+
+    @staticmethod
+    def _parse_price(price: Any, default: float = 999.0) -> float:
+        """Normalize registrar price values into a float."""
+        if isinstance(price, (int, float)):
+            return float(price)
+        if isinstance(price, str):
+            sanitized = price.strip().replace("$", "").replace("€", "")
+            try:
+                return float(sanitized)
+            except ValueError:
+                return default
+        return default
+
+    def get_config(self) -> Dict[str, Any]:
+        """Return sanitized config information for UI display."""
+        return {
+            "configured": self.api_client is not None,
+            "api_key_masked": self._mask_secret(self._api_key),
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "active_domain": self.active_domain,
+            "domains_owned": len(self.owned_domains),
+        }
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -168,12 +221,8 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
-                
+                price = self._parse_price(result.get("price", 999))
+
                 if price <= max_price:
                     return {
                         "domain": domain,
@@ -222,28 +271,56 @@ class DomainRotationManager:
     
     def rotate_domain(self) -> Optional[str]:
         """
-        Rotate to a new domain
-        Finds and purchases a new cheap domain
+        Rotate to a new domain and return domain string.
+        Kept for backward compatibility with existing callers/tests.
         """
+        result = self.rotate_domain_with_result()
+        if result.get("success"):
+            return result.get("domain")
+        return None
+
+    def rotate_domain_with_result(self, max_price: float = 5.0) -> Dict[str, Any]:
+        """
+        Rotate to a new domain and return a structured result.
+        Useful for API endpoints and UI responses.
+        """
+        remaining_budget = self.monthly_budget - self.current_spending
+        if remaining_budget <= 0:
+            return {"success": False, "error": "Monthly budget exhausted"}
+
         # Find cheap domain
-        domain_info = self.find_cheap_available_domain()
-        
+        domain_info = self.find_cheap_available_domain(
+            max_price=min(max_price, remaining_budget)
+        )
+
         if not domain_info:
-            logger.error("Could not find available cheap domain")
-            return None
-        
+            return {"success": False, "error": "Could not find available cheap domain"}
+
         # Purchase domain
         success = self.purchase_domain_if_budget_allows(
-            domain_info["domain"], 
+            domain_info["domain"],
             domain_info["price"]
         )
-        
+
         if success:
             self.active_domain = domain_info["domain"]
-            return self.active_domain
-        
-        return None
-    
+            return {
+                "success": True,
+                "domain": self.active_domain,
+                "price": domain_info["price"],
+                "remaining_budget": self.monthly_budget - self.current_spending,
+            }
+
+        return {"success": False, "error": "Domain purchase failed"}
+
+    def set_monthly_budget(self, budget: float) -> None:
+        """Update monthly budget."""
+        self.monthly_budget = float(budget)
+
+    def is_configured(self) -> bool:
+        """Return whether an API client is configured."""
+        return self.api_client is not None
+
     def get_active_domain(self) -> Optional[str]:
         """Get currently active domain"""
         return self.active_domain

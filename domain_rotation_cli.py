@@ -18,11 +18,42 @@ import json
 import os
 import sys
 from pathlib import Path
+from datetime import datetime
 from getpass import getpass
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _serialize_domain_records(domains):
+    """Convert datetime fields to ISO strings for JSON persistence."""
+    serialized = []
+    for record in domains or []:
+        updated = dict(record)
+        for key in ("purchased_at", "expires_at"):
+            value = updated.get(key)
+            if isinstance(value, datetime):
+                updated[key] = value.isoformat()
+        serialized.append(updated)
+    return serialized
+
+
+def _deserialize_domain_records(domains):
+    """Convert persisted ISO datetime strings back to datetime objects."""
+    parsed = []
+    for record in domains or []:
+        updated = dict(record)
+        for key in ("purchased_at", "expires_at"):
+            value = updated.get(key)
+            if isinstance(value, str):
+                try:
+                    updated[key] = datetime.fromisoformat(value)
+                except ValueError:
+                    # Keep raw string if it cannot be parsed.
+                    pass
+        parsed.append(updated)
+    return parsed
 
 
 def load_config():
@@ -112,7 +143,7 @@ def get_manager():
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = _deserialize_domain_records(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,14 +153,14 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = _serialize_domain_records(manager.owned_domains)
     config['active_domain'] = manager.active_domain
     save_config(config)
 
 
 def list_domains():
     """List owned domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Owned Domains ===\n")
     
@@ -141,17 +172,36 @@ def list_domains():
         return
     
     for i, domain in enumerate(domains, 1):
+        purchased_at = domain.get('purchased_at')
+        expires_at = domain.get('expires_at')
+        if isinstance(purchased_at, str):
+            try:
+                purchased_at = datetime.fromisoformat(purchased_at)
+            except ValueError:
+                pass
+        if isinstance(expires_at, str):
+            try:
+                expires_at = datetime.fromisoformat(expires_at)
+            except ValueError:
+                pass
+
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        if isinstance(purchased_at, datetime):
+            print(f"   Purchased: {purchased_at.strftime('%Y-%m-%d %H:%M')}")
+        else:
+            print(f"   Purchased: {purchased_at or 'Unknown'}")
+        if isinstance(expires_at, datetime):
+            print(f"   Expires: {expires_at.strftime('%Y-%m-%d')}")
+        else:
+            print(f"   Expires: {expires_at or 'Unknown'}")
         print()
 
 
 def search_domains():
     """Search for available cheap domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
     print("Searching for domains under $5...\n")
@@ -215,7 +265,7 @@ def rotate_domain():
 
 def show_status():
     """Show current status"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Domain Rotation Status ===\n")
     
@@ -236,7 +286,7 @@ def show_status():
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
-        description='OpSecHat Domain Rotation CLI',
+        description='OpSecChat Domain Rotation CLI',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
