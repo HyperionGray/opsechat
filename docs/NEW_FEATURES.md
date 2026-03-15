@@ -2,6 +2,25 @@
 
 This guide covers the new features added in the final push for OpSecHat production readiness.
 
+## Service Health and Observability Endpoints
+
+### What Changed
+The server now exposes dedicated health and monitoring endpoints for production probes and operational visibility:
+
+- `GET /health` - detailed status, version, uptime, and in-memory runtime counters
+- `GET /health/live` - liveness probe (process is up)
+- `GET /health/ready` - readiness probe (critical subsystems available)
+- `GET /metrics/summary` - lightweight request and activity summary
+
+### Runtime Counters Included in `/health`
+- `active_rooms`
+- `active_direct_messages`
+- `rate_limiter_sessions`
+
+This removes ambiguity from the previous duplicate `/health` implementations and provides one consistent health model for deploy platforms and CI checks.
+
+---
+
 ## 🔑 Automated Key Exchange
 
 ### What Changed

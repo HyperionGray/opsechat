@@ -105,6 +105,8 @@ def test_health_endpoint_returns_json_with_required_fields():
     assert data.get("status") == "healthy"
     assert "version" in data
     assert "active_rooms" in data
+    assert "active_direct_messages" in data
+    assert "rate_limiter_sessions" in data
 
 
 def test_health_endpoint_active_rooms_is_integer():
@@ -113,3 +115,43 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_live_endpoint_returns_alive():
+    client = _test_app.test_client()
+    response = client.get("/health/live")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data is not None
+    assert data.get("status") == "alive"
+    assert data.get("service") == "opsechat"
+
+
+def test_health_ready_endpoint_returns_checks():
+    client = _test_app.test_client()
+    response = client.get("/health/ready")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data is not None
+    assert data.get("status") == "ready"
+    assert data.get("service") == "opsechat"
+    checks = data.get("checks", {})
+    assert checks.get("version_file_loaded") is True
+    assert checks.get("cleanup_worker_running") is True
+
+
+def test_metrics_summary_endpoint_returns_request_totals():
+    client = _test_app.test_client()
+    # Generate at least one tracked request before reading metrics.
+    client.get("/health")
+
+    response = client.get("/metrics/summary")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data is not None
+    assert "requests" in data
+    assert "total" in data["requests"]
+    assert data["requests"]["total"] >= 1

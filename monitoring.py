@@ -323,16 +323,81 @@ def _read_version() -> str:
 
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
+    version = _read_version()
+    runtime = get_runtime_counts()
+    cleanup_ok = runtime["cleanup_thread_alive"]
+    version_ok = version != "unknown"
+
     return {
-        'status': 'healthy',
+        'status': 'healthy' if (cleanup_ok and version_ok) else 'degraded',
+        'service': 'opsechat',
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
-        'version': _read_version(),
+        'version': version,
+        'active_rooms': runtime['active_rooms'],
+        'active_direct_messages': runtime['active_direct_messages'],
+        'rate_limiter_sessions': runtime['rate_limiter_sessions'],
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
-            'memory_usage': 'ok',
-            'disk_space': 'ok'
+            'version_file': 'ok' if version_ok else 'degraded',
+            'cleanup_thread': 'ok' if cleanup_ok else 'degraded'
         }
+    }
+
+
+def get_runtime_counts() -> Dict[str, Any]:
+    """
+    Return lightweight runtime counters from the in-memory chat subsystem.
+
+    Import is intentionally local to avoid module import cycles at startup.
+    """
+    runtime = {
+        "active_rooms": 0,
+        "active_direct_messages": 0,
+        "rate_limiter_sessions": 0,
+        "cleanup_thread_alive": False,
+    }
+
+    try:
+        from simple_chat_routes import (  # local import by design
+            chat_rooms,
+            rooms_lock,
+            direct_messages,
+            dm_lock,
+            _rate_limit_store,
+            _rate_limit_lock,
+            cleanup_thread,
+        )
+    except ImportError:
+        return runtime
+
+    with rooms_lock:
+        runtime["active_rooms"] = len(chat_rooms)
+    with dm_lock:
+        runtime["active_direct_messages"] = len(direct_messages)
+    with _rate_limit_lock:
+        runtime["rate_limiter_sessions"] = len(_rate_limit_store)
+    runtime["cleanup_thread_alive"] = cleanup_thread.is_alive()
+
+    return runtime
+
+
+def get_readiness_status() -> Dict[str, Any]:
+    """Readiness status for deployment probes."""
+    version = _read_version()
+    runtime = get_runtime_counts()
+
+    checks = {
+        "version_file_loaded": version != "unknown",
+        "cleanup_worker_running": runtime["cleanup_thread_alive"],
+    }
+    is_ready = all(checks.values())
+
+    return {
+        "status": "ready" if is_ready else "not_ready",
+        "service": "opsechat",
+        "version": version,
+        "checks": checks,
     }
 
 # Security event logging
