@@ -99,7 +99,8 @@ class _StubDomainManager:
 
 
 def _build_app(monkeypatch):
-    app = Flask(__name__)
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    app = Flask(__name__, template_folder=os.path.join(project_root, "templates"))
     app.secret_key = "test-secret"
     app.config["path"] = "secret-path"
     app.config["hostname"] = "example.onion"
