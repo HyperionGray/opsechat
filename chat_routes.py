@@ -17,6 +17,18 @@ from utils import sanitize_emojis, filter_to_ascii
 def register_chat_routes(app, chatlines, chatters, id_generator, get_random_color, 
                         check_older_than, process_chat, add_security_headers=None):
     """Register all chat-related routes with the Flask app"""
+
+    # NOTE:
+    # The `add_security_headers` parameter is deprecated and ignored.
+    # Security headers are now applied globally via `@app.after_request`.
+    # This parameter is kept only for backward compatibility so that
+    # existing call sites that still pass it do not break.
+    if add_security_headers is not None:
+        app.logger.warning(
+            "add_security_headers parameter passed to register_chat_routes is "
+            "deprecated and ignored; security headers are now applied globally "
+            "via @app.after_request."
+        )
     
     @app.route('/<string:url_addition>')
     def drop(url_addition):
