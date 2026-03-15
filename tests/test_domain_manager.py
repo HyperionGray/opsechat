@@ -2,6 +2,7 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +175,60 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+    
+    def test_rotate_domain_result_returns_structured_payload(self):
+        """Structured rotate response should include success and budget status."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test789.xyz",
+            "price": "$2.50"
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "test789.xyz"
+        }
+        
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        result = manager.rotate_domain_result(max_price=5.0)
+        
+        assert result["success"] is True
+        assert result["domain"] == "test789.xyz"
+        assert "budget_status" in result
+        assert result["budget_status"]["domains_owned"] == 1
+    
+    def test_export_and_import_state_round_trip(self):
+        """Exported state should restore owned domains and active domain."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 3.14
+        manager.owned_domains = [{
+            "domain": "persisted.xyz",
+            "price": 3.14,
+            "purchased_at": datetime(2026, 3, 1, 12, 0, 0),
+            "expires_at": datetime(2027, 3, 1, 12, 0, 0),
+        }]
+        manager.active_domain = "persisted.xyz"
+        
+        state = manager.export_state()
+        
+        restored = DomainRotationManager(monthly_budget=100.0)
+        restored.import_state(state)
+        
+        assert restored.current_spending == 3.14
+        assert restored.active_domain == "persisted.xyz"
+        assert len(restored.owned_domains) == 1
+        assert restored.owned_domains[0]["domain"] == "persisted.xyz"
+        assert hasattr(restored.owned_domains[0]["purchased_at"], "isoformat")
+    
+    @patch('domain_manager.PorkbunAPIClient')
+    def test_configure_and_get_config(self, mock_porkbun_client):
+        """Manager configure API should attach client and expose masked config."""
+        manager = DomainRotationManager()
+        manager.configure("pk1_test_key", "sk1_test_secret", monthly_budget=25.0)
+        
+        mock_porkbun_client.assert_called_once_with("pk1_test_key", "sk1_test_secret")
+        config = manager.get_config()
+        
+        assert config["configured"] is True
+        assert config["monthly_budget"] == 25.0
+        assert config["api_key_masked"].endswith("key")

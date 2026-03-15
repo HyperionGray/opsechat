@@ -288,11 +288,28 @@ class EmailTransportManager:
     def __init__(self):
         self.smtp_transport: Optional[SMTPTransport] = None
         self.imap_transport: Optional[IMAPTransport] = None
+        self._smtp_config: Dict = {}
+        self._imap_config: Dict = {}
+    
+    @staticmethod
+    def _mask_secret(value: str) -> str:
+        if not value:
+            return ""
+        if len(value) <= 4:
+            return "*" * len(value)
+        return f"{'*' * 8}{value[-4:]}"
     
     def configure_smtp(self, smtp_server: str, smtp_port: int, username: str, 
                       password: str, use_tls: bool = True) -> bool:
         """Configure SMTP transport"""
         try:
+            self._smtp_config = {
+                "smtp_server": smtp_server,
+                "smtp_port": smtp_port,
+                "smtp_username": username,
+                "smtp_password": password,
+                "use_tls": use_tls,
+            }
             self.smtp_transport = SMTPTransport(
                 smtp_server, smtp_port, username, password, use_tls
             )
@@ -305,6 +322,13 @@ class EmailTransportManager:
                       password: str, use_ssl: bool = True) -> bool:
         """Configure IMAP transport"""
         try:
+            self._imap_config = {
+                "imap_server": imap_server,
+                "imap_port": imap_port,
+                "imap_username": username,
+                "imap_password": password,
+                "use_ssl": use_ssl,
+            }
             self.imap_transport = IMAPTransport(
                 imap_server, imap_port, username, password, use_ssl
             )
@@ -338,6 +362,23 @@ class EmailTransportManager:
         return {
             'smtp': self.smtp_transport is not None,
             'imap': self.imap_transport is not None
+        }
+    
+    def get_config_status(self) -> Dict[str, bool]:
+        """Compatibility alias used by route handlers/templates."""
+        return self.is_configured()
+    
+    def get_config(self) -> Dict:
+        """Return current transport configuration with masked secrets."""
+        return {
+            "smtp": {
+                **self._smtp_config,
+                "smtp_password": self._mask_secret(self._smtp_config.get("smtp_password", "")),
+            },
+            "imap": {
+                **self._imap_config,
+                "imap_password": self._mask_secret(self._imap_config.get("imap_password", "")),
+            },
         }
 
 
