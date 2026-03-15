@@ -10,6 +10,7 @@ import random
 import datetime
 import textwrap
 import re
+import os
 from flask import session
 
 
@@ -28,6 +29,22 @@ def id_generator(size=6, chars=None):
     if chars is None:
         chars = string.ascii_uppercase + string.digits + string.ascii_lowercase
     return ''.join(random.choice(chars) for i in range(size))
+
+
+def read_version(default="unknown"):
+    """
+    Read application version from the VERSION file in the repository root.
+
+    Returns:
+        str: Version string, or `default` if unavailable.
+    """
+    version_file = os.path.join(os.path.dirname(__file__), "VERSION")
+    try:
+        with open(version_file, "r", encoding="utf-8") as file_obj:
+            version = file_obj.read().strip()
+            return version or default
+    except OSError:
+        return default
 
 
 def check_older_than(chat_dic, secs_to_live=180):

@@ -5,24 +5,21 @@ This module handles Flask application creation and configuration,
 extracted from runserver.py to improve code organization.
 """
 
-import os
+import time
 from flask import Flask, jsonify
-from utils import id_generator, get_random_color, check_older_than, process_chat
-
-
-def _read_version():
-    """Read application version from VERSION file"""
-    version_file = os.path.join(os.path.dirname(__file__), "VERSION")
-    try:
-        with open(version_file) as f:
-            return f.read().strip()
-    except OSError:
-        return "unknown"
+from utils import (
+    id_generator,
+    get_random_color,
+    check_older_than,
+    process_chat,
+    read_version,
+)
 
 
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
+    app_start_monotonic = time.monotonic()
     
     # Set secret key for sessions
     app.secret_key = id_generator(size=64)
@@ -92,37 +89,44 @@ def create_app():
     # Health check endpoint for monitoring and deployment readiness
     @app.route('/health', methods=["GET"])
     def health_check():
-        from simple_chat_routes import chat_rooms
+        from simple_chat_routes import (
+            chat_rooms,
+            direct_messages,
+            _rate_limit_store,
+            rooms_lock,
+            dm_lock,
+            _rate_limit_lock,
+        )
+        with rooms_lock:
+            active_rooms = len(chat_rooms)
+        with dm_lock:
+            active_direct_messages = len(direct_messages)
+        with _rate_limit_lock:
+            rate_limiter_sessions = len(_rate_limit_store)
+
         return jsonify({
             "status": "healthy",
-            "version": _read_version(),
-            "active_rooms": len(chat_rooms),
+            "service": "opsechat",
+            "version": read_version(),
+            "uptime_seconds": int(time.monotonic() - app_start_monotonic),
+            "active_rooms": active_rooms,
+            "active_direct_messages": active_direct_messages,
+            "rate_limiter_sessions": rate_limiter_sessions,
+        }), 200
+
+    @app.route('/version', methods=["GET"])
+    def version_info():
+        """Return application version metadata for deployment checks."""
+        return jsonify({
+            "status": "ok",
+            "service": "opsechat",
+            "version": read_version(),
         }), 200
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # Health check endpoint for monitoring
-    @app.route('/health', methods=["GET"])
-    def health():
-        """
-        Health check endpoint for monitoring and deployment verification.
-        Returns basic status and version information.
-        """
-        import os
-        try:
-            with open('VERSION', 'r') as f:
-                version = f.read().strip()
-        except:
-            version = '0.8.0-alpha'  # fallback
-        
-        return {
-            'status': 'ok',
-            'version': version,
-            'service': 'opsechat'
-        }, 200
     
     # Error handlers
     @app.errorhandler(404)
