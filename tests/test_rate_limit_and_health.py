@@ -113,3 +113,61 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_details_endpoint_returns_runtime_fields():
+    _clear_store()
+    client = _test_app.test_client()
+    response = client.get("/health/details")
+    assert response.status_code == 200
+
+    data = response.get_json()
+    assert data is not None
+    assert data.get("status") == "healthy"
+    assert data.get("service") == "opsechat"
+    assert isinstance(data.get("uptime_seconds"), int)
+    assert data["uptime_seconds"] >= 0
+
+    runtime = data.get("runtime")
+    assert isinstance(runtime, dict)
+    assert isinstance(runtime.get("active_rooms"), int)
+    assert isinstance(runtime.get("active_direct_messages"), int)
+    assert isinstance(runtime.get("rate_limiter_sessions"), int)
+    assert isinstance(runtime.get("rate_limits"), dict)
+    assert "chat_message" in runtime["rate_limits"]
+
+
+def test_chat_rate_limit_status_endpoint_returns_all_limits():
+    _clear_store()
+    client = _test_app.test_client()
+    response = client.get("/chat/rate-limit-status")
+    assert response.status_code == 200
+
+    data = response.get_json()
+    assert data is not None
+    assert "limits" in data
+    assert set(data["limits"].keys()) == {"chat_create", "chat_message", "dm_send"}
+
+
+def test_chat_rate_limit_status_reflects_current_usage():
+    _clear_store()
+    client = _test_app.test_client()
+
+    with client.session_transaction() as sess:
+        sess["_id"] = "session-status"
+        sess["username"] = "TestUser"
+        sess["color"] = [255, 85, 85]
+
+    # Consume two dm_send requests for this session
+    check_rate_limit("session-status", "dm_send")
+    check_rate_limit("session-status", "dm_send")
+
+    response = client.get("/chat/rate-limit-status")
+    assert response.status_code == 200
+    data = response.get_json()
+
+    dm_send = data["limits"]["dm_send"]
+    assert dm_send["used_requests"] == 2
+    assert dm_send["remaining_requests"] == 3
+    assert dm_send["max_requests"] == 5
+    assert dm_send["window_seconds"] == 60

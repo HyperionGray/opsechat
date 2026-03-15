@@ -6,6 +6,7 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
+import datetime
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
 
@@ -23,6 +24,7 @@ def _read_version():
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
+    app_started_at = datetime.datetime.now(datetime.timezone.utc)
     
     # Set secret key for sessions
     app.secret_key = id_generator(size=64)
@@ -92,37 +94,37 @@ def create_app():
     # Health check endpoint for monitoring and deployment readiness
     @app.route('/health', methods=["GET"])
     def health_check():
-        from simple_chat_routes import chat_rooms
+        from simple_chat_routes import get_runtime_stats
+        runtime = get_runtime_stats()
         return jsonify({
             "status": "healthy",
             "version": _read_version(),
-            "active_rooms": len(chat_rooms),
+            "active_rooms": runtime["active_rooms"],
+        }), 200
+
+    @app.route('/health/details', methods=["GET"])
+    def health_details():
+        """
+        Detailed health endpoint with runtime diagnostics.
+
+        Intended for operators and automated monitoring checks.
+        """
+        from simple_chat_routes import get_runtime_stats
+        now = datetime.datetime.now(datetime.timezone.utc)
+        runtime = get_runtime_stats()
+
+        return jsonify({
+            "status": "healthy",
+            "service": "opsechat",
+            "version": _read_version(),
+            "uptime_seconds": int((now - app_started_at).total_seconds()),
+            "runtime": runtime,
         }), 200
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # Health check endpoint for monitoring
-    @app.route('/health', methods=["GET"])
-    def health():
-        """
-        Health check endpoint for monitoring and deployment verification.
-        Returns basic status and version information.
-        """
-        import os
-        try:
-            with open('VERSION', 'r') as f:
-                version = f.read().strip()
-        except:
-            version = '0.8.0-alpha'  # fallback
-        
-        return {
-            'status': 'ok',
-            'version': version,
-            'service': 'opsechat'
-        }, 200
     
     # Error handlers
     @app.errorhandler(404)

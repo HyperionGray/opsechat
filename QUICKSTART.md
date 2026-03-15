@@ -30,6 +30,7 @@ python chat-room.py --tor
 - ✅ Text-only, no media
 - ✅ In-memory only (no disk writes)
 - ✅ Rate limiting: 30 messages/min, 10 room creates/min, 5 DMs/min per session
+- ✅ Runtime observability endpoints for health and rate-limit diagnostics
 
 Access at `http://localhost:5000/chat` or your `.onion` address.
 
@@ -38,6 +39,18 @@ Access at `http://localhost:5000/chat` or your `.onion` address.
 ```bash
 curl http://localhost:5000/health
 # {"active_rooms":0,"status":"healthy","version":"0.8.0-alpha"}
+```
+
+```bash
+curl http://localhost:5000/health/details
+# {"status":"healthy","service":"opsechat","version":"0.8.0-alpha","uptime_seconds":42,"runtime":{...}}
+```
+
+### Check your current rate-limit usage
+
+```bash
+curl http://localhost:5000/chat/rate-limit-status
+# {"limits":{"chat_create":{"max_requests":10,"window_seconds":60,"used_requests":0,...}, ...}}
 ```
 
 ---

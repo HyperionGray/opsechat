@@ -15,7 +15,7 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
+from flask import render_template, request, session, jsonify
 from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
 
 # Global room storage (in-memory only)
@@ -220,6 +220,81 @@ def cleanup_rate_limits():
             del _rate_limit_store[sid]
 
 
+def get_rate_limit_status(session_id: str) -> dict:
+    """
+    Return per-endpoint rate-limit usage for a session.
+
+    This powers observability endpoints and client-side diagnostics.
+    """
+    now = datetime.datetime.now()
+    status = {}
+
+    with _rate_limit_lock:
+        session_limits = _rate_limit_store.get(session_id, {})
+
+        for endpoint, config in RATE_LIMITS.items():
+            max_requests = config["max_requests"]
+            window = config["window_seconds"]
+            cutoff = now - datetime.timedelta(seconds=window)
+
+            valid_timestamps = [ts for ts in session_limits.get(endpoint, []) if ts > cutoff]
+
+            if session_id in _rate_limit_store and endpoint in _rate_limit_store[session_id]:
+                _rate_limit_store[session_id][endpoint] = valid_timestamps
+
+            used = len(valid_timestamps)
+            remaining = max(0, max_requests - used)
+
+            if valid_timestamps:
+                oldest = valid_timestamps[0]
+                reset_in = max(0, int(window - (now - oldest).total_seconds()) + 1)
+            else:
+                reset_in = 0
+
+            status[endpoint] = {
+                "max_requests": max_requests,
+                "window_seconds": window,
+                "used_requests": used,
+                "remaining_requests": remaining,
+                "reset_in_seconds": reset_in,
+            }
+
+        if session_id in _rate_limit_store:
+            empty_endpoints = [
+                endpoint for endpoint, timestamps in _rate_limit_store[session_id].items()
+                if not timestamps
+            ]
+            for endpoint in empty_endpoints:
+                del _rate_limit_store[session_id][endpoint]
+            if not _rate_limit_store[session_id]:
+                del _rate_limit_store[session_id]
+
+    return status
+
+
+def get_runtime_stats() -> dict:
+    """Get lightweight in-memory runtime metrics for health/debug endpoints."""
+    with rooms_lock:
+        active_rooms = len(chat_rooms)
+    with dm_lock:
+        active_direct_messages = len(direct_messages)
+    with _rate_limit_lock:
+        rate_limiter_sessions = len(_rate_limit_store)
+
+    return {
+        "active_rooms": active_rooms,
+        "active_direct_messages": active_direct_messages,
+        "rate_limiter_sessions": rate_limiter_sessions,
+        "rate_limits": {
+            endpoint: {
+                "max_requests": config["max_requests"],
+                "window_seconds": config["window_seconds"],
+            }
+            for endpoint, config in RATE_LIMITS.items()
+        },
+    }
+
+
 # Background cleanup thread
 def cleanup_loop():
     """Continuously clean up old messages and rooms"""
@@ -250,6 +325,14 @@ def generate_secure_dm_id():
     return secrets.token_urlsafe(16)
 
 
+def _ensure_session_identity():
+    """Create a per-session identity if one does not already exist."""
+    if "_id" not in session:
+        session["_id"] = generate_secure_dm_id()
+        session["username"] = generate_random_username()
+        session["color"] = get_random_color_rgb()
+
+
 def register_simple_chat_routes(app):
     """Register simple chat routes with the Flask app"""
     
@@ -268,11 +351,7 @@ def register_simple_chat_routes(app):
     @app.route('/chat/create', methods=['POST'])
     def chat_create():
         """Create a new chat room with cryptographically secure ID"""
-        # Ensure session exists for rate limiting
-        if "_id" not in session:
-            session["_id"] = generate_secure_dm_id()
-            session["username"] = generate_random_username()
-            session["color"] = get_random_color_rgb()
+        _ensure_session_identity()
 
         allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
         if not allowed:
@@ -300,10 +379,7 @@ def register_simple_chat_routes(app):
                                      error="Room not found or expired"), 404
         
         # Initialize user session
-        if "_id" not in session:
-            session["_id"] = generate_secure_dm_id()
-            session["username"] = generate_random_username()
-            session["color"] = get_random_color_rgb()
+        _ensure_session_identity()
         
         return render_template("simple_chat_room.html", 
                              room_id=room_id,
@@ -320,10 +396,7 @@ def register_simple_chat_routes(app):
         
         if request.method == 'POST':
             # Ensure user has session
-            if "_id" not in session:
-                session["_id"] = generate_secure_dm_id()
-                session["username"] = generate_random_username()
-                session["color"] = get_random_color_rgb()
+            _ensure_session_identity()
 
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
@@ -391,15 +464,20 @@ def register_simple_chat_routes(app):
                 "my_username": session.get("username"),
                 "my_color": session.get("color")
             })
+
+    @app.route('/chat/rate-limit-status', methods=['GET'])
+    def chat_rate_limit_status():
+        """Return the current session's rate-limit usage for chat endpoints."""
+        _ensure_session_identity()
+        return jsonify({
+            "limits": get_rate_limit_status(session["_id"])
+        }), 200
     
     @app.route('/chat/dm/send', methods=['POST'])
     def send_dm():
         """Send a direct message (for sharing room IDs) - expires in 1 minute"""
         # Initialize user session if needed
-        if "_id" not in session:
-            session["_id"] = generate_secure_dm_id()
-            session["username"] = generate_random_username()
-            session["color"] = get_random_color_rgb()
+        _ensure_session_identity()
 
         # Check rate limit for DMs
         allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
