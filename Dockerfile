@@ -27,6 +27,7 @@ RUN pip install --no-cache-dir -r requirements.txt || \
 # Copy application code
 COPY runserver.py .
 COPY app_factory.py .
+COPY rate_limiter.py .
 COPY utils.py .
 COPY chat_routes.py .
 COPY simple_chat_routes.py .

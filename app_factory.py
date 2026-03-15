@@ -99,8 +99,8 @@ def create_app():
         return response
     
     # Register chat routes
-    register_chat_routes(app, chatlines, chatters, id_generator, get_random_color, 
-                        check_older_than, process_chat, add_security_headers)
+    register_chat_routes(app, chatlines, chatters, id_generator, get_random_color,
+                        check_older_than, process_chat)
     
     # Register simple chat routes (new simplified interface)
     from simple_chat_routes import register_simple_chat_routes
