@@ -112,6 +112,23 @@ class TestDomainRotationManager:
         assert result is not None
         assert result["domain"].endswith((".xyz", ".club", ".online", ".site", ".website"))
         assert result["price"] <= 5.0
+
+    def test_find_cheap_available_domain_parses_currency_price(self):
+        """Test parsing string prices returned by registrar APIs"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test123.xyz",
+            "price": "$2.49 USD",
+            "currency": "USD",
+        }
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=3.0, max_attempts=1)
+
+        assert result is not None
+        assert result["price"] == 2.49
+        assert result["currency"] == "USD"
     
     def test_purchase_domain_if_budget_allows_success(self):
         """Test domain purchase within budget"""
@@ -174,3 +191,36 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_rotate_domain_with_result_success(self):
+        """Test structured domain rotation result payload"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test789.xyz",
+            "price": "1.50",
+            "currency": "USD",
+        }
+        mock_client.purchase_domain.return_value = {"success": True}
+
+        manager = DomainRotationManager(mock_client, monthly_budget=10.0)
+        result = manager.rotate_domain_with_result()
+
+        assert result["success"] is True
+        assert result["domain"] == manager.active_domain
+        assert result["budget"]["domains_owned"] == 1
+
+    @patch("domain_manager.PorkbunAPIClient")
+    def test_configure_and_get_config(self, mock_porkbun):
+        """Test manager configuration and masked config output"""
+        mock_porkbun.return_value = Mock(spec=DomainAPIClient)
+        manager = DomainRotationManager(monthly_budget=5.0)
+
+        manager.configure("pk_test_1234", "sk_secret_9999", monthly_budget=20.0)
+        config = manager.get_config()
+
+        assert config["configured"] is True
+        assert config["provider"] == "porkbun"
+        assert config["api_key_masked"].endswith("1234")
+        assert config["secret_key_configured"] is True
+        assert config["monthly_budget"] == 20.0

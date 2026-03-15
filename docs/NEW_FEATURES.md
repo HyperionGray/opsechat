@@ -177,6 +177,11 @@ When limit exceeded:
 ### Purpose
 Easy domain rotation for burner email service to avoid domain bans and maintain service availability.
 
+### 2026-03 Maintenance Update
+- Web config route (`/<secret>/email/config`) now applies SMTP/IMAP/domain actions directly.
+- Domain rotate route (`/<secret>/email/domain/rotate`) now uses structured results and updates burner domain.
+- CLI state persistence now safely serializes/restores domain timestamps.
+
 ### Installation
 ```bash
 # The CLI is included in the main repository

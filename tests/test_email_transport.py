@@ -165,3 +165,19 @@ class TestEmailTransportManager:
         manager.smtp_transport = Mock()
         status = manager.is_configured()
         assert status['smtp'] is True
+
+    def test_get_config_snapshot(self):
+        """Test config snapshot payload for UI usage"""
+        manager = EmailTransportManager()
+        manager.smtp_transport = SMTPTransport(
+            "smtp.test.com", 587, "user@test.com", "secret", True
+        )
+        manager.imap_transport = IMAPTransport(
+            "imap.test.com", 993, "user@test.com", "secret", True
+        )
+
+        config = manager.get_config()
+        assert config["status"]["smtp"] is True
+        assert config["status"]["imap"] is True
+        assert config["smtp"]["server"] == "smtp.test.com"
+        assert config["imap"]["server"] == "imap.test.com"

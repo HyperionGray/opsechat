@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from getpass import getpass
 from domain_manager import PorkbunAPIClient, DomainRotationManager
@@ -112,7 +113,7 @@ def get_manager():
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = _deserialize_domains(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,9 +123,53 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = _serialize_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
     save_config(config)
+
+
+def _serialize_domains(domains):
+    """Convert datetime fields to ISO strings for JSON persistence."""
+    serialized = []
+    for domain in domains:
+        entry = dict(domain)
+        purchased_at = entry.get('purchased_at')
+        expires_at = entry.get('expires_at')
+        if hasattr(purchased_at, "isoformat"):
+            entry['purchased_at'] = purchased_at.isoformat()
+        if hasattr(expires_at, "isoformat"):
+            entry['expires_at'] = expires_at.isoformat()
+        serialized.append(entry)
+    return serialized
+
+
+def _deserialize_domains(domains):
+    """Convert persisted ISO timestamps back to datetime objects."""
+    parsed = []
+    for domain in domains:
+        entry = dict(domain)
+        for key in ('purchased_at', 'expires_at'):
+            value = entry.get(key)
+            if isinstance(value, str):
+                try:
+                    entry[key] = datetime.fromisoformat(value)
+                except ValueError:
+                    # Keep raw string if it is not in ISO format
+                    pass
+        parsed.append(entry)
+    return parsed
+
+
+def _format_datetime_for_display(value, default_fmt):
+    """Format datetimes safely for CLI output."""
+    if isinstance(value, datetime):
+        return value.strftime(default_fmt)
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value).strftime(default_fmt)
+        except ValueError:
+            return value
+    return "unknown"
 
 
 def list_domains():
@@ -144,8 +189,8 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_datetime_for_display(domain.get('purchased_at'), '%Y-%m-%d %H:%M')}")
+        print(f"   Expires: {_format_datetime_for_display(domain.get('expires_at'), '%Y-%m-%d')}")
         print()
 
 
