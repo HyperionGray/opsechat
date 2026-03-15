@@ -5,17 +5,25 @@ This module handles Flask application creation and configuration,
 extracted from runserver.py to improve code organization.
 """
 
-from flask import Flask
+import os
+from flask import Flask, jsonify, request
 from utils import id_generator, get_random_color, check_older_than, process_chat
 from rate_limiter import init_limiter
 
 
-def create_app():
+def create_app(test_config=None):
     """Create and configure the Flask application"""
     app = Flask(__name__)
     
     # Set secret key for sessions
     app.secret_key = id_generator(size=64)
+
+    # Configurable per-endpoint limits for chat write APIs
+    app.config.setdefault("RATE_LIMIT_CHAT_CREATE", os.getenv("OPSECHAT_RATE_LIMIT_CHAT_CREATE", "10 per hour; 3 per minute"))
+    app.config.setdefault("RATE_LIMIT_CHAT_MESSAGES_POST", os.getenv("OPSECHAT_RATE_LIMIT_CHAT_MESSAGES_POST", "60 per minute"))
+    app.config.setdefault("RATE_LIMIT_CHAT_DM_SEND", os.getenv("OPSECHAT_RATE_LIMIT_CHAT_DM_SEND", "20 per hour; 5 per minute"))
+    if test_config:
+        app.config.update(test_config)
     
     # Initialize rate limiter
     init_limiter(app)
@@ -64,7 +72,7 @@ def create_app():
     def add_security_headers(response):
         response.headers["Server"] = ""
         response.headers["Date"] = ""
-        # Content Security Policy: restrict resources to same origin, block inline scripts
+        # Content Security Policy: keep resources same-origin and only allow same-origin framing.
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self'; "
@@ -72,18 +80,45 @@ def create_app():
             "img-src 'self' data:; "
             "font-src 'self'; "
             "connect-src 'self'; "
-            "frame-ancestors 'none';"
+            "frame-ancestors 'self';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["Referrer-Policy"] = "no-referrer"
+        return response
+
+    @app.errorhandler(429)
+    def handle_rate_limit(error):
+        """Return JSON for API clients and plain text for browser pages."""
+        retry_after = int(getattr(error, "retry_after", 0) or 0)
+        is_api_request = (
+            request.path.startswith("/chat/")
+            or request.path.endswith(".json")
+            or request.accept_mimetypes.best == "application/json"
+        )
+        if is_api_request:
+            response = jsonify({"error": "Rate limit exceeded. Please retry later."})
+        else:
+            response = app.response_class(
+                "Rate limit exceeded. Please retry later.",
+                mimetype="text/plain",
+            )
+
+        response.status_code = 429
+        if retry_after > 0:
+            response.headers["Retry-After"] = str(retry_after)
         return response
     
     # Register chat routes
-    register_chat_routes(app, chatlines, chatters, id_generator, get_random_color, 
-                        check_older_than, process_chat, add_security_headers)
+    register_chat_routes(
+        app,
+        chatlines,
+        chatters,
+        id_generator,
+        get_random_color,
+        check_older_than,
+        process_chat,
+    )
     
     # Register simple chat routes (new simplified interface)
     from simple_chat_routes import register_simple_chat_routes

@@ -14,8 +14,8 @@ from flask import render_template, request, session, jsonify
 from utils import sanitize_emojis, filter_to_ascii
 
 
-def register_chat_routes(app, chatlines, chatters, id_generator, get_random_color, 
-                        check_older_than, process_chat, add_security_headers=None):
+def register_chat_routes(app, chatlines, chatters, id_generator, get_random_color,
+                        check_older_than, process_chat):
     """Register all chat-related routes with the Flask app"""
     
     @app.route('/<string:url_addition>')

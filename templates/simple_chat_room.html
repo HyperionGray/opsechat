@@ -216,6 +216,7 @@
         let encryptionEnabled = false;
         let encryptionKey = null;
         let pollInterval = null;
+        let renderedMessageKeys = [];
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
         
         // Show security warning on first load
@@ -348,47 +349,74 @@
             const container = document.getElementById('messagesContainer');
             container.scrollTop = container.scrollHeight;
         }
-        
-        async function renderMessages(messages) {
-            const container = document.getElementById('messagesContainer');
-            container.innerHTML = '';
-            
-            for (const msg of messages) {
-                const messageDiv = document.createElement('div');
-                messageDiv.className = 'message' + (msg.is_mine ? ' mine' : '');
-                
-                const usernameSpan = document.createElement('span');
-                usernameSpan.className = 'username';
-                usernameSpan.style.color = `rgb(${msg.color[0]}, ${msg.color[1]}, ${msg.color[2]})`;
-                usernameSpan.textContent = msg.username + ':';
-                
-                const messageText = document.createElement('span');
-                
-                // Check if message is encrypted
-                if (isEncrypted(msg.message)) {
-                    const lockIcon = document.createElement('span');
-                    lockIcon.className = 'lock-icon';
-                    lockIcon.textContent = '🔒 ';
-                    messageText.appendChild(lockIcon);
-                    
-                    if (encryptionEnabled && encryptionKey) {
-                        const encryptedData = msg.message.substring(1); // Remove lock emoji
-                        const decrypted = await decryptMessage(encryptedData, encryptionKey);
-                        messageText.appendChild(document.createTextNode(decrypted));
-                    } else {
-                        messageText.appendChild(document.createTextNode('[Encrypted - Enable encryption to view]'));
-                    }
+
+        function buildMessageKey(msg) {
+            // Server timestamps include microseconds; combining fields makes collisions unlikely.
+            return `${msg.timestamp}|${msg.username}|${msg.is_mine}|${msg.message}`;
+        }
+
+        async function appendMessageElement(container, msg) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message' + (msg.is_mine ? ' mine' : '');
+
+            const usernameSpan = document.createElement('span');
+            usernameSpan.className = 'username';
+            usernameSpan.style.color = `rgb(${msg.color[0]}, ${msg.color[1]}, ${msg.color[2]})`;
+            usernameSpan.textContent = msg.username + ':';
+
+            const messageText = document.createElement('span');
+
+            // Check if message is encrypted
+            if (isEncrypted(msg.message)) {
+                const lockIcon = document.createElement('span');
+                lockIcon.className = 'lock-icon';
+                lockIcon.textContent = '🔒 ';
+                messageText.appendChild(lockIcon);
+
+                if (encryptionEnabled && encryptionKey) {
+                    const encryptedData = msg.message.substring(1); // Remove lock emoji
+                    const decrypted = await decryptMessage(encryptedData, encryptionKey);
+                    messageText.appendChild(document.createTextNode(decrypted));
                 } else {
-                    messageText.textContent = msg.message;
+                    messageText.appendChild(document.createTextNode('[Encrypted - Enable encryption to view]'));
                 }
-                
-                messageDiv.appendChild(usernameSpan);
-                messageDiv.appendChild(document.createTextNode(' '));
-                messageDiv.appendChild(messageText);
-                
-                container.appendChild(messageDiv);
+            } else {
+                messageText.textContent = msg.message;
             }
-            
+
+            messageDiv.appendChild(usernameSpan);
+            messageDiv.appendChild(document.createTextNode(' '));
+            messageDiv.appendChild(messageText);
+            container.appendChild(messageDiv);
+        }
+        
+        async function renderMessages(messages, options = {}) {
+            const forceFullRender = options.forceFullRender === true;
+            const container = document.getElementById('messagesContainer');
+
+            const nextKeys = messages.map(buildMessageKey);
+            const canAppendOnly = !forceFullRender
+                && renderedMessageKeys.length <= nextKeys.length
+                && renderedMessageKeys.every((key, index) => key === nextKeys[index]);
+
+            if (!canAppendOnly) {
+                // Disable announcements while rebuilding the full log to avoid repeated re-reading.
+                const liveSetting = container.getAttribute('aria-live') || 'polite';
+                container.setAttribute('aria-live', 'off');
+                container.innerHTML = '';
+
+                for (const msg of messages) {
+                    await appendMessageElement(container, msg);
+                }
+
+                container.setAttribute('aria-live', liveSetting);
+            } else {
+                for (let i = renderedMessageKeys.length; i < messages.length; i++) {
+                    await appendMessageElement(container, messages[i]);
+                }
+            }
+
+            renderedMessageKeys = nextKeys;
             scrollToBottom();
         }
         
@@ -425,13 +453,14 @@
             }
         }
         
-        async function pollMessages() {
+        async function pollMessages(options = {}) {
+            const forceFullRender = options.forceFullRender === true;
             try {
                 const response = await fetch(`/chat/room/${roomId}/messages`);
                 
                 if (response.ok) {
                     const data = await response.json();
-                    await renderMessages(data.messages);
+                    await renderMessages(data.messages, { forceFullRender });
                     document.getElementById('userCount').textContent = `Users: ${data.user_count}`;
                 }
             } catch (error) {
@@ -475,7 +504,7 @@
             }
             
             // Re-render messages with new encryption status
-            await pollMessages();
+            await pollMessages({ forceFullRender: true });
         });
         
         // Check for existing key on load

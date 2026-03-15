@@ -131,6 +131,26 @@ First-time users see a prominent security warning:
 - **VIOLATIONS = CONSEQUENCES** - Logs preserved, not burned, potential reporting
 - Users must click "I UNDERSTAND AND AGREE" before chatting
 
+### Configurable Chat Rate Limits
+Rate limits for chat write endpoints are now configurable without code changes:
+
+- `OPSECHAT_RATE_LIMIT_CHAT_CREATE` (default: `10 per hour; 3 per minute`)
+- `OPSECHAT_RATE_LIMIT_CHAT_MESSAGES_POST` (default: `60 per minute`)
+- `OPSECHAT_RATE_LIMIT_CHAT_DM_SEND` (default: `20 per hour; 5 per minute`)
+- `OPSECHAT_RATELIMIT_DEFAULT` (default: `200 per hour,50 per minute`)
+- `OPSECHAT_RATELIMIT_STORAGE_URI` (default: `memory://`)
+
+When a client exceeds limits on API routes, the app now returns a structured JSON response:
+
+```json
+{
+  "error": "Rate limit exceeded. Please retry later."
+}
+```
+
+### Accessibility: Incremental Live Chat Updates
+The chat room now performs incremental message rendering during polling. This avoids clearing and rebuilding the full chat log each refresh, preventing repeated screen-reader announcements of the entire conversation.
+
 ---
 
 ## 📧 Email Rate Limiting

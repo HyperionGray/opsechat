@@ -16,8 +16,8 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from flask import render_template, request, session, jsonify, current_app
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Global room storage (in-memory only)
@@ -181,7 +181,7 @@ def register_simple_chat_routes(app):
         return render_template("simple_chat_index.html")
     
     @app.route('/chat/create', methods=['POST'])
-    @limiter.limit("10 per hour; 3 per minute")
+    @limiter.limit(lambda: current_app.config.get("RATE_LIMIT_CHAT_CREATE", "10 per hour; 3 per minute"))
     def chat_create():
         """Create a new chat room with cryptographically secure ID"""
         room_id = generate_secure_room_id(32)
@@ -215,7 +215,7 @@ def register_simple_chat_routes(app):
                              color=session["color"])
     
     @app.route('/chat/room/<string:room_id>/messages', methods=['GET', 'POST'])
-    @limiter.limit("60 per minute", methods=["POST"])
+    @limiter.limit(lambda: current_app.config.get("RATE_LIMIT_CHAT_MESSAGES_POST", "60 per minute"), methods=["POST"])
     def simple_chat_messages(room_id):
         """Get or post messages to a room"""
         with rooms_lock:
@@ -291,7 +291,7 @@ def register_simple_chat_routes(app):
             })
     
     @app.route('/chat/dm/send', methods=['POST'])
-    @limiter.limit("20 per hour; 5 per minute")
+    @limiter.limit(lambda: current_app.config.get("RATE_LIMIT_CHAT_DM_SEND", "20 per hour; 5 per minute"))
     def send_dm():
         """Send a direct message (for sharing room IDs) - expires in 1 minute"""
         # Initialize user session if needed
