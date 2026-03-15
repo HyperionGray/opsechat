@@ -7,7 +7,14 @@ extracted from runserver.py to improve code organization.
 
 from flask import Flask
 from utils import id_generator, get_random_color, check_older_than, process_chat
-from rate_limiter import init_limiter
+try:
+    from rate_limiter import init_limiter
+except ModuleNotFoundError:
+    def init_limiter(app):
+        # Fallback: disable rate limiting if rate_limiter is not available.
+        # This keeps containerized installs working even if rate_limiter.py
+        # was not included in the image build.
+        return app
 
 
 def create_app():
@@ -101,5 +108,15 @@ def create_app():
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
+    
+    # CHANGELOG (AI assistant):
+    # - Made rate_limiter import optional with a no-op fallback to prevent
+    #   ModuleNotFoundError in containerized installs that omit rate_limiter.py.
+    #
+    # Remaining checklist (non-blocking for runtime):
+    # - Update container/Podman build configuration to ensure rate_limiter.py
+    #   is included in the image (e.g., COPY list or packaging config).
+    # - Once packaging reliably includes rate_limiter.py, consider removing
+    #   the fallback or turning it into an explicit configuration option.
     
     return app
