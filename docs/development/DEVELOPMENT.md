@@ -22,6 +22,24 @@ You can run the same bootstrap locally:
 ./scripts/bootstrap-dev-environment.sh
 ```
 
+Useful variants:
+
+```bash
+# Recreate a clean virtual environment
+./scripts/bootstrap-dev-environment.sh --recreate-venv
+
+# Install Python dependencies only (skip Node/Playwright)
+./scripts/bootstrap-dev-environment.sh --skip-node
+
+# Validate an existing environment without installing anything
+./scripts/bootstrap-dev-environment.sh --check-only
+
+# Skip apt-based system package installation attempts
+./scripts/bootstrap-dev-environment.sh --skip-system-packages
+```
+
+Run `./scripts/bootstrap-dev-environment.sh --help` for the full option list.
+
 ### Setting Up Development Environment
 
 ```bash
@@ -221,7 +239,7 @@ npm run lint
 
 - `TOR_CONTROL_PORT` - Tor control port (default: 9051)
 - `PORT` - Flask server port (default: 5000)
-- `FLASK_ENV` - Development/production mode
+- `FLASK_DEBUG` - Flask debug mode (`1` for enabled, `0` for disabled)
 
 ## Troubleshooting
 
