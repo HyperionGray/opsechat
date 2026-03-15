@@ -6,6 +6,7 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
+import time
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
 
@@ -23,6 +24,7 @@ def _read_version():
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
+    app_started_at = time.time()
     
     # Set secret key for sessions
     app.secret_key = id_generator(size=64)
@@ -89,40 +91,39 @@ def create_app():
     register_review_routes(app, id_generator, get_random_color, 
                           add_review_wrapper, get_reviews, get_review_stats)
     
-    # Health check endpoint for monitoring and deployment readiness
+    # Health endpoint used by orchestration and readiness checks.
     @app.route('/health', methods=["GET"])
     def health_check():
-        from simple_chat_routes import chat_rooms
+        from simple_chat_routes import (
+            chat_rooms,
+            direct_messages,
+            _rate_limit_store,
+            rooms_lock,
+            dm_lock,
+            _rate_limit_lock,
+        )
+
+        with rooms_lock:
+            active_rooms = len(chat_rooms)
+        with dm_lock:
+            active_direct_messages = len(direct_messages)
+        with _rate_limit_lock:
+            active_rate_limit_sessions = len(_rate_limit_store)
+
         return jsonify({
             "status": "healthy",
+            "service": "opsechat",
             "version": _read_version(),
-            "active_rooms": len(chat_rooms),
+            "active_rooms": active_rooms,
+            "active_direct_messages": active_direct_messages,
+            "rate_limiter_sessions": active_rate_limit_sessions,
+            "uptime_seconds": int(time.time() - app_started_at),
         }), 200
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # Health check endpoint for monitoring
-    @app.route('/health', methods=["GET"])
-    def health():
-        """
-        Health check endpoint for monitoring and deployment verification.
-        Returns basic status and version information.
-        """
-        import os
-        try:
-            with open('VERSION', 'r') as f:
-                version = f.read().strip()
-        except:
-            version = '0.8.0-alpha'  # fallback
-        
-        return {
-            'status': 'ok',
-            'version': version,
-            'service': 'opsechat'
-        }, 200
     
     # Error handlers
     @app.errorhandler(404)

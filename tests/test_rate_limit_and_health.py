@@ -103,8 +103,12 @@ def test_health_endpoint_returns_json_with_required_fields():
     data = response.get_json()
     assert data is not None
     assert data.get("status") == "healthy"
+    assert data.get("service") == "opsechat"
     assert "version" in data
     assert "active_rooms" in data
+    assert "active_direct_messages" in data
+    assert "rate_limiter_sessions" in data
+    assert "uptime_seconds" in data
 
 
 def test_health_endpoint_active_rooms_is_integer():
@@ -113,3 +117,35 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_route_registered_once():
+    health_rules = [
+        rule for rule in _test_app.url_map.iter_rules()
+        if rule.rule == "/health" and "GET" in rule.methods
+    ]
+    assert len(health_rules) == 1
+
+
+def test_dm_rate_limit_429_includes_retry_metadata():
+    _clear_store()
+    client = _test_app.test_client()
+    payload = {"room_id": "room-test", "message": "hello"}
+
+    for _ in range(5):
+        response = client.post("/chat/dm/send", json=payload)
+        assert response.status_code == 200
+
+    limited = client.post("/chat/dm/send", json=payload)
+    data = limited.get_json()
+
+    assert limited.status_code == 429
+    assert data["retry_after"] >= 1
+    assert data["rate_limit"]["endpoint"] == "dm_send"
+    assert data["rate_limit"]["max_requests"] == 5
+    assert data["rate_limit"]["window_seconds"] == 60
+
+    assert limited.headers.get("Retry-After") is not None
+    assert limited.headers.get("X-RateLimit-Limit") == "5"
+    assert limited.headers.get("X-RateLimit-Window") == "60"
+    assert limited.headers.get("X-RateLimit-Remaining") == "0"
