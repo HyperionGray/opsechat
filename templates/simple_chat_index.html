@@ -112,10 +112,10 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container" role="main">
         <h1>⚡ OpSecChat ⚡</h1>
         
-        <div class="info-box">
+        <div class="info-box" role="region" aria-label="Security features">
             <h2>Security Features</h2>
             <ul>
                 <li>Messages disappear after 3 minutes</li>
@@ -128,7 +128,7 @@
             </ul>
         </div>
         
-        <div class="info-box">
+        <div class="info-box" role="region" aria-label="How to use">
             <h2>How It Works</h2>
             <ul>
                 <li>Click "Create New Chat Room" below</li>
@@ -140,11 +140,11 @@
         </div>
         
         <div class="create-room">
-            <button id="createRoomBtn">Create New Chat Room</button>
-            <div id="status" class="status"></div>
+            <button id="createRoomBtn" aria-label="Create a new secure chat room">Create New Chat Room</button>
+            <div id="status" class="status" role="status" aria-live="polite"></div>
         </div>
         
-        <div class="info-box">
+        <div class="info-box" role="region" aria-label="Security reminder">
             <h2 class="warning">⚠ Security Reminder</h2>
             <ul>
                 <li>Only share room URLs with trusted contacts</li>

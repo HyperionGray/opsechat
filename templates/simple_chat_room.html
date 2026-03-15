@@ -156,37 +156,39 @@
     </style>
 </head>
 <body>
-    <div class="header">
+    <div class="header" role="banner">
         <div>
             <h1>🔒 OpSecChat Room</h1>
-            <span id="userInfo">You are: <span style="color: rgb({{ color[0] }}, {{ color[1] }}, {{ color[2] }})">{{ username }}</span></span>
+            <span id="userInfo">You are: <span style="color: rgb({{ color[0] }}, {{ color[1] }}, {{ color[2] }})" aria-label="Your username">{{ username }}</span></span>
         </div>
         <div class="header-info">
-            <span id="userCount">Users: 1</span>
+            <span id="userCount" aria-live="polite">Users: 1</span>
             <span class="encryption-toggle">
                 <label>
-                    <input type="checkbox" id="encryptionToggle">
+                    <input type="checkbox" id="encryptionToggle" aria-label="Toggle end-to-end encryption">
                     <span id="encryptionStatus" class="encryption-status">Encryption: OFF</span>
                 </label>
             </span>
         </div>
     </div>
     
-    <div class="messages-container" id="messagesContainer">
+    <div class="messages-container" id="messagesContainer" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions">
         <!-- Messages will appear here -->
     </div>
     
-    <div class="input-container">
-        <input type="text" id="messageInput" placeholder="Type your message (max 500 chars)..." maxlength="500" autofocus>
-        <button id="sendBtn">Send</button>
+    <div class="input-container" role="form" aria-label="Send a message">
+        <input type="text" id="messageInput" placeholder="Type your message (max 500 chars)..." maxlength="500" autofocus
+               aria-label="Message text" aria-describedby="statusMsg">
+        <button id="sendBtn" aria-label="Send message">Send</button>
     </div>
-    <div class="status" id="statusMsg"></div>
+    <div class="status" id="statusMsg" role="status" aria-live="polite"></div>
     
     <!-- Security Warning Modal -->
-    <div id="securityWarning" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 1000; padding: 20px;">
+    <div id="securityWarning" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 1000; padding: 20px;"
+         role="dialog" aria-modal="true" aria-labelledby="securityWarningTitle" aria-describedby="securityWarningBody">
         <div style="max-width: 600px; margin: 50px auto; background: #001100; border: 2px solid #f00; padding: 30px; color: #0f0;">
-            <h2 style="color: #f00; text-align: center;">⚠️ CRITICAL SECURITY NOTICE ⚠️</h2>
-            <p style="margin: 20px 0; line-height: 1.6;">
+            <h2 id="securityWarningTitle" style="color: #f00; text-align: center;">⚠️ CRITICAL SECURITY NOTICE ⚠️</h2>
+            <p id="securityWarningBody" style="margin: 20px 0; line-height: 1.6;">
                 <strong>THIS IS FOR SERIOUS OPERATIONAL SECURITY ONLY.</strong><br><br>
                 
                 ❌ <strong>NO MEDIA SHARING</strong> - Text only. Images, videos, or any encoded content is STRICTLY PROHIBITED.<br><br>

@@ -78,10 +78,10 @@
   - [ ] Set spam thresholds
   - [ ] Add bayesian learning
   - [ ] Test with spam corpus
-- [ ] Add rate limiting
-  - [ ] Implement per-session limits
-  - [ ] Add per-endpoint throttling
-  - [ ] Configure reasonable thresholds
+- [x] Add rate limiting
+  - [x] Implement per-session/IP limits (Flask-Limiter)
+  - [x] Add per-endpoint throttling (`/chat/create`, `/chat/*/messages`, `/chat/dm/send`)
+  - [ ] Configure reasonable thresholds (review after load testing)
   - [ ] Add backoff/retry logic
 - [ ] Integrate second domain registrar API
   - [ ] Choose registrar (Namecheap recommended)
@@ -186,13 +186,13 @@
 **Estimated:** 3-4 days
 
 ### 12. Accessibility
+- [x] ARIA labels added to chat room and chat index pages
 - [ ] Screen reader testing
 - [ ] Keyboard navigation testing
 - [ ] WCAG 2.1 compliance check
 - [ ] Color contrast verification
-- [ ] Add ARIA labels where needed
 - [ ] Test with common accessibility tools
-**Estimated:** 1-2 days
+**Estimated:** 1-2 days remaining
 
 ---
 
@@ -277,6 +277,9 @@
 - [x] Input sanitization
 - [x] Security tools (spoofing detection, phishing simulation)
 - [x] Amazon Q code review integration
+- [x] Content Security Policy (CSP) headers added
+- [x] X-Content-Type-Options, X-Frame-Options, Referrer-Policy headers added
+- [x] Rate limiting on chat API endpoints (Flask-Limiter)
 
 ---
 

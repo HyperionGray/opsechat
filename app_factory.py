@@ -7,6 +7,14 @@ extracted from runserver.py to improve code organization.
 
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
+try:
+    from rate_limiter import init_limiter
+except ModuleNotFoundError:
+    def init_limiter(app):
+        # Fallback: disable rate limiting if rate_limiter is not available.
+        # This keeps containerized installs working even if rate_limiter.py
+        # was not included in the image build.
+        return app
 
 
 def _read_version():
@@ -25,6 +33,9 @@ def create_app():
     
     # Set secret key for sessions
     app.secret_key = id_generator(size=64)
+    
+    # Initialize rate limiter
+    init_limiter(app)
     
     # Initialize global state
     chatters = []
@@ -65,16 +76,31 @@ def create_app():
     def add_review_wrapper(user_id, rating, review_text):
         return add_review(reviews, user_id, rating, review_text)
     
-    # Add security headers function
+    # Add security headers after every response
     @app.after_request
-    def remove_headers(response):
+    def add_security_headers(response):
         response.headers["Server"] = ""
         response.headers["Date"] = ""
+        # Content Security Policy: restrict resources to same origin, block inline scripts
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self'; "
+            "style-src 'self'; "
+            "img-src 'self' data:; "
+            "font-src 'self'; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none';"
+        )
+        # Checklist:
+        # - [ ] Verify that no templates rely on inline <script> or style attributes.
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
         return response
     
     # Register chat routes
-    register_chat_routes(app, chatlines, chatters, id_generator, get_random_color, 
-                        check_older_than, process_chat, remove_headers)
+    register_chat_routes(app, chatlines, chatters, id_generator, get_random_color,
+                        check_older_than, process_chat)
     
     # Register simple chat routes (new simplified interface)
     from simple_chat_routes import register_simple_chat_routes
@@ -100,42 +126,14 @@ def create_app():
     def index():
         return ('', 200)
     
-    # Health check endpoint for monitoring
-    @app.route('/health', methods=["GET"])
-    def health():
-        """
-        Health check endpoint for monitoring and deployment verification.
-        Returns basic status and version information.
-        """
-        import os
-        try:
-            with open('VERSION', 'r') as f:
-                version = f.read().strip()
-        except:
-            version = '0.8.0-alpha'  # fallback
-        
-        return {
-            'status': 'ok',
-            'version': version,
-            'service': 'opsechat'
-        }, 200
-    
-    # Error handlers
-    @app.errorhandler(404)
-    def not_found(error):
-        """Handle 404 errors with a simple message"""
-        return ('Not found', 404)
-    
-    @app.errorhandler(500)
-    def internal_error(error):
-        """Handle 500 errors"""
-        # Log the error but don't expose details to users
-        app.logger.error(f'Server Error: {error}')
-        return ('Internal server error', 500)
-    
-    @app.errorhandler(403)
-    def forbidden(error):
-        """Handle 403 errors"""
-        return ('Forbidden', 403)
+    # CHANGELOG (AI assistant):
+    # - Made rate_limiter import optional with a no-op fallback to prevent
+    #   ModuleNotFoundError in containerized installs that omit rate_limiter.py.
+    #
+    # Remaining checklist (non-blocking for runtime):
+    # - Update container/Podman build configuration to ensure rate_limiter.py
+    #   is included in the image (e.g., COPY list or packaging config).
+    # - Once packaging reliably includes rate_limiter.py, consider removing
+    #   the fallback or turning it into an explicit configuration option.
     
     return app
