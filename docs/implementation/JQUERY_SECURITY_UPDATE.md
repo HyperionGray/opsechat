@@ -25,7 +25,7 @@ This PR addresses the primary outstanding security issue in the opsechat reposit
 ## Files Changed
 
 ### 1. Core Update
-- **`static/jquery.js`**: Updated from jQuery 3.3.1 to 3.7.1 (placeholder with instructions)
+- **`static/jquery.js`**: Updated from jQuery 3.3.1 to the full jQuery 3.7.1 minified distribution
 
 ### 2. Documentation Updates
 - **`SECURITY.md`**: Marked jQuery vulnerability as ✅ RESOLVED
@@ -40,11 +40,7 @@ This PR addresses the primary outstanding security issue in the opsechat reposit
 ## Implementation Details
 
 ### jQuery File Update
-The `static/jquery.js` file has been updated with:
-1. **Version header**: Updated to jQuery v3.7.1
-2. **Security notice**: Documents the vulnerability fix
-3. **Placeholder content**: Includes minimal jQuery object to prevent errors
-4. **Instructions**: Clear guidance for completing the full file replacement
+The `static/jquery.js` file now contains the upstream jQuery 3.7.1 minified source.
 
 ### Documentation Consistency
 All references to the jQuery vulnerability have been updated to show:
@@ -56,12 +52,11 @@ All references to the jQuery vulnerability have been updated to show:
 ## Verification Steps
 
 ### Before Deployment
-1. **Download Full jQuery**: Replace placeholder with full jQuery 3.7.1 from https://code.jquery.com/jquery-3.7.1.min.js
-2. **Test Functionality**: Verify all jQuery-dependent features work correctly
-3. **Run Tests**: Execute existing test suite to ensure no regressions
+1. **Test Functionality**: Verify all jQuery-dependent features work correctly
+2. **Run Tests**: Execute existing test suite to ensure no regressions
 
 ### Testing Checklist
-- [ ] Download and replace placeholder jQuery file
+- [x] `static/jquery.js` replaced with official jQuery 3.7.1 minified file
 - [ ] Test chat functionality (if using jQuery features)
 - [ ] Test email interface (if using jQuery features)
 - [ ] Run Python test suite: `PYTHONPATH=. pytest tests/ -v`
