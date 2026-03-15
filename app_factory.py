@@ -20,6 +20,54 @@ def _read_version():
         return "unknown"
 
 
+def _read_bool_env(name: str, default: bool = False) -> bool:
+    """Read a boolean environment variable."""
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _build_security_headers():
+    """
+    Build response headers used to reduce fingerprinting and enforce safer defaults.
+
+    OPSECHAT_CSP can be used to fully override the default CSP policy.
+    OPSECHAT_DISABLE_CSP=true disables setting a CSP header.
+    """
+    headers = {
+        "Server": "OpSecChat",
+        "Date": "",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "Referrer-Policy": "no-referrer",
+        "Permissions-Policy": (
+            "camera=(), microphone=(), geolocation=(), payment=(), "
+            "usb=(), bluetooth=()"
+        ),
+        "Cache-Control": "no-store, no-cache, must-revalidate, private, max-age=0",
+        "Pragma": "no-cache",
+    }
+
+    if not _read_bool_env("OPSECHAT_DISABLE_CSP", default=False):
+        default_csp = (
+            "default-src 'self'; "
+            "base-uri 'self'; "
+            "frame-ancestors 'none'; "
+            "form-action 'self'; "
+            "object-src 'none'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; "
+            "font-src 'self' data:; "
+            "connect-src 'self'; "
+            "frame-src 'self';"
+        )
+        headers["Content-Security-Policy"] = os.environ.get("OPSECHAT_CSP", default_csp)
+
+    return headers
+
+
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
@@ -66,11 +114,13 @@ def create_app():
     def add_review_wrapper(user_id, rating, review_text):
         return add_review(reviews, user_id, rating, review_text)
     
+    security_headers = _build_security_headers()
+
     # Add security headers function
     @app.after_request
     def remove_headers(response):
-        response.headers["Server"] = ""
-        response.headers["Date"] = ""
+        for key, value in security_headers.items():
+            response.headers[key] = value
         return response
     
     # Register chat routes
@@ -103,26 +153,6 @@ def create_app():
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # Health check endpoint for monitoring
-    @app.route('/health', methods=["GET"])
-    def health():
-        """
-        Health check endpoint for monitoring and deployment verification.
-        Returns basic status and version information.
-        """
-        import os
-        try:
-            with open('VERSION', 'r') as f:
-                version = f.read().strip()
-        except:
-            version = '0.8.0-alpha'  # fallback
-        
-        return {
-            'status': 'ok',
-            'version': version,
-            'service': 'opsechat'
-        }, 200
     
     # Error handlers
     @app.errorhandler(404)

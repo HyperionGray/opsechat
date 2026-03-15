@@ -40,6 +40,28 @@ curl http://localhost:5000/health
 # {"active_rooms":0,"status":"healthy","version":"0.8.0-alpha"}
 ```
 
+### Verify security headers
+
+```bash
+curl -i http://localhost:5000/health
+```
+
+Look for these response headers:
+- `Content-Security-Policy`
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Referrer-Policy: no-referrer`
+
+Optional CSP controls:
+
+```bash
+# Override CSP policy completely
+OPSECHAT_CSP="default-src 'self'; frame-ancestors 'none';" python runserver.py
+
+# Disable CSP header (not recommended for production)
+OPSECHAT_DISABLE_CSP=true python runserver.py
+```
+
 ---
 
 ## Prerequisites

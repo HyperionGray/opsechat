@@ -335,6 +335,19 @@ For security best practices and recommendations, please see [SECURITY.md](SECURI
 
 **Note on jQuery**: ✅ **RESOLVED** - The bundled jQuery has been updated to v3.7.1 to patch the previously known XSS vulnerabilities (CVE-2020-11023 and CVE-2020-11022). The security vulnerabilities have been addressed.
 
+### HTTP Response Header Hardening
+
+The Flask app now applies security headers globally, including:
+- `Content-Security-Policy`
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Referrer-Policy: no-referrer`
+- `Permissions-Policy` with sensitive browser capabilities disabled
+
+Advanced configuration:
+- `OPSECHAT_CSP` to provide a custom CSP policy
+- `OPSECHAT_DISABLE_CSP=true` to disable the CSP header (development/debug only)
+
 Examples
 ========
 
