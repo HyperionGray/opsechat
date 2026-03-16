@@ -10,7 +10,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_lock,
+    load_rate_limits_from_env,
+    load_flask_rate_limits_from_env,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -85,6 +91,37 @@ def test_rate_limit_chat_message_limit():
     allowed, retry_after = check_rate_limit("session-msg", "chat_message")
     assert allowed is False
     assert retry_after >= 1
+
+
+def test_load_rate_limits_from_env_overrides_defaults(monkeypatch):
+    defaults = {"chat_create": {"max_requests": 10, "window_seconds": 60}}
+    monkeypatch.setenv("OPSECHAT_RATE_LIMIT_CHAT_CREATE_MAX_REQUESTS", "7")
+    monkeypatch.setenv("OPSECHAT_RATE_LIMIT_CHAT_CREATE_WINDOW_SECONDS", "120")
+
+    config = load_rate_limits_from_env(defaults)
+
+    assert config["chat_create"]["max_requests"] == 7
+    assert config["chat_create"]["window_seconds"] == 120
+
+
+def test_load_rate_limits_from_env_ignores_invalid_values(monkeypatch):
+    defaults = {"dm_send": {"max_requests": 5, "window_seconds": 60}}
+    monkeypatch.setenv("OPSECHAT_RATE_LIMIT_DM_SEND_MAX_REQUESTS", "-1")
+    monkeypatch.setenv("OPSECHAT_RATE_LIMIT_DM_SEND_WINDOW_SECONDS", "abc")
+
+    config = load_rate_limits_from_env(defaults)
+
+    assert config["dm_send"]["max_requests"] == 5
+    assert config["dm_send"]["window_seconds"] == 60
+
+
+def test_load_flask_rate_limits_from_env_overrides_defaults(monkeypatch):
+    defaults = {"chat_message": "60 per minute"}
+    monkeypatch.setenv("OPSECHAT_FLASK_RATE_LIMIT_CHAT_MESSAGE", "45 per minute")
+
+    config = load_flask_rate_limits_from_env(defaults)
+
+    assert config["chat_message"] == "45 per minute"
 
 
 # ---------------------------------------------------------------------------

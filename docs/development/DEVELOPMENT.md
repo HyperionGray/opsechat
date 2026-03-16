@@ -77,8 +77,7 @@ These are development and testing utilities that help during development:
 - **`comprehensive_functionality_test.py`** - Full functional test suite
 
 ### Main Application Files
-- **`runserver.py`** - Main entry point (legacy monolithic)
-- **`runserver_refactored.py`** - Refactored version (blueprint-based)
+- **`runserver.py`** - Main application entry point
 - **`app_factory.py`** - Flask app factory pattern
 - **`chat-room.py`** - Standalone chat room creator
 - **`tui-server.py`** - Terminal UI server
@@ -221,7 +220,16 @@ npm run lint
 
 - `TOR_CONTROL_PORT` - Tor control port (default: 9051)
 - `PORT` - Flask server port (default: 5000)
-- `FLASK_ENV` - Development/production mode
+- `FLASK_DEBUG` - Flask debug mode toggle (`1` enables debug)
+- `OPSECHAT_RATE_LIMIT_CHAT_CREATE_MAX_REQUESTS` - In-memory `/chat/create` max requests
+- `OPSECHAT_RATE_LIMIT_CHAT_CREATE_WINDOW_SECONDS` - In-memory `/chat/create` window size
+- `OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_MAX_REQUESTS` - In-memory `/chat/room/.../messages` max requests
+- `OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_WINDOW_SECONDS` - In-memory `/chat/room/.../messages` window size
+- `OPSECHAT_RATE_LIMIT_DM_SEND_MAX_REQUESTS` - In-memory `/chat/dm/send` max requests
+- `OPSECHAT_RATE_LIMIT_DM_SEND_WINDOW_SECONDS` - In-memory `/chat/dm/send` window size
+- `OPSECHAT_FLASK_RATE_LIMIT_CHAT_CREATE` - Flask-Limiter expression for `/chat/create`
+- `OPSECHAT_FLASK_RATE_LIMIT_CHAT_MESSAGE` - Flask-Limiter expression for `/chat/room/.../messages`
+- `OPSECHAT_FLASK_RATE_LIMIT_DM_SEND` - Flask-Limiter expression for `/chat/dm/send`
 
 ## Troubleshooting
 
@@ -263,5 +271,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed contribution guidelines.
 
 ---
 
-**Last Updated:** 2026-03-03  
+**Last Updated:** 2026-03-16  
 **Version:** 0.8.0-alpha

@@ -10,10 +10,12 @@
 - 🔒 **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
 - 🌐 **Domain Rotation CLI** - Easy burner email domain management
 - 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
+- **Configurable Chat Rate Limits** - Override chat endpoint limits with environment variables
 - ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use
 - 🚀 **Production Deployment** - Robust systemd units with auto-restart
 
 📖 **Full Details:** [New Features Guide](docs/NEW_FEATURES.md)
+Rate limit configuration: [Development Guide](docs/development/DEVELOPMENT.md#environment-variables)
 
 ---
 
