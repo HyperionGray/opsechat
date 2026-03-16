@@ -16,9 +16,13 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+import os
+import logging
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
+
+logger = logging.getLogger(__name__)
 
 # Global room storage (in-memory only)
 chat_rooms = {}
@@ -33,15 +37,117 @@ dm_lock = threading.Lock()
 _rate_limit_store = {}
 _rate_limit_lock = threading.Lock()
 
-# Rate limit configuration
-RATE_LIMITS = {
+# Default in-memory rate-limit configuration (per endpoint)
+DEFAULT_RATE_LIMITS = {
     "chat_create": {"max_requests": 10, "window_seconds": 60},
     "chat_message": {"max_requests": 30, "window_seconds": 60},
     "dm_send": {"max_requests": 5, "window_seconds": 60},
 }
 
+_RATE_LIMIT_ENV_KEYS = {
+    "chat_create": (
+        "OPSECHAT_CHAT_CREATE_MAX_REQUESTS",
+        "OPSECHAT_CHAT_CREATE_WINDOW_SECONDS",
+    ),
+    "chat_message": (
+        "OPSECHAT_CHAT_MESSAGE_MAX_REQUESTS",
+        "OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS",
+    ),
+    "dm_send": (
+        "OPSECHAT_DM_SEND_MAX_REQUESTS",
+        "OPSECHAT_DM_SEND_WINDOW_SECONDS",
+    ),
+}
+
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
+
+
+def _parse_positive_int(raw_value, fallback, setting_name):
+    """Parse env value as positive integer, with fallback on invalid input."""
+    if raw_value is None:
+        return fallback
+    try:
+        parsed = int(raw_value)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid %s=%r; using fallback value %d",
+            setting_name,
+            raw_value,
+            fallback,
+        )
+        return fallback
+
+    if parsed <= 0:
+        logger.warning(
+            "Non-positive %s=%r; using fallback value %d",
+            setting_name,
+            raw_value,
+            fallback,
+        )
+        return fallback
+    return parsed
+
+
+def load_rate_limits(env=None):
+    """
+    Build rate-limit config from environment with safe fallbacks.
+
+    Returns a dict matching the DEFAULT_RATE_LIMITS schema.
+    """
+    source_env = env if env is not None else os.environ
+    loaded = {}
+
+    for endpoint, defaults in DEFAULT_RATE_LIMITS.items():
+        max_key, window_key = _RATE_LIMIT_ENV_KEYS[endpoint]
+        loaded[endpoint] = {
+            "max_requests": _parse_positive_int(
+                source_env.get(max_key),
+                defaults["max_requests"],
+                max_key,
+            ),
+            "window_seconds": _parse_positive_int(
+                source_env.get(window_key),
+                defaults["window_seconds"],
+                window_key,
+            ),
+        }
+
+    return loaded
+
+
+# Active in-memory limiter thresholds (overridable via environment variables)
+RATE_LIMITS = load_rate_limits()
+
+
+def _rate_limited_json_response(endpoint: str, retry_after: int):
+    """Return consistent 429 JSON response with retry headers and metadata."""
+    config = RATE_LIMITS.get(endpoint, {})
+    response = jsonify({
+        "error": "Rate limit exceeded",
+        "endpoint": endpoint,
+        "retry_after_seconds": retry_after,
+        "limit": {
+            "max_requests": config.get("max_requests"),
+            "window_seconds": config.get("window_seconds"),
+            "remaining": 0,
+        },
+    })
+    response.status_code = 429
+    response.headers["Retry-After"] = str(retry_after)
+    if config.get("max_requests") is not None:
+        response.headers["X-RateLimit-Limit"] = str(config["max_requests"])
+    return response
+
+
+def _read_version():
+    """Read version from VERSION file in project root."""
+    version_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "VERSION")
+    try:
+        with open(version_file) as file_handle:
+            return file_handle.read().strip()
+    except OSError:
+        return "0.8.0-alpha"
 
 # Room class to manage chat state
 class ChatRoom:
@@ -258,13 +364,7 @@ def register_simple_chat_routes(app):
     @app.route('/chat')
     def chat_index():
         """Landing page for creating/joining chat rooms"""
-        # Read version from VERSION file
-        try:
-            with open('VERSION', 'r') as f:
-                version = f.read().strip()
-        except:
-            version = '0.8.0-alpha'  # fallback
-        
+        version = _read_version()
         return render_template("simple_chat_index.html", version=version)
     
     @app.route('/chat/create', methods=['POST'])
@@ -279,9 +379,7 @@ def register_simple_chat_routes(app):
 
         allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Try again in {retry_after} seconds."
-            }), 429
+            return _rate_limited_json_response("chat_create", retry_after)
 
         room_id = generate_secure_room_id(32)
         
@@ -332,9 +430,7 @@ def register_simple_chat_routes(app):
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
             if not allowed:
-                return jsonify({
-                    "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds."
-                }), 429
+                return _rate_limited_json_response("chat_message", retry_after)
             
             # Get message from request
             data = request.get_json()
@@ -409,9 +505,7 @@ def register_simple_chat_routes(app):
         # Check rate limit for DMs
         allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds."
-            }), 429
+            return _rate_limited_json_response("dm_send", retry_after)
         
         data = request.get_json()
         if not data or "room_id" not in data or "message" not in data:

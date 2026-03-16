@@ -222,6 +222,14 @@ npm run lint
 - `TOR_CONTROL_PORT` - Tor control port (default: 9051)
 - `PORT` - Flask server port (default: 5000)
 - `FLASK_ENV` - Development/production mode
+- `OPSECHAT_CHAT_CREATE_MAX_REQUESTS` - Simple chat room-create requests per window (default: 10)
+- `OPSECHAT_CHAT_CREATE_WINDOW_SECONDS` - Window size for room-create limiter (default: 60)
+- `OPSECHAT_CHAT_MESSAGE_MAX_REQUESTS` - Simple chat message POST requests per window (default: 30)
+- `OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS` - Window size for message limiter (default: 60)
+- `OPSECHAT_DM_SEND_MAX_REQUESTS` - DM send requests per window (default: 5)
+- `OPSECHAT_DM_SEND_WINDOW_SECONDS` - Window size for DM limiter (default: 60)
+
+See [Rate Limit Configuration](RATE_LIMIT_CONFIGURATION.md) for 429 response details and operator guidance.
 
 ## Troubleshooting
 
