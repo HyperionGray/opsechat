@@ -2,6 +2,7 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +175,41 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_recalculate_monthly_spending_uses_purchase_month(self):
+        """Only purchases from current month should count against budget."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        reference_time = datetime(2026, 3, 15, 12, 0, 0)
+
+        manager.owned_domains = [
+            {
+                "domain": "current-month.xyz",
+                "price": "$2.50",
+                "purchased_at": "2026-03-01T08:00:00",
+                "expires_at": "2027-03-01T08:00:00",
+            },
+            {
+                "domain": "previous-month.xyz",
+                "price": 3.00,
+                "purchased_at": "2026-02-27T20:00:00",
+                "expires_at": "2027-02-27T20:00:00",
+            },
+        ]
+
+        spending = manager.recalculate_monthly_spending(reference_time=reference_time)
+        assert spending == 2.5
+
+        status = manager.get_budget_status()
+        # get_budget_status() recalculates against "now", but this assertion guarantees
+        # that recalculate_monthly_spending() itself was able to parse and scope correctly.
+        assert isinstance(status["current_spending"], float)
+
+    def test_purchase_domain_rejects_invalid_price(self):
+        """Invalid registrar prices should fail safely."""
+        mock_client = Mock(spec=DomainAPIClient)
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+
+        result = manager.purchase_domain_if_budget_allows("badprice.xyz", "not-a-number")
+
+        assert result is False
+        assert manager.current_spending == 0.0

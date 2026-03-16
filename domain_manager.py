@@ -134,6 +134,68 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+
+    @staticmethod
+    def _normalize_price(price_value) -> Optional[float]:
+        """
+        Normalize registrar pricing into a float.
+        Accepts numeric values and common currency-formatted strings.
+        """
+        if isinstance(price_value, (int, float)):
+            return float(price_value)
+
+        if isinstance(price_value, str):
+            cleaned = (
+                price_value
+                .strip()
+                .replace("$", "")
+                .replace("€", "")
+                .replace(",", "")
+            )
+            try:
+                return float(cleaned)
+            except ValueError:
+                logger.warning("Could not parse price value: %r", price_value)
+                return None
+
+        logger.warning("Unsupported price type: %s", type(price_value).__name__)
+        return None
+
+    @staticmethod
+    def _coerce_datetime(value):
+        """Accept datetime or ISO timestamp string and return datetime when possible."""
+        if isinstance(value, datetime):
+            return value
+
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                logger.warning("Could not parse datetime value: %r", value)
+                return None
+
+        return None
+
+    def recalculate_monthly_spending(self, reference_time: Optional[datetime] = None) -> float:
+        """
+        Recompute monthly spending from owned domain purchase timestamps.
+        This keeps budget checks correct across month boundaries and state reloads.
+        """
+        now = reference_time or datetime.now()
+        total = 0.0
+
+        for domain in self.owned_domains:
+            purchased_at = self._coerce_datetime(domain.get("purchased_at"))
+            if not purchased_at:
+                continue
+
+            if purchased_at.year == now.year and purchased_at.month == now.month:
+                normalized_price = self._normalize_price(domain.get("price"))
+                if normalized_price is not None:
+                    total += normalized_price
+
+        self.current_spending = round(total, 2)
+        return self.current_spending
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
@@ -168,12 +230,11 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
-                
+                price = self._normalize_price(result.get("price"))
+
+                if price is None:
+                    continue
+
                 if price <= max_price:
                     return {
                         "domain": domain,
@@ -192,29 +253,38 @@ class DomainRotationManager:
             logger.error("No API client configured")
             return False
         
+        normalized_price = self._normalize_price(price)
+        if normalized_price is None:
+            logger.error("Invalid price provided for purchase: %r", price)
+            return False
+
+        # Recalculate in case month changed since previous operation.
+        self.recalculate_monthly_spending()
+
         # Check budget
-        if self.current_spending + price > self.monthly_budget:
+        if self.current_spending + normalized_price > self.monthly_budget:
             logger.warning(f"Budget exceeded. Current: ${self.current_spending}, "
-                          f"Requested: ${price}, Budget: ${self.monthly_budget}")
+                          f"Requested: ${normalized_price}, Budget: ${self.monthly_budget}")
             return False
         
         # Attempt purchase
         result = self.api_client.purchase_domain(domain, years=1)
         
         if result.get("success"):
-            self.current_spending += price
+            now = datetime.now()
+            self.current_spending += normalized_price
             self.owned_domains.append({
                 "domain": domain,
-                "price": price,
-                "purchased_at": datetime.now(),
-                "expires_at": datetime.now() + timedelta(days=365)
+                "price": normalized_price,
+                "purchased_at": now,
+                "expires_at": now + timedelta(days=365)
             })
             
             # Set as active if no active domain
             if not self.active_domain:
                 self.active_domain = domain
             
-            logger.info(f"Successfully purchased domain: {domain} for ${price}")
+            logger.info(f"Successfully purchased domain: {domain} for ${normalized_price}")
             return True
         else:
             logger.error(f"Failed to purchase domain: {result.get('message')}")
@@ -254,6 +324,7 @@ class DomainRotationManager:
     
     def get_budget_status(self) -> Dict:
         """Get budget information"""
+        self.recalculate_monthly_spending()
         return {
             "monthly_budget": self.monthly_budget,
             "current_spending": self.current_spending,

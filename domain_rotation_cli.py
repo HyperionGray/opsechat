@@ -19,6 +19,7 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
@@ -49,6 +50,60 @@ def save_config(config):
         print(f"Configuration saved to {CONFIG_FILE}")
     except Exception as e:
         print(f"Error saving config: {e}")
+
+
+def _serialize_datetime(value):
+    """Serialize datetime values for JSON storage."""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
+
+
+def _deserialize_datetime(value):
+    """Deserialize ISO timestamps from JSON into datetime values."""
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return value
+    return value
+
+
+def _serialize_owned_domains(domains):
+    """Convert in-memory domain objects into JSON-safe objects."""
+    serialized = []
+    for domain in domains or []:
+        serialized.append({
+            "domain": domain.get("domain"),
+            "price": domain.get("price"),
+            "purchased_at": _serialize_datetime(domain.get("purchased_at")),
+            "expires_at": _serialize_datetime(domain.get("expires_at")),
+        })
+    return serialized
+
+
+def _deserialize_owned_domains(domains):
+    """Convert JSON domain objects back into in-memory objects."""
+    deserialized = []
+    for domain in domains or []:
+        if not isinstance(domain, dict):
+            continue
+
+        deserialized.append({
+            "domain": domain.get("domain"),
+            "price": domain.get("price"),
+            "purchased_at": _deserialize_datetime(domain.get("purchased_at")),
+            "expires_at": _deserialize_datetime(domain.get("expires_at")),
+        })
+    return deserialized
+
+
+def _format_datetime(value, fmt, fallback="unknown"):
+    """Render datetime values robustly for CLI display."""
+    parsed = _deserialize_datetime(value)
+    if isinstance(parsed, datetime):
+        return parsed.strftime(fmt)
+    return fallback
 
 
 def configure_api():
@@ -109,20 +164,23 @@ def get_manager():
     )
     
     # Load saved state
-    if config.get('current_spending'):
+    if config.get('current_spending') is not None:
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = _deserialize_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
+
+    # Keep monthly budget usage accurate across restarts/month changes.
+    manager.recalculate_monthly_spending()
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['current_spending'] = manager.recalculate_monthly_spending()
+    config['owned_domains'] = _serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -144,21 +202,21 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_datetime(domain.get('purchased_at'), '%Y-%m-%d %H:%M')}")
+        print(f"   Expires: {_format_datetime(domain.get('expires_at'), '%Y-%m-%d')}")
         print()
 
 
-def search_domains():
+def search_domains(max_price=5.0, attempts=5):
     """Search for available cheap domains"""
     manager, config = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
-    print("Searching for domains under $5...\n")
+    print(f"Searching for domains under ${max_price}...\n")
     
-    for i in range(5):
-        print(f"Attempt {i+1}/5...")
-        domain_info = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+    for i in range(attempts):
+        print(f"Attempt {i+1}/{attempts}...")
+        domain_info = manager.find_cheap_available_domain(max_price=max_price, max_attempts=1)
         
         if domain_info:
             print(f"  ✅ Found: {domain_info['domain']} - ${domain_info['price']}")
@@ -168,7 +226,7 @@ def search_domains():
     print("\nTo purchase a domain, run: python domain_rotation_cli.py rotate")
 
 
-def rotate_domain():
+def rotate_domain(max_price=5.0):
     """Rotate to a new domain"""
     manager, config = get_manager()
     
@@ -186,7 +244,7 @@ def rotate_domain():
     
     print("Searching for available cheap domain...")
     
-    domain_info = manager.find_cheap_available_domain(max_price=min(5.0, budget_status['remaining']))
+    domain_info = manager.find_cheap_available_domain(max_price=min(max_price, budget_status['remaining']))
     
     if not domain_info:
         print("❌ Could not find an available cheap domain within budget.")
@@ -236,7 +294,7 @@ def show_status():
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
-        description='OpSecHat Domain Rotation CLI',
+        description='OpSecChat Domain Rotation CLI',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -253,6 +311,20 @@ Examples:
         choices=['config', 'status', 'search', 'rotate', 'list'],
         help='Command to execute'
     )
+
+    parser.add_argument(
+        '--max-price',
+        type=float,
+        default=5.0,
+        help='Maximum purchase/search price in USD (search/rotate commands)'
+    )
+
+    parser.add_argument(
+        '--attempts',
+        type=int,
+        default=5,
+        help='Search attempts for the search command'
+    )
     
     args = parser.parse_args()
     
@@ -261,9 +333,9 @@ Examples:
     elif args.command == 'status':
         show_status()
     elif args.command == 'search':
-        search_domains()
+        search_domains(max_price=args.max_price, attempts=max(1, args.attempts))
     elif args.command == 'rotate':
-        rotate_domain()
+        rotate_domain(max_price=args.max_price)
     elif args.command == 'list':
         list_domains()
 
