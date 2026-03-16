@@ -24,7 +24,7 @@ Major cleanup and consolidation of GitHub Actions workflows to reduce automation
 
 3. **Documentation**:
    - `docs/AUTOMATION_CONSOLIDATION.md` - Complete consolidation documentation
-   - `TODO-automation.md` - Follow-up tasks checklist
+   - `docs/development/AUTOMATION_TODO.md` - Follow-up tasks checklist
 
 ### Modified
 1. **Refactored for Reusability**:
@@ -99,7 +99,7 @@ Major cleanup and consolidation of GitHub Actions workflows to reduce automation
 - ✅ No vulnerabilities introduced
 
 ### Follow-Up Required
-See `TODO-automation.md` for:
+See `docs/development/AUTOMATION_TODO.md` for:
 - Updating branch protection rules to require new CI workflow
 - Testing CI on a real PR
 - Monitoring workflow performance
