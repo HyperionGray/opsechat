@@ -113,3 +113,50 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_chat_create_429_includes_retry_metadata():
+    client = _test_app.test_client()
+
+    for _ in range(3):
+        response = client.post("/chat/create", json={})
+        assert response.status_code == 200
+
+    blocked = client.post("/chat/create", json={})
+    assert blocked.status_code == 429
+
+    payload = blocked.get_json()
+    assert payload is not None
+    assert payload.get("error_code") == "rate_limit_exceeded"
+    assert isinstance(payload.get("retry_after"), int)
+    assert payload["retry_after"] >= 1
+    assert blocked.headers.get("Retry-After") == str(payload["retry_after"])
+    assert "backoff_hint" in payload
+
+
+def test_chat_message_429_includes_retry_metadata():
+    client = _test_app.test_client()
+
+    create_response = client.post("/chat/create", json={})
+    assert create_response.status_code == 200
+    room_id = create_response.get_json()["room_id"]
+
+    for _ in range(30):
+        send_response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "hello"}
+        )
+        assert send_response.status_code == 200
+
+    blocked = client.post(
+        f"/chat/room/{room_id}/messages",
+        json={"message": "blocked"}
+    )
+    assert blocked.status_code == 429
+
+    payload = blocked.get_json()
+    assert payload is not None
+    assert payload.get("error_code") == "rate_limit_exceeded"
+    assert isinstance(payload.get("retry_after"), int)
+    assert payload["retry_after"] >= 1
+    assert blocked.headers.get("Retry-After") == str(payload["retry_after"])

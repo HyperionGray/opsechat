@@ -66,8 +66,9 @@ python chat-room.py --port 8080
 
 1. Navigate to `/chat` on your server
 2. Click "Create New Chat Room"
-3. Share the room URL with trusted contacts
-4. Optionally enable E2E encryption in the room
+3. If you hit a rate limit, the UI shows a countdown using `Retry-After`
+4. Share the room URL with trusted contacts
+5. Optionally enable E2E encryption in the room
 
 ### Joining a Room
 
@@ -141,6 +142,24 @@ GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
+
+#### Rate-Limit Responses (Backoff Support)
+When a write endpoint is throttled, OpSecChat returns structured 429 metadata:
+
+```
+Status: 429 Too Many Requests
+Retry-After: <seconds>
+Content-Type: application/json
+
+{
+  "error": "Rate limit exceeded. ...",
+  "error_code": "rate_limit_exceeded",
+  "retry_after": <seconds>,
+  "backoff_hint": "Retry after the provided delay. Use exponential backoff for repeated 429 responses."
+}
+```
+
+The web UI consumes this metadata and applies a temporary send/create cooldown automatically.
 
 ### Encryption Implementation
 

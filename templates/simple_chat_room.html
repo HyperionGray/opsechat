@@ -217,6 +217,52 @@
         let encryptionKey = null;
         let pollInterval = null;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+        let sendCooldownTimer = null;
+        let sendCooldownUntil = 0;
+
+        function parseRetryAfterSeconds(response, data) {
+            if (data && Number.isFinite(Number(data.retry_after))) {
+                return Math.max(1, Number(data.retry_after));
+            }
+            const retryAfterHeader = response.headers.get('Retry-After');
+            if (retryAfterHeader && Number.isFinite(Number(retryAfterHeader))) {
+                return Math.max(1, Number(retryAfterHeader));
+            }
+            return 1;
+        }
+
+        function setComposerEnabled(enabled) {
+            document.getElementById('messageInput').disabled = !enabled;
+            document.getElementById('sendBtn').disabled = !enabled;
+        }
+
+        function startSendCooldown(seconds) {
+            const cooldownSeconds = Math.max(1, Math.floor(seconds));
+            if (sendCooldownTimer) {
+                clearInterval(sendCooldownTimer);
+            }
+
+            sendCooldownUntil = Date.now() + (cooldownSeconds * 1000);
+            setComposerEnabled(false);
+
+            let remaining = cooldownSeconds;
+            showStatus(`Rate limited. Retry in ${remaining}s.`, 120000);
+
+            sendCooldownTimer = setInterval(() => {
+                remaining -= 1;
+                if (remaining <= 0) {
+                    clearInterval(sendCooldownTimer);
+                    sendCooldownTimer = null;
+                    sendCooldownUntil = 0;
+                    if (securityWarningAccepted) {
+                        setComposerEnabled(true);
+                    }
+                    showStatus('Rate limit cooldown ended. You can send messages again.', 2000);
+                    return;
+                }
+                showStatus(`Rate limited. Retry in ${remaining}s.`, 120000);
+            }, 1000);
+        }
         
         // Show security warning on first load
         function showSecurityWarning() {
@@ -394,6 +440,9 @@
         
         async function sendMessage() {
             const input = document.getElementById('messageInput');
+            if (Date.now() < sendCooldownUntil) {
+                return;
+            }
             const message = input.value.trim();
             
             if (!message) return;
@@ -418,7 +467,23 @@
                     input.value = '';
                     await pollMessages();
                 } else {
-                    showStatus('Error sending message');
+                    let errorData = null;
+                    try {
+                        errorData = await response.json();
+                    } catch (parseError) {
+                        errorData = null;
+                    }
+
+                    if (response.status === 429) {
+                        const retryAfterSeconds = parseRetryAfterSeconds(response, errorData);
+                        startSendCooldown(retryAfterSeconds);
+                        return;
+                    }
+
+                    const messageText = (errorData && errorData.error)
+                        ? errorData.error
+                        : 'Error sending message';
+                    showStatus(messageText);
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);
