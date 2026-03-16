@@ -5,10 +5,25 @@ Configures Flask-Limiter to protect API endpoints from abuse.
 Limits are applied per client session (falling back to client IP).
 """
 
+import secrets
+import os
 from flask import session
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-import secrets
+
+
+def _read_int_env(name: str, default: int, minimum: int = 1) -> int:
+    """Parse a positive integer env var with safe fallback."""
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    try:
+        parsed = int(raw_value.strip())
+        if parsed < minimum:
+            return default
+        return parsed
+    except ValueError:
+        return default
 
 def _get_client_identifier():
     """
@@ -29,7 +44,10 @@ def _get_client_identifier():
 # Global limiter instance - configured per-app in init_limiter()
 limiter = Limiter(
     key_func=_get_client_identifier,
-    default_limits=["200 per hour", "50 per minute"],
+    default_limits=[
+        f"{_read_int_env('OPSECHAT_DEFAULT_LIMIT_PER_HOUR', 200)} per hour",
+        f"{_read_int_env('OPSECHAT_DEFAULT_LIMIT_PER_MINUTE', 50)} per minute",
+    ],
     storage_uri="memory://",
 )
 

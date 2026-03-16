@@ -104,6 +104,8 @@ $ aws cloudformation create-stack --stack-name opsechat-infrastructure-productio
 
 This provides AWS ECS Fargate deployment with Tor integration, network isolation, and comprehensive security monitoring. See [AWS Deployment Guide](docs/setup/AWS_DEPLOYMENT.md) for complete instructions.
 
+Rate limiting thresholds are configurable via environment variables. See [Rate Limit Configuration](docs/setup/RATE_LIMIT_CONFIGURATION.md).
+
 ## Option 2: Systemd Quadlets (Recommended for Local Production)
 
 For local production deployment with native systemd integration:
