@@ -6,7 +6,7 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -138,6 +138,43 @@ class DomainRotationManager:
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+
+    def configure(self, api_key: str, secret_key: str,
+                  monthly_budget: Optional[float] = None) -> bool:
+        """
+        Configure manager with a Porkbun API client.
+        Returns True when configuration is valid.
+        """
+        if not api_key or not secret_key:
+            logger.error("Domain API configuration failed: missing credentials")
+            return False
+
+        if monthly_budget is not None:
+            if monthly_budget <= 0:
+                logger.error("Domain API configuration failed: budget must be > 0")
+                return False
+
+        self.api_client = PorkbunAPIClient(api_key=api_key, api_secret=secret_key)
+
+        if monthly_budget is not None:
+            self.monthly_budget = monthly_budget
+
+        return True
+
+    def get_config(self) -> Dict[str, Any]:
+        """Get current domain manager configuration and status."""
+        has_client = self.api_client is not None
+        api_key = getattr(self.api_client, "api_key", "") if has_client else ""
+        api_secret = getattr(self.api_client, "api_secret", "") if has_client else ""
+        return {
+            "configured": has_client,
+            "api_key_masked": f"{'*' * 8}{api_key[-4:]}" if api_key else "",
+            "api_secret_configured": bool(api_secret),
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "active_domain": self.active_domain,
+            "domains_owned": len(self.owned_domains),
+        }
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -260,6 +297,52 @@ class DomainRotationManager:
             "remaining": self.monthly_budget - self.current_spending,
             "domains_owned": len(self.owned_domains)
         }
+
+    def export_state(self) -> Dict[str, Any]:
+        """Serialize manager state for JSON storage."""
+        serialized_domains: List[Dict[str, Any]] = []
+        for domain in self.owned_domains:
+            item = dict(domain)
+            purchased_at = item.get("purchased_at")
+            expires_at = item.get("expires_at")
+            if isinstance(purchased_at, datetime):
+                item["purchased_at"] = purchased_at.isoformat()
+            if isinstance(expires_at, datetime):
+                item["expires_at"] = expires_at.isoformat()
+            serialized_domains.append(item)
+
+        return {
+            "current_spending": self.current_spending,
+            "owned_domains": serialized_domains,
+            "active_domain": self.active_domain,
+        }
+
+    def import_state(self, state: Dict[str, Any]):
+        """Load manager state from deserialized JSON."""
+        try:
+            self.current_spending = float(state.get("current_spending", 0.0))
+        except (TypeError, ValueError):
+            self.current_spending = 0.0
+        self.active_domain = state.get("active_domain")
+
+        loaded_domains: List[Dict[str, Any]] = []
+        for domain in state.get("owned_domains", []):
+            item = dict(domain)
+            purchased_at = item.get("purchased_at")
+            expires_at = item.get("expires_at")
+            if isinstance(purchased_at, str):
+                try:
+                    item["purchased_at"] = datetime.fromisoformat(purchased_at)
+                except ValueError:
+                    item["purchased_at"] = datetime.now()
+            if isinstance(expires_at, str):
+                try:
+                    item["expires_at"] = datetime.fromisoformat(expires_at)
+                except ValueError:
+                    item["expires_at"] = datetime.now() + timedelta(days=365)
+            loaded_domains.append(item)
+
+        self.owned_domains = loaded_domains
 
 
 # Global domain rotation manager

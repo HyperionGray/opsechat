@@ -1,6 +1,7 @@
 """
 Tests for domain management module
 """
+from datetime import datetime
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
@@ -174,3 +175,38 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_and_get_config(self):
+        """Test manager configuration and status export."""
+        manager = DomainRotationManager(monthly_budget=15.0)
+        configured = manager.configure("pk_test_key", "sk_test_key", monthly_budget=25.0)
+
+        assert configured is True
+        config = manager.get_config()
+        assert config["configured"] is True
+        assert config["monthly_budget"] == 25.0
+        assert config["api_secret_configured"] is True
+        assert config["api_key_masked"].endswith("key")
+
+    def test_export_import_state_roundtrip(self):
+        """Test serializing and restoring runtime state."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 9.5
+        manager.active_domain = "abc123.xyz"
+        manager.owned_domains = [{
+            "domain": "abc123.xyz",
+            "price": 2.99,
+            "purchased_at": datetime(2026, 1, 1, 12, 30, 0),
+            "expires_at": datetime(2027, 1, 1, 12, 30, 0),
+        }]
+
+        state = manager.export_state()
+
+        restored = DomainRotationManager(monthly_budget=50.0)
+        restored.import_state(state)
+
+        assert restored.current_spending == 9.5
+        assert restored.active_domain == "abc123.xyz"
+        assert restored.owned_domains[0]["domain"] == "abc123.xyz"
+        assert isinstance(restored.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(restored.owned_domains[0]["expires_at"], datetime)
