@@ -8,7 +8,7 @@
 - 🔑 **Automated Key Exchange** - No manual key sharing needed
 - 💬 **Direct Messages** - Ephemeral DM feature for sharing room IDs (1-min expiry)
 - 🔒 **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
-- 🌐 **Domain Rotation CLI** - Easy burner email domain management
+- 🌐 **Multi-Registrar Domain Rotation CLI** - Burner domains via Porkbun or Namecheap
 - 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
 - ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use
 - 🚀 **Production Deployment** - Robust systemd units with auto-restart
@@ -263,7 +263,7 @@ Features
   - **Quick Rotation** - One-click generation and rotation to new addresses
   - **Instant Copy** - Copy burner emails to clipboard with one click
   - **Smart Stats Dashboard** - Track active burners and total time remaining
-- **Automated Domain Purchasing** - Porkbun API integration for cheap domain rotation (.xyz, .club, etc.) - see [Domain Registrar API](docs/setup/DOMAIN_REGISTRAR_API.md)
+- **Automated Domain Purchasing** - Registrar abstraction with Porkbun + Namecheap support for domain rotation - see [Domain Registrar API](docs/setup/DOMAIN_REGISTRAR_API.md)
 - **Budget Management** - Configurable monthly spending limits for domain purchases
 - **Spoofing Detection** - Test emails for spoofing attempts (unicode lookalikes, typosquatting, homographs)
 - **Phishing Simulation** - Gamified training with scoring and achievements

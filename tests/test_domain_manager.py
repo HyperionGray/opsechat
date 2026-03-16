@@ -2,9 +2,10 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, NamecheapAPIClient, PorkbunAPIClient, DomainRotationManager
 )
 
 
@@ -174,3 +175,126 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_export_and_load_state_roundtrip(self):
+        """Persisted state keeps datetime fields JSON-safe and recoverable."""
+        manager = DomainRotationManager(monthly_budget=25.0)
+        manager.current_spending = 4.5
+        manager.active_domain = "demo.xyz"
+        manager.owned_domains = [{
+            "domain": "demo.xyz",
+            "price": 4.5,
+            "purchased_at": datetime.now(),
+            "expires_at": datetime.now() + timedelta(days=365),
+        }]
+
+        exported = manager.export_state()
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(exported["owned_domains"][0]["expires_at"], str)
+
+        restored = DomainRotationManager(monthly_budget=1.0)
+        restored.load_state(exported)
+        assert restored.monthly_budget == 25.0
+        assert restored.current_spending == 4.5
+        assert restored.active_domain == "demo.xyz"
+        assert isinstance(restored.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(restored.owned_domains[0]["expires_at"], datetime)
+
+    def test_configure_namecheap(self):
+        """Manager can switch to Namecheap registrar configuration."""
+        manager = DomainRotationManager()
+        configured = manager.configure(
+            api_key="namecheap-key",
+            registrar="namecheap",
+            monthly_budget=10.0,
+            api_user="example-user",
+            client_ip="127.0.0.1",
+        )
+
+        assert configured is True
+        assert manager.registrar == "namecheap"
+        assert isinstance(manager.api_client, NamecheapAPIClient)
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client behavior."""
+
+    @patch('domain_manager.requests.Session')
+    def test_search_domain_available(self, mock_session_class):
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """
+        <ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+          <CommandResponse>
+            <DomainCheckResult Domain="test123xyz.com" Available="true" />
+          </CommandResponse>
+        </ApiResponse>
+        """
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_user="user",
+            api_key="key",
+            client_ip="127.0.0.1",
+        )
+        result = client.search_domain("test123xyz.com")
+
+        assert result["domain"] == "test123xyz.com"
+        assert result["available"] is True
+        assert result["currency"] == "USD"
+
+    @patch('domain_manager.requests.Session')
+    def test_search_domain_unavailable(self, mock_session_class):
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """
+        <ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+          <CommandResponse>
+            <DomainCheckResult Domain="google.com" Available="false" />
+          </CommandResponse>
+        </ApiResponse>
+        """
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_user="user",
+            api_key="key",
+            client_ip="127.0.0.1",
+        )
+        result = client.search_domain("google.com")
+
+        assert result["available"] is False
+
+    @patch('domain_manager.requests.Session')
+    def test_get_pricing(self, mock_session_class):
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """
+        <ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+          <CommandResponse>
+            <UserGetPricingResult>
+              <ProductType Name="DOMAIN">
+                <ProductCategory Name="register">
+                  <Product Name="xyz">
+                    <Price Duration="1" YourPrice="1.99" />
+                  </Product>
+                </ProductCategory>
+              </ProductType>
+            </UserGetPricingResult>
+          </CommandResponse>
+        </ApiResponse>
+        """
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_user="user",
+            api_key="key",
+            client_ip="127.0.0.1",
+        )
+        result = client.get_pricing("xyz")
+
+        assert result["tld"] == "xyz"
+        assert result["registration"] == "1.99"

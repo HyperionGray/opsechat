@@ -59,14 +59,21 @@ Key endpoints used by opsechat:
 - `pricing/get` - Get TLD pricing
 - `domain/listAll` - List owned domains
 
+### Namecheap
+
+Namecheap support is now available in the Domain Rotation CLI.
+
+- API docs: [Namecheap API Intro](https://www.namecheap.com/support/api/intro/)
+- API key access typically requires account qualification by Namecheap
+- Required CLI fields: `api_user`, `api_key`, and `client_ip`
+- Supported commands in opsechat:
+  - Domain availability checks (`namecheap.domains.check`)
+  - Pricing lookup (`namecheap.users.getPricing`)
+  - Domain purchase (requires advanced contact details)
+
 ## Other Registrars (Future Support)
 
-The opsechat domain manager is designed to be extensible. Future registrar support may include:
-
-### Namecheap
-- API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
-- Cheap TLDs: .xyz, .club, .online
+The opsechat domain manager is designed to be extensible. Additional registrar support may include:
 
 ### Namesilo
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)
@@ -110,6 +117,18 @@ Environment=DOMAIN_MONTHLY_BUDGET=50.0
 ```
 
 Then modify the runserver.py to read these on startup.
+
+### Via CLI (Domain Rotation CLI)
+
+Use the built-in CLI and select registrar at configuration time:
+
+```bash
+python domain_rotation_cli.py config
+```
+
+- Choose `porkbun` or `namecheap`
+- Enter registrar-specific credentials
+- Set monthly budget
 
 ## Budget Management
 
