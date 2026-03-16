@@ -13,7 +13,8 @@ from email_routes import register_email_routes, transport_manager, domain_rotati
 
 
 def _build_test_app():
-    app = Flask(__name__)
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    app = Flask(__name__, template_folder=os.path.join(project_root, "templates"))
     app.secret_key = "test-secret-key"
     app.config["path"] = "unit-path"
     app.config["hostname"] = "localhost"
