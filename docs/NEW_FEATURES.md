@@ -172,6 +172,42 @@ When limit exceeded:
 
 ---
 
+## ⏱️ Chat API Backoff Metadata (NEW)
+
+Write endpoints in the chat API now return a consistent machine-readable 429 payload
+when limits are exceeded.
+
+### Endpoints Covered
+- `POST /chat/create`
+- `POST /chat/room/<room_id>/messages`
+- `POST /chat/dm/send`
+
+### 429 Response Contract
+```json
+{
+  "error": "Rate limit exceeded for this endpoint.",
+  "code": "rate_limited",
+  "retry_after_seconds": 12,
+  "backoff": {
+    "strategy": "fixed-window",
+    "retry_after_seconds": 12
+  },
+  "limit": "3 per 1 minute",
+  "endpoint": "chat_create"
+}
+```
+
+### Response Headers
+- `Retry-After: <seconds>`
+- `X-RateLimit-Retry-After: <seconds>`
+
+### Why This Matters
+- Clients can implement deterministic retry/backoff without parsing text.
+- Frontend code can show countdowns and disable submit buttons safely.
+- Automated tooling can handle throttling consistently across all chat write APIs.
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

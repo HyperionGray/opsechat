@@ -40,6 +40,12 @@ def test_post_is_rate_limited_get_is_not():
 
         r = client.post("/chat/create", content_type="application/json")
         assert r.status_code == 429, f"4th POST should be rate-limited (429), got {r.status_code}"
+        assert r.is_json is True
+        payload = r.get_json()
+        assert payload["code"] == "rate_limited"
+        assert int(payload["retry_after_seconds"]) >= 1
+        assert int(r.headers.get("Retry-After", "0")) >= 1
+        assert r.headers.get("X-RateLimit-Retry-After") == r.headers.get("Retry-After")
 
     print("✅ POST /chat/create is rate-limited after 3 requests; GET / is never throttled")
     return True
@@ -71,6 +77,33 @@ def test_separate_sessions_have_independent_limits():
     return True
 
 
+def test_chat_message_manual_limit_returns_backoff_metadata():
+    """
+    chat_message has a stricter in-app limit (30/min) than Flask-Limiter (60/min),
+    so this verifies the custom backoff response contract.
+    """
+    app = _make_app()
+    with app.test_client() as client:
+        create_resp = client.post("/chat/create", content_type="application/json")
+        assert create_resp.status_code == 200
+        room_id = create_resp.get_json()["room_id"]
+
+        endpoint = f"/chat/room/{room_id}/messages"
+        for i in range(30):
+            r = client.post(endpoint, json={"message": f"msg-{i}"})
+            assert r.status_code == 200, f"message {i + 1} should succeed, got {r.status_code}"
+
+        blocked = client.post(endpoint, json={"message": "blocked"})
+        assert blocked.status_code == 429
+        assert blocked.is_json is True
+        payload = blocked.get_json()
+        assert payload["code"] == "rate_limited"
+        assert payload["endpoint"] == "chat_message"
+        assert int(payload["retry_after_seconds"]) >= 1
+        assert int(blocked.headers.get("Retry-After", "0")) >= 1
+        assert blocked.headers.get("X-RateLimit-Retry-After") == blocked.headers.get("Retry-After")
+
+
 def main():
     print("=== Rate Limiter Integration Tests ===\n")
     results = []
@@ -78,6 +111,7 @@ def main():
     tests = [
         test_post_is_rate_limited_get_is_not,
         test_separate_sessions_have_independent_limits,
+        test_chat_message_manual_limit_returns_backoff_metadata,
     ]
 
     for test_fn in tests:
