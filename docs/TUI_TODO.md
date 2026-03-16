@@ -70,9 +70,9 @@ This file tracks what needs to be done for the TUI chat system.
 
 ### User Experience
 - [ ] Add status indicators
-  - [ ] Connection status
-  - [ ] Server health
-  - [ ] Number of connected users
+  - [x] Connection status
+  - [x] Server health (via `/status` command response)
+  - [x] Number of connected users (via `/users` command)
   - [ ] Time until message burn
 - [ ] Improve error handling
   - [ ] Better error messages

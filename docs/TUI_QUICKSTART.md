@@ -78,8 +78,14 @@ You'll see the TUI interface:
 
 1. Type a message in the input box
 2. Press **Enter** to send
-3. Messages appear in the main window
-4. Press **Ctrl+C** to quit
+3. Use slash commands when needed:
+   - `/help` - Show available commands
+   - `/status` - Show server status snapshot
+   - `/users` - Show connected user count
+   - `/encrypt on|off` - Toggle local encryption indicator
+   - `/quit` - Exit client cleanly
+4. Messages appear in the main window
+5. Press **Ctrl+C** to quit
 
 **Try opening multiple clients** to test multi-user chat!
 
@@ -240,13 +246,13 @@ python tui-client.py --host <server> --tor-port 9150
 
 ```bash
 # Run automated test
-python tests/test-tui-client.py
+python scripts/manual/tui_client_smoke.py
 
 # Should output:
-# [✓] Connected to server
-# [✓] Received welcome
-# [✓] Sent test message
-# [✓] Test completed successfully!
+# [OK] Connected to server
+# [OK] Received welcome
+# [OK] Sent test message
+# [OK] Smoke test completed successfully
 ```
 
 ### Manual Test

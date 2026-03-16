@@ -34,7 +34,7 @@ Successfully implemented a Terminal User Interface (TUI) based chat system for O
    - `tui-client.py` - Client launcher
 
 4. **Testing**
-   - `tests/test-tui-client.py` - Automated integration test
+   - `scripts/manual/tui_client_smoke.py` - Manual smoke integration test
    - Verified E2E message flow
    - All tests passing
 
@@ -136,7 +136,7 @@ Simple JSON-based protocol over TCP sockets:
 - `src/tui/client.py` (314 lines)
 - `tui-server.py` (launcher)
 - `tui-client.py` (launcher)
-- `tests/test-tui-client.py`
+- `scripts/manual/tui_client_smoke.py`
 - `TUI_README.md`
 - `docs/TUI_QUICKSTART.md`
 - `docs/TUI_TODO.md`

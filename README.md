@@ -49,10 +49,11 @@ Access the chat at `/chat` to create rooms and share with your contacts.
 ### Terminal UI (TUI)
 - ✅ **TUI Only** - No web browser required
 - ✅ **Tor Integration** - Built-in Tor hidden service support
-- ✅ **Messages Burn** - Auto-delete after 3 minutes with overwriting
+- ✅ **Messages Burn** - Auto-delete after 4 minutes with overwriting
 - ✅ **Randomized Usernames** - Server-assigned, no reuse
 - ✅ **Text Only** - No images, videos, or encoded data
 - ✅ **In-Memory Only** - Zero disk writes
+- ✅ **Slash Commands & Status** - `/help`, `/status`, `/users`, `/encrypt`, `/quit`
 
 ### Quick Start (TUI)
 

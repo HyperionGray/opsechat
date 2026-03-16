@@ -95,11 +95,11 @@ python rotate-domain.py --get-pricing xyz
 ### 4. Inline Help System
 
 **Add to TUI:**
-- [ ] `/help` command - show all commands
-- [ ] `/status` - show server/connection status
-- [ ] `/users` - show connected users (count only)
-- [ ] `/quit` - graceful disconnect
-- [ ] `/encrypt <on|off>` - toggle encryption
+- [x] `/help` command - show all commands
+- [x] `/status` - show server/connection status
+- [x] `/users` - show connected users (count only)
+- [x] `/quit` - graceful disconnect
+- [x] `/encrypt <on|off>` - toggle local encryption indicator
 
 **Estimated Effort:** 1 day
 
@@ -128,10 +128,10 @@ python rotate-domain.py --get-pricing xyz
 ### 6. Connection Status Indicator
 
 **Add to TUI:**
-- Show connection status
-- Show encryption status
-- Show Tor status (if applicable)
-- Show message count / burn time
+- [x] Show connection status
+- [x] Show encryption status
+- [x] Show Tor status (if applicable)
+- [x] Show message count / burn time (via `/status` response)
 
 **UI Example:**
 ```
