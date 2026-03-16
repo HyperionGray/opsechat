@@ -8,6 +8,7 @@
 - 🔑 **Automated Key Exchange** - No manual key sharing needed
 - 💬 **Direct Messages** - Ephemeral DM feature for sharing room IDs (1-min expiry)
 - 🔒 **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
+- 🛡️ **Nonce-Based CSP Hardening** - Per-request script nonces with automatic template injection
 - 🌐 **Domain Rotation CLI** - Easy burner email domain management
 - 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
 - ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use
@@ -334,6 +335,8 @@ Security
 For security best practices and recommendations, please see [SECURITY.md](SECURITY.md) and [Security Assessment](docs/assessment/SECURITY_ASSESSMENT.md).
 
 **Note on jQuery**: ✅ **RESOLVED** - The bundled jQuery has been updated to v3.7.1 to patch the previously known XSS vulnerabilities (CVE-2020-11023 and CVE-2020-11022). The security vulnerabilities have been addressed.
+
+**Content Security Policy update**: The app now uses a per-request CSP nonce for scripts and injects nonce attributes into rendered `<script>` tags automatically, allowing strict script execution control without breaking legacy templates.
 
 Examples
 ========
