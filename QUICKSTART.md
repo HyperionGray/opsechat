@@ -37,8 +37,22 @@ Access at `http://localhost:5000/chat` or your `.onion` address.
 
 ```bash
 curl http://localhost:5000/health
-# {"active_rooms":0,"status":"healthy","version":"0.8.0-alpha"}
+# {"status":"healthy","active_rooms":0,"active_direct_messages":0,"rate_limits":{"chat_create":{"max_requests":10,"window_seconds":60},"chat_message":{"max_requests":30,"window_seconds":60},"dm_send":{"max_requests":5,"window_seconds":60}},"version":"0.8.0-alpha"}
 ```
+
+### Optional: configure chat rate limits
+
+Rate limits are configurable with environment variables:
+
+```bash
+export OPSECHAT_CHAT_CREATE_PER_MINUTE=10
+export OPSECHAT_CHAT_MESSAGE_PER_MINUTE=30
+export OPSECHAT_DM_SEND_PER_MINUTE=5
+export OPSECHAT_DM_SEND_PER_HOUR=20
+python runserver.py
+```
+
+If unset or invalid, defaults are used automatically.
 
 ---
 

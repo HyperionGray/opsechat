@@ -105,6 +105,8 @@ def test_health_endpoint_returns_json_with_required_fields():
     assert data.get("status") == "healthy"
     assert "version" in data
     assert "active_rooms" in data
+    assert "active_direct_messages" in data
+    assert "rate_limits" in data
 
 
 def test_health_endpoint_active_rooms_is_integer():
@@ -113,3 +115,13 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_exposes_rate_limit_defaults():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    data = response.get_json()
+
+    assert data["rate_limits"]["chat_create"]["max_requests"] == 10
+    assert data["rate_limits"]["chat_message"]["max_requests"] == 30
+    assert data["rate_limits"]["dm_send"]["max_requests"] == 5

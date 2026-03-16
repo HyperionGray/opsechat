@@ -16,8 +16,9 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+import os
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Global room storage (in-memory only)
@@ -33,12 +34,66 @@ dm_lock = threading.Lock()
 _rate_limit_store = {}
 _rate_limit_lock = threading.Lock()
 
-# Rate limit configuration
-RATE_LIMITS = {
-    "chat_create": {"max_requests": 10, "window_seconds": 60},
-    "chat_message": {"max_requests": 30, "window_seconds": 60},
-    "dm_send": {"max_requests": 5, "window_seconds": 60},
-}
+def _parse_rate_limit_value(raw_value, default):
+    """Parse a positive integer limit value with safe fallback."""
+    if raw_value is None:
+        return default
+    try:
+        parsed = int(raw_value)
+        return parsed if parsed > 0 else default
+    except (TypeError, ValueError):
+        return default
+
+
+def build_rate_limit_config(env=None):
+    """
+    Build endpoint rate-limit config from environment variables.
+
+    Supported variables:
+    - OPSECHAT_CHAT_CREATE_PER_MINUTE (default: 10)
+    - OPSECHAT_CHAT_MESSAGE_PER_MINUTE (default: 30)
+    - OPSECHAT_DM_SEND_PER_MINUTE (default: 5)
+    - OPSECHAT_DM_SEND_PER_HOUR (default: 20)
+    """
+    env = env if env is not None else os.environ
+    chat_create_per_minute = _parse_rate_limit_value(
+        env.get("OPSECHAT_CHAT_CREATE_PER_MINUTE"),
+        10,
+    )
+    chat_message_per_minute = _parse_rate_limit_value(
+        env.get("OPSECHAT_CHAT_MESSAGE_PER_MINUTE"),
+        30,
+    )
+    dm_send_per_minute = _parse_rate_limit_value(
+        env.get("OPSECHAT_DM_SEND_PER_MINUTE"),
+        5,
+    )
+    dm_send_per_hour = _parse_rate_limit_value(
+        env.get("OPSECHAT_DM_SEND_PER_HOUR"),
+        20,
+    )
+
+    return {
+        "chat_create": {
+            "max_requests": chat_create_per_minute,
+            "window_seconds": 60,
+            "flask_limit": f"{chat_create_per_minute} per minute",
+        },
+        "chat_message": {
+            "max_requests": chat_message_per_minute,
+            "window_seconds": 60,
+            "flask_limit": f"{chat_message_per_minute} per minute",
+        },
+        "dm_send": {
+            "max_requests": dm_send_per_minute,
+            "window_seconds": 60,
+            "flask_limit": f"{dm_send_per_hour} per hour; {dm_send_per_minute} per minute",
+        },
+    }
+
+
+# Rate limit configuration (shared by Flask-Limiter and in-memory checks)
+RATE_LIMITS = build_rate_limit_config()
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
@@ -222,6 +277,33 @@ def cleanup_rate_limits():
             del _rate_limit_store[sid]
 
 
+def get_runtime_stats():
+    """Return lightweight runtime stats for health/monitoring endpoints."""
+    with rooms_lock:
+        active_rooms = len(chat_rooms)
+        active_room_users = sum(room.get_user_count() for room in chat_rooms.values())
+
+    with dm_lock:
+        active_direct_messages = len(direct_messages)
+
+    with _rate_limit_lock:
+        rate_limit_sessions = len(_rate_limit_store)
+
+    return {
+        "active_rooms": active_rooms,
+        "active_room_users": active_room_users,
+        "active_direct_messages": active_direct_messages,
+        "rate_limit_sessions": rate_limit_sessions,
+        "rate_limits": {
+            endpoint: {
+                "max_requests": cfg["max_requests"],
+                "window_seconds": cfg["window_seconds"],
+            }
+            for endpoint, cfg in RATE_LIMITS.items()
+        },
+    }
+
+
 # Background cleanup thread
 def cleanup_loop():
     """Continuously clean up old messages and rooms"""
@@ -262,13 +344,13 @@ def register_simple_chat_routes(app):
         try:
             with open('VERSION', 'r') as f:
                 version = f.read().strip()
-        except:
+        except OSError:
             version = '0.8.0-alpha'  # fallback
         
         return render_template("simple_chat_index.html", version=version)
     
     @app.route('/chat/create', methods=['POST'])
-    @limiter.limit("10 per hour; 3 per minute")
+    @limiter.limit(RATE_LIMITS["chat_create"]["flask_limit"])
     def chat_create():
         """Create a new chat room with cryptographically secure ID"""
         # Ensure session exists for rate limiting
@@ -314,7 +396,7 @@ def register_simple_chat_routes(app):
                              color=session["color"])
     
     @app.route('/chat/room/<string:room_id>/messages', methods=['GET', 'POST'])
-    @limiter.limit("60 per minute", methods=["POST"])
+    @limiter.limit(RATE_LIMITS["chat_message"]["flask_limit"], methods=["POST"])
     def simple_chat_messages(room_id):
         """Get or post messages to a room"""
         with rooms_lock:
@@ -397,7 +479,7 @@ def register_simple_chat_routes(app):
             })
     
     @app.route('/chat/dm/send', methods=['POST'])
-    @limiter.limit("20 per hour; 5 per minute")
+    @limiter.limit(RATE_LIMITS["dm_send"]["flask_limit"])
     def send_dm():
         """Send a direct message (for sharing room IDs) - expires in 1 minute"""
         # Initialize user session if needed
