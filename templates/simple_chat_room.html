@@ -217,6 +217,8 @@
         let encryptionKey = null;
         let pollInterval = null;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+        let sendBackoffUntil = 0;
+        let sendBackoffTimer = null;
         
         // Show security warning on first load
         function showSecurityWarning() {
@@ -251,24 +253,6 @@
                 console.error('Failed to fetch room key:', e);
             }
             return false;
-        }
-        
-        // Simple encryption using AES-GCM with Web Crypto API
-        async function generateKey() {
-            const key = await window.crypto.subtle.generateKey(
-                {
-                    name: "AES-GCM",
-                    length: 256
-                },
-                true,
-                ["encrypt", "decrypt"]
-            );
-            return key;
-        }
-        
-        async function exportKey(key) {
-            const exported = await window.crypto.subtle.exportKey("raw", key);
-            return Array.from(new Uint8Array(exported));
         }
         
         async function importKey(keyArray) {
@@ -343,6 +327,47 @@
                 statusMsg.textContent = '';
             }, duration);
         }
+
+        function parseRetryAfterSeconds(response, body) {
+            const headerValue = response.headers.get('Retry-After');
+            const fromHeader = Number.parseInt(headerValue || '', 10);
+            if (Number.isInteger(fromHeader) && fromHeader > 0) {
+                return fromHeader;
+            }
+            const fromBody = body && Number.parseInt(body.retry_after_seconds, 10);
+            if (Number.isInteger(fromBody) && fromBody > 0) {
+                return fromBody;
+            }
+            return 5;
+        }
+
+        function startSendBackoff(seconds) {
+            const waitSeconds = Math.max(1, Number.parseInt(seconds || 0, 10));
+            const sendBtn = document.getElementById('sendBtn');
+            sendBackoffUntil = Date.now() + (waitSeconds * 1000);
+            sendBtn.disabled = true;
+
+            if (sendBackoffTimer) {
+                clearInterval(sendBackoffTimer);
+            }
+
+            const tick = () => {
+                const remaining = Math.max(0, Math.ceil((sendBackoffUntil - Date.now()) / 1000));
+                if (remaining <= 0) {
+                    clearInterval(sendBackoffTimer);
+                    sendBackoffTimer = null;
+                    if (securityWarningAccepted) {
+                        sendBtn.disabled = false;
+                    }
+                    showStatus('Rate limit window ended. You can send messages again.');
+                    return;
+                }
+                showStatus(`Rate limited. Retry in ${remaining}s...`, 1200);
+            };
+
+            tick();
+            sendBackoffTimer = setInterval(tick, 1000);
+        }
         
         function scrollToBottom() {
             const container = document.getElementById('messagesContainer');
@@ -393,6 +418,12 @@
         }
         
         async function sendMessage() {
+            if (Date.now() < sendBackoffUntil) {
+                const remaining = Math.ceil((sendBackoffUntil - Date.now()) / 1000);
+                showStatus(`Please wait ${remaining}s before sending another message.`);
+                return;
+            }
+
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
             
@@ -413,12 +444,19 @@
                     },
                     body: JSON.stringify({ message: messageToSend })
                 });
-                
+
+                const body = await response.json().catch(() => null);
+
                 if (response.ok) {
                     input.value = '';
                     await pollMessages();
                 } else {
-                    showStatus('Error sending message');
+                    if (response.status === 429) {
+                        startSendBackoff(parseRetryAfterSeconds(response, body));
+                        return;
+                    }
+                    const errorMessage = (body && (body.detail || body.error)) || 'Error sending message';
+                    showStatus(errorMessage);
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);

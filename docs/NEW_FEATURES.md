@@ -172,6 +172,36 @@ When limit exceeded:
 
 ---
 
+## ⏱ API Retry Metadata and Client Backoff
+
+### What Changed
+Chat API rate-limit responses are now standardized and include explicit retry metadata:
+- HTTP `429 Too Many Requests`
+- `Retry-After` response header
+- JSON payload fields: `error_code`, `retry_after_seconds`, `backoff_hint`
+
+### Why This Matters
+- API clients can reliably read `Retry-After` and avoid hot-loop retries
+- Browser clients now implement countdown-based backoff for:
+  - Room creation (`/chat/create`)
+  - Message sending (`/chat/room/<id>/messages`)
+- Reduces accidental abuse and improves behavior under throttling
+
+### Example 429 Response
+```json
+{
+  "error": "Rate limit exceeded",
+  "error_code": "rate_limit_exceeded",
+  "retry_after_seconds": 12,
+  "backoff_hint": "Retry with exponential backoff.",
+  "detail": "Maximum 30 messages per minute exceeded.",
+  "endpoint": "/chat/room/<id>/messages",
+  "limit": "30 per minute"
+}
+```
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

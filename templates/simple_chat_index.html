@@ -162,8 +162,56 @@
     
     <script>
         // Simple room creation with no external dependencies
-        document.getElementById('createRoomBtn').addEventListener('click', async function() {
-            const statusDiv = document.getElementById('status');
+        const createRoomBtn = document.getElementById('createRoomBtn');
+        const statusDiv = document.getElementById('status');
+        let roomCreateBackoffUntil = 0;
+        let roomCreateBackoffTimer = null;
+
+        function parseRetryAfterSeconds(response, body) {
+            const headerValue = response.headers.get('Retry-After');
+            const fromHeader = Number.parseInt(headerValue || '', 10);
+            if (Number.isInteger(fromHeader) && fromHeader > 0) {
+                return fromHeader;
+            }
+            const fromBody = body && Number.parseInt(body.retry_after_seconds, 10);
+            if (Number.isInteger(fromBody) && fromBody > 0) {
+                return fromBody;
+            }
+            return 5;
+        }
+
+        function startRoomCreateBackoff(seconds) {
+            const waitSeconds = Math.max(1, Number.parseInt(seconds || 0, 10));
+            roomCreateBackoffUntil = Date.now() + (waitSeconds * 1000);
+            createRoomBtn.disabled = true;
+
+            if (roomCreateBackoffTimer) {
+                clearInterval(roomCreateBackoffTimer);
+            }
+
+            const tick = () => {
+                const remaining = Math.max(0, Math.ceil((roomCreateBackoffUntil - Date.now()) / 1000));
+                if (remaining <= 0) {
+                    clearInterval(roomCreateBackoffTimer);
+                    roomCreateBackoffTimer = null;
+                    createRoomBtn.disabled = false;
+                    statusDiv.textContent = 'Rate limit window ended. You can create a room now.';
+                    return;
+                }
+                statusDiv.textContent = `Rate limited. Retry in ${remaining}s...`;
+            };
+
+            tick();
+            roomCreateBackoffTimer = setInterval(tick, 1000);
+        }
+
+        createRoomBtn.addEventListener('click', async function() {
+            if (Date.now() < roomCreateBackoffUntil) {
+                const seconds = Math.ceil((roomCreateBackoffUntil - Date.now()) / 1000);
+                statusDiv.textContent = `Please wait ${seconds}s before creating another room.`;
+                return;
+            }
+
             statusDiv.textContent = 'Creating room...';
             
             try {
@@ -174,11 +222,16 @@
                     }
                 });
                 
+                const data = await response.json().catch(() => null);
+
                 if (!response.ok) {
-                    throw new Error('Failed to create room');
+                    if (response.status === 429) {
+                        startRoomCreateBackoff(parseRetryAfterSeconds(response, data));
+                        return;
+                    }
+                    const errorMessage = (data && (data.detail || data.error)) || 'Failed to create room';
+                    throw new Error(errorMessage);
                 }
-                
-                const data = await response.json();
                 
                 if (data.success) {
                     statusDiv.innerHTML = `Room created! Redirecting...<br><a href="${data.room_url}">${window.location.origin}${data.room_url}</a>`;

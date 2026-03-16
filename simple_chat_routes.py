@@ -16,9 +16,9 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
-from rate_limiter import limiter
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
+from rate_limiter import limiter, rate_limit_json_response
 
 # Global room storage (in-memory only)
 chat_rooms = {}
@@ -279,9 +279,12 @@ def register_simple_chat_routes(app):
 
         allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Try again in {retry_after} seconds."
-            }), 429
+            return rate_limit_json_response(
+                retry_after=retry_after,
+                detail="Too many room creation attempts.",
+                endpoint="/chat/create",
+                limit="3 per minute",
+            )
 
         room_id = generate_secure_room_id(32)
         
@@ -332,9 +335,12 @@ def register_simple_chat_routes(app):
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
             if not allowed:
-                return jsonify({
-                    "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds."
-                }), 429
+                return rate_limit_json_response(
+                    retry_after=retry_after,
+                    detail="Maximum 30 messages per minute exceeded.",
+                    endpoint=f"/chat/room/{room_id}/messages",
+                    limit="30 per minute",
+                )
             
             # Get message from request
             data = request.get_json()
@@ -409,9 +415,12 @@ def register_simple_chat_routes(app):
         # Check rate limit for DMs
         allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds."
-            }), 429
+            return rate_limit_json_response(
+                retry_after=retry_after,
+                detail="Maximum 5 direct messages per minute exceeded.",
+                endpoint="/chat/dm/send",
+                limit="5 per minute",
+            )
         
         data = request.get_json()
         if not data or "room_id" not in data or "message" not in data:

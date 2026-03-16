@@ -113,3 +113,43 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def _assert_retry_metadata(response):
+    """Assert 429 responses include backoff metadata and header."""
+    assert response.status_code == 429
+    data = response.get_json()
+    assert data is not None
+    assert data.get("error_code") == "rate_limit_exceeded"
+    assert isinstance(data.get("retry_after_seconds"), int)
+    assert data["retry_after_seconds"] >= 1
+    assert response.headers.get("Retry-After") is not None
+
+
+def test_chat_create_429_includes_retry_metadata():
+    client = _test_app.test_client()
+
+    # /chat/create has 3/min route-level limiter; 4th request should be blocked.
+    for _ in range(3):
+        ok = client.post("/chat/create", json={})
+        assert ok.status_code == 200
+
+    blocked = client.post("/chat/create", json={})
+    _assert_retry_metadata(blocked)
+
+
+def test_chat_message_429_includes_retry_metadata():
+    _clear_store()
+    client = _test_app.test_client()
+
+    create_resp = client.post("/chat/create", json={})
+    assert create_resp.status_code == 200
+    room_id = create_resp.get_json()["room_id"]
+
+    # Custom message limiter in simple_chat_routes is 30/min; 31st should be blocked.
+    for i in range(30):
+        ok = client.post(f"/chat/room/{room_id}/messages", json={"message": f"m{i}"})
+        assert ok.status_code == 200
+
+    blocked = client.post(f"/chat/room/{room_id}/messages", json={"message": "overflow"})
+    _assert_retry_metadata(blocked)
