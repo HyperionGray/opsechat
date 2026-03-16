@@ -190,6 +190,19 @@ Tests cover:
 
 For full testing documentation, see [Testing Guide](docs/user-guide/TESTING.md).
 
+### Health Endpoint
+
+`GET /health` returns operational status and lightweight runtime counters:
+
+- `active_rooms`
+- `active_room_users`
+- `active_direct_messages`
+- `tracked_rate_limit_sessions`
+- `version`, `uptime_seconds`, and component `checks`
+
+These counters are in-memory snapshots intended for liveness/readiness checks and
+basic operational visibility.
+
 
 How it works
 ============

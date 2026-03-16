@@ -323,11 +323,27 @@ def _read_version() -> str:
 
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
+    runtime_stats = {
+        "active_rooms": 0,
+        "active_room_users": 0,
+        "active_direct_messages": 0,
+        "tracked_rate_limit_sessions": 0,
+    }
+
+    # Lazily import chat runtime stats to avoid circular imports at startup.
+    try:
+        from simple_chat_routes import get_runtime_stats
+        runtime_stats.update(get_runtime_stats())
+    except Exception:
+        # Keep health endpoint available even if chat routes are unavailable.
+        pass
+
     return {
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
+        **runtime_stats,
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',

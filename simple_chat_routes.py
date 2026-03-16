@@ -222,6 +222,30 @@ def cleanup_rate_limits():
             del _rate_limit_store[sid]
 
 
+def get_runtime_stats():
+    """
+    Return runtime counters for operational health checks.
+
+    Values are best-effort snapshots and may change immediately after read.
+    """
+    with rooms_lock:
+        active_rooms = len(chat_rooms)
+        active_room_users = sum(room.get_user_count() for room in chat_rooms.values())
+
+    with dm_lock:
+        active_direct_messages = len(direct_messages)
+
+    with _rate_limit_lock:
+        tracked_rate_limit_sessions = len(_rate_limit_store)
+
+    return {
+        "active_rooms": active_rooms,
+        "active_room_users": active_room_users,
+        "active_direct_messages": active_direct_messages,
+        "tracked_rate_limit_sessions": tracked_rate_limit_sessions,
+    }
+
+
 # Background cleanup thread
 def cleanup_loop():
     """Continuously clean up old messages and rooms"""
