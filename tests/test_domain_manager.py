@@ -4,7 +4,7 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, NamecheapAPIClient, PorkbunAPIClient, DomainRotationManager
 )
 
 
@@ -174,3 +174,100 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch('domain_manager.requests.Session')
+    def test_search_domain_available(self, mock_session_class):
+        """Namecheap domain search parses availability"""
+        xml = """
+        <ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+          <CommandResponse Type="namecheap.domains.check">
+            <DomainCheckResult Domain="test123.xyz" Available="true" IsPremiumName="false" />
+          </CommandResponse>
+        </ApiResponse>
+        """
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = xml
+        mock_response.raise_for_status.return_value = None
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_user="user",
+            api_key="key",
+            username="user",
+            client_ip="127.0.0.1",
+            use_sandbox=True,
+        )
+        result = client.search_domain("test123.xyz")
+
+        assert result["domain"] == "test123.xyz"
+        assert result["available"] is True
+        assert result["currency"] == "USD"
+
+    @patch('domain_manager.requests.Session')
+    def test_get_pricing(self, mock_session_class):
+        """Namecheap pricing returns registration/renew/transfer"""
+        pricing_xml_template = """
+        <ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+          <CommandResponse Type="namecheap.users.getPricing">
+            <UserGetPricingResult>
+              <ProductType Name="DOMAIN">
+                <ProductCategory Name="register">
+                  <Product Name="xyz">
+                    <Price Duration="1" YourPrice="{price}" />
+                  </Product>
+                </ProductCategory>
+              </ProductType>
+            </UserGetPricingResult>
+          </CommandResponse>
+        </ApiResponse>
+        """
+
+        mock_session = Mock()
+
+        def _response_for_action(url, params, timeout):
+            prices = {"register": "2.99", "renew": "12.99", "transfer": "9.99"}
+            response = Mock()
+            response.raise_for_status.return_value = None
+            response.text = pricing_xml_template.format(price=prices[params["ActionName"]])
+            return response
+
+        mock_session.get.side_effect = _response_for_action
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_user="user",
+            api_key="key",
+            username="user",
+            client_ip="127.0.0.1",
+            use_sandbox=True,
+        )
+        pricing = client.get_pricing("xyz")
+
+        assert pricing["tld"] == "xyz"
+        assert pricing["registration"] == 2.99
+        assert pricing["renewal"] == 12.99
+        assert pricing["transfer"] == 9.99
+
+    @patch('domain_manager.requests.Session')
+    def test_purchase_domain_requires_contact_profile(self, mock_session_class):
+        """Namecheap purchase fails fast without contact profile"""
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        client = NamecheapAPIClient(
+            api_user="user",
+            api_key="key",
+            username="user",
+            client_ip="127.0.0.1",
+            use_sandbox=True,
+        )
+        result = client.purchase_domain("test123.xyz", years=1)
+
+        assert result["success"] is False
+        assert "Missing Namecheap contact profile fields" in result["message"]
+        mock_session.get.assert_not_called()

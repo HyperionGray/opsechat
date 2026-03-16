@@ -189,10 +189,17 @@ chmod +x domain_rotation_cli.py
 python domain_rotation_cli.py config
 
 # You'll be prompted for:
-# - Porkbun API Key
-# - Porkbun API Secret
+# - Registrar selection (porkbun or namecheap)
+# - Registrar-specific API credentials
 # - Monthly Budget (default: $50)
 ```
+
+Namecheap setup includes:
+- API User
+- API Key
+- Whitelisted Client IP
+- Optional sandbox mode
+- Purchase contact profile (required for registrations)
 
 ### Usage
 
@@ -285,6 +292,7 @@ After rotating domains, update your email configuration:
 - CLI tracks spending automatically
 - Prevents purchases that would exceed budget
 - Resets monthly (manual reset required)
+- Domain timestamps are now persisted safely across CLI restarts
 
 ---
 

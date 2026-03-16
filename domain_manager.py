@@ -1,18 +1,21 @@
 """
-Domain management and API integration
-Supports automated domain purchasing for burner email rotation
+Domain management and API integration.
+Supports automated domain purchasing for burner email rotation.
 """
-import requests
+import xml.etree.ElementTree as ET
+from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
+import logging
 import random
 import string
-import logging
-from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
+import requests
 
 logger = logging.getLogger(__name__)
 
 
-class DomainAPIClient:
+class DomainAPIClient(ABC):
     """
     Base class for domain registrar API clients
     """
@@ -21,17 +24,20 @@ class DomainAPIClient:
         self.api_key = api_key
         self.api_secret = api_secret
     
+    @abstractmethod
     def search_domain(self, domain: str) -> Dict:
         """Search if domain is available"""
-        raise NotImplementedError
+        raise NotImplementedError("Subclasses must implement search_domain()")
     
+    @abstractmethod
     def purchase_domain(self, domain: str, years: int = 1) -> Dict:
         """Purchase domain"""
-        raise NotImplementedError
+        raise NotImplementedError("Subclasses must implement purchase_domain()")
     
+    @abstractmethod
     def get_pricing(self, tld: str) -> Dict:
         """Get pricing for TLD"""
-        raise NotImplementedError
+        raise NotImplementedError("Subclasses must implement get_pricing()")
 
 
 class PorkbunAPIClient(DomainAPIClient):
@@ -119,6 +125,215 @@ class PorkbunAPIClient(DomainAPIClient):
             return [d.get("domain") for d in domains if d.get("domain")]
         
         return []
+
+
+class NamecheapAPIClient(DomainAPIClient):
+    """
+    Namecheap API client for domain management.
+    API docs: https://www.namecheap.com/support/api/intro/
+    """
+
+    BASE_URL = "https://api.namecheap.com/xml.response"
+    SANDBOX_URL = "https://api.sandbox.namecheap.com/xml.response"
+    REQUIRED_CONTACT_FIELDS = [
+        "FirstName",
+        "LastName",
+        "Address1",
+        "City",
+        "StateProvince",
+        "PostalCode",
+        "Country",
+        "Phone",
+        "EmailAddress",
+    ]
+
+    def __init__(
+        self,
+        api_user: str,
+        api_key: str,
+        username: str,
+        client_ip: str,
+        use_sandbox: bool = False,
+        contact_profile: Optional[Dict[str, str]] = None,
+    ):
+        super().__init__(api_key)
+        self.api_user = api_user
+        self.username = username
+        self.client_ip = client_ip
+        self.use_sandbox = use_sandbox
+        self.contact_profile = contact_profile or {}
+        self.session = requests.Session()
+
+    @staticmethod
+    def _local_name(tag: str) -> str:
+        return tag.split("}", 1)[-1]
+
+    def _find_first(self, root: ET.Element, tag_name: str) -> Optional[ET.Element]:
+        for element in root.iter():
+            if self._local_name(element.tag) == tag_name:
+                return element
+        return None
+
+    def _find_all(self, root: ET.Element, tag_name: str) -> List[ET.Element]:
+        return [el for el in root.iter() if self._local_name(el.tag) == tag_name]
+
+    @staticmethod
+    def _to_float(value: Any) -> Optional[float]:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        if not isinstance(value, str):
+            return None
+        try:
+            return float(value.replace("$", "").strip())
+        except ValueError:
+            return None
+
+    def _extract_errors(self, root: ET.Element) -> List[str]:
+        errors: List[str] = []
+        for err in self._find_all(root, "Error"):
+            if err.text:
+                errors.append(err.text.strip())
+        return errors
+
+    def _make_request(self, command: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        url = self.SANDBOX_URL if self.use_sandbox else self.BASE_URL
+        params = {
+            "ApiUser": self.api_user,
+            "ApiKey": self.api_key,
+            "UserName": self.username,
+            "ClientIp": self.client_ip,
+            "Command": command,
+        }
+        if data:
+            params.update(data)
+
+        try:
+            response = self.session.get(url, params=params, timeout=30)
+            response.raise_for_status()
+            root = ET.fromstring(response.text)
+            errors = self._extract_errors(root)
+            if errors:
+                return {"status": "ERROR", "errors": errors, "root": root}
+            return {"status": "SUCCESS", "root": root}
+        except Exception as exc:
+            logger.error("Namecheap API request failed: %s", exc)
+            return {"status": "ERROR", "errors": [str(exc)]}
+
+    def search_domain(self, domain: str) -> Dict:
+        result = self._make_request("namecheap.domains.check", {"DomainList": domain})
+        if result.get("status") != "SUCCESS":
+            return {
+                "domain": domain,
+                "available": False,
+                "price": None,
+                "currency": "USD",
+                "error": "; ".join(result.get("errors", ["Unknown Namecheap error"])),
+            }
+
+        root = result["root"]
+        check = self._find_first(root, "DomainCheckResult")
+        if check is None:
+            return {
+                "domain": domain,
+                "available": False,
+                "price": None,
+                "currency": "USD",
+                "error": "Missing DomainCheckResult in Namecheap response",
+            }
+
+        available = str(check.attrib.get("Available", "")).lower() == "true"
+        premium_price = check.attrib.get("PremiumRegistrationPrice")
+        return {
+            "domain": domain,
+            "available": available,
+            "price": self._to_float(premium_price),
+            "currency": "USD",
+            "premium": str(check.attrib.get("IsPremiumName", "")).lower() == "true",
+        }
+
+    def _get_price_for_action(self, tld: str, action: str) -> Optional[float]:
+        result = self._make_request(
+            "namecheap.users.getPricing",
+            {
+                "ProductType": "DOMAIN",
+                "ProductCategory": "register",
+                "ActionName": action,
+                "ProductName": tld.lower().lstrip("."),
+            },
+        )
+        if result.get("status") != "SUCCESS":
+            return None
+
+        root = result["root"]
+        product_name = tld.lower().lstrip(".")
+        for product in self._find_all(root, "Product"):
+            if product.attrib.get("Name", "").lower() != product_name:
+                continue
+            for price in product:
+                if self._local_name(price.tag) != "Price":
+                    continue
+                if price.attrib.get("Duration") == "1":
+                    for candidate in ("YourPrice", "Price", "YourAdditionalCost"):
+                        parsed = self._to_float(price.attrib.get(candidate))
+                        if parsed is not None:
+                            return parsed
+        return None
+
+    def get_pricing(self, tld: str = "com") -> Dict:
+        return {
+            "tld": tld.lower().lstrip("."),
+            "registration": self._get_price_for_action(tld, "register"),
+            "renewal": self._get_price_for_action(tld, "renew"),
+            "transfer": self._get_price_for_action(tld, "transfer"),
+            "currency": "USD",
+        }
+
+    def purchase_domain(self, domain: str, years: int = 1) -> Dict:
+        missing = [f for f in self.REQUIRED_CONTACT_FIELDS if not self.contact_profile.get(f)]
+        if missing:
+            return {
+                "success": False,
+                "domain": domain,
+                "message": (
+                    "Missing Namecheap contact profile fields: "
+                    + ", ".join(missing)
+                ),
+                "order_id": None,
+            }
+
+        params: Dict[str, Any] = {
+            "DomainName": domain,
+            "Years": max(1, int(years)),
+        }
+        for contact_type in ("Registrant", "Tech", "Admin", "AuxBilling"):
+            for field in self.REQUIRED_CONTACT_FIELDS:
+                params[f"{contact_type}{field}"] = self.contact_profile[field]
+
+        result = self._make_request("namecheap.domains.create", params)
+        if result.get("status") != "SUCCESS":
+            return {
+                "success": False,
+                "domain": domain,
+                "message": "; ".join(result.get("errors", ["Namecheap purchase failed"])),
+                "order_id": None,
+            }
+
+        root = result["root"]
+        create_result = self._find_first(root, "DomainCreateResult")
+        order_details = self._find_first(root, "OrderDetails")
+        order_id = order_details.attrib.get("OrderID") if order_details is not None else None
+        purchase_ok = (
+            create_result is not None
+            and str(create_result.attrib.get("Registered", "")).lower() == "true"
+        )
+        return {
+            "success": purchase_ok,
+            "domain": domain,
+            "message": "Success" if purchase_ok else "Namecheap returned an unsuccessful purchase result",
+            "order_id": order_id,
+        }
 
 
 class DomainRotationManager:

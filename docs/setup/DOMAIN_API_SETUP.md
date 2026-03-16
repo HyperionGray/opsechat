@@ -81,7 +81,7 @@ Porkbun offers cheap domains and a simple API, making it ideal for burner email 
 
 ### Namecheap
 
-While not directly integrated, Namecheap offers competitive pricing and API access.
+Namecheap is fully integrated in the Domain Rotation CLI as an alternative to Porkbun.
 
 #### Getting Started
 - Website: [namecheap.com](https://namecheap.com)
@@ -89,9 +89,13 @@ While not directly integrated, Namecheap offers competitive pricing and API acce
 - Pricing: .com domains ~$8.88/year, .xyz ~$1.98/year
 
 #### Integration Notes
-- Requires custom API client implementation
-- More complex API than Porkbun
-- Good for high-volume usage
+- Integrated client supports:
+  - Domain availability checks (`namecheap.domains.check`)
+  - Domain pricing lookup (`namecheap.users.getPricing`)
+  - Domain purchases (`namecheap.domains.create`)
+- Requires a **whitelisted Client IP** in your Namecheap API settings.
+- Requires a **contact profile** (name/address/email/phone) for purchases.
+- Supports Namecheap sandbox mode for safe testing.
 
 ### GoDaddy
 
@@ -149,6 +153,7 @@ Enterprise-focused with comprehensive API.
 
 1. **Choose Registrar**
    - Porkbun recommended for beginners
+   - Namecheap supported for users already operating there
    - Consider volume and budget requirements
 
 2. **Create Account and Get API Keys**
@@ -202,11 +207,13 @@ Enterprise-focused with comprehensive API.
 - Verify API key and secret are correct
 - Check registrar account has sufficient funds
 - Ensure API access is enabled in registrar account
+- For Namecheap, verify your current public IP is whitelisted in API settings
 
 **"Domain purchase failed"**
 - Check account balance in registrar
 - Verify monthly budget not exceeded
 - Try different domain extension (.xyz vs .com)
+- For Namecheap, verify contact profile fields are configured in CLI setup
 
 **"Budget exceeded"**
 - Increase monthly budget in configuration
@@ -301,6 +308,7 @@ Enterprise-focused with comprehensive API.
 - Configuration issues: Check application logs
 - API errors: Review registrar account status
 - Budget problems: Verify monthly limits and spending
+- CLI setup: `python domain_rotation_cli.py config` (choose `porkbun` or `namecheap`)
 
 ### Community Resources
 - Domain pricing comparison sites
