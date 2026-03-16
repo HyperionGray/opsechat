@@ -15,6 +15,32 @@ Porkbun offers cheap domains and a simple API, making it ideal for burner email 
 - **Fast registration**: Domains available within minutes
 - **Good selection**: .xyz, .club, .online, .site, and more
 
+### Namecheap (Now Supported)
+
+Namecheap is now supported as a second registrar provider for domain rotation.
+
+#### Namecheap Requirements
+- API key and API user
+- Whitelisted client IP in Namecheap API settings
+- Optional sandbox mode for safe integration testing
+- Contact profile information for real purchases (required by Namecheap API)
+
+#### Configuration via CLI
+```bash
+python domain_rotation_cli.py config
+# Select provider: namecheap
+# Enter api_key, api_user, and client_ip
+```
+
+#### Provider-specific operations
+```bash
+# Search only with Namecheap
+python domain_rotation_cli.py search --provider namecheap
+
+# Rotate using Namecheap
+python domain_rotation_cli.py rotate --provider namecheap
+```
+
 #### Getting API Credentials
 
 1. **Create Account**
@@ -77,11 +103,11 @@ Porkbun offers cheap domains and a simple API, making it ideal for burner email 
 - Budget: $100+/month
 - Covers: 100+ .xyz domains or 20+ .com domains
 
-## Alternative Registrars
+## Additional Registrars
 
 ### Namecheap
 
-While not directly integrated, Namecheap offers competitive pricing and API access.
+Integrated and available through the domain manager and CLI provider selection.
 
 #### Getting Started
 - Website: [namecheap.com](https://namecheap.com)
@@ -89,9 +115,9 @@ While not directly integrated, Namecheap offers competitive pricing and API acce
 - Pricing: .com domains ~$8.88/year, .xyz ~$1.98/year
 
 #### Integration Notes
-- Requires custom API client implementation
-- More complex API than Porkbun
-- Good for high-volume usage
+- Requires Namecheap API IP allow-list configuration
+- Purchase flows require contact profile fields
+- Supports sandbox mode for safer verification
 
 ### GoDaddy
 

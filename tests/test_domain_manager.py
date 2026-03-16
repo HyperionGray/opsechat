@@ -4,7 +4,7 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, NamecheapAPIClient, DomainRotationManager
 )
 
 
@@ -76,6 +76,38 @@ class TestPorkbunAPIClient:
         assert result["registration"] == "9.99"
 
 
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch('domain_manager.requests.Session')
+    def test_search_domain_available(self, mock_session_class):
+        """Test Namecheap domain availability parsing"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """
+<ApiResponse Status="OK">
+  <CommandResponse>
+    <DomainCheckResult Domain="test123.xyz" Available="true" PremiumRegistrationPrice="2.49" />
+  </CommandResponse>
+</ApiResponse>
+"""
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_key="test_key",
+            api_user="test_user",
+            client_ip="127.0.0.1",
+            use_sandbox=True
+        )
+        result = client.search_domain("test123.xyz")
+
+        assert result["domain"] == "test123.xyz"
+        assert result["available"] is True
+        assert result["price"] == 2.49
+        assert result["provider"] == "namecheap"
+
+
 class TestDomainRotationManager:
     """Test domain rotation manager"""
     
@@ -129,6 +161,23 @@ class TestDomainRotationManager:
         assert manager.current_spending == 2.99
         assert len(manager.owned_domains) == 1
         assert manager.active_domain == "test123.xyz"
+
+    def test_purchase_records_provider(self):
+        """Test purchased domain tracks provider metadata"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "test123.xyz",
+        }
+
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.add_api_client("namecheap", mock_client, make_default=True)
+        success = manager.purchase_domain_if_budget_allows(
+            "test123.xyz", 1.99, provider="namecheap"
+        )
+
+        assert success is True
+        assert manager.owned_domains[0]["provider"] == "namecheap"
     
     def test_purchase_domain_if_budget_allows_exceeds_budget(self):
         """Test domain purchase exceeds budget"""
@@ -174,3 +223,51 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_and_get_config(self):
+        """Test in-memory provider configuration metadata"""
+        manager = DomainRotationManager(monthly_budget=10.0)
+        result = manager.configure(
+            provider="porkbun",
+            api_key="test_key",
+            api_secret="test_secret",
+            monthly_budget=25.0
+        )
+
+        assert result["success"] is True
+        assert result["provider"] == "porkbun"
+        config = manager.get_config()
+        assert config["configured"] is True
+        assert config["default_provider"] == "porkbun"
+        assert "porkbun" in config["providers"]
+        assert config["monthly_budget"] == 25.0
+
+    def test_find_cheap_domain_with_provider_filter(self):
+        """Test provider filter controls which API client is used"""
+        primary_client = Mock(spec=DomainAPIClient)
+        primary_client.search_domain.return_value = {
+            "available": False,
+            "domain": "x.xyz",
+            "price": 9.99
+        }
+
+        preferred_client = Mock(spec=DomainAPIClient)
+        preferred_client.search_domain.return_value = {
+            "available": True,
+            "domain": "y.xyz",
+            "price": 1.99
+        }
+
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.add_api_client("porkbun", primary_client, make_default=True)
+        manager.add_api_client("namecheap", preferred_client)
+
+        result = manager.find_cheap_available_domain(
+            max_price=5.0,
+            max_attempts=1,
+            providers=["namecheap"]
+        )
+
+        assert result is not None
+        assert result["provider"] == "namecheap"
+        assert result["price"] == 1.99
