@@ -41,8 +41,7 @@ def test_post_is_rate_limited_get_is_not():
         r = client.post("/chat/create", content_type="application/json")
         assert r.status_code == 429, f"4th POST should be rate-limited (429), got {r.status_code}"
 
-    print("✅ POST /chat/create is rate-limited after 3 requests; GET / is never throttled")
-    return True
+    print("POST /chat/create is rate-limited after 3 requests; GET / is never throttled")
 
 
 def test_separate_sessions_have_independent_limits():
@@ -67,8 +66,7 @@ def test_separate_sessions_have_independent_limits():
             f"Client B should NOT be blocked by Client A's exhausted limit, got {r.status_code}"
         )
 
-    print("✅ Different sessions have independent rate-limit counters")
-    return True
+    print("Different sessions have independent rate-limit counters")
 
 
 def main():
