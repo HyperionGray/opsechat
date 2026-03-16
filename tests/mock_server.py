@@ -69,14 +69,68 @@ except ImportError as e:
     print(f"Warning: Could not import email_system: {e}")
     # Create mock objects for testing
     class MockEmailStorage:
-        def create_user_inbox(self, user_id): pass
+        def __init__(self):
+            self.inboxes = {}
+
+        def create_user_inbox(self, user_id):
+            self.inboxes[user_id] = self.inboxes.get(user_id, [])
+            return self.inboxes[user_id]
+
     class MockBurnerManager:
-        def cleanup_expired(self): pass
-        def generate_burner_email(self, user_id): return f"test{user_id}@example.com"
-        def rotate_burner(self, user_id, old_email): return f"test{user_id}@example.com"
-        def get_user_burners(self, user_id): return []
-        def get_user_for_burner(self, email): return None
-        def expire_burner(self, email): pass
+        def __init__(self):
+            self._burners_by_user = {}
+            self._owner_by_email = {}
+
+        def cleanup_expired(self):
+            now = datetime.datetime.now()
+            removed = 0
+            for user_id in list(self._burners_by_user.keys()):
+                current = []
+                for burner in self._burners_by_user[user_id]:
+                    if burner["expires_at"] > now:
+                        current.append(burner)
+                    else:
+                        self._owner_by_email.pop(burner["email"], None)
+                        removed += 1
+                if current:
+                    self._burners_by_user[user_id] = current
+                else:
+                    del self._burners_by_user[user_id]
+            return removed
+
+        def generate_burner_email(self, user_id):
+            email = f"test{user_id}-{id_generator(size=8)}@example.com"
+            burner = {
+                "email": email,
+                "created_at": datetime.datetime.now(),
+                "expires_at": datetime.datetime.now() + datetime.timedelta(hours=1),
+            }
+            self._burners_by_user.setdefault(user_id, []).append(burner)
+            self._owner_by_email[email] = user_id
+            return email
+
+        def rotate_burner(self, user_id, old_email):
+            self.expire_burner(old_email)
+            return self.generate_burner_email(user_id)
+
+        def get_user_burners(self, user_id):
+            self.cleanup_expired()
+            return [b["email"] for b in self._burners_by_user.get(user_id, [])]
+
+        def get_user_for_burner(self, email):
+            self.cleanup_expired()
+            return self._owner_by_email.get(email)
+
+        def expire_burner(self, email):
+            owner = self._owner_by_email.pop(email, None)
+            if not owner:
+                return False
+            self._burners_by_user[owner] = [
+                b for b in self._burners_by_user.get(owner, []) if b["email"] != email
+            ]
+            if not self._burners_by_user[owner]:
+                del self._burners_by_user[owner]
+            return True
     
     email_storage = MockEmailStorage()
     burner_manager = MockBurnerManager()
