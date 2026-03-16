@@ -176,6 +176,27 @@ def test_dm_structure():
     return True
 
 
+def test_burner_cleanup_prunes_user_index():
+    """Test burner cleanup removes stale user index entries"""
+    print("\nTesting burner cleanup consistency...")
+    from email_system import BurnerEmailManager
+
+    manager = BurnerEmailManager()
+    user_id = "cleanup_test_user"
+    email = manager.generate_burner_email(user_id, hours_valid=1)
+    assert email in manager.user_burners[user_id]
+    assert email in manager.burner_addresses
+
+    # Force expiry and clean up.
+    manager.burner_addresses[email]["expires_at"] = datetime.datetime.now() - datetime.timedelta(seconds=1)
+    manager.cleanup_expired()
+
+    assert email not in manager.burner_addresses
+    assert user_id not in manager.user_burners
+    print("✅ Expired burners are removed from both indexes")
+    return True
+
+
 def run_all_tests():
     """Run all tests"""
     print("=" * 60)
@@ -189,6 +210,7 @@ def run_all_tests():
         test_base64_detection,
         test_message_length_cap,
         test_dm_structure,
+        test_burner_cleanup_prunes_user_index,
     ]
     
     passed = 0
