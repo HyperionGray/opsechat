@@ -162,8 +162,70 @@
     
     <script>
         // Simple room creation with no external dependencies
+        let createRoomCooldownUntil = 0;
+        let createRoomCooldownInterval = null;
+
+        async function parseRateLimitResponse(response) {
+            const retryAfterHeader = parseInt(response.headers.get('Retry-After') || '0', 10) || 0;
+            try {
+                const body = await response.json();
+                const details = body.rate_limit || {};
+                return {
+                    message: body.error || 'Rate limit exceeded',
+                    retryAfterSeconds: details.retry_after_seconds || retryAfterHeader || 1,
+                    recommendedBackoffSeconds: details.recommended_backoff_seconds || retryAfterHeader || 1
+                };
+            } catch (error) {
+                return {
+                    message: 'Rate limit exceeded',
+                    retryAfterSeconds: retryAfterHeader || 1,
+                    recommendedBackoffSeconds: retryAfterHeader || 1
+                };
+            }
+        }
+
+        function applyCreateRoomCooldown(seconds, reason) {
+            const statusDiv = document.getElementById('status');
+            const createBtn = document.getElementById('createRoomBtn');
+            const cooldownSeconds = Math.max(1, Number(seconds) || 1);
+
+            createRoomCooldownUntil = Date.now() + (cooldownSeconds * 1000);
+            createBtn.disabled = true;
+            createBtn.style.opacity = '0.6';
+            createBtn.style.cursor = 'not-allowed';
+
+            if (createRoomCooldownInterval) {
+                clearInterval(createRoomCooldownInterval);
+            }
+
+            const updateStatus = () => {
+                const remaining = Math.max(0, Math.ceil((createRoomCooldownUntil - Date.now()) / 1000));
+                if (remaining <= 0) {
+                    clearInterval(createRoomCooldownInterval);
+                    createRoomCooldownInterval = null;
+                    createBtn.disabled = false;
+                    createBtn.style.opacity = '1';
+                    createBtn.style.cursor = 'pointer';
+                    statusDiv.textContent = 'You can try creating a room again now.';
+                    return;
+                }
+                statusDiv.textContent = `${reason} Retrying available in ${remaining}s.`;
+            };
+
+            updateStatus();
+            createRoomCooldownInterval = setInterval(updateStatus, 1000);
+        }
+
         document.getElementById('createRoomBtn').addEventListener('click', async function() {
             const statusDiv = document.getElementById('status');
+            const createBtn = document.getElementById('createRoomBtn');
+
+            if (Date.now() < createRoomCooldownUntil) {
+                const remaining = Math.ceil((createRoomCooldownUntil - Date.now()) / 1000);
+                statusDiv.textContent = `Rate limited. Try again in ${remaining}s.`;
+                return;
+            }
+
             statusDiv.textContent = 'Creating room...';
             
             try {
@@ -175,6 +237,14 @@
                 });
                 
                 if (!response.ok) {
+                    if (response.status === 429) {
+                        const rateLimit = await parseRateLimitResponse(response);
+                        applyCreateRoomCooldown(
+                            rateLimit.recommendedBackoffSeconds || rateLimit.retryAfterSeconds,
+                            rateLimit.message
+                        );
+                        return;
+                    }
                     throw new Error('Failed to create room');
                 }
                 
@@ -182,6 +252,7 @@
                 
                 if (data.success) {
                     statusDiv.innerHTML = `Room created! Redirecting...<br><a href="${data.room_url}">${window.location.origin}${data.room_url}</a>`;
+                    createBtn.disabled = true;
                     setTimeout(() => {
                         window.location.href = data.room_url;
                     }, 1000);

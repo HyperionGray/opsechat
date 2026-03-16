@@ -217,6 +217,8 @@
         let encryptionKey = null;
         let pollInterval = null;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+        let sendCooldownUntil = 0;
+        let sendCooldownInterval = null;
         
         // Show security warning on first load
         function showSecurityWarning() {
@@ -343,6 +345,61 @@
                 statusMsg.textContent = '';
             }, duration);
         }
+
+        async function parseRateLimitResponse(response) {
+            const retryAfterHeader = parseInt(response.headers.get('Retry-After') || '0', 10) || 0;
+            try {
+                const body = await response.json();
+                const details = body.rate_limit || {};
+                return {
+                    message: body.error || 'Rate limit exceeded',
+                    retryAfterSeconds: details.retry_after_seconds || retryAfterHeader || 1,
+                    recommendedBackoffSeconds: details.recommended_backoff_seconds || retryAfterHeader || 1
+                };
+            } catch (error) {
+                return {
+                    message: 'Rate limit exceeded',
+                    retryAfterSeconds: retryAfterHeader || 1,
+                    recommendedBackoffSeconds: retryAfterHeader || 1
+                };
+            }
+        }
+
+        function applySendCooldown(seconds, reason) {
+            const input = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendBtn');
+            const cooldownSeconds = Math.max(1, Number(seconds) || 1);
+            sendCooldownUntil = Date.now() + (cooldownSeconds * 1000);
+            input.disabled = true;
+            sendBtn.disabled = true;
+            sendBtn.style.opacity = '0.6';
+            sendBtn.style.cursor = 'not-allowed';
+
+            if (sendCooldownInterval) {
+                clearInterval(sendCooldownInterval);
+            }
+
+            const updateStatus = () => {
+                const remaining = Math.max(0, Math.ceil((sendCooldownUntil - Date.now()) / 1000));
+                if (remaining <= 0) {
+                    clearInterval(sendCooldownInterval);
+                    sendCooldownInterval = null;
+                    if (securityWarningAccepted) {
+                        input.disabled = false;
+                        sendBtn.disabled = false;
+                        input.focus();
+                    }
+                    sendBtn.style.opacity = '1';
+                    sendBtn.style.cursor = 'pointer';
+                    showStatus('Rate limit cooldown finished. You can send messages again.', 2500);
+                    return;
+                }
+                document.getElementById('statusMsg').textContent = `${reason} Retrying available in ${remaining}s.`;
+            };
+
+            updateStatus();
+            sendCooldownInterval = setInterval(updateStatus, 1000);
+        }
         
         function scrollToBottom() {
             const container = document.getElementById('messagesContainer');
@@ -397,6 +454,11 @@
             const message = input.value.trim();
             
             if (!message) return;
+            if (Date.now() < sendCooldownUntil) {
+                const remaining = Math.max(1, Math.ceil((sendCooldownUntil - Date.now()) / 1000));
+                showStatus(`Rate limited. Try again in ${remaining}s.`, 1500);
+                return;
+            }
             
             let messageToSend = message;
             
@@ -418,6 +480,14 @@
                     input.value = '';
                     await pollMessages();
                 } else {
+                    if (response.status === 429) {
+                        const rateLimit = await parseRateLimitResponse(response);
+                        applySendCooldown(
+                            rateLimit.recommendedBackoffSeconds || rateLimit.retryAfterSeconds,
+                            rateLimit.message
+                        );
+                        return;
+                    }
                     showStatus('Error sending message');
                 }
             } catch (error) {

@@ -87,6 +87,18 @@ def test_rate_limit_chat_message_limit():
     assert retry_after >= 1
 
 
+def test_rate_limits_endpoint_returns_policy():
+    client = _test_app.test_client()
+    response = client.get("/chat/rate-limits")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data is not None
+    assert "limits" in data
+    assert "chat_message" in data["limits"]
+    assert data["limits"]["chat_message"]["max_requests"] == 30
+    assert data["recommended_backoff_cap_seconds"] >= 1
+
+
 # ---------------------------------------------------------------------------
 # Health endpoint integration tests
 # ---------------------------------------------------------------------------

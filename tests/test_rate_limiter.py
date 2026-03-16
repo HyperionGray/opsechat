@@ -71,6 +71,39 @@ def test_separate_sessions_have_independent_limits():
     return True
 
 
+def test_chat_message_limit_returns_structured_retry_metadata():
+    """POST chat messages should return retry/backoff metadata when blocked."""
+    print("\nTesting: structured 429 metadata for chat messages...")
+    app = _make_app()
+
+    with app.test_client() as client:
+        create_resp = client.post("/chat/create", content_type="application/json")
+        assert create_resp.status_code == 200, f"Failed to create room: {create_resp.status_code}"
+        room_id = create_resp.get_json()["room_id"]
+        messages_url = f"/chat/room/{room_id}/messages"
+
+        for i in range(30):
+            r = client.post(messages_url, json={"message": f"hello-{i}"})
+            assert r.status_code == 200, f"Message {i + 1} should succeed, got {r.status_code}"
+
+        blocked = client.post(messages_url, json={"message": "this should be blocked"})
+        assert blocked.status_code == 429, f"31st message should be rate-limited, got {blocked.status_code}"
+        assert blocked.is_json, "Expected JSON body for rate-limited response"
+
+        payload = blocked.get_json()
+        assert "rate_limit" in payload, "Response should include rate_limit metadata"
+        assert payload["rate_limit"]["endpoint"] == "chat_message"
+        assert payload["rate_limit"]["retry_after_seconds"] >= 1
+        assert (
+            payload["rate_limit"]["recommended_backoff_seconds"]
+            >= payload["rate_limit"]["retry_after_seconds"]
+        )
+        assert blocked.headers.get("Retry-After"), "Retry-After header should be present"
+
+    print("✅ Structured retry metadata returned for chat message throttling")
+    return True
+
+
 def main():
     print("=== Rate Limiter Integration Tests ===\n")
     results = []
@@ -78,6 +111,7 @@ def main():
     tests = [
         test_post_is_rate_limited_get_is_not,
         test_separate_sessions_have_independent_limits,
+        test_chat_message_limit_returns_structured_retry_metadata,
     ]
 
     for test_fn in tests:
