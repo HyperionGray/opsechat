@@ -136,19 +136,28 @@ class TestDomainRotationManager:
         mock_client = Mock(spec=DomainAPIClient)
         
         manager = DomainRotationManager(mock_client, monthly_budget=5.0)
-        manager.current_spending = 4.0
+        manager.owned_domains = [{
+            "domain": "existing.xyz",
+            "price": 4.0,
+            "purchased_at": datetime.now(),
+            "expires_at": datetime.now(),
+        }]
         
         result = manager.purchase_domain_if_budget_allows("test123.xyz", 2.0)
         
         assert result is False
         assert manager.current_spending == 4.0
-        assert len(manager.owned_domains) == 0
+        assert len(manager.owned_domains) == 1
     
     def test_get_budget_status(self):
         """Test budget status retrieval"""
         manager = DomainRotationManager(monthly_budget=50.0)
-        manager.current_spending = 10.0
-        manager.owned_domains = [{"domain": "test.xyz"}]
+        manager.owned_domains = [{
+            "domain": "test.xyz",
+            "price": 10.0,
+            "purchased_at": datetime.now(),
+            "expires_at": datetime.now(),
+        }]
         
         status = manager.get_budget_status()
         
