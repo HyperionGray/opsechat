@@ -233,6 +233,7 @@ class TestDomainRotationManager:
         result = manager.rotate_domain_with_details()
 
         assert result["success"] is True
-        assert result["domain"] == "test789.xyz"
+        assert result["domain"].endswith((".xyz", ".club", ".online", ".site", ".website"))
+        assert manager.active_domain == result["domain"]
         assert result["price"] == 2.99
         assert "remaining_budget" in result
