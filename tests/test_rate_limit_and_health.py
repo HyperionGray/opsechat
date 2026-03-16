@@ -105,6 +105,9 @@ def test_health_endpoint_returns_json_with_required_fields():
     assert data.get("status") == "healthy"
     assert "version" in data
     assert "active_rooms" in data
+    assert "active_direct_messages" in data
+    assert "active_rate_limit_sessions" in data
+    assert "rate_limits" in data
 
 
 def test_health_endpoint_active_rooms_is_integer():
@@ -113,3 +116,27 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_returns_rate_limit_config_shape():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    data = response.get_json()
+
+    assert isinstance(data["active_direct_messages"], int)
+    assert data["active_direct_messages"] >= 0
+    assert isinstance(data["active_rate_limit_sessions"], int)
+    assert data["active_rate_limit_sessions"] >= 0
+
+    rate_limits = data["rate_limits"]
+    assert isinstance(rate_limits, dict)
+    assert "chat_create" in rate_limits
+    assert "chat_message" in rate_limits
+    assert "dm_send" in rate_limits
+
+    for endpoint in ["chat_create", "chat_message", "dm_send"]:
+        cfg = rate_limits[endpoint]
+        assert isinstance(cfg["max_requests"], int)
+        assert isinstance(cfg["window_seconds"], int)
+        assert cfg["max_requests"] > 0
+        assert cfg["window_seconds"] > 0

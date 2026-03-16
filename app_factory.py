@@ -16,17 +16,6 @@ except ModuleNotFoundError:
         # was not included in the image build.
         return app
 
-
-def _read_version():
-    """Read application version from VERSION file"""
-    version_file = os.path.join(os.path.dirname(__file__), "VERSION")
-    try:
-        with open(version_file) as f:
-            return f.read().strip()
-    except OSError:
-        return "unknown"
-
-
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
@@ -119,7 +108,31 @@ def create_app():
 
     @app.route('/health', methods=["GET"])
     def health():
-        return jsonify(get_health_status())
+        from simple_chat_routes import (
+            chat_rooms,
+            direct_messages,
+            rooms_lock,
+            dm_lock,
+            get_rate_limits,
+            _rate_limit_store,
+            _rate_limit_lock,
+        )
+
+        status = get_health_status()
+        with rooms_lock:
+            active_rooms = len(chat_rooms)
+        with dm_lock:
+            active_direct_messages = len(direct_messages)
+        with _rate_limit_lock:
+            active_rate_limit_sessions = len(_rate_limit_store)
+
+        status.update({
+            "active_rooms": active_rooms,
+            "active_direct_messages": active_direct_messages,
+            "active_rate_limit_sessions": active_rate_limit_sessions,
+            "rate_limits": get_rate_limits(),
+        })
+        return jsonify(status)
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])

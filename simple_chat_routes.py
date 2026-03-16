@@ -16,9 +16,13 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+import os
+import logging
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
+
+logger = logging.getLogger(__name__)
 
 # Global room storage (in-memory only)
 chat_rooms = {}
@@ -33,12 +37,85 @@ dm_lock = threading.Lock()
 _rate_limit_store = {}
 _rate_limit_lock = threading.Lock()
 
-# Rate limit configuration
-RATE_LIMITS = {
+# Default rate limit configuration
+DEFAULT_RATE_LIMITS = {
     "chat_create": {"max_requests": 10, "window_seconds": 60},
     "chat_message": {"max_requests": 30, "window_seconds": 60},
     "dm_send": {"max_requests": 5, "window_seconds": 60},
 }
+
+RATE_LIMIT_ENV_MAP = {
+    "chat_create": "OPSECHAT_RATE_LIMIT_CHAT_CREATE",
+    "chat_message": "OPSECHAT_RATE_LIMIT_CHAT_MESSAGE",
+    "dm_send": "OPSECHAT_RATE_LIMIT_DM_SEND",
+}
+
+
+def _parse_rate_limit(raw_value: str, default_value: dict, endpoint: str) -> dict:
+    """
+    Parse env override in "<max_requests>/<window_seconds>" format.
+    Falls back to default_value on invalid input.
+    """
+    normalized = raw_value.strip()
+    parts = [part.strip() for part in normalized.split("/", 1)]
+    if len(parts) != 2:
+        logger.warning(
+            "Invalid rate limit format for %s: %r. Expected '<max>/<window>'",
+            endpoint,
+            raw_value,
+        )
+        return default_value.copy()
+
+    max_requests_text, window_seconds_text = parts
+    if not max_requests_text.isdigit() or not window_seconds_text.isdigit():
+        logger.warning(
+            "Non-numeric rate limit override for %s: %r. Using defaults.",
+            endpoint,
+            raw_value,
+        )
+        return default_value.copy()
+
+    max_requests = int(max_requests_text)
+    window_seconds = int(window_seconds_text)
+    if max_requests <= 0 or window_seconds <= 0:
+        logger.warning(
+            "Rate limit override must be positive for %s: %r. Using defaults.",
+            endpoint,
+            raw_value,
+        )
+        return default_value.copy()
+
+    return {"max_requests": max_requests, "window_seconds": window_seconds}
+
+
+def load_rate_limits_from_env(default_limits: dict = None) -> dict:
+    """
+    Load rate limits with optional per-endpoint env overrides.
+
+    Environment variable format: "<max_requests>/<window_seconds>".
+    Example: OPSECHAT_RATE_LIMIT_CHAT_CREATE=12/60
+    """
+    defaults = default_limits or DEFAULT_RATE_LIMITS
+    resolved = {}
+
+    for endpoint, default_value in defaults.items():
+        env_name = RATE_LIMIT_ENV_MAP.get(endpoint)
+        raw_value = os.environ.get(env_name, "").strip() if env_name else ""
+        if raw_value:
+            resolved[endpoint] = _parse_rate_limit(raw_value, default_value, endpoint)
+        else:
+            resolved[endpoint] = default_value.copy()
+
+    return resolved
+
+
+def get_rate_limits() -> dict:
+    """Return a copy of active in-memory rate-limit configuration."""
+    return {endpoint: config.copy() for endpoint, config in RATE_LIMITS.items()}
+
+
+# Active rate limits (loaded once at import time)
+RATE_LIMITS = load_rate_limits_from_env()
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
@@ -262,7 +339,7 @@ def register_simple_chat_routes(app):
         try:
             with open('VERSION', 'r') as f:
                 version = f.read().strip()
-        except:
+        except OSError:
             version = '0.8.0-alpha'  # fallback
         
         return render_template("simple_chat_index.html", version=version)

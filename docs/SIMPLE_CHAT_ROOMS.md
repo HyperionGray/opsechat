@@ -142,6 +142,23 @@ POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
 
+### Runtime Rate Limit Configuration
+
+Simple chat write endpoints can be tuned at runtime with environment variables.
+Each value uses `<max_requests>/<window_seconds>` format.
+
+```
+OPSECHAT_RATE_LIMIT_CHAT_CREATE=10/60
+OPSECHAT_RATE_LIMIT_CHAT_MESSAGE=30/60
+OPSECHAT_RATE_LIMIT_DM_SEND=5/60
+```
+
+Examples:
+- `OPSECHAT_RATE_LIMIT_CHAT_CREATE=3/60` limits room creation to 3 requests per minute.
+- `OPSECHAT_RATE_LIMIT_DM_SEND=12/300` allows 12 DMs per 5 minutes.
+
+If a value is missing or invalid, OpSecChat falls back to secure defaults.
+
 ### Encryption Implementation
 
 The E2E encryption uses native Web Crypto API:
