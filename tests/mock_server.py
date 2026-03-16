@@ -112,6 +112,19 @@ def health_check():
     }), 200
 
 
+@app.route('/version', methods=["GET"])
+def version_check():
+    """Version endpoint aligned with application API."""
+    from flask import jsonify
+    version_file = os.path.join(base_dir, "VERSION")
+    try:
+        with open(version_file) as f:
+            version = f.read().strip()
+    except OSError:
+        version = "unknown"
+    return jsonify({"version": version}), 200
+
+
 def main():
     """Main entry point for mock server"""
     # Set up mock configuration

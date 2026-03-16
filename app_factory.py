@@ -16,17 +16,6 @@ except ModuleNotFoundError:
         # was not included in the image build.
         return app
 
-
-def _read_version():
-    """Read application version from VERSION file"""
-    version_file = os.path.join(os.path.dirname(__file__), "VERSION")
-    try:
-        with open(version_file) as f:
-            return f.read().strip()
-    except OSError:
-        return "unknown"
-
-
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
@@ -115,11 +104,15 @@ def create_app():
                           add_review_wrapper, get_reviews, get_review_stats)
     
     # Health check endpoint
-    from monitoring import get_health_status
+    from monitoring import get_health_status, get_app_version
 
     @app.route('/health', methods=["GET"])
     def health():
         return jsonify(get_health_status())
+
+    @app.route('/version', methods=["GET"])
+    def version():
+        return jsonify({"version": get_app_version()})
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])

@@ -321,13 +321,19 @@ def _read_version() -> str:
         return 'unknown'
 
 
+def get_app_version() -> str:
+    """Public helper for application version access."""
+    return _read_version()
+
+
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
     return {
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
-        'version': _read_version(),
+        'version': get_app_version(),
+        'active_rooms': int(apm.metrics['chat'].get('active_sessions', 0)),
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',
