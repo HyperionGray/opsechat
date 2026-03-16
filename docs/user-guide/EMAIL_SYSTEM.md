@@ -265,11 +265,11 @@ Test coverage includes:
 ### Planned Features
 The following features are planned for future releases:
 
-#### 1. SMTP/IMAP Integration
-- Custom SMTP server settings
-- Send emails to external addresses
-- Receive emails from external sources
-- Multiple protocol support (SMTP, IMAP, POP3)
+#### 1. SMTP/IMAP Hardening and Expansion
+- Additional provider presets and connection diagnostics
+- Better retry and queue behavior for temporary transport failures
+- Optional POP3 support for providers that do not expose IMAP
+- Improved delivery/receive telemetry in the UI
 
 #### 2. Database Backend
 - HBase integration for scalability

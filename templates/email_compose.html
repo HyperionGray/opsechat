@@ -151,6 +151,26 @@
     permission is illegal in many jurisdictions.
   </div>
 
+  {% if error %}
+  <div class="warning">
+    <strong>Send failed:</strong> {{ error }}
+  </div>
+  {% endif %}
+
+  {% if success %}
+  <div class="info">
+    <strong>Success:</strong> {{ success }}
+  </div>
+  {% endif %}
+
+  {% if send_limit_status %}
+  <div class="info">
+    <strong>Rate limit:</strong>
+    {{ send_limit_status.sends_used }} / {{ send_limit_status.max_sends_per_hour }} used this hour
+    ({{ send_limit_status.sends_remaining }} remaining).
+  </div>
+  {% endif %}
+
   <div class="mode-toggle">
     <label>
       <input type="radio" name="compose-mode" value="standard" checked onchange="toggleMode()"> 
