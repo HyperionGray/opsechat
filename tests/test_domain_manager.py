@@ -87,6 +87,40 @@ class TestDomainRotationManager:
         
         assert domain.endswith(".xyz")
         assert len(domain.split(".")[0]) == 8
+
+    def test_configure_and_get_config_masks_secrets(self):
+        """Test in-memory manager configuration and masked display."""
+        manager = DomainRotationManager()
+        config = manager.configure(
+            api_key="pk1_example_key_1234",
+            secret_key="sk1_example_secret_5678",
+            monthly_budget=25.0,
+        )
+
+        assert config["configured"] is True
+        assert config["provider"] == "porkbun"
+        assert config["monthly_budget"] == 25.0
+        assert config["api_key"].endswith("1234")
+        assert "pk1_example_key_1234" not in config["api_key"]
+        assert config["secret_key"].endswith("5678")
+        assert "sk1_example_secret_5678" not in config["secret_key"]
+
+        unmasked = manager.get_config(mask_secrets=False)
+        assert unmasked["api_key"] == "pk1_example_key_1234"
+        assert unmasked["secret_key"] == "sk1_example_secret_5678"
+
+    def test_configure_rejects_invalid_inputs(self):
+        """Configuration should reject missing creds and bad budget."""
+        manager = DomainRotationManager()
+
+        with pytest.raises(ValueError):
+            manager.configure(api_key="", secret_key="x", monthly_budget=10.0)
+
+        with pytest.raises(ValueError):
+            manager.configure(api_key="x", secret_key="", monthly_budget=10.0)
+
+        with pytest.raises(ValueError):
+            manager.configure(api_key="x", secret_key="y", monthly_budget=0)
     
     def test_find_cheap_available_domain_no_client(self):
         """Test finding domain without API client"""
@@ -174,3 +208,31 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_rotate_domain_with_details_no_client(self):
+        """Structured rotation response should fail when unconfigured."""
+        manager = DomainRotationManager()
+        result = manager.rotate_domain_with_details()
+        assert result["success"] is False
+        assert "error" in result
+
+    def test_rotate_domain_with_details_success(self):
+        """Structured rotation response should include domain and budget."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test789.xyz",
+            "price": 2.99
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "test789.xyz"
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        result = manager.rotate_domain_with_details()
+
+        assert result["success"] is True
+        assert result["domain"] == "test789.xyz"
+        assert result["price"] == 2.99
+        assert "remaining_budget" in result

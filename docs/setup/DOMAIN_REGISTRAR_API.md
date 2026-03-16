@@ -98,6 +98,24 @@ The opsechat domain manager is designed to be extensible. Future registrar suppo
 
 3. Click "Configure"
 
+### Runtime Behavior (Current Implementation)
+
+The current application implementation keeps domain registrar credentials in memory
+for the lifetime of the running process only.
+
+- `POST /<path>/email/config` with `action=configure_domain_api` configures:
+  - `api_key`
+  - `api_secret`
+  - `monthly_budget`
+- `POST /<path>/email/domain/rotate` now performs a real rotation attempt and returns:
+  - `success` (boolean)
+  - `domain` (when successful)
+  - `price` and `remaining_budget` (when successful)
+  - `error` (when unsuccessful)
+
+For form-based use in the UI, the same rotate endpoint redirects back to the config
+page with a success/error message.
+
 ### Via Environment Variables (Advanced)
 
 For container deployments, you can set:
