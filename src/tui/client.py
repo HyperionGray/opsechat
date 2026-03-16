@@ -57,6 +57,7 @@ class ChatClient:
         self.socket = None
         self.username = "Unknown"
         self.running = False
+        self.encryption_enabled = False
         self.message_buffer = ""
         
         # UI components
@@ -66,6 +67,33 @@ class ChatClient:
         
         # Build UI
         self.build_ui()
+
+    def _footer_text(self):
+        """Build dynamic footer text with status indicators and commands."""
+        connection_state = "Connected" if self.running else "Disconnected"
+        transport = "Tor" if self.use_tor else "Direct"
+        encryption = "On" if self.encryption_enabled else "Off"
+        return [
+            ('info', '/help'),
+            ' ',
+            ('info', '/status'),
+            ' ',
+            ('info', '/users'),
+            ' ',
+            ('info', '/quit'),
+            ' | ',
+            ('warn', 'State: '),
+            ('username', connection_state),
+            ' | ',
+            ('warn', 'Transport: '),
+            ('username', transport),
+            ' | ',
+            ('warn', 'Enc: '),
+            ('username', encryption),
+            ' | ',
+            ('warn', 'You: '),
+            ('username', self.username),
+        ]
     
     def build_ui(self):
         """Build the terminal UI"""
@@ -82,15 +110,7 @@ class ChatClient:
         )
         
         # Footer with instructions
-        footer_text = [
-            ('info', 'Enter'),
-            ': Send | ',
-            ('info', 'Ctrl+C'),
-            ': Quit | ',
-            ('warn', 'Your username: '),
-            ('username', self.username)
-        ]
-        footer = urwid.AttrMap(urwid.Text(footer_text), 'footer')
+        footer = urwid.AttrMap(urwid.Text(self._footer_text()), 'footer')
         
         # Messages area
         messages_frame = urwid.LineBox(
@@ -162,6 +182,7 @@ class ChatClient:
             
             self.socket = create_socket_connection(self.host, self.port, self.use_tor, self.tor_port)
             self.running = True
+            self.update_footer()
             
             # Start receive thread
             receive_thread = threading.Thread(target=self.receive_messages, daemon=True)
@@ -185,6 +206,7 @@ class ChatClient:
                 if not data:
                     self.add_message("System", "Disconnected from server", is_system=True)
                     self.running = False
+                    self.update_footer()
                     break
                 
                 buffer += data
@@ -201,6 +223,7 @@ class ChatClient:
                 if self.running:
                     self.add_message("System", f"Connection error: {e}", is_system=True)
                 self.running = False
+                self.update_footer()
                 break
     
     def handle_server_message(self, msg):
@@ -217,19 +240,49 @@ class ChatClient:
             username = msg.get('username', 'Unknown')
             message = msg.get('message', '')
             self.add_message(username, message)
+
+        elif msg_type == 'control_response':
+            self.handle_control_response(msg)
+
+    def handle_control_response(self, msg):
+        """Handle control response from the server."""
+        command = msg.get('command')
+        if command == 'users':
+            user_count = msg.get('users', 0)
+            self.add_message("System", f"Connected users: {user_count}", is_system=True)
+        elif command == 'status':
+            user_count = msg.get('users', 0)
+            message_count = msg.get('message_count', 0)
+            lifetime = msg.get('message_lifetime', 0)
+            self.add_message(
+                "System",
+                f"Server status: users={user_count}, messages={message_count}, burn={lifetime}s",
+                is_system=True
+            )
+        else:
+            response = msg.get('message')
+            if response:
+                self.add_message("System", response, is_system=True)
     
     def update_footer(self):
         """Update the footer with current username"""
-        footer_text = [
-            ('info', 'Enter'),
-            ': Send | ',
-            ('info', 'Ctrl+C'),
-            ': Quit | ',
-            ('warn', 'Your username: '),
-            ('username', self.username)
-        ]
-        footer = urwid.AttrMap(urwid.Text(footer_text), 'footer')
+        footer = urwid.AttrMap(urwid.Text(self._footer_text()), 'footer')
         self.frame.footer = footer
+
+    def send_control_command(self, command):
+        """Send a control command to the server."""
+        if not self.socket:
+            self.add_message("System", "Not connected to a server", is_system=True)
+            return
+
+        try:
+            msg_obj = {
+                'type': 'control',
+                'command': command
+            }
+            self.socket.send((json.dumps(msg_obj) + '\n').encode())
+        except Exception as e:
+            self.add_message("System", f"Failed to send command: {e}", is_system=True)
     
     def send_message(self, message):
         """Send a message to the server"""
@@ -255,11 +308,57 @@ class ChatClient:
         if key == 'enter':
             message = self.input_box.get_edit_text()
             if message.strip():
-                self.send_message(message.strip())
+                clean_message = message.strip()
+                if clean_message.startswith('/'):
+                    self.execute_command(clean_message)
+                else:
+                    self.send_message(clean_message)
                 self.input_box.set_edit_text("")
             return
         
         return key
+
+    def execute_command(self, command):
+        """Execute slash commands from the input box."""
+        parts = command.split()
+        cmd = parts[0].lower()
+
+        if cmd == '/help':
+            self.add_message(
+                "System",
+                "Commands: /help, /status, /users, /encrypt <on|off>, /quit",
+                is_system=True
+            )
+            return
+
+        if cmd == '/status':
+            self.send_control_command('status')
+            return
+
+        if cmd == '/users':
+            self.send_control_command('users')
+            return
+
+        if cmd == '/encrypt':
+            if len(parts) != 2 or parts[1].lower() not in ('on', 'off'):
+                self.add_message("System", "Usage: /encrypt <on|off>", is_system=True)
+                return
+            self.encryption_enabled = (parts[1].lower() == 'on')
+            self.update_footer()
+            state = "enabled" if self.encryption_enabled else "disabled"
+            self.add_message(
+                "System",
+                f"Local encryption indicator {state}.",
+                is_system=True
+            )
+            return
+
+        if cmd == '/quit':
+            self.running = False
+            self.update_footer()
+            raise urwid.ExitMainLoop()
+
+        self.add_message("System", f"Unknown command: {cmd}. Try /help", is_system=True)
     
     def run(self):
         """Run the TUI client"""
@@ -284,6 +383,7 @@ class ChatClient:
     def cleanup(self):
         """Clean up resources"""
         self.running = False
+        self.update_footer()
         if self.socket:
             try:
                 self.socket.close()

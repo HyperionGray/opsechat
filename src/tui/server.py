@@ -25,7 +25,7 @@ from typing import Dict, List, Any, Optional
 # Message storage (in-memory only)
 class ChatServer:
     MAX_MESSAGE_LENGTH = 1000  # Prevent b64 encoded images
-    MESSAGE_LIFETIME = 180  # 3 minutes in seconds
+    MESSAGE_LIFETIME = 240  # 4 minutes in seconds
     
     def __init__(self, host='127.0.0.1', port=5555):
         self.host = host
@@ -35,6 +35,7 @@ class ChatServer:
         self.lock = threading.Lock()
         self.server_socket = None
         self.running = False
+        self.started_at = time.time()
         
         # Start cleanup thread
         self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
@@ -100,6 +101,49 @@ class ChatServer:
                 return self.messages.copy()
             else:
                 return [msg for msg in self.messages if msg['timestamp'] > since]
+
+    def send_json(self, client_socket: socket.socket, payload: Dict[str, Any]) -> bool:
+        """Send a newline-delimited JSON payload to a client."""
+        try:
+            client_socket.send((json.dumps(payload) + '\n').encode())
+            return True
+        except (OSError, socket.error, TypeError, ValueError):
+            return False
+
+    def handle_control_command(self, client_socket: socket.socket, command: str):
+        """Handle control commands from clients (status/helpful metadata only)."""
+        with self.lock:
+            users_count = len(self.clients)
+            messages_count = len(self.messages)
+
+        if command == 'users':
+            response = {
+                'type': 'control_response',
+                'command': 'users',
+                'users': users_count,
+            }
+            self.send_json(client_socket, response)
+            return
+
+        if command == 'status':
+            uptime_seconds = int(time.time() - self.started_at)
+            response = {
+                'type': 'control_response',
+                'command': 'status',
+                'users': users_count,
+                'message_count': messages_count,
+                'message_lifetime': self.MESSAGE_LIFETIME,
+                'uptime_seconds': uptime_seconds,
+            }
+            self.send_json(client_socket, response)
+            return
+
+        response = {
+            'type': 'control_response',
+            'command': command,
+            'message': f'Unknown command: {command}',
+        }
+        self.send_json(client_socket, response)
     
     def handle_client(self, client_socket: socket.socket, addr):
         """Handle a client connection"""
@@ -113,9 +157,9 @@ class ChatServer:
             welcome = {
                 'type': 'welcome',
                 'username': username,
-                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
+                'message': f'Welcome! You are {username}. Messages burn in 4 minutes.'
             }
-            client_socket.send((json.dumps(welcome) + '\n').encode())
+            self.send_json(client_socket, welcome)
             
             # Send existing messages
             messages = self.get_messages()
@@ -126,7 +170,8 @@ class ChatServer:
                     'message': msg['message'],
                     'timestamp': msg['timestamp'].isoformat()
                 }
-                client_socket.send((json.dumps(msg_data) + '\n').encode())
+                if not self.send_json(client_socket, msg_data):
+                    break
             
             # Handle incoming messages
             buffer = ""
@@ -142,11 +187,16 @@ class ChatServer:
                         if line:
                             try:
                                 msg_obj = json.loads(line)
-                                if msg_obj.get('type') == 'message':
+                                msg_type = msg_obj.get('type')
+                                if msg_type == 'message':
                                     message = msg_obj.get('message', '')
                                     if self.add_message(username, message):
                                         # Broadcast to all clients
                                         self.broadcast_message(username, message)
+                                elif msg_type == 'control':
+                                    command = str(msg_obj.get('command', '')).strip().lower()
+                                    if command:
+                                        self.handle_control_command(client_socket, command)
                             except json.JSONDecodeError:
                                 pass
                 
