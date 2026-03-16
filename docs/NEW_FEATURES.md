@@ -172,6 +172,55 @@ When limit exceeded:
 
 ---
 
+## 🛡️ Configurable Chat Rate Limiting + Backoff
+
+### What Changed
+Simple chat write endpoints now expose consistent retry metadata and support runtime configuration:
+- `POST /chat/create`
+- `POST /chat/room/<room_id>/messages`
+- `POST /chat/dm/send`
+
+Each 429 response now includes:
+- `retry_after_seconds`
+- `backoff_level`
+- `max_requests`
+- `window_seconds`
+- `Retry-After` response header
+
+### Runtime Configuration
+You can configure limits with Flask app config:
+
+```python
+app.config["SIMPLE_CHAT_RATE_LIMITS"] = {
+    "chat_create": {"max_requests": 3, "window_seconds": 60, "hourly_max_requests": 10},
+    "chat_message": {"max_requests": 30, "window_seconds": 60},
+    "dm_send": {"max_requests": 5, "window_seconds": 60, "hourly_max_requests": 20},
+}
+
+app.config["SIMPLE_CHAT_BACKOFF_POLICY"] = {
+    "enabled": True,
+    "base_seconds": 2,
+    "multiplier": 2,
+    "max_seconds": 60,
+}
+```
+
+Or via environment variables:
+- `OPSECHAT_RATE_LIMIT_<ENDPOINT>_MAX_REQUESTS`
+- `OPSECHAT_RATE_LIMIT_<ENDPOINT>_WINDOW_SECONDS`
+- `OPSECHAT_RATE_LIMIT_<ENDPOINT>_HOURLY_MAX_REQUESTS`
+- `OPSECHAT_RATE_LIMIT_BACKOFF_ENABLED`
+- `OPSECHAT_RATE_LIMIT_BACKOFF_BASE_SECONDS`
+- `OPSECHAT_RATE_LIMIT_BACKOFF_MULTIPLIER`
+- `OPSECHAT_RATE_LIMIT_BACKOFF_MAX_SECONDS`
+
+### Why This Helps
+- Better client UX: callers can back off predictably.
+- More operational control: limits can be tuned without code edits.
+- Stronger abuse resistance: repeated violations incur increasing delays.
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

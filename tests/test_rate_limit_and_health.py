@@ -10,7 +10,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    get_rate_limit_decision,
+    configure_rate_limit_settings,
+    _rate_limit_store,
+    _rate_limit_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -22,6 +28,7 @@ _test_app = create_app()
 
 def _clear_store():
     """Helper: wipe the rate limit store between tests."""
+    configure_rate_limit_settings()
     with _rate_limit_lock:
         _rate_limit_store.clear()
 
@@ -85,6 +92,52 @@ def test_rate_limit_chat_message_limit():
     allowed, retry_after = check_rate_limit("session-msg", "chat_message")
     assert allowed is False
     assert retry_after >= 1
+
+
+def test_rate_limit_exponential_backoff_increases_on_repeated_violations():
+    _clear_store()
+    cfg = type(
+        "Cfg",
+        (),
+        {
+            "config": {
+                "SIMPLE_CHAT_RATE_LIMITS": {
+                    "dm_send": {
+                        "max_requests": 1,
+                        "window_seconds": 60,
+                        "hourly_max_requests": 20,
+                    }
+                },
+                "SIMPLE_CHAT_BACKOFF_POLICY": {
+                    "enabled": True,
+                    "base_seconds": 2,
+                    "multiplier": 2,
+                    "max_seconds": 60,
+                },
+            }
+        },
+    )()
+    configure_rate_limit_settings(cfg)
+
+    # First request allowed.
+    first = get_rate_limit_decision("session-backoff", "dm_send")
+    assert first["allowed"] is True
+
+    # First violation.
+    violation_1 = get_rate_limit_decision("session-backoff", "dm_send")
+    assert violation_1["allowed"] is False
+    assert violation_1["backoff_level"] == 1
+
+    # Fast-forward the temporary block without clearing timestamps so we hit a second violation.
+    with _rate_limit_lock:
+        _rate_limit_store["session-backoff"]["dm_send"]["blocked_until"] = (
+            datetime.datetime.now() - datetime.timedelta(seconds=1)
+        )
+
+    violation_2 = get_rate_limit_decision("session-backoff", "dm_send")
+    assert violation_2["allowed"] is False
+    assert violation_2["backoff_level"] == 2
+    assert violation_2["retry_after_seconds"] >= violation_1["retry_after_seconds"]
 
 
 # ---------------------------------------------------------------------------
