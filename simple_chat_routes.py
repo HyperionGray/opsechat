@@ -155,6 +155,20 @@ def cleanup_old_dms():
             del direct_messages[dm_id]
 
 
+def get_active_room_count():
+    """Get current number of active rooms after cleanup."""
+    cleanup_old_rooms()
+    with rooms_lock:
+        return len(chat_rooms)
+
+
+def get_active_dm_count():
+    """Get current number of active direct messages after cleanup."""
+    cleanup_old_dms()
+    with dm_lock:
+        return len(direct_messages)
+
+
 def check_rate_limit(session_id: str, endpoint: str) -> tuple:
     """
     Check if a session has exceeded its rate limit for an endpoint.

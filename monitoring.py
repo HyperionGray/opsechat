@@ -321,18 +321,74 @@ def _read_version() -> str:
         return 'unknown'
 
 
+def _get_chat_runtime_stats() -> Dict[str, Any]:
+    """
+    Get runtime chat stats from simple chat storage.
+    Uses lazy import to avoid module import cycles at startup.
+    """
+    try:
+        from simple_chat_routes import get_active_room_count, get_active_dm_count
+        return {
+            'active_rooms': get_active_room_count(),
+            'active_direct_messages': get_active_dm_count(),
+            'chat_runtime_available': True,
+        }
+    except Exception:
+        return {
+            'active_rooms': 0,
+            'active_direct_messages': 0,
+            'chat_runtime_available': False,
+        }
+
+
 def get_health_status() -> Dict[str, Any]:
-    """Get application health status"""
+    """Get application health status with runtime counters."""
+    chat_stats = _get_chat_runtime_stats()
     return {
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
+        'active_rooms': chat_stats['active_rooms'],
+        'active_direct_messages': chat_stats['active_direct_messages'],
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',
-            'disk_space': 'ok'
+            'disk_space': 'ok',
+            'chat_runtime': 'ok' if chat_stats['chat_runtime_available'] else 'unavailable',
         }
+    }
+
+
+def get_liveness_status() -> Dict[str, Any]:
+    """Liveness probe for orchestration systems."""
+    return {
+        'status': 'alive',
+        'timestamp': datetime.utcnow().isoformat(),
+        'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
+        'version': _read_version(),
+    }
+
+
+def get_readiness_status(app: Optional[Any] = None) -> Dict[str, Any]:
+    """Readiness probe indicating whether the app can serve traffic."""
+    chat_stats = _get_chat_runtime_stats()
+    version = _read_version()
+    secret_key_set = bool(getattr(app, "secret_key", None)) if app is not None else True
+
+    ready = chat_stats['chat_runtime_available'] and secret_key_set
+    checks = {
+        'chat_runtime': 'ok' if chat_stats['chat_runtime_available'] else 'unavailable',
+        'session_secret_key': 'ok' if secret_key_set else 'missing',
+        'version_file': 'ok' if version != 'unknown' else 'missing',
+    }
+
+    return {
+        'status': 'ready' if ready else 'not_ready',
+        'ready': ready,
+        'timestamp': datetime.utcnow().isoformat(),
+        'version': version,
+        'checks': checks,
     }
 
 # Security event logging
