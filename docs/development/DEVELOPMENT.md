@@ -221,7 +221,12 @@ npm run lint
 
 - `TOR_CONTROL_PORT` - Tor control port (default: 9051)
 - `PORT` - Flask server port (default: 5000)
-- `FLASK_ENV` - Development/production mode
+- `FLASK_DEBUG` - Flask debug mode (`1` enables debug)
+- `OPSECHAT_RATE_LIMIT_CHAT_CREATE` - Override `/chat/create` limit (`<max>/<window_seconds>`, e.g. `3/60`)
+- `OPSECHAT_RATE_LIMIT_CHAT_MESSAGE` - Override room message POST limit (`<max>/<window_seconds>`)
+- `OPSECHAT_RATE_LIMIT_DM_SEND` - Override DM send limit (`<max>/<window_seconds>`)
+
+For full rate-limit behavior (including 429 backoff metadata and client retry behavior), see [RATE_LIMITING.md](RATE_LIMITING.md).
 
 ## Troubleshooting
 
