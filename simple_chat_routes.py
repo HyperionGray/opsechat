@@ -222,6 +222,32 @@ def cleanup_rate_limits():
             del _rate_limit_store[sid]
 
 
+def get_runtime_stats():
+    """
+    Get lightweight runtime stats for health/readiness endpoints.
+
+    Returns:
+        dict: active_rooms, active_direct_messages, rate_limited_sessions
+    """
+    # Keep counts meaningful by evicting stale entries first.
+    cleanup_old_rooms()
+    cleanup_old_dms()
+    cleanup_rate_limits()
+
+    with rooms_lock:
+        active_rooms = len(chat_rooms)
+    with dm_lock:
+        active_direct_messages = len(direct_messages)
+    with _rate_limit_lock:
+        rate_limited_sessions = len(_rate_limit_store)
+
+    return {
+        "active_rooms": active_rooms,
+        "active_direct_messages": active_direct_messages,
+        "rate_limited_sessions": rate_limited_sessions,
+    }
+
+
 # Background cleanup thread
 def cleanup_loop():
     """Continuously clean up old messages and rooms"""

@@ -321,18 +321,63 @@ def _read_version() -> str:
         return 'unknown'
 
 
-def get_health_status() -> Dict[str, Any]:
-    """Get application health status"""
+def get_liveness_status() -> Dict[str, Any]:
+    """Liveness probe: process is running."""
     return {
-        'status': 'healthy',
+        'status': 'alive',
+        'timestamp': datetime.utcnow().isoformat(),
+        'version': _read_version()
+    }
+
+
+def get_readiness_status(runtime_stats: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Readiness probe: app can serve traffic safely."""
+    apm.update_system_metrics()
+    max_memory_mb = float(os.environ.get('OPSECHAT_HEALTH_MAX_MEMORY_MB', '1024'))
+    memory_usage_mb = apm.metrics['system']['memory_usage_mb']
+    # memory_usage_mb == 0 means psutil isn't available; don't fail readiness for that.
+    memory_ok = memory_usage_mb == 0 or memory_usage_mb <= max_memory_mb
+
+    checks = {
+        'memory_usage': 'ok' if memory_ok else 'high',
+        'chat_runtime': 'ok',
+    }
+
+    runtime = runtime_stats or {
+        'active_rooms': 0,
+        'active_direct_messages': 0,
+        'rate_limited_sessions': 0,
+    }
+
+    return {
+        'status': 'ready' if memory_ok else 'not_ready',
+        'timestamp': datetime.utcnow().isoformat(),
+        'version': _read_version(),
+        'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
+        'checks': checks,
+        'limits': {
+            'max_memory_mb': max_memory_mb,
+        },
+        'runtime': runtime,
+    }
+
+
+def get_health_status(runtime_stats: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Operational health summary used by /health."""
+    readiness = get_readiness_status(runtime_stats=runtime_stats)
+    runtime = readiness['runtime']
+    checks = readiness['checks']
+
+    status = 'healthy' if readiness['status'] == 'ready' else 'degraded'
+    return {
+        'status': status,
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
-        'checks': {
-            'tor_connection': 'unknown',  # Would need to check actual Tor status
-            'memory_usage': 'ok',
-            'disk_space': 'ok'
-        }
+        'checks': checks,
+        'active_rooms': runtime['active_rooms'],
+        'active_direct_messages': runtime['active_direct_messages'],
+        'rate_limited_sessions': runtime['rate_limited_sessions'],
     }
 
 # Security event logging

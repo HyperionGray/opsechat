@@ -187,8 +187,10 @@ Tests cover:
 - UI functionality (script and noscript modes)
 - Security headers validation
 - Responsive design
+- Operational health probes (`/health`, `/health/live`, `/health/ready`)
 
 For full testing documentation, see [Testing Guide](docs/user-guide/TESTING.md).
+For probe details, see [Health Checks](docs/user-guide/HEALTH_CHECKS.md).
 
 
 How it works
