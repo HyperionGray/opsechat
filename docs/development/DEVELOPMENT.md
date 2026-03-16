@@ -77,8 +77,7 @@ These are development and testing utilities that help during development:
 - **`comprehensive_functionality_test.py`** - Full functional test suite
 
 ### Main Application Files
-- **`runserver.py`** - Main entry point (legacy monolithic)
-- **`runserver_refactored.py`** - Refactored version (blueprint-based)
+- **`runserver.py`** - Main server entry point (app-factory based)
 - **`app_factory.py`** - Flask app factory pattern
 - **`chat-room.py`** - Standalone chat room creator
 - **`tui-server.py`** - Terminal UI server
@@ -222,6 +221,9 @@ npm run lint
 - `TOR_CONTROL_PORT` - Tor control port (default: 9051)
 - `PORT` - Flask server port (default: 5000)
 - `FLASK_ENV` - Development/production mode
+- `OPSECHAT_CHAT_CREATE_MAX_REQUESTS` / `OPSECHAT_CHAT_CREATE_WINDOW_SECONDS` - Chat room creation in-memory rate limit tuning
+- `OPSECHAT_CHAT_MESSAGE_MAX_REQUESTS` / `OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS` - Chat message in-memory rate limit tuning
+- `OPSECHAT_DM_SEND_MAX_REQUESTS` / `OPSECHAT_DM_SEND_WINDOW_SECONDS` - DM send in-memory rate limit tuning
 
 ## Troubleshooting
 

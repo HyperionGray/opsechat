@@ -5,7 +5,7 @@ This module handles Flask application creation and configuration,
 extracted from runserver.py to improve code organization.
 """
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -15,17 +15,6 @@ except ModuleNotFoundError:
         # This keeps containerized installs working even if rate_limiter.py
         # was not included in the image build.
         return app
-
-
-def _read_version():
-    """Read application version from VERSION file"""
-    version_file = os.path.join(os.path.dirname(__file__), "VERSION")
-    try:
-        with open(version_file) as f:
-            return f.read().strip()
-    except OSError:
-        return "unknown"
-
 
 def create_app():
     """Create and configure the Flask application"""
@@ -97,6 +86,33 @@ def create_app():
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
         return response
+
+    @app.errorhandler(429)
+    def handle_rate_limit_exceeded(error):
+        """
+        Return structured JSON on 429 responses so clients can back off.
+        Works for Flask-Limiter rejections as well as generic 429 errors.
+        """
+        retry_after = None
+        limiter_response = getattr(error, "response", None)
+        if limiter_response is not None:
+            retry_header = limiter_response.headers.get("Retry-After")
+            if retry_header and retry_header.isdigit():
+                retry_after = int(retry_header)
+
+        payload = {
+            "error": "Rate limit exceeded. Please wait and retry.",
+            "error_code": "rate_limit_exceeded",
+            "path": request.path,
+        }
+        if retry_after is not None:
+            payload["retry_after_seconds"] = retry_after
+
+        response = jsonify(payload)
+        response.status_code = 429
+        if retry_after is not None:
+            response.headers["Retry-After"] = str(retry_after)
+        return response
     
     # Register chat routes
     register_chat_routes(app, chatlines, chatters, id_generator, get_random_color,
@@ -119,21 +135,17 @@ def create_app():
 
     @app.route('/health', methods=["GET"])
     def health():
-        return jsonify(get_health_status())
+        from simple_chat_routes import chat_rooms, rooms_lock, get_rate_limit_config
+
+        health_data = get_health_status()
+        with rooms_lock:
+            health_data["active_rooms"] = len(chat_rooms)
+        health_data["rate_limits"] = get_rate_limit_config()
+        return jsonify(health_data)
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # CHANGELOG (AI assistant):
-    # - Made rate_limiter import optional with a no-op fallback to prevent
-    #   ModuleNotFoundError in containerized installs that omit rate_limiter.py.
-    #
-    # Remaining checklist (non-blocking for runtime):
-    # - Update container/Podman build configuration to ensure rate_limiter.py
-    #   is included in the image (e.g., COPY list or packaging config).
-    # - Once packaging reliably includes rate_limiter.py, consider removing
-    #   the fallback or turning it into an explicit configuration option.
     
     return app

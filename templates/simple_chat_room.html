@@ -216,14 +216,50 @@
         let encryptionEnabled = false;
         let encryptionKey = null;
         let pollInterval = null;
+        let sendCooldownInterval = null;
+        let sendCooldownRemaining = 0;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+
+        function setComposerEnabled(enabled) {
+            const input = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendBtn');
+            const shouldEnable = enabled && securityWarningAccepted;
+            input.disabled = !shouldEnable;
+            sendBtn.disabled = !shouldEnable;
+        }
+
+        function startSendCooldown(seconds) {
+            if (!Number.isFinite(seconds) || seconds <= 0) {
+                return;
+            }
+
+            sendCooldownRemaining = Math.ceil(seconds);
+            setComposerEnabled(false);
+            showStatus(`Rate limited. Retry in ${sendCooldownRemaining}s.`, 1000);
+
+            if (sendCooldownInterval) {
+                clearInterval(sendCooldownInterval);
+            }
+
+            sendCooldownInterval = setInterval(() => {
+                sendCooldownRemaining -= 1;
+                if (sendCooldownRemaining <= 0) {
+                    clearInterval(sendCooldownInterval);
+                    sendCooldownInterval = null;
+                    sendCooldownRemaining = 0;
+                    setComposerEnabled(true);
+                    showStatus('Rate limit window ended. You can send again.', 2000);
+                    return;
+                }
+                showStatus(`Rate limited. Retry in ${sendCooldownRemaining}s.`, 1000);
+            }, 1000);
+        }
         
         // Show security warning on first load
         function showSecurityWarning() {
             if (!securityWarningAccepted) {
                 document.getElementById('securityWarning').style.display = 'block';
-                document.getElementById('messageInput').disabled = true;
-                document.getElementById('sendBtn').disabled = true;
+                setComposerEnabled(false);
             }
         }
         
@@ -231,8 +267,7 @@
             securityWarningAccepted = true;
             sessionStorage.setItem('securityWarningAccepted', 'true');
             document.getElementById('securityWarning').style.display = 'none';
-            document.getElementById('messageInput').disabled = false;
-            document.getElementById('sendBtn').disabled = false;
+            setComposerEnabled(true);
             document.getElementById('messageInput').focus();
         }
         
@@ -397,6 +432,10 @@
             const message = input.value.trim();
             
             if (!message) return;
+            if (sendCooldownRemaining > 0) {
+                showStatus(`Rate limited. Retry in ${sendCooldownRemaining}s.`, 2000);
+                return;
+            }
             
             let messageToSend = message;
             
@@ -418,7 +457,23 @@
                     input.value = '';
                     await pollMessages();
                 } else {
-                    showStatus('Error sending message');
+                    let data = null;
+                    try {
+                        data = await response.json();
+                    } catch (e) {
+                        data = null;
+                    }
+
+                    if (response.status === 429) {
+                        const retryAfterHeader = Number(response.headers.get('Retry-After'));
+                        const retryAfterBody = data && Number(data.retry_after_seconds);
+                        const retryAfter = retryAfterHeader || retryAfterBody || 5;
+                        showStatus((data && data.error) || 'Rate limit exceeded.', 2000);
+                        startSendCooldown(retryAfter);
+                        return;
+                    }
+
+                    showStatus((data && data.error) || 'Error sending message');
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);
@@ -501,6 +556,9 @@
         window.addEventListener('beforeunload', function() {
             if (pollInterval) {
                 clearInterval(pollInterval);
+            }
+            if (sendCooldownInterval) {
+                clearInterval(sendCooldownInterval);
             }
         });
     </script>

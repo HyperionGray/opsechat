@@ -172,6 +172,50 @@ When limit exceeded:
 
 ---
 
+## ⏱️ Chat Rate-Limit Backoff Metadata (NEW)
+
+### What Changed
+Chat write endpoints now return structured rate-limit metadata so clients can back off cleanly instead of spamming retries.
+
+### Endpoints Covered
+- `POST /chat/create`
+- `POST /chat/room/{room_id}/messages`
+- `POST /chat/dm/send`
+
+### 429 Response Format
+```json
+{
+  "error": "Rate limit exceeded. Please wait and retry.",
+  "error_code": "rate_limit_exceeded",
+  "path": "/chat/create",
+  "retry_after_seconds": 12
+}
+```
+
+Headers:
+```text
+Retry-After: 12
+```
+
+### Browser Behavior
+The chat room UI now:
+1. Reads `Retry-After` (or `retry_after_seconds`) on `429`.
+2. Disables the message composer during cooldown.
+3. Shows a second-by-second countdown until sending is re-enabled.
+
+### Runtime Configuration
+In-memory chat limits can now be tuned via environment variables:
+- `OPSECHAT_CHAT_CREATE_MAX_REQUESTS`
+- `OPSECHAT_CHAT_CREATE_WINDOW_SECONDS`
+- `OPSECHAT_CHAT_MESSAGE_MAX_REQUESTS`
+- `OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS`
+- `OPSECHAT_DM_SEND_MAX_REQUESTS`
+- `OPSECHAT_DM_SEND_WINDOW_SECONDS`
+
+Invalid or non-positive values fall back to safe defaults.
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose
