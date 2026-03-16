@@ -5,8 +5,10 @@ This module handles Flask application creation and configuration,
 extracted from runserver.py to improve code organization.
 """
 
+import os
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
+from rate_limit_config import load_rate_limit_settings
 try:
     from rate_limiter import init_limiter
 except ModuleNotFoundError:
@@ -30,6 +32,11 @@ def _read_version():
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
+
+    # Load tunable rate limit configuration from environment.
+    rate_limit_settings = load_rate_limit_settings()
+    app.config["SIMPLE_CHAT_RATE_LIMITS"] = rate_limit_settings["simple_limits"]
+    app.config["FLASK_LIMIT_STRINGS"] = rate_limit_settings["flask_limits"]
     
     # Set secret key for sessions
     app.secret_key = id_generator(size=64)
