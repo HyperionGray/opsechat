@@ -8,7 +8,7 @@ import json
 import time
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from functools import wraps
 import traceback
@@ -323,11 +323,21 @@ def _read_version() -> str:
 
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
+    active_rooms = 0
+    try:
+        from simple_chat_routes import chat_rooms, rooms_lock
+        with rooms_lock:
+            active_rooms = len(chat_rooms)
+    except Exception:
+        # Keep health endpoint resilient even when chat subsystem is unavailable.
+        active_rooms = 0
+
     return {
         'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
+        'active_rooms': active_rooms,
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',
