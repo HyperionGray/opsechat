@@ -311,6 +311,18 @@ def monitor_performance(operation_name: str):
 apm = ApplicationPerformanceMonitor()
 
 # Health check endpoint data
+def _get_active_room_count() -> int:
+    """
+    Best-effort active room count for health/status consumers.
+    """
+    try:
+        from simple_chat_routes import chat_rooms, rooms_lock
+        with rooms_lock:
+            return len(chat_rooms)
+    except Exception:
+        return 0
+
+
 def _read_version() -> str:
     """Read version from VERSION file, falling back to 'unknown'"""
     version_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'VERSION')
@@ -328,6 +340,7 @@ def get_health_status() -> Dict[str, Any]:
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
+        'active_rooms': _get_active_room_count(),
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',
