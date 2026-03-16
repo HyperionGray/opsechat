@@ -170,6 +170,23 @@ When limit exceeded:
 ❌ Rate limit exceeded. You can send 10 emails per hour. Try again in 42 minutes.
 ```
 
+### Chat API Backoff Metadata
+Chat write endpoints now return structured retry information on rate limit responses:
+- `HTTP 429` with `Retry-After` header (seconds)
+- JSON body with:
+  - `error`
+  - `retry_after`
+  - `rate_limited`
+  - `endpoint`
+
+This enables deterministic client backoff behavior instead of guesswork.
+
+### Automatic Browser Backoff
+The chat web UI now honors rate-limit windows automatically:
+- Send controls are temporarily disabled during cooldown
+- A second-by-second countdown is shown to the user
+- Controls are re-enabled automatically when cooldown expires
+
 ---
 
 ## 🌐 Domain Rotation CLI

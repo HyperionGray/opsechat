@@ -216,6 +216,8 @@
         let encryptionEnabled = false;
         let encryptionKey = null;
         let pollInterval = null;
+        let sendBackoffUntil = 0;
+        let sendBackoffTimer = null;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
         
         // Show security warning on first load
@@ -231,8 +233,8 @@
             securityWarningAccepted = true;
             sessionStorage.setItem('securityWarningAccepted', 'true');
             document.getElementById('securityWarning').style.display = 'none';
-            document.getElementById('messageInput').disabled = false;
-            document.getElementById('sendBtn').disabled = false;
+            const nowSeconds = Math.floor(Date.now() / 1000);
+            setSendControlsEnabled(sendBackoffUntil <= nowSeconds);
             document.getElementById('messageInput').focus();
         }
         
@@ -254,23 +256,6 @@
         }
         
         // Simple encryption using AES-GCM with Web Crypto API
-        async function generateKey() {
-            const key = await window.crypto.subtle.generateKey(
-                {
-                    name: "AES-GCM",
-                    length: 256
-                },
-                true,
-                ["encrypt", "decrypt"]
-            );
-            return key;
-        }
-        
-        async function exportKey(key) {
-            const exported = await window.crypto.subtle.exportKey("raw", key);
-            return Array.from(new Uint8Array(exported));
-        }
-        
         async function importKey(keyArray) {
             const key = await window.crypto.subtle.importKey(
                 "raw",
@@ -343,6 +328,55 @@
                 statusMsg.textContent = '';
             }, duration);
         }
+
+        function parseRetryAfter(response, data) {
+            if (data && Number.isInteger(data.retry_after) && data.retry_after > 0) {
+                return data.retry_after;
+            }
+
+            const retryHeader = response.headers.get('Retry-After');
+            if (!retryHeader) {
+                return 0;
+            }
+
+            const parsed = parseInt(retryHeader, 10);
+            return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+        }
+
+        function setSendControlsEnabled(enabled) {
+            document.getElementById('messageInput').disabled = !enabled || !securityWarningAccepted;
+            document.getElementById('sendBtn').disabled = !enabled || !securityWarningAccepted;
+        }
+
+        function applySendBackoff(seconds) {
+            if (!seconds || seconds < 1) return;
+
+            const nowSeconds = Math.floor(Date.now() / 1000);
+            sendBackoffUntil = Math.max(sendBackoffUntil, nowSeconds + seconds);
+            setSendControlsEnabled(false);
+
+            if (sendBackoffTimer) {
+                clearInterval(sendBackoffTimer);
+            }
+
+            const tick = () => {
+                const remaining = sendBackoffUntil - Math.floor(Date.now() / 1000);
+                if (remaining <= 0) {
+                    clearInterval(sendBackoffTimer);
+                    sendBackoffTimer = null;
+                    sendBackoffUntil = 0;
+                    setSendControlsEnabled(true);
+                    showStatus('Rate limit cooldown ended. You can send again.', 2000);
+                    return;
+                }
+
+                document.getElementById('statusMsg').textContent =
+                    `Rate limited. Retry in ${remaining}s.`;
+            };
+
+            tick();
+            sendBackoffTimer = setInterval(tick, 1000);
+        }
         
         function scrollToBottom() {
             const container = document.getElementById('messagesContainer');
@@ -397,6 +431,13 @@
             const message = input.value.trim();
             
             if (!message) return;
+
+            const nowSeconds = Math.floor(Date.now() / 1000);
+            if (sendBackoffUntil > nowSeconds) {
+                const remaining = sendBackoffUntil - nowSeconds;
+                showStatus(`Rate limited. Retry in ${remaining}s.`, 1500);
+                return;
+            }
             
             let messageToSend = message;
             
@@ -418,7 +459,23 @@
                     input.value = '';
                     await pollMessages();
                 } else {
-                    showStatus('Error sending message');
+                    let data = null;
+                    try {
+                        data = await response.json();
+                    } catch (e) {
+                        data = null;
+                    }
+
+                    if (response.status === 429) {
+                        const retryAfter = parseRetryAfter(response, data);
+                        if (retryAfter > 0) {
+                            applySendBackoff(retryAfter);
+                            return;
+                        }
+                    }
+
+                    const errorMessage = data && data.error ? data.error : 'Error sending message';
+                    showStatus(errorMessage);
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);
@@ -501,6 +558,9 @@
         window.addEventListener('beforeunload', function() {
             if (pollInterval) {
                 clearInterval(pollInterval);
+            }
+            if (sendBackoffTimer) {
+                clearInterval(sendBackoffTimer);
             }
         });
     </script>

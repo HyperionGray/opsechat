@@ -162,8 +162,63 @@
     
     <script>
         // Simple room creation with no external dependencies
+        let createBackoffUntil = 0;
+        let createBackoffTimer = null;
+
+        function parseRetryAfter(response, data) {
+            if (data && Number.isInteger(data.retry_after) && data.retry_after > 0) {
+                return data.retry_after;
+            }
+
+            const retryHeader = response.headers.get('Retry-After');
+            if (!retryHeader) {
+                return 0;
+            }
+
+            const parsed = parseInt(retryHeader, 10);
+            return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+        }
+
+        function applyCreateBackoff(seconds) {
+            if (!seconds || seconds < 1) return;
+
+            const button = document.getElementById('createRoomBtn');
+            const statusDiv = document.getElementById('status');
+            const nowSeconds = Math.floor(Date.now() / 1000);
+            createBackoffUntil = Math.max(createBackoffUntil, nowSeconds + seconds);
+            button.disabled = true;
+
+            if (createBackoffTimer) {
+                clearInterval(createBackoffTimer);
+            }
+
+            const tick = () => {
+                const remaining = createBackoffUntil - Math.floor(Date.now() / 1000);
+                if (remaining <= 0) {
+                    clearInterval(createBackoffTimer);
+                    createBackoffTimer = null;
+                    createBackoffUntil = 0;
+                    button.disabled = false;
+                    statusDiv.textContent = 'Rate limit cooldown ended. You can create a room again.';
+                    return;
+                }
+
+                statusDiv.textContent = `Rate limited. Retry in ${remaining}s.`;
+            };
+
+            tick();
+            createBackoffTimer = setInterval(tick, 1000);
+        }
+
         document.getElementById('createRoomBtn').addEventListener('click', async function() {
             const statusDiv = document.getElementById('status');
+            const nowSeconds = Math.floor(Date.now() / 1000);
+            if (createBackoffUntil > nowSeconds) {
+                const remaining = createBackoffUntil - nowSeconds;
+                statusDiv.textContent = `Rate limited. Retry in ${remaining}s.`;
+                return;
+            }
+
             statusDiv.textContent = 'Creating room...';
             
             try {
@@ -174,11 +229,19 @@
                     }
                 });
                 
+                const data = await response.json().catch(() => ({}));
+
                 if (!response.ok) {
-                    throw new Error('Failed to create room');
+                    if (response.status === 429) {
+                        const retryAfter = parseRetryAfter(response, data);
+                        if (retryAfter > 0) {
+                            applyCreateBackoff(retryAfter);
+                            return;
+                        }
+                    }
+
+                    throw new Error(data.error || 'Failed to create room');
                 }
-                
-                const data = await response.json();
                 
                 if (data.success) {
                     statusDiv.innerHTML = `Room created! Redirecting...<br><a href="${data.room_url}">${window.location.origin}${data.room_url}</a>`;
@@ -190,6 +253,12 @@
                 }
             } catch (error) {
                 statusDiv.textContent = 'Error: ' + error.message;
+            }
+        });
+
+        window.addEventListener('beforeunload', function() {
+            if (createBackoffTimer) {
+                clearInterval(createBackoffTimer);
             }
         });
     </script>
