@@ -131,6 +131,16 @@ First-time users see a prominent security warning:
 - **VIOLATIONS = CONSEQUENCES** - Logs preserved, not burned, potential reporting
 - Users must click "I UNDERSTAND AND AGREE" before chatting
 
+### Adaptive Chat Backoff
+Chat write endpoints now apply adaptive retry backoff for repeated rate-limit violations:
+- Base per-endpoint sliding windows are still enforced (`/chat/create`, room message POSTs, and DM send)
+- If a client keeps sending requests while blocked, cooldown expands exponentially (capped)
+- 429 responses now include `retry_after` in JSON plus standard retry metadata headers:
+  - `Retry-After`
+  - `X-RateLimit-Limit`
+  - `X-RateLimit-Remaining`
+  - `X-RateLimit-Reset`
+
 ---
 
 ## 📧 Email Rate Limiting

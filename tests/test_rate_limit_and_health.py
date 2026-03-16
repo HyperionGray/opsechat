@@ -10,7 +10,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_backoff_store,
+    _rate_limit_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -21,9 +26,10 @@ _test_app = create_app()
 # ---------------------------------------------------------------------------
 
 def _clear_store():
-    """Helper: wipe the rate limit store between tests."""
+    """Helper: wipe all in-memory rate-limit stores between tests."""
     with _rate_limit_lock:
         _rate_limit_store.clear()
+        _rate_limit_backoff_store.clear()
 
 
 def test_rate_limit_allows_requests_within_window():
@@ -87,6 +93,30 @@ def test_rate_limit_chat_message_limit():
     assert retry_after >= 1
 
 
+def test_rate_limit_backoff_escalates_for_repeated_violations():
+    _clear_store()
+    sid = "session-backoff"
+
+    # Hit dm_send limit (5 per minute), then repeatedly violate while blocked.
+    for _ in range(5):
+        allowed, _ = check_rate_limit(sid, "dm_send")
+        assert allowed is True
+
+    allowed, retry_1 = check_rate_limit(sid, "dm_send")
+    assert allowed is False
+    assert retry_1 >= 1
+
+    allowed, retry_2 = check_rate_limit(sid, "dm_send")
+    assert allowed is False
+
+    allowed, retry_3 = check_rate_limit(sid, "dm_send")
+    assert allowed is False
+
+    # Adaptive cooldown should never shrink under repeated violations.
+    assert retry_2 >= retry_1
+    assert retry_3 >= retry_2
+
+
 # ---------------------------------------------------------------------------
 # Health endpoint integration tests
 # ---------------------------------------------------------------------------
@@ -113,3 +143,32 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_chat_message_rate_limit_response_has_retry_headers():
+    _clear_store()
+    client = _test_app.test_client()
+
+    create_resp = client.post("/chat/create", content_type="application/json")
+    assert create_resp.status_code == 200
+    room_id = create_resp.get_json()["room_id"]
+
+    for i in range(30):
+        resp = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": f"hello {i}"},
+        )
+        assert resp.status_code == 200
+
+    blocked = client.post(
+        f"/chat/room/{room_id}/messages",
+        json={"message": "hello blocked"},
+    )
+    assert blocked.status_code == 429
+    assert "Retry-After" in blocked.headers
+    assert blocked.headers.get("X-RateLimit-Limit") == "30"
+    assert blocked.headers.get("X-RateLimit-Remaining") == "0"
+
+    payload = blocked.get_json()
+    assert payload is not None
+    assert payload.get("retry_after", 0) >= 1

@@ -1,6 +1,6 @@
 # Production TODO List
 
-**Last Updated:** February 23, 2026  
+**Last Updated:** March 16, 2026  
 **Priority Order:** Critical → High → Medium → Low
 
 ---
@@ -82,7 +82,7 @@
   - [x] Implement per-session/IP limits (Flask-Limiter)
   - [x] Add per-endpoint throttling (`/chat/create`, `/chat/*/messages`, `/chat/dm/send`)
   - [ ] Configure reasonable thresholds (review after load testing)
-  - [ ] Add backoff/retry logic
+  - [x] Add backoff/retry logic
 - [ ] Integrate second domain registrar API
   - [ ] Choose registrar (Namecheap recommended)
   - [ ] Implement API client

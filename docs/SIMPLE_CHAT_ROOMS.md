@@ -112,6 +112,11 @@ This prevents memory forensics from recovering deleted messages.
 - All message data is overwritten before room deletion
 - No persistent storage - everything is in-memory
 
+### Adaptive Rate-Limit Backoff
+- Write endpoints enforce sliding-window limits per session
+- Repeated violations trigger an adaptive cooldown (exponential backoff)
+- 429 responses include `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`
+
 ### Username Randomization
 - Usernames are server-generated and non-reusable
 - Format: `[Adjective][Noun][4-digit-number]`
@@ -140,6 +145,7 @@ Response: {"success": true, "room_id": "...", "room_url": "/chat/room/..."}
 GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
+429 Headers: Retry-After, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset
 ```
 
 ### Encryption Implementation
