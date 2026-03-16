@@ -242,6 +242,31 @@ cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True)
 cleanup_thread.start()
 
 
+def get_runtime_stats():
+    """
+    Return live in-memory chat/runtime counters for health reporting.
+
+    Returns:
+        dict: runtime counters including room, DM, and rate-limit state.
+    """
+    with rooms_lock:
+        active_rooms = len(chat_rooms)
+        active_room_users = sum(room.get_user_count() for room in chat_rooms.values())
+
+    with dm_lock:
+        active_direct_messages = len(direct_messages)
+
+    with _rate_limit_lock:
+        tracked_rate_limit_sessions = len(_rate_limit_store)
+
+    return {
+        "active_rooms": active_rooms,
+        "active_room_users": active_room_users,
+        "active_direct_messages": active_direct_messages,
+        "tracked_rate_limit_sessions": tracked_rate_limit_sessions,
+    }
+
+
 def generate_secure_room_id(length=32):
     """Generate cryptographically secure, non-discoverable room ID"""
     return secrets.token_urlsafe(length)

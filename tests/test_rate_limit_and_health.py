@@ -105,6 +105,9 @@ def test_health_endpoint_returns_json_with_required_fields():
     assert data.get("status") == "healthy"
     assert "version" in data
     assert "active_rooms" in data
+    assert "active_room_users" in data
+    assert "active_direct_messages" in data
+    assert "tracked_rate_limit_sessions" in data
 
 
 def test_health_endpoint_active_rooms_is_integer():
@@ -113,3 +116,28 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_runtime_counters_are_non_negative_integers():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    data = response.get_json()
+
+    for key in (
+        "active_room_users",
+        "active_direct_messages",
+        "tracked_rate_limit_sessions",
+    ):
+        assert isinstance(data[key], int)
+        assert data[key] >= 0
+
+
+def test_health_endpoint_reflects_room_creation():
+    client = _test_app.test_client()
+    before = client.get("/health").get_json()["active_rooms"]
+
+    create_response = client.post("/chat/create", json={})
+    assert create_response.status_code == 200
+
+    after = client.get("/health").get_json()["active_rooms"]
+    assert after >= before + 1

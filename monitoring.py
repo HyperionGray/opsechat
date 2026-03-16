@@ -321,19 +321,36 @@ def _read_version() -> str:
         return 'unknown'
 
 
-def get_health_status() -> Dict[str, Any]:
+def get_health_status(runtime_stats: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Get application health status"""
-    return {
+    health = {
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
+        'active_rooms': 0,
+        'active_room_users': 0,
+        'active_direct_messages': 0,
+        'tracked_rate_limit_sessions': 0,
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',
             'disk_space': 'ok'
         }
     }
+
+    if runtime_stats:
+        for key in (
+            'active_rooms',
+            'active_room_users',
+            'active_direct_messages',
+            'tracked_rate_limit_sessions',
+        ):
+            value = runtime_stats.get(key)
+            if isinstance(value, int) and value >= 0:
+                health[key] = value
+
+    return health
 
 # Security event logging
 class SecurityEventLogger:
