@@ -29,6 +29,7 @@ Installation and deployment guides for different environments.
 - [Installation Guide](setup/INSTALL.md) - Installation instructions
 - [Docker Guide](setup/DOCKER.md) - Docker/Podman containerization
 - [Quadlets Guide](setup/QUADLETS.md) - Systemd quadlet integration
+- [Rate Limiting Configuration](setup/RATE_LIMITING.md) - Configure per-endpoint chat limits
 - [AWS Deployment](setup/AWS_DEPLOYMENT.md) - AWS cloud deployment
 - [Amazon Q Setup](setup/AMAZON_Q_SETUP_GUIDE.md) - Amazon Q integration
 - [Domain API Setup](setup/DOMAIN_API_SETUP.md) - Domain registrar API configuration

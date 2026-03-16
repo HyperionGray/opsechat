@@ -10,7 +10,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_lock,
+    _load_rate_limits_from_env,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -87,6 +92,42 @@ def test_rate_limit_chat_message_limit():
     assert retry_after >= 1
 
 
+def test_load_rate_limits_from_env_overrides_values():
+    env = {
+        "OPSECHAT_CHAT_CREATE_MAX_PER_MINUTE": "7",
+        "OPSECHAT_CHAT_CREATE_MAX_PER_HOUR": "50",
+        "OPSECHAT_CHAT_MESSAGE_MAX_PER_MINUTE": "42",
+        "OPSECHAT_CHAT_MESSAGE_MAX_PER_HOUR": "0",
+        "OPSECHAT_DM_SEND_MAX_PER_MINUTE": "8",
+        "OPSECHAT_DM_SEND_MAX_PER_HOUR": "25",
+    }
+
+    limits = _load_rate_limits_from_env(env)
+
+    assert limits["chat_create"]["max_requests"] == 7
+    assert limits["chat_create"]["max_requests_per_hour"] == 50
+    assert limits["chat_message"]["max_requests"] == 42
+    assert limits["chat_message"]["max_requests_per_hour"] == 0
+    assert limits["dm_send"]["max_requests"] == 8
+    assert limits["dm_send"]["max_requests_per_hour"] == 25
+
+
+def test_load_rate_limits_from_env_uses_defaults_on_invalid_values():
+    env = {
+        "OPSECHAT_CHAT_CREATE_MAX_PER_MINUTE": "bad-value",
+        "OPSECHAT_CHAT_CREATE_MAX_PER_HOUR": "-1",
+        "OPSECHAT_CHAT_MESSAGE_MAX_PER_MINUTE": "0",
+        "OPSECHAT_DM_SEND_MAX_PER_MINUTE": "-8",
+    }
+
+    limits = _load_rate_limits_from_env(env)
+
+    assert limits["chat_create"]["max_requests"] == 3
+    assert limits["chat_create"]["max_requests_per_hour"] == 10
+    assert limits["chat_message"]["max_requests"] == 30
+    assert limits["dm_send"]["max_requests"] == 5
+
+
 # ---------------------------------------------------------------------------
 # Health endpoint integration tests
 # ---------------------------------------------------------------------------
@@ -113,3 +154,15 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_chat_rate_limits_endpoint_returns_config():
+    client = _test_app.test_client()
+    response = client.get("/chat/rate-limits")
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "rate_limits" in data
+    assert "chat_create" in data["rate_limits"]
+    assert "chat_message" in data["rate_limits"]
+    assert "dm_send" in data["rate_limits"]
