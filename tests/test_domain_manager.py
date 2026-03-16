@@ -75,6 +75,13 @@ class TestPorkbunAPIClient:
         assert result["tld"] == "com"
         assert result["registration"] == "9.99"
 
+    @patch('domain_manager.requests.Session')
+    def test_secret_key_alias(self, mock_session_class):
+        """Backward-compatible secret_key alias should exist."""
+        mock_session_class.return_value = Mock()
+        client = PorkbunAPIClient("test_key", "test_secret")
+        assert client.secret_key == "test_secret"
+
 
 class TestDomainRotationManager:
     """Test domain rotation manager"""
@@ -174,3 +181,50 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_and_get_config(self):
+        """Test manager configure/get_config compatibility APIs."""
+        manager = DomainRotationManager()
+        result = manager.configure("pk_test_1234", "sk_test_5678", monthly_budget=25.0)
+
+        assert result["configured"] is True
+        assert result["registrar"] == "porkbun"
+        assert result["monthly_budget"] == 25.0
+        assert result["api_key_masked"].endswith("1234")
+
+    def test_set_monthly_budget_validation(self):
+        """Budget updates should reject invalid values."""
+        manager = DomainRotationManager()
+        with pytest.raises(ValueError):
+            manager.set_monthly_budget(0)
+
+    def test_find_cheap_available_domain_bad_price(self):
+        """Malformed price responses should be skipped safely."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "badprice.xyz",
+            "price": "not-a-number"
+        }
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_attempts=1)
+        assert result is None
+
+    def test_rotate_domain_with_details(self):
+        """Detailed rotation payload should be JSON-friendly."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test789.xyz",
+            "price": 2.49
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "test789.xyz"
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        result = manager.rotate_domain_with_details()
+        assert result["success"] is True
+        assert result["domain"] == manager.active_domain

@@ -98,6 +98,25 @@ The opsechat domain manager is designed to be extensible. Future registrar suppo
 
 3. Click "Configure"
 
+### Via CLI (Fast Local Workflow)
+
+For operators who prefer terminal-only workflows:
+
+```bash
+# Configure credentials and budget
+python domain_rotation_cli.py config
+
+# Rotate directly (new simple wrapper)
+python rotate-domain.py
+
+# Optional helper actions
+python rotate-domain.py --status
+python rotate-domain.py --list
+python rotate-domain.py --search
+```
+
+The CLI stores local configuration in `~/.opsechat/domain_config.json` with `0600` file permissions.
+
 ### Via Environment Variables (Advanced)
 
 For container deployments, you can set:
@@ -136,6 +155,9 @@ http://yourservice.onion/{path}/email/config
 ### API Key Storage
 
 ⚠️ **Important**: API keys are stored in-memory only. They are NOT persisted to disk. After restart, you must reconfigure.
+
+For the standalone CLI tool (`domain_rotation_cli.py` / `rotate-domain.py`), credentials are persisted in
+`~/.opsechat/domain_config.json` so repeated rotations are possible without re-entry on every run.
 
 For persistent configuration:
 - Use environment variables in your deployment

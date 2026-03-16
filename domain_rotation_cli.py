@@ -19,7 +19,8 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
-from domain_manager import PorkbunAPIClient, DomainRotationManager
+from datetime import datetime
+from domain_manager import DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
@@ -31,7 +32,7 @@ def load_config():
         return {}
     
     try:
-        with open(CONFIG_FILE, 'r') as f:
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
         print(f"Error loading config: {e}")
@@ -43,7 +44,7 @@ def save_config(config):
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     
     try:
-        with open(CONFIG_FILE, 'w') as f:
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2)
         os.chmod(CONFIG_FILE, 0o600)  # Secure permissions
         print(f"Configuration saved to {CONFIG_FILE}")
@@ -93,6 +94,48 @@ def configure_api():
     print("\n✅ Configuration updated successfully!")
 
 
+def _serialize_owned_domains(owned_domains):
+    """Convert datetime values to ISO strings for JSON storage."""
+    serialized = []
+    for domain in owned_domains:
+        entry = dict(domain)
+        for key in ("purchased_at", "expires_at"):
+            value = entry.get(key)
+            if isinstance(value, datetime):
+                entry[key] = value.isoformat()
+        serialized.append(entry)
+    return serialized
+
+
+def _deserialize_owned_domains(owned_domains):
+    """Convert persisted ISO strings back into datetimes when possible."""
+    hydrated = []
+    for domain in owned_domains or []:
+        entry = dict(domain)
+        for key in ("purchased_at", "expires_at"):
+            value = entry.get(key)
+            if isinstance(value, str):
+                try:
+                    entry[key] = datetime.fromisoformat(value)
+                except ValueError:
+                    # Keep raw value if parsing fails for backward compatibility.
+                    pass
+        hydrated.append(entry)
+    return hydrated
+
+
+def _format_dt(value):
+    """Render datetime-like values safely for CLI output."""
+    if isinstance(value, datetime):
+        return value.strftime('%Y-%m-%d %H:%M')
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value).strftime('%Y-%m-%d %H:%M')
+        except ValueError:
+            return value
+    return "unknown"
+
+
 def get_manager():
     """Get configured domain manager"""
     config = load_config()
@@ -102,17 +145,19 @@ def get_manager():
         print("Run: python domain_rotation_cli.py config")
         sys.exit(1)
     
-    client = PorkbunAPIClient(config['api_key'], config['api_secret'])
-    manager = DomainRotationManager(
-        api_client=client,
-        monthly_budget=config.get('monthly_budget', 50.0)
+    manager = DomainRotationManager(monthly_budget=config.get('monthly_budget', 50.0))
+    manager.configure(
+        api_key=config['api_key'],
+        secret_key=config['api_secret'],
+        monthly_budget=config.get('monthly_budget', 50.0),
+        registrar=config.get('registrar', 'porkbun')
     )
     
     # Load saved state
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = _deserialize_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,8 +167,9 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = _serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
+    config['registrar'] = getattr(manager, 'registrar', 'porkbun')
     save_config(config)
 
 
@@ -144,8 +190,8 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_dt(domain.get('purchased_at'))}")
+        print(f"   Expires: {_format_dt(domain.get('expires_at'))[:10]}")
         print()
 
 

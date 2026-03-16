@@ -289,24 +289,52 @@ class EmailTransportManager:
         self.smtp_transport: Optional[SMTPTransport] = None
         self.imap_transport: Optional[IMAPTransport] = None
     
-    def configure_smtp(self, smtp_server: str, smtp_port: int, username: str, 
-                      password: str, use_tls: bool = True) -> bool:
+    def configure_smtp(
+        self,
+        smtp_server: str,
+        smtp_port: int,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        use_tls: bool = True,
+        smtp_username: Optional[str] = None,
+        smtp_password: Optional[str] = None
+    ) -> bool:
         """Configure SMTP transport"""
         try:
+            resolved_username = username or smtp_username
+            resolved_password = password or smtp_password
+            if not resolved_username or not resolved_password:
+                logger.error("SMTP username/password are required")
+                return False
+
             self.smtp_transport = SMTPTransport(
-                smtp_server, smtp_port, username, password, use_tls
+                smtp_server, smtp_port, resolved_username, resolved_password, use_tls
             )
             return self.smtp_transport.test_connection()
         except Exception as e:
             logger.error(f"Failed to configure SMTP: {e}")
             return False
     
-    def configure_imap(self, imap_server: str, imap_port: int, username: str, 
-                      password: str, use_ssl: bool = True) -> bool:
+    def configure_imap(
+        self,
+        imap_server: str,
+        imap_port: int,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        use_ssl: bool = True,
+        imap_username: Optional[str] = None,
+        imap_password: Optional[str] = None
+    ) -> bool:
         """Configure IMAP transport"""
         try:
+            resolved_username = username or imap_username
+            resolved_password = password or imap_password
+            if not resolved_username or not resolved_password:
+                logger.error("IMAP username/password are required")
+                return False
+
             self.imap_transport = IMAPTransport(
-                imap_server, imap_port, username, password, use_ssl
+                imap_server, imap_port, resolved_username, resolved_password, use_ssl
             )
             return self.imap_transport.test_connection()
         except Exception as e:
@@ -338,6 +366,31 @@ class EmailTransportManager:
         return {
             'smtp': self.smtp_transport is not None,
             'imap': self.imap_transport is not None
+        }
+
+    def get_config(self) -> Dict[str, Optional[Dict]]:
+        """Return non-sensitive transport configuration details."""
+        smtp_config = None
+        if self.smtp_transport:
+            smtp_config = {
+                "smtp_server": self.smtp_transport.smtp_server,
+                "smtp_port": self.smtp_transport.smtp_port,
+                "smtp_username": self.smtp_transport.username,
+                "use_tls": self.smtp_transport.use_tls
+            }
+
+        imap_config = None
+        if self.imap_transport:
+            imap_config = {
+                "imap_server": self.imap_transport.imap_server,
+                "imap_port": self.imap_transport.imap_port,
+                "imap_username": self.imap_transport.username,
+                "use_ssl": self.imap_transport.use_ssl
+            }
+
+        return {
+            "smtp": smtp_config,
+            "imap": imap_config
         }
 
 

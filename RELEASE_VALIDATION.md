@@ -202,9 +202,9 @@ if result['available']:
     client.purchase_domain('example.xyz')
 ```
 
-**Note:** CLI wrapper needed for easier domain rotation
+**Note:** CLI wrapper now available for easier domain rotation.
 
-**TODO:** Create simple CLI tool `python rotate-domain.py`
+**Completed:** `python rotate-domain.py` (defaults to rotate, supports `--status`, `--list`, `--search`, `--config`)
 
 ---
 

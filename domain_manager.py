@@ -44,6 +44,8 @@ class PorkbunAPIClient(DomainAPIClient):
     
     def __init__(self, api_key: str, api_secret: str):
         super().__init__(api_key, api_secret)
+        # Backward-compatible attribute name used by older scripts/tests.
+        self.secret_key = api_secret
         self.session = requests.Session()
     
     def _make_request(self, endpoint: str, data: Optional[Dict] = None) -> Dict:
@@ -134,10 +136,89 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+        self.registrar = "porkbun"
+        self.api_key: Optional[str] = None
+        self.secret_key: Optional[str] = None
+
+    @staticmethod
+    def _coerce_price(price_value) -> Optional[float]:
+        """Convert registrar price responses into float dollars."""
+        if price_value is None:
+            return None
+
+        if isinstance(price_value, (int, float)):
+            return float(price_value)
+
+        if isinstance(price_value, str):
+            normalized = price_value.strip().replace("$", "").replace("€", "")
+            try:
+                return float(normalized)
+            except ValueError:
+                logger.warning("Failed to parse domain price: %s", price_value)
+                return None
+
+        logger.warning("Unsupported price type from registrar: %s", type(price_value).__name__)
+        return None
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+
+    def set_monthly_budget(self, monthly_budget: float) -> None:
+        """Set a new monthly spending budget."""
+        if monthly_budget <= 0:
+            raise ValueError("monthly_budget must be greater than 0")
+        self.monthly_budget = float(monthly_budget)
+
+    def generate_domain_name(self, tld: str = "xyz", length: int = 8) -> str:
+        """
+        Backward-compatible alias for older utilities that expect this method.
+        """
+        return self.generate_random_domain(tld=tld, length=length)
+
+    def configure(
+        self,
+        api_key: str,
+        secret_key: str,
+        monthly_budget: float = 50.0,
+        registrar: str = "porkbun"
+    ) -> Dict:
+        """
+        Configure domain registrar credentials for runtime domain rotation.
+        """
+        normalized_registrar = (registrar or "porkbun").strip().lower()
+        if normalized_registrar != "porkbun":
+            raise ValueError("Unsupported registrar. Currently supported: porkbun")
+
+        if not api_key or not secret_key:
+            raise ValueError("Both api_key and secret_key are required")
+
+        self.api_client = PorkbunAPIClient(api_key, secret_key)
+        self.api_key = api_key
+        self.secret_key = secret_key
+        self.registrar = normalized_registrar
+        self.set_monthly_budget(monthly_budget)
+
+        return self.get_config()
+
+    def get_config(self) -> Dict:
+        """
+        Return current domain manager configuration and budget summary.
+        """
+        api_key_masked = ""
+        if self.api_key:
+            api_key_masked = ("*" * max(len(self.api_key) - 4, 0)) + self.api_key[-4:]
+
+        return {
+            "configured": self.api_client is not None,
+            "registrar": self.registrar,
+            "api_key_masked": api_key_masked,
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "remaining_budget": self.monthly_budget - self.current_spending,
+            "active_domain": self.active_domain,
+            "domains_owned": len(self.owned_domains)
+        }
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -168,12 +249,10 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
-                
+                price = self._coerce_price(result.get("price"))
+                if price is None:
+                    continue
+
                 if price <= max_price:
                     return {
                         "domain": domain,
@@ -243,6 +322,24 @@ class DomainRotationManager:
             return self.active_domain
         
         return None
+
+    def rotate_domain_with_details(self) -> Dict:
+        """
+        Rotate to a new domain and return a JSON-serializable result payload.
+        """
+        new_domain = self.rotate_domain()
+        if not new_domain:
+            return {
+                "success": False,
+                "domain": None,
+                "message": "Could not rotate domain"
+            }
+
+        return {
+            "success": True,
+            "domain": new_domain,
+            "message": "Domain rotated successfully"
+        }
     
     def get_active_domain(self) -> Optional[str]:
         """Get currently active domain"""

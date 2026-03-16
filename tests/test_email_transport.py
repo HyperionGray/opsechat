@@ -165,3 +165,56 @@ class TestEmailTransportManager:
         manager.smtp_transport = Mock()
         status = manager.is_configured()
         assert status['smtp'] is True
+
+    @patch('email_transport.SMTPTransport')
+    def test_configure_smtp_accepts_alias_kwargs(self, mock_smtp_class):
+        """Legacy caller kwargs should still configure SMTP."""
+        mock_transport = Mock()
+        mock_transport.test_connection.return_value = True
+        mock_smtp_class.return_value = mock_transport
+
+        manager = EmailTransportManager()
+        result = manager.configure_smtp(
+            smtp_server="smtp.test.com",
+            smtp_port=587,
+            smtp_username="alias@test.com",
+            smtp_password="password",
+            use_tls=True,
+        )
+
+        assert result is True
+        assert manager.smtp_transport is not None
+
+    @patch('email_transport.IMAPTransport')
+    def test_configure_imap_accepts_alias_kwargs(self, mock_imap_class):
+        """Legacy caller kwargs should still configure IMAP."""
+        mock_transport = Mock()
+        mock_transport.test_connection.return_value = True
+        mock_imap_class.return_value = mock_transport
+
+        manager = EmailTransportManager()
+        result = manager.configure_imap(
+            imap_server="imap.test.com",
+            imap_port=993,
+            imap_username="alias@test.com",
+            imap_password="password",
+            use_ssl=True,
+        )
+
+        assert result is True
+        assert manager.imap_transport is not None
+
+    def test_get_config_redacts_to_non_sensitive_fields(self):
+        """get_config should expose servers/ports but not passwords."""
+        manager = EmailTransportManager()
+        manager.smtp_transport = SMTPTransport(
+            "smtp.test.com", 587, "smtp-user@test.com", "super-secret", True
+        )
+        manager.imap_transport = IMAPTransport(
+            "imap.test.com", 993, "imap-user@test.com", "super-secret", True
+        )
+
+        cfg = manager.get_config()
+        assert cfg["smtp"]["smtp_server"] == "smtp.test.com"
+        assert cfg["imap"]["imap_server"] == "imap.test.com"
+        assert "password" not in str(cfg).lower()
