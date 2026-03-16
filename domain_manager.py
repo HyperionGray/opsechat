@@ -7,7 +7,7 @@ import random
 import string
 import logging
 from typing import Any, Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +144,7 @@ class DomainRotationManager:
     @staticmethod
     def _current_budget_cycle() -> str:
         """Return budget cycle identifier as YYYY-MM (UTC)."""
-        return datetime.utcnow().strftime("%Y-%m")
+        return datetime.now(timezone.utc).strftime("%Y-%m")
     
     def _reset_budget_if_needed(self):
         """Automatically reset spending when entering a new month."""
