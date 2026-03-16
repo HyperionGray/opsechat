@@ -4,6 +4,7 @@ deadenv/*
 # BISH build artifacts
 .bish-index
 .bish.sqlite
+bfg-*.jar
 
 # Python
 __pycache__/
