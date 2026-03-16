@@ -7,8 +7,20 @@ Tests:
 2. Two different client sessions do not share rate-limit counters.
 """
 
-import json
 import sys
+
+
+def _reset_limiter_state():
+    """Reset in-memory limiter state to keep tests independent."""
+    from rate_limiter import limiter
+    from simple_chat_routes import _rate_limit_store, _rate_limit_lock
+
+    with _rate_limit_lock:
+        _rate_limit_store.clear()
+
+    storage = getattr(limiter, "_storage", None)
+    if storage is not None and hasattr(storage, "reset"):
+        storage.reset()
 
 
 def _make_app():
@@ -21,54 +33,80 @@ def _make_app():
     return app
 
 
+_TEST_APP = _make_app()
+
+
 def test_post_is_rate_limited_get_is_not():
     """POST /chat/create is rate-limited; GET / is never rate-limited."""
     print("\nTesting: POST is rate-limited, GET is not...")
-    app = _make_app()
+    app = _TEST_APP
+    _reset_limiter_state()
+    addr = "198.51.100.10"
 
     with app.test_client() as client:
         # GET / should never be throttled
         for _ in range(10):
-            r = client.get("/")
+            r = client.get("/", environ_overrides={"REMOTE_ADDR": addr})
             assert r.status_code == 200, f"GET / should never be throttled, got {r.status_code}"
 
         # POST /chat/create: limit is 3 per minute per client.
         # First 3 calls must succeed; the 4th must be rejected with 429.
         for i in range(3):
-            r = client.post("/chat/create", content_type="application/json")
+            r = client.post(
+                "/chat/create",
+                content_type="application/json",
+                environ_overrides={"REMOTE_ADDR": addr},
+            )
             assert r.status_code == 200, f"Request {i + 1} should succeed, got {r.status_code}"
 
-        r = client.post("/chat/create", content_type="application/json")
+        r = client.post(
+            "/chat/create",
+            content_type="application/json",
+            environ_overrides={"REMOTE_ADDR": addr},
+        )
         assert r.status_code == 429, f"4th POST should be rate-limited (429), got {r.status_code}"
 
     print("✅ POST /chat/create is rate-limited after 3 requests; GET / is never throttled")
-    return True
 
 
 def test_separate_sessions_have_independent_limits():
     """Two different sessions must not share rate-limit counters."""
     print("\nTesting: independent rate-limit counters per session...")
-    app = _make_app()
+    app = _TEST_APP
+    _reset_limiter_state()
+    addr_a = "198.51.100.20"
+    addr_b = "198.51.100.21"
 
     with app.test_client() as client_a:
         # Exhaust session A's limit (3 per minute)
         for i in range(3):
-            r = client_a.post("/chat/create", content_type="application/json")
+            r = client_a.post(
+                "/chat/create",
+                content_type="application/json",
+                environ_overrides={"REMOTE_ADDR": addr_a},
+            )
             assert r.status_code == 200, f"Client A request {i + 1} failed: {r.status_code}"
 
         # Session A must now be blocked
-        r = client_a.post("/chat/create", content_type="application/json")
+        r = client_a.post(
+            "/chat/create",
+            content_type="application/json",
+            environ_overrides={"REMOTE_ADDR": addr_a},
+        )
         assert r.status_code == 429, f"Client A should be blocked, got {r.status_code}"
 
     # A new test client gets a fresh session with its own counter
     with app.test_client() as client_b:
-        r = client_b.post("/chat/create", content_type="application/json")
+        r = client_b.post(
+            "/chat/create",
+            content_type="application/json",
+            environ_overrides={"REMOTE_ADDR": addr_b},
+        )
         assert r.status_code == 200, (
             f"Client B should NOT be blocked by Client A's exhausted limit, got {r.status_code}"
         )
 
     print("✅ Different sessions have independent rate-limit counters")
-    return True
 
 
 def main():
