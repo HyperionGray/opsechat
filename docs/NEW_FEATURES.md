@@ -235,6 +235,7 @@ Attempt 2/5...
 #### Rotate to New Domain
 ```bash
 python domain_rotation_cli.py rotate
+python domain_rotation_cli.py rotate --yes    # non-interactive automation
 
 Output:
 === Domain Rotation ===
@@ -254,6 +255,13 @@ Purchasing domain...
 
 ✅ Successfully purchased and activated: n5x8q2k7.xyz
 ```
+
+#### Switch Active Domain (No Purchase)
+```bash
+python domain_rotation_cli.py set-active abc123xyz.club
+```
+
+Use this command to switch to an already-owned domain without purchasing a new one.
 
 #### List Owned Domains
 ```bash
