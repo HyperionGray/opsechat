@@ -19,10 +19,55 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _parse_datetime(value):
+    """Parse datetime values from config (ISO8601 strings)."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _serialize_domain_entry(entry):
+    """Return a JSON-serializable copy of a domain entry."""
+    serialized = dict(entry)
+    for key in ("purchased_at", "expires_at"):
+        dt = _parse_datetime(serialized.get(key))
+        if dt:
+            serialized[key] = dt.isoformat()
+        elif serialized.get(key) is None:
+            serialized[key] = None
+        else:
+            # Preserve unexpected values as strings to avoid save failures.
+            serialized[key] = str(serialized[key])
+    return serialized
+
+
+def _deserialize_domain_entry(entry):
+    """Return an in-memory domain entry with datetime fields when possible."""
+    deserialized = dict(entry)
+    for key in ("purchased_at", "expires_at"):
+        dt = _parse_datetime(deserialized.get(key))
+        deserialized[key] = dt if dt else None
+    return deserialized
+
+
+def _format_datetime(dt_value, fmt):
+    """Format datetime values for terminal output safely."""
+    dt = _parse_datetime(dt_value)
+    if not dt:
+        return "unknown"
+    return dt.strftime(fmt)
 
 
 def load_config():
@@ -109,12 +154,14 @@ def get_manager():
     )
     
     # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+    if config.get('current_spending') is not None:
+        manager.current_spending = float(config['current_spending'])
+
+    owned_domains = config.get('owned_domains') or []
+    manager.owned_domains = [
+        _deserialize_domain_entry(entry) for entry in owned_domains if isinstance(entry, dict)
+    ]
+    manager.active_domain = config.get('active_domain')
     
     return manager, config
 
@@ -122,14 +169,16 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = [
+        _serialize_domain_entry(entry) for entry in manager.owned_domains
+    ]
     config['active_domain'] = manager.active_domain
     save_config(config)
 
 
 def list_domains():
     """List owned domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Owned Domains ===\n")
     
@@ -144,14 +193,14 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_datetime(domain.get('purchased_at'), '%Y-%m-%d %H:%M')}")
+        print(f"   Expires: {_format_datetime(domain.get('expires_at'), '%Y-%m-%d')}")
         print()
 
 
 def search_domains():
     """Search for available cheap domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
     print("Searching for domains under $5...\n")
@@ -215,7 +264,7 @@ def rotate_domain():
 
 def show_status():
     """Show current status"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Domain Rotation Status ===\n")
     
@@ -233,6 +282,31 @@ def show_status():
         print(f"   Configure your email system to use: user@{manager.active_domain}")
 
 
+def prune_expired_domains():
+    """Remove expired domains from saved local state."""
+    manager, config = get_manager()
+    now = datetime.now()
+    kept_domains = []
+
+    for entry in manager.owned_domains:
+        expires_at = _parse_datetime(entry.get("expires_at"))
+        if expires_at and expires_at <= now:
+            continue
+        kept_domains.append(entry)
+
+    removed = len(manager.owned_domains) - len(kept_domains)
+    manager.owned_domains = kept_domains
+
+    if manager.active_domain and manager.active_domain not in {
+        d.get("domain") for d in manager.owned_domains
+    }:
+        manager.active_domain = manager.owned_domains[-1]["domain"] if manager.owned_domains else None
+
+    save_manager_state(manager, config)
+    print(f"Removed {removed} expired domain entries.")
+    print(f"Remaining domains: {len(manager.owned_domains)}")
+
+
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
@@ -245,12 +319,13 @@ Examples:
   python domain_rotation_cli.py search     # Search for available domains
   python domain_rotation_cli.py rotate     # Rotate to a new domain
   python domain_rotation_cli.py list       # List owned domains
+  python domain_rotation_cli.py prune      # Remove expired domains from local state
         """
     )
     
     parser.add_argument(
         'command',
-        choices=['config', 'status', 'search', 'rotate', 'list'],
+        choices=['config', 'status', 'search', 'rotate', 'list', 'prune'],
         help='Command to execute'
     )
     
@@ -266,6 +341,8 @@ Examples:
         rotate_domain()
     elif args.command == 'list':
         list_domains()
+    elif args.command == 'prune':
+        prune_expired_domains()
 
 
 if __name__ == '__main__':
