@@ -321,13 +321,15 @@ def _read_version() -> str:
         return 'unknown'
 
 
-def get_health_status() -> Dict[str, Any]:
-    """Get application health status"""
+def get_health_status(active_rooms: int = 0) -> Dict[str, Any]:
+    """Get application health status."""
+    safe_active_rooms = max(int(active_rooms), 0)
     return {
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
+        'active_rooms': safe_active_rooms,
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',

@@ -28,6 +28,12 @@ rooms_lock = threading.Lock()
 direct_messages = {}
 dm_lock = threading.Lock()
 
+
+def get_active_room_count():
+    """Return the current number of active in-memory chat rooms."""
+    with rooms_lock:
+        return len(chat_rooms)
+
 # In-memory rate limiter: tracks requests per session per endpoint
 # Structure: { session_id: { endpoint: [timestamp, ...] } }
 _rate_limit_store = {}
