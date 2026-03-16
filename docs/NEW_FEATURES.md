@@ -172,6 +172,32 @@ When limit exceeded:
 
 ---
 
+## 🔁 Chat Rate-Limit Backoff & Retry
+
+### What Changed
+Chat endpoints now return consistent retry metadata when a request is throttled (`HTTP 429`):
+
+- JSON body includes:
+  - `retry_after` (seconds)
+  - `should_retry: true`
+- Response header includes:
+  - `Retry-After: <seconds>`
+
+### Client Behavior
+The simple chat web UI now performs bounded automatic retries for:
+
+- `POST /chat/create`
+- `POST /chat/room/<room_id>/messages`
+
+When throttled, the client waits for `Retry-After` (or falls back to bounded exponential backoff) and retries up to 3 times, with a visible status message.
+
+### Why This Helps
+- Better UX during bursty usage (fewer hard failures)
+- Predictable retry windows for clients and tooling
+- Cleaner integration path for external clients/bots
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

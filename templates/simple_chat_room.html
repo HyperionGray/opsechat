@@ -343,6 +343,36 @@
                 statusMsg.textContent = '';
             }, duration);
         }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function retryDelayFromResponse(response, attempt) {
+            const retryAfterHeader = response.headers.get('Retry-After');
+            const retryAfterSeconds = Number.parseInt(retryAfterHeader || '0', 10);
+            if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+                return retryAfterSeconds * 1000;
+            }
+            return Math.min(1000 * (2 ** (attempt - 1)), 5000);
+        }
+
+        async function fetchWithRetry(url, options, maxAttempts = 3) {
+            let lastResponse = null;
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                const response = await fetch(url, options);
+                lastResponse = response;
+
+                if (response.status !== 429 || attempt === maxAttempts) {
+                    return response;
+                }
+
+                const waitMs = retryDelayFromResponse(response, attempt);
+                showStatus(`Rate limited. Retrying (${attempt}/${maxAttempts}) in ${Math.ceil(waitMs / 1000)}s...`, waitMs);
+                await sleep(waitMs);
+            }
+            return lastResponse;
+        }
         
         function scrollToBottom() {
             const container = document.getElementById('messagesContainer');
@@ -406,18 +436,28 @@
             }
             
             try {
-                const response = await fetch(`/chat/room/${roomId}/messages`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
+                const response = await fetchWithRetry(
+                    `/chat/room/${roomId}/messages`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ message: messageToSend })
                     },
-                    body: JSON.stringify({ message: messageToSend })
-                });
+                    3
+                );
                 
                 if (response.ok) {
                     input.value = '';
                     await pollMessages();
                 } else {
+                    if (response.status === 429) {
+                        const payload = await response.json().catch(() => ({}));
+                        const retryAfter = payload.retry_after || response.headers.get('Retry-After') || 'a few';
+                        showStatus(`Rate limit reached. Retry in ${retryAfter}s.`, 4000);
+                        return;
+                    }
                     showStatus('Error sending message');
                 }
             } catch (error) {
