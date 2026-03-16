@@ -28,6 +28,7 @@ Misuse of these features may be illegal in your jurisdiction. Always obtain prop
 - Custom header support for security testing
 - PGP encrypted message support
 - Plain text only (no HTML rendering)
+- Automatic retry with exponential backoff for transient SMTP failures
 
 **Configuration:** Configure SMTP settings at `/{path}/email/config`
 

@@ -22,13 +22,39 @@ class SMTPTransport:
     Supports plain text emails with PGP encryption
     """
     
-    def __init__(self, smtp_server: str, smtp_port: int, username: str, 
-                 password: str, use_tls: bool = True):
+    RETRYABLE_ERRORS = (
+        smtplib.SMTPServerDisconnected,
+        smtplib.SMTPConnectError,
+        smtplib.SMTPHeloError,
+        TimeoutError,
+        ConnectionError,
+        OSError,
+    )
+
+    NON_RETRYABLE_ERRORS = (
+        smtplib.SMTPAuthenticationError,
+        smtplib.SMTPSenderRefused,
+        smtplib.SMTPRecipientsRefused,
+        smtplib.SMTPDataError,
+        smtplib.SMTPNotSupportedError,
+    )
+
+    def __init__(self, smtp_server: str, smtp_port: int, username: str,
+                 password: str, use_tls: bool = True, max_retries: int = 2,
+                 retry_backoff_seconds: float = 1.0):
         self.smtp_server = smtp_server
         self.smtp_port = smtp_port
         self.username = username
         self.password = password
         self.use_tls = use_tls
+        self.max_retries = max(0, max_retries)
+        self.retry_backoff_seconds = max(0.0, retry_backoff_seconds)
+
+    def _is_retryable_error(self, exc: Exception) -> bool:
+        """Return True if this SMTP failure should be retried."""
+        if isinstance(exc, self.NON_RETRYABLE_ERRORS):
+            return False
+        return isinstance(exc, self.RETRYABLE_ERRORS)
     
     def send_email(self, from_addr: str, to_addr: str, subject: str, 
                    body: str, headers: Optional[Dict] = None) -> bool:
@@ -36,39 +62,60 @@ class SMTPTransport:
         Send email via SMTP
         Returns True on success, False on failure
         """
-        try:
-            # Create message
-            msg = MIMEMultipart()
-            msg['From'] = from_addr
-            msg['To'] = to_addr
-            msg['Subject'] = Header(subject, 'utf-8')
-            
-            # Add custom headers if provided
-            if headers:
-                for key, value in headers.items():
-                    if key.lower() not in ['from', 'to', 'subject']:
-                        msg[key] = value
-            
-            # Add body as plain text
-            msg.attach(MIMEText(body, 'plain', 'utf-8'))
-            
-            # Connect and send
-            if self.use_tls:
-                server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-                server.starttls()
-            else:
-                server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-            
-            server.login(self.username, self.password)
-            server.send_message(msg)
-            server.quit()
-            
-            logger.info(f"Email sent successfully to {to_addr}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to send email: {e}")
-            return False
+        # Create message once and reuse for retries.
+        msg = MIMEMultipart()
+        msg['From'] = from_addr
+        msg['To'] = to_addr
+        msg['Subject'] = Header(subject, 'utf-8')
+
+        if headers:
+            for key, value in headers.items():
+                if key.lower() not in ['from', 'to', 'subject']:
+                    msg[key] = value
+
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+
+        max_attempts = 1 + self.max_retries
+        for attempt in range(1, max_attempts + 1):
+            server = None
+            try:
+                if self.use_tls:
+                    server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+                    server.starttls()
+                else:
+                    server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+
+                server.login(self.username, self.password)
+                server.send_message(msg)
+                logger.info(f"Email sent successfully to {to_addr}")
+                return True
+            except Exception as e:
+                should_retry = attempt < max_attempts and self._is_retryable_error(e)
+                if should_retry:
+                    delay = self.retry_backoff_seconds * (2 ** (attempt - 1))
+                    logger.warning(
+                        "Transient SMTP failure on attempt %s/%s: %s. Retrying in %.2f seconds.",
+                        attempt,
+                        max_attempts,
+                        e,
+                        delay,
+                    )
+                    time.sleep(delay)
+                    continue
+
+                logger.error(
+                    "Failed to send email after %s attempt(s): %s",
+                    attempt,
+                    e,
+                )
+                return False
+            finally:
+                if server is not None:
+                    try:
+                        server.quit()
+                    except Exception:
+                        # Connection can already be broken on failures.
+                        pass
     
     def test_connection(self) -> bool:
         """Test SMTP connection"""
@@ -289,12 +336,14 @@ class EmailTransportManager:
         self.smtp_transport: Optional[SMTPTransport] = None
         self.imap_transport: Optional[IMAPTransport] = None
     
-    def configure_smtp(self, smtp_server: str, smtp_port: int, username: str, 
-                      password: str, use_tls: bool = True) -> bool:
+    def configure_smtp(self, smtp_server: str, smtp_port: int, username: str,
+                      password: str, use_tls: bool = True, max_retries: int = 2,
+                      retry_backoff_seconds: float = 1.0) -> bool:
         """Configure SMTP transport"""
         try:
             self.smtp_transport = SMTPTransport(
-                smtp_server, smtp_port, username, password, use_tls
+                smtp_server, smtp_port, username, password, use_tls,
+                max_retries=max_retries, retry_backoff_seconds=retry_backoff_seconds
             )
             return self.smtp_transport.test_connection()
         except Exception as e:

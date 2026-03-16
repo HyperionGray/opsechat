@@ -1,8 +1,8 @@
 """
 Tests for email transport module (SMTP/IMAP)
 """
-import pytest
-from unittest.mock import Mock, patch, MagicMock
+import smtplib
+from unittest.mock import Mock, patch
 from email_transport import (
     SMTPTransport, IMAPTransport, EmailTransportManager
 )
@@ -57,6 +57,65 @@ class TestSMTPTransport:
         )
         
         assert result is False
+
+    @patch('email_transport.time.sleep')
+    @patch('email_transport.smtplib.SMTP')
+    def test_send_email_retries_transient_failure(self, mock_smtp, mock_sleep):
+        """Retry on transient SMTP errors with exponential backoff."""
+        transient_error = smtplib.SMTPServerDisconnected("temporary disconnect")
+        mock_server = Mock()
+        mock_smtp.side_effect = [transient_error, mock_server]
+
+        transport = SMTPTransport(
+            "smtp.test.com",
+            587,
+            "test@test.com",
+            "password",
+            True,
+            max_retries=2,
+            retry_backoff_seconds=0.5,
+        )
+
+        result = transport.send_email(
+            "from@test.com",
+            "to@test.com",
+            "Test Subject",
+            "Test Body",
+        )
+
+        assert result is True
+        assert mock_smtp.call_count == 2
+        mock_sleep.assert_called_once_with(0.5)
+        mock_server.send_message.assert_called_once()
+
+    @patch('email_transport.time.sleep')
+    @patch('email_transport.smtplib.SMTP')
+    def test_send_email_no_retry_on_auth_failure(self, mock_smtp, mock_sleep):
+        """Do not retry on non-transient SMTP authentication failures."""
+        mock_server = Mock()
+        mock_server.login.side_effect = smtplib.SMTPAuthenticationError(535, b'Auth failed')
+        mock_smtp.return_value = mock_server
+
+        transport = SMTPTransport(
+            "smtp.test.com",
+            587,
+            "test@test.com",
+            "password",
+            True,
+            max_retries=3,
+            retry_backoff_seconds=0.5,
+        )
+
+        result = transport.send_email(
+            "from@test.com",
+            "to@test.com",
+            "Test Subject",
+            "Test Body",
+        )
+
+        assert result is False
+        assert mock_smtp.call_count == 1
+        mock_sleep.assert_not_called()
     
     @patch('email_transport.smtplib.SMTP')
     def test_test_connection_success(self, mock_smtp):
