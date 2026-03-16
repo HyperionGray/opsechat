@@ -216,6 +216,9 @@
         let encryptionEnabled = false;
         let encryptionKey = null;
         let pollInterval = null;
+        let sendBackoffTimer = null;
+        let sendBackoffUntil = 0;
+        let pendingRetryTimeout = null;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
         
         // Show security warning on first load
@@ -343,6 +346,55 @@
                 statusMsg.textContent = '';
             }, duration);
         }
+
+        function showPersistentStatus(message) {
+            document.getElementById('statusMsg').textContent = message;
+        }
+
+        function clearPersistentStatus() {
+            document.getElementById('statusMsg').textContent = '';
+        }
+
+        function beginSendBackoff(seconds) {
+            const waitSeconds = Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : 1;
+            sendBackoffUntil = Date.now() + (waitSeconds * 1000);
+            document.getElementById('sendBtn').disabled = true;
+
+            if (sendBackoffTimer) {
+                clearInterval(sendBackoffTimer);
+            }
+
+            sendBackoffTimer = setInterval(() => {
+                const remaining = Math.max(0, Math.ceil((sendBackoffUntil - Date.now()) / 1000));
+                if (remaining <= 0) {
+                    clearInterval(sendBackoffTimer);
+                    sendBackoffTimer = null;
+                    sendBackoffUntil = 0;
+                    document.getElementById('sendBtn').disabled = !securityWarningAccepted;
+                    clearPersistentStatus();
+                    return;
+                }
+
+                showPersistentStatus(`Rate limited. Retrying in ${remaining}s...`);
+            }, 250);
+        }
+
+        function isSendBackoffActive() {
+            return sendBackoffUntil > Date.now();
+        }
+
+        function parseRetryAfter(response, payload) {
+            if (payload && Number.isFinite(payload.retry_after)) {
+                return Math.max(1, Math.ceil(payload.retry_after));
+            }
+
+            const retryHeader = Number(response.headers.get('Retry-After'));
+            if (Number.isFinite(retryHeader) && retryHeader > 0) {
+                return Math.ceil(retryHeader);
+            }
+
+            return 1;
+        }
         
         function scrollToBottom() {
             const container = document.getElementById('messagesContainer');
@@ -392,11 +444,16 @@
             scrollToBottom();
         }
         
-        async function sendMessage() {
+        async function sendMessage(messageOverride = null, isRetry = false) {
             const input = document.getElementById('messageInput');
-            const message = input.value.trim();
+            const message = (messageOverride === null ? input.value : messageOverride).trim();
             
             if (!message) return;
+            if (isSendBackoffActive()) {
+                const remaining = Math.max(1, Math.ceil((sendBackoffUntil - Date.now()) / 1000));
+                showPersistentStatus(`Rate limited. Retrying in ${remaining}s...`);
+                return;
+            }
             
             let messageToSend = message;
             
@@ -415,10 +472,36 @@
                 });
                 
                 if (response.ok) {
-                    input.value = '';
+                    if (messageOverride === null || input.value.trim() === message) {
+                        input.value = '';
+                    }
                     await pollMessages();
                 } else {
-                    showStatus('Error sending message');
+                    let payload = null;
+                    try {
+                        payload = await response.json();
+                    } catch (e) {
+                        payload = null;
+                    }
+
+                    if (response.status === 429) {
+                        const retryAfter = parseRetryAfter(response, payload);
+                        beginSendBackoff(retryAfter);
+
+                        if (!isRetry) {
+                            if (pendingRetryTimeout) {
+                                clearTimeout(pendingRetryTimeout);
+                            }
+                            pendingRetryTimeout = setTimeout(() => {
+                                sendMessage(message, true);
+                            }, retryAfter * 1000);
+                        }
+
+                        return;
+                    }
+
+                    const errorMessage = payload && payload.error ? payload.error : 'Error sending message';
+                    showStatus(errorMessage);
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);
@@ -501,6 +584,12 @@
         window.addEventListener('beforeunload', function() {
             if (pollInterval) {
                 clearInterval(pollInterval);
+            }
+            if (sendBackoffTimer) {
+                clearInterval(sendBackoffTimer);
+            }
+            if (pendingRetryTimeout) {
+                clearTimeout(pendingRetryTimeout);
             }
         });
     </script>
