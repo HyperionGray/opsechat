@@ -16,6 +16,7 @@ import datetime
 import secrets
 import threading
 import base64
+import os
 from flask import render_template, request, session, jsonify, Blueprint
 from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
@@ -33,12 +34,66 @@ dm_lock = threading.Lock()
 _rate_limit_store = {}
 _rate_limit_lock = threading.Lock()
 
-# Rate limit configuration
-RATE_LIMITS = {
+# Default rate limit configuration (can be overridden via environment variables)
+DEFAULT_RATE_LIMITS = {
     "chat_create": {"max_requests": 10, "window_seconds": 60},
     "chat_message": {"max_requests": 30, "window_seconds": 60},
     "dm_send": {"max_requests": 5, "window_seconds": 60},
 }
+
+
+def _read_positive_int_env(env_name: str, default: int) -> int:
+    """Read a positive integer environment variable with fallback."""
+    raw_value = os.getenv(env_name)
+    if raw_value is None:
+        return default
+
+    try:
+        parsed = int(raw_value)
+        if parsed <= 0:
+            raise ValueError("value must be positive")
+        return parsed
+    except ValueError:
+        return default
+
+
+def _load_rate_limits_from_env() -> dict:
+    """Build runtime rate-limit settings from environment variables."""
+    return {
+        "chat_create": {
+            "max_requests": _read_positive_int_env(
+                "OPSECHAT_RATE_LIMIT_CHAT_CREATE_MAX_REQUESTS",
+                DEFAULT_RATE_LIMITS["chat_create"]["max_requests"],
+            ),
+            "window_seconds": _read_positive_int_env(
+                "OPSECHAT_RATE_LIMIT_CHAT_CREATE_WINDOW_SECONDS",
+                DEFAULT_RATE_LIMITS["chat_create"]["window_seconds"],
+            ),
+        },
+        "chat_message": {
+            "max_requests": _read_positive_int_env(
+                "OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_MAX_REQUESTS",
+                DEFAULT_RATE_LIMITS["chat_message"]["max_requests"],
+            ),
+            "window_seconds": _read_positive_int_env(
+                "OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_WINDOW_SECONDS",
+                DEFAULT_RATE_LIMITS["chat_message"]["window_seconds"],
+            ),
+        },
+        "dm_send": {
+            "max_requests": _read_positive_int_env(
+                "OPSECHAT_RATE_LIMIT_DM_SEND_MAX_REQUESTS",
+                DEFAULT_RATE_LIMITS["dm_send"]["max_requests"],
+            ),
+            "window_seconds": _read_positive_int_env(
+                "OPSECHAT_RATE_LIMIT_DM_SEND_WINDOW_SECONDS",
+                DEFAULT_RATE_LIMITS["dm_send"]["window_seconds"],
+            ),
+        },
+    }
+
+
+RATE_LIMITS = _load_rate_limits_from_env()
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
@@ -202,6 +257,37 @@ def check_rate_limit(session_id: str, endpoint: str) -> tuple:
         return True, 0
 
 
+def _rate_limited_response(endpoint: str, retry_after: int):
+    """Return a consistent 429 response with standard backoff headers."""
+    config = RATE_LIMITS.get(endpoint, {})
+    max_requests = config.get("max_requests")
+    window_seconds = config.get("window_seconds")
+
+    if max_requests and window_seconds:
+        message = (
+            f"Rate limit exceeded. Maximum {max_requests} requests per "
+            f"{window_seconds} seconds. Try again in {retry_after} seconds."
+        )
+    else:
+        message = f"Rate limit exceeded. Try again in {retry_after} seconds."
+
+    response = jsonify({
+        "error": message,
+        "endpoint": endpoint,
+        "retry_after": retry_after,
+        "limit": {
+            "max_requests": max_requests,
+            "window_seconds": window_seconds,
+        },
+    })
+    response.status_code = 429
+    response.headers["Retry-After"] = str(retry_after)
+    response.headers["X-RateLimit-Remaining"] = "0"
+    if max_requests:
+        response.headers["X-RateLimit-Limit"] = str(max_requests)
+    return response
+
+
 def cleanup_rate_limits():
     """Remove stale rate limit entries to prevent unbounded memory growth"""
     with _rate_limit_lock:
@@ -279,9 +365,7 @@ def register_simple_chat_routes(app):
 
         allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Try again in {retry_after} seconds."
-            }), 429
+            return _rate_limited_response("chat_create", retry_after)
 
         room_id = generate_secure_room_id(32)
         
@@ -332,9 +416,7 @@ def register_simple_chat_routes(app):
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
             if not allowed:
-                return jsonify({
-                    "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds."
-                }), 429
+                return _rate_limited_response("chat_message", retry_after)
             
             # Get message from request
             data = request.get_json()
@@ -409,9 +491,7 @@ def register_simple_chat_routes(app):
         # Check rate limit for DMs
         allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds."
-            }), 429
+            return _rate_limited_response("dm_send", retry_after)
         
         data = request.get_json()
         if not data or "room_id" not in data or "message" not in data:

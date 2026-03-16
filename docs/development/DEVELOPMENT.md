@@ -223,6 +223,25 @@ npm run lint
 - `PORT` - Flask server port (default: 5000)
 - `FLASK_ENV` - Development/production mode
 
+### Simple Chat Rate Limit Tuning
+
+These variables override in-memory write limits for simple chat endpoints:
+
+- `OPSECHAT_RATE_LIMIT_CHAT_CREATE_MAX_REQUESTS` (default: `10`)
+- `OPSECHAT_RATE_LIMIT_CHAT_CREATE_WINDOW_SECONDS` (default: `60`)
+- `OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_MAX_REQUESTS` (default: `30`)
+- `OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_WINDOW_SECONDS` (default: `60`)
+- `OPSECHAT_RATE_LIMIT_DM_SEND_MAX_REQUESTS` (default: `5`)
+- `OPSECHAT_RATE_LIMIT_DM_SEND_WINDOW_SECONDS` (default: `60`)
+
+Example:
+
+```bash
+OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_MAX_REQUESTS=45 \
+OPSECHAT_RATE_LIMIT_CHAT_MESSAGE_WINDOW_SECONDS=60 \
+python runserver.py
+```
+
 ## Troubleshooting
 
 ### Common Issues
