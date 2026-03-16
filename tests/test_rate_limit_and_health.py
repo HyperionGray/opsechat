@@ -154,12 +154,13 @@ def test_health_endpoint_returns_json_with_required_fields():
     assert data is not None
     assert data.get("status") == "healthy"
     assert "version" in data
-    assert "active_rooms" in data
+    assert "checks" in data
+    assert isinstance(data["checks"], dict)
 
 
-def test_health_endpoint_active_rooms_is_integer():
+def test_health_endpoint_uptime_is_numeric():
     client = _test_app.test_client()
     response = client.get("/health")
     data = response.get_json()
-    assert isinstance(data["active_rooms"], int)
-    assert data["active_rooms"] >= 0
+    assert isinstance(data["uptime_seconds"], (int, float))
+    assert data["uptime_seconds"] >= 0
