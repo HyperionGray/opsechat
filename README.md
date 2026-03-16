@@ -252,6 +252,7 @@ Features
 - New chat service created every time the server is started
 - No frills, no fancy CSS, code is easy to follow and review to ensure your safety
 - **Memory Overwriting** - Messages are overwritten in memory before deletion for enhanced security
+- **Configurable Chat Rate Limits** - Tune `chat_create`, `chat_message`, and `dm_send` limits via environment variables (see [Rate Limit Configuration](docs/user-guide/RATE_LIMIT_CONFIGURATION.md))
 
 ### Email System (NEW - REAL EMAIL SUPPORT!)
 - **Real SMTP/IMAP Integration** - Send and receive actual emails via configured email servers (see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md))
