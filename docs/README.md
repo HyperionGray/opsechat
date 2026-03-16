@@ -63,6 +63,7 @@ Implementation details and summaries of major features.
 
 - [Alpha Implementation Roadmap](implementation/ALPHA_IMPLEMENTATION_ROADMAP.md) - Detailed implementation plan
 - [Implementation Summary](implementation/IMPLEMENTATION_SUMMARY.md) - Email feature implementation
+- [Domain Rotation Lifecycle Update](implementation/DOMAIN_ROTATION_LIFECYCLE_UPDATE.md) - Persistence and budget-cycle improvements
 - [Amazon Q Integration](implementation/AMAZON_Q_IMPLEMENTATION_SUMMARY.md) - Amazon Q implementation
 - [CI/CD Implementation](implementation/CI_CD_IMPLEMENTATION_SUMMARY.md) - CI/CD setup
 - [Containerization Summary](implementation/CONTAINERIZATION_SUMMARY.md) - Container implementation

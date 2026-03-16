@@ -1,8 +1,8 @@
 """
 Tests for domain management module
 """
-import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime, timedelta
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -174,3 +174,82 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+    
+    @patch('domain_manager.PorkbunAPIClient')
+    def test_configure_sets_client_and_budget(self, mock_porkbun_cls):
+        """Test manager configure initializes provider and budget"""
+        manager = DomainRotationManager()
+        manager.configure("pk_test", "sk_test", monthly_budget=25.0)
+
+        assert mock_porkbun_cls.called
+        assert manager.provider == "porkbun"
+        assert manager.monthly_budget == 25.0
+    
+    def test_budget_auto_resets_on_new_cycle(self):
+        """Test spending resets when budget cycle changes"""
+        manager = DomainRotationManager(monthly_budget=20.0)
+        manager.current_spending = 7.0
+        manager.last_budget_reset_month = "1999-01"
+
+        status = manager.get_budget_status()
+
+        assert status["current_spending"] == 0.0
+        assert manager.last_budget_reset_month != "1999-01"
+    
+    def test_export_import_state_round_trip(self):
+        """Test state export/import handles datetime serialization"""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        now = datetime.now()
+        manager.current_spending = 3.5
+        manager.active_domain = "active.xyz"
+        manager.owned_domains = [{
+            "domain": "active.xyz",
+            "price": 3.5,
+            "purchased_at": now,
+            "expires_at": now + timedelta(days=30)
+        }]
+
+        exported = manager.export_state()
+        restored = DomainRotationManager(monthly_budget=50.0)
+        restored.import_state(exported)
+
+        domains = restored.get_owned_domains()
+        assert restored.current_spending == 3.5
+        assert restored.active_domain == "active.xyz"
+        assert len(domains) == 1
+        assert isinstance(domains[0]["purchased_at"], datetime)
+        assert isinstance(domains[0]["expires_at"], datetime)
+    
+    def test_set_active_domain_requires_owned_domain(self):
+        """Test setting active domain validates ownership"""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.owned_domains = [{"domain": "owned.xyz"}]
+
+        assert manager.set_active_domain("owned.xyz") is True
+        assert manager.active_domain == "owned.xyz"
+        assert manager.set_active_domain("missing.xyz") is False
+    
+    def test_remove_expired_domains_updates_active_domain(self):
+        """Test expired domain pruning removes old active domain"""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        now = datetime.now()
+        manager.owned_domains = [
+            {
+                "domain": "expired.xyz",
+                "price": 1.0,
+                "purchased_at": now - timedelta(days=370),
+                "expires_at": now - timedelta(days=1),
+            },
+            {
+                "domain": "valid.xyz",
+                "price": 2.0,
+                "purchased_at": now - timedelta(days=10),
+                "expires_at": now + timedelta(days=300),
+            },
+        ]
+        manager.active_domain = "expired.xyz"
+
+        removed = manager.remove_expired_domains()
+
+        assert removed == 1
+        assert manager.active_domain == "valid.xyz"
