@@ -377,7 +377,7 @@ npm run test:headed
 ### Short-term (Medium Priority)
 
 1. ⏳ **TODO**: Add WAF (Web Application Firewall)
-2. ⏳ **TODO**: Implement CSP headers
+2. ✅ **DONE**: Implement CSP headers (configurable compat/strict modes)
 3. ⏳ **TODO**: Add security logging
 4. ⏳ **TODO**: Set up intrusion detection
 

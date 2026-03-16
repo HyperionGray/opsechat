@@ -5,6 +5,8 @@ This module handles Flask application creation and configuration,
 extracted from runserver.py to improve code organization.
 """
 
+import os
+
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
@@ -17,14 +19,37 @@ except ModuleNotFoundError:
         return app
 
 
-def _read_version():
-    """Read application version from VERSION file"""
-    version_file = os.path.join(os.path.dirname(__file__), "VERSION")
-    try:
-        with open(version_file) as f:
-            return f.read().strip()
-    except OSError:
-        return "unknown"
+def _build_csp_policy(mode: str) -> str:
+    """
+    Build the Content-Security-Policy header.
+
+    Modes:
+    - compat: allows inline JS/CSS for legacy templates
+    - strict: disallows inline JS/CSS
+    """
+    directives = [
+        "default-src 'self'",
+        "img-src 'self' data:",
+        "font-src 'self'",
+        "connect-src 'self'",
+        "frame-ancestors 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "object-src 'none'",
+    ]
+
+    if mode == "strict":
+        directives.extend([
+            "script-src 'self'",
+            "style-src 'self'",
+        ])
+    else:
+        directives.extend([
+            "script-src 'self' 'unsafe-inline'",
+            "style-src 'self' 'unsafe-inline'",
+        ])
+
+    return "; ".join(directives) + ";"
 
 
 def create_app():
@@ -33,6 +58,11 @@ def create_app():
     
     # Set secret key for sessions
     app.secret_key = id_generator(size=64)
+
+    csp_mode = os.environ.get("OPSECHAT_CSP_MODE", "compat").strip().lower()
+    if csp_mode not in {"compat", "strict"}:
+        csp_mode = "compat"
+    app.config["OPSECHAT_CSP_MODE"] = csp_mode
     
     # Initialize rate limiter
     init_limiter(app)
@@ -81,18 +111,7 @@ def create_app():
     def add_security_headers(response):
         response.headers["Server"] = ""
         response.headers["Date"] = ""
-        # Content Security Policy: restrict resources to same origin, block inline scripts
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self'; "
-            "style-src 'self'; "
-            "img-src 'self' data:; "
-            "font-src 'self'; "
-            "connect-src 'self'; "
-            "frame-ancestors 'none';"
-        )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
+        response.headers["Content-Security-Policy"] = _build_csp_policy(app.config["OPSECHAT_CSP_MODE"])
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
@@ -125,15 +144,5 @@ def create_app():
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # CHANGELOG (AI assistant):
-    # - Made rate_limiter import optional with a no-op fallback to prevent
-    #   ModuleNotFoundError in containerized installs that omit rate_limiter.py.
-    #
-    # Remaining checklist (non-blocking for runtime):
-    # - Update container/Podman build configuration to ensure rate_limiter.py
-    #   is included in the image (e.g., COPY list or packaging config).
-    # - Once packaging reliably includes rate_limiter.py, consider removing
-    #   the fallback or turning it into an explicit configuration option.
-    
+
     return app

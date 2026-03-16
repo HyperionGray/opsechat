@@ -335,6 +335,15 @@ For security best practices and recommendations, please see [SECURITY.md](SECURI
 
 **Note on jQuery**: ✅ **RESOLVED** - The bundled jQuery has been updated to v3.7.1 to patch the previously known XSS vulnerabilities (CVE-2020-11023 and CVE-2020-11022). The security vulnerabilities have been addressed.
 
+### Content Security Policy (CSP)
+
+Responses include a `Content-Security-Policy` header by default.
+
+- `OPSECHAT_CSP_MODE=compat` (default): allows inline scripts/styles for legacy templates.
+- `OPSECHAT_CSP_MODE=strict`: disables inline scripts/styles and enforces a stricter policy.
+
+This allows incremental hardening while keeping current UI templates functional.
+
 Examples
 ========
 
