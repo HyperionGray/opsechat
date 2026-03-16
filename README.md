@@ -10,6 +10,8 @@
 - 🔒 **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
 - 🌐 **Domain Rotation CLI** - Easy burner email domain management
 - 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
+- 🩺 **Health Runtime Metrics** - `/health` now reports active rooms/DMs/rate-limit session counts
+- ⚙️ **Configurable Chat Limits** - In-memory chat rate limits can be tuned via environment variables
 - ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use
 - 🚀 **Production Deployment** - Robust systemd units with auto-restart
 

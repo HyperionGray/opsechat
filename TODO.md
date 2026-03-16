@@ -81,7 +81,8 @@
 - [x] Add rate limiting
   - [x] Implement per-session/IP limits (Flask-Limiter)
   - [x] Add per-endpoint throttling (`/chat/create`, `/chat/*/messages`, `/chat/dm/send`)
-  - [ ] Configure reasonable thresholds (review after load testing)
+  - [x] Add configurable in-memory thresholds via environment variables (`OPSECHAT_*_MAX_REQUESTS`, `OPSECHAT_*_WINDOW_SECONDS`)
+  - [ ] Tune production thresholds with load-testing data
   - [ ] Add backoff/retry logic
 - [ ] Integrate second domain registrar API
   - [ ] Choose registrar (Namecheap recommended)

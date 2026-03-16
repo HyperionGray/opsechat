@@ -17,16 +17,6 @@ except ModuleNotFoundError:
         return app
 
 
-def _read_version():
-    """Read application version from VERSION file"""
-    version_file = os.path.join(os.path.dirname(__file__), "VERSION")
-    try:
-        with open(version_file) as f:
-            return f.read().strip()
-    except OSError:
-        return "unknown"
-
-
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
@@ -91,8 +81,6 @@ def create_app():
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
@@ -103,7 +91,7 @@ def create_app():
                         check_older_than, process_chat)
     
     # Register simple chat routes (new simplified interface)
-    from simple_chat_routes import register_simple_chat_routes
+    from simple_chat_routes import register_simple_chat_routes, get_simple_chat_stats
     register_simple_chat_routes(app)
     
     # Register email routes
@@ -119,21 +107,13 @@ def create_app():
 
     @app.route('/health', methods=["GET"])
     def health():
-        return jsonify(get_health_status())
+        status = get_health_status()
+        status.update(get_simple_chat_stats())
+        return jsonify(status)
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # CHANGELOG (AI assistant):
-    # - Made rate_limiter import optional with a no-op fallback to prevent
-    #   ModuleNotFoundError in containerized installs that omit rate_limiter.py.
-    #
-    # Remaining checklist (non-blocking for runtime):
-    # - Update container/Podman build configuration to ensure rate_limiter.py
-    #   is included in the image (e.g., COPY list or packaging config).
-    # - Once packaging reliably includes rate_limiter.py, consider removing
-    #   the fallback or turning it into an explicit configuration option.
     
     return app

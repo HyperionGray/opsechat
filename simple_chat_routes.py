@@ -11,6 +11,7 @@ This module provides a simplified, security-focused chat system with:
 - Rate limiting on all write endpoints
 """
 
+import os
 import re
 import datetime
 import secrets
@@ -33,12 +34,44 @@ dm_lock = threading.Lock()
 _rate_limit_store = {}
 _rate_limit_lock = threading.Lock()
 
-# Rate limit configuration
-RATE_LIMITS = {
-    "chat_create": {"max_requests": 10, "window_seconds": 60},
-    "chat_message": {"max_requests": 30, "window_seconds": 60},
-    "dm_send": {"max_requests": 5, "window_seconds": 60},
-}
+def _read_positive_int_env(var_name, default_value):
+    """
+    Read a positive integer environment variable with safe fallback.
+
+    Invalid, missing, or non-positive values return the provided default.
+    """
+    raw_value = os.environ.get(var_name)
+    if raw_value is None:
+        return default_value
+    try:
+        parsed = int(raw_value)
+        if parsed > 0:
+            return parsed
+    except ValueError:
+        pass
+    return default_value
+
+
+def _load_rate_limits():
+    """Load in-memory rate limit config from environment variables."""
+    return {
+        "chat_create": {
+            "max_requests": _read_positive_int_env("OPSECHAT_CHAT_CREATE_MAX_REQUESTS", 10),
+            "window_seconds": _read_positive_int_env("OPSECHAT_CHAT_CREATE_WINDOW_SECONDS", 60),
+        },
+        "chat_message": {
+            "max_requests": _read_positive_int_env("OPSECHAT_CHAT_MESSAGE_MAX_REQUESTS", 30),
+            "window_seconds": _read_positive_int_env("OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS", 60),
+        },
+        "dm_send": {
+            "max_requests": _read_positive_int_env("OPSECHAT_DM_SEND_MAX_REQUESTS", 5),
+            "window_seconds": _read_positive_int_env("OPSECHAT_DM_SEND_WINDOW_SECONDS", 60),
+        },
+    }
+
+
+# Rate limit configuration (in-memory sliding window checks)
+RATE_LIMITS = _load_rate_limits()
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
@@ -220,6 +253,25 @@ def cleanup_rate_limits():
 
         for sid in stale_sessions:
             del _rate_limit_store[sid]
+
+
+def get_simple_chat_stats():
+    """Return current simple-chat runtime metrics for health reporting."""
+    with rooms_lock:
+        active_rooms = len(chat_rooms)
+    with dm_lock:
+        active_dms = len(direct_messages)
+    with _rate_limit_lock:
+        active_rate_limit_sessions = len(_rate_limit_store)
+
+    return {
+        "active_rooms": active_rooms,
+        "active_dms": active_dms,
+        "active_rate_limit_sessions": active_rate_limit_sessions,
+        "simple_chat_rate_limits": {
+            endpoint: config.copy() for endpoint, config in RATE_LIMITS.items()
+        },
+    }
 
 
 # Background cleanup thread
