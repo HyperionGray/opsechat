@@ -4,7 +4,7 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, NamecheapAPIClient, DomainRotationManager
 )
 
 
@@ -74,6 +74,57 @@ class TestPorkbunAPIClient:
         
         assert result["tld"] == "com"
         assert result["registration"] == "9.99"
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch.object(NamecheapAPIClient, "_make_request")
+    def test_search_domain_available(self, mock_request):
+        """Test Namecheap domain availability parsing"""
+        mock_request.return_value = """
+<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+  <CommandResponse Type="namecheap.domains.check">
+    <DomainCheckResult Domain="test123.xyz" Available="true" Price="2.88" />
+  </CommandResponse>
+</ApiResponse>
+"""
+        client = NamecheapAPIClient(
+            api_key="test-key",
+            username="test-user",
+            client_ip="127.0.0.1",
+        )
+        result = client.search_domain("test123.xyz")
+        assert result["available"] is True
+        assert result["price"] == 2.88
+        assert result["provider"] == "namecheap"
+
+    @patch.object(NamecheapAPIClient, "_make_request")
+    def test_get_pricing(self, mock_request):
+        """Test Namecheap pricing parsing"""
+        mock_request.return_value = """
+<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+  <CommandResponse Type="namecheap.users.getPricing">
+    <UserGetPricingResult>
+      <ProductType Name="domains">
+        <ProductCategory Name="register">
+          <Product Name="com">
+            <Price Duration="1" DurationType="YEAR" Price="9.16" />
+          </Product>
+        </ProductCategory>
+      </ProductType>
+    </UserGetPricingResult>
+  </CommandResponse>
+</ApiResponse>
+"""
+        client = NamecheapAPIClient(
+            api_key="test-key",
+            username="test-user",
+            client_ip="127.0.0.1",
+        )
+        result = client.get_pricing("com")
+        assert result["tld"] == "com"
+        assert result["registration"] == 9.16
 
 
 class TestDomainRotationManager:
@@ -174,3 +225,19 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_namecheap_and_get_config(self):
+        """Test manager runtime configuration helpers"""
+        manager = DomainRotationManager()
+        manager.configure(
+            provider="namecheap",
+            api_key="test-key",
+            username="namecheap-user",
+            client_ip="127.0.0.1",
+            monthly_budget=25.0,
+        )
+
+        config = manager.get_config()
+        assert config["monthly_budget"] == 25.0
+        assert config["active_provider"] == "namecheap"
+        assert "namecheap" in config["configured_providers"]

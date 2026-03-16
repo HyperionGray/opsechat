@@ -5,6 +5,7 @@ This module handles Flask application creation and configuration,
 extracted from runserver.py to improve code organization.
 """
 
+import os
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:

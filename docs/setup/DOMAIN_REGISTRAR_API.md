@@ -59,14 +59,31 @@ Key endpoints used by opsechat:
 - `pricing/get` - Get TLD pricing
 - `domain/listAll` - List owned domains
 
-## Other Registrars (Future Support)
+### Namecheap (Supported)
 
-The opsechat domain manager is designed to be extensible. Future registrar support may include:
+Namecheap support is available for domain availability checks, pricing lookups,
+and optional purchases when full registrant contact details are configured.
+
+## Additional Registrar Support
+
+Opsechat now supports a second registrar client for availability checks and
+pricing via Namecheap, in addition to Porkbun.
 
 ### Namecheap
-- API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
-- Cheap TLDs: .xyz, .club, .online
+- API docs: [Namecheap API Intro](https://www.namecheap.com/support/api/intro/)
+- Requirements: API access enabled and allowed `ClientIp`
+- Current support in opsechat:
+  - Domain availability checks
+  - Pricing lookups
+  - Optional purchase flow when full registrant contact profile is provided
+- CLI configuration keys:
+  - `registrar=namecheap`
+  - `namecheap_api_key`
+  - `namecheap_username`
+  - `namecheap_client_ip`
+  - `namecheap_api_user` (optional)
+
+### Other potential registrars
 
 ### Namesilo
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)
