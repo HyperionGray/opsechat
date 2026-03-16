@@ -1,7 +1,7 @@
 """
 Tests for domain management module
 """
-import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +174,84 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+    
+    @patch('domain_manager.PorkbunAPIClient')
+    def test_configure_and_get_config(self, mock_client_class):
+        """Test manager configuration and config reporting"""
+        manager = DomainRotationManager()
+        manager.configure(
+            api_key="pk1_testkey1234",
+            secret_key="sk1_secret5678",
+            monthly_budget=25.0
+        )
+        
+        mock_client_class.assert_called_once_with(
+            api_key="pk1_testkey1234",
+            api_secret="sk1_secret5678"
+        )
+        
+        config = manager.get_config()
+        assert config["configured"] is True
+        assert config["monthly_budget"] == 25.0
+        assert config["api_key_masked"] == "****1234"
+    
+    def test_rotate_to_new_domain_returns_structured_result(self):
+        """Structured rotate result should include success metadata"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "newdomain.xyz",
+            "price": "2.99"
+        }
+        mock_client.purchase_domain.return_value = {"success": True, "order_id": "ord_1"}
+        
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        result = manager.rotate_to_new_domain(max_price=5.0)
+        
+        assert result["success"] is True
+        assert result["domain"] == "newdomain.xyz"
+        assert result["cost"] == 2.99
+        assert manager.active_domain == "newdomain.xyz"
+    
+    def test_rotate_to_new_domain_test_mode_skips_purchase(self):
+        """Test mode should avoid real registrar purchases"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "testmode.xyz",
+            "price": 1.99
+        }
+        
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        manager.set_test_mode(True)
+        result = manager.rotate_to_new_domain(max_price=5.0)
+        
+        assert result["success"] is True
+        assert result["test_mode"] is True
+        assert result["domain"] == "testmode.xyz"
+        mock_client.purchase_domain.assert_not_called()
+    
+    def test_state_export_and_load_roundtrip(self):
+        """Exported state should be JSON-safe and reload cleanly"""
+        manager = DomainRotationManager(monthly_budget=40.0)
+        manager.current_spending = 5.5
+        manager.active_domain = "saved.xyz"
+        manager.owned_domains = [{
+            "domain": "saved.xyz",
+            "price": "5.50",
+            "order_id": "order_123",
+            "purchased_at": datetime(2026, 1, 1, 12, 0, 0),
+            "expires_at": datetime(2027, 1, 1, 12, 0, 0)
+        }]
+        
+        state = manager.export_state()
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(state["owned_domains"][0]["expires_at"], str)
+        
+        restored = DomainRotationManager()
+        restored.load_state(state)
+        
+        assert restored.current_spending == 5.5
+        assert restored.active_domain == "saved.xyz"
+        assert len(restored.owned_domains) == 1
+        assert isinstance(restored.owned_domains[0]["purchased_at"], datetime)
