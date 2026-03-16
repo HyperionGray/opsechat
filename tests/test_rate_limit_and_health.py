@@ -87,6 +87,56 @@ def test_rate_limit_chat_message_limit():
     assert retry_after >= 1
 
 
+def test_chat_create_429_returns_retry_metadata():
+    """Flask-Limiter 429 responses should include backoff metadata."""
+    app = create_app()
+    app.config["TESTING"] = True
+
+    with app.test_client() as client:
+        for _ in range(3):
+            response = client.post("/chat/create", content_type="application/json")
+            assert response.status_code == 200
+
+        response = client.post("/chat/create", content_type="application/json")
+        assert response.status_code == 429
+        data = response.get_json()
+        assert data["error_code"] == "rate_limit_exceeded"
+        assert data["endpoint"] == "/chat/create"
+        assert data["retry_after_seconds"] >= 1
+        assert int(response.headers["Retry-After"]) >= 1
+
+
+def test_chat_message_429_has_consistent_body_and_headers():
+    """Custom limiter responses should include JSON + Retry-After header."""
+    _clear_store()
+    app = create_app()
+    app.config["TESTING"] = True
+
+    with app.test_client() as client:
+        create_response = client.post("/chat/create", content_type="application/json")
+        assert create_response.status_code == 200
+        room_id = create_response.get_json()["room_id"]
+
+        for i in range(30):
+            response = client.post(
+                f"/chat/room/{room_id}/messages",
+                json={"message": f"message-{i}"},
+            )
+            assert response.status_code == 200
+
+        blocked = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "blocked-message"},
+        )
+        assert blocked.status_code == 429
+        data = blocked.get_json()
+        assert data["error_code"] == "rate_limit_exceeded"
+        assert data["endpoint"] == "chat_message"
+        assert data["retry_after_seconds"] >= 1
+        assert int(blocked.headers["Retry-After"]) == data["retry_after_seconds"]
+        assert blocked.headers["X-RateLimit-Limit"] == "30"
+
+
 # ---------------------------------------------------------------------------
 # Health endpoint integration tests
 # ---------------------------------------------------------------------------

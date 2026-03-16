@@ -161,11 +161,36 @@
     </div>
     
     <script>
-        // Simple room creation with no external dependencies
-        document.getElementById('createRoomBtn').addEventListener('click', async function() {
-            const statusDiv = document.getElementById('status');
+        const createRoomBtn = document.getElementById('createRoomBtn');
+        const statusDiv = document.getElementById('status');
+        let createCooldownTimer = null;
+
+        function startCreateCooldown(seconds) {
+            let remaining = Math.max(parseInt(seconds, 10) || 1, 1);
+            createRoomBtn.disabled = true;
+
+            if (createCooldownTimer) {
+                clearInterval(createCooldownTimer);
+            }
+
+            statusDiv.textContent = `Rate limit reached. Retry in ${remaining}s.`;
+            createCooldownTimer = setInterval(() => {
+                remaining -= 1;
+                if (remaining <= 0) {
+                    clearInterval(createCooldownTimer);
+                    createCooldownTimer = null;
+                    createRoomBtn.disabled = false;
+                    statusDiv.textContent = 'Ready. You can create a room now.';
+                    return;
+                }
+                statusDiv.textContent = `Rate limit reached. Retry in ${remaining}s.`;
+            }, 1000);
+        }
+
+        // Simple room creation with built-in backoff handling.
+        createRoomBtn.addEventListener('click', async function() {
             statusDiv.textContent = 'Creating room...';
-            
+
             try {
                 const response = await fetch('/chat/create', {
                     method: 'POST',
@@ -173,14 +198,26 @@
                         'Content-Type': 'application/json'
                     }
                 });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to create room');
+
+                let data = {};
+                try {
+                    data = await response.json();
+                } catch (e) {
+                    data = {};
                 }
-                
-                const data = await response.json();
-                
-                if (data.success) {
+
+                if (!response.ok) {
+                    if (response.status === 429) {
+                        const retryAfterHeader = response.headers.get('Retry-After');
+                        const retryAfterBody = data.retry_after_seconds;
+                        const retryAfter = parseInt(retryAfterHeader || retryAfterBody || '1', 10);
+                        startCreateCooldown(retryAfter);
+                        return;
+                    }
+                    throw new Error(data.error || 'Failed to create room');
+                }
+
+                if (data.success && data.room_url) {
                     statusDiv.innerHTML = `Room created! Redirecting...<br><a href="${data.room_url}">${window.location.origin}${data.room_url}</a>`;
                     setTimeout(() => {
                         window.location.href = data.room_url;
@@ -190,6 +227,7 @@
                 }
             } catch (error) {
                 statusDiv.textContent = 'Error: ' + error.message;
+                createRoomBtn.disabled = false;
             }
         });
     </script>

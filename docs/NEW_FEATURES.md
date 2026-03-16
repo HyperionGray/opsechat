@@ -172,6 +172,37 @@ When limit exceeded:
 
 ---
 
+## ⏱ HTTP Backoff Signaling for Chat Rate Limits
+
+### What Changed
+Rate-limited chat endpoints now return machine-readable cooldown metadata so clients can back off cleanly instead of retrying blindly.
+
+### Response Format
+When a request is throttled (`429`), the API now returns:
+
+- `Retry-After` response header (seconds)
+- JSON fields:
+  - `error_code: "rate_limit_exceeded"`
+  - `retry_after_seconds`
+  - `endpoint`
+
+Example:
+
+```json
+{
+  "error": "Rate limit exceeded. Try again in 17 seconds.",
+  "error_code": "rate_limit_exceeded",
+  "endpoint": "chat_message",
+  "retry_after_seconds": 17
+}
+```
+
+### Client Behavior
+- Chat room creation UI now shows a countdown and temporarily disables the create button after `429`.
+- Chat send UI now shows a countdown and temporarily disables send until cooldown expires.
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

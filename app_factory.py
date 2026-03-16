@@ -5,7 +5,9 @@ This module handles Flask application creation and configuration,
 extracted from runserver.py to improve code organization.
 """
 
-from flask import Flask, jsonify
+import os
+
+from flask import Flask, jsonify, request
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -96,6 +98,60 @@ def create_app():
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
+        return response
+
+    def _parse_retry_after(value, default=60):
+        """Parse Retry-After-like values into safe positive seconds."""
+        try:
+            parsed = int(float(value))
+            return max(parsed, 1)
+        except (TypeError, ValueError):
+            return default
+
+    @app.errorhandler(429)
+    def handle_rate_limit_exceeded(error):
+        """
+        Normalize Flask-Limiter 429 responses for predictable client backoff.
+        """
+        source_response = None
+        if hasattr(error, "get_response"):
+            try:
+                source_response = error.get_response()
+            except Exception:
+                source_response = None
+
+        retry_after = 60
+        if source_response is not None:
+            retry_after = _parse_retry_after(
+                source_response.headers.get("Retry-After"),
+                default=retry_after,
+            )
+        if hasattr(error, "retry_after"):
+            retry_after = _parse_retry_after(getattr(error, "retry_after"), default=retry_after)
+
+        payload = {
+            "error": "Rate limit exceeded. Please retry after cooldown.",
+            "error_code": "rate_limit_exceeded",
+            "endpoint": request.path,
+            "retry_after_seconds": retry_after,
+        }
+        response = jsonify(payload)
+        response.status_code = 429
+        response.headers["Retry-After"] = str(retry_after)
+        response.headers["Cache-Control"] = "no-store"
+
+        if source_response is not None:
+            passthrough_headers = (
+                "X-RateLimit-Limit",
+                "X-RateLimit-Remaining",
+                "X-RateLimit-Reset",
+                "X-RateLimit-Policy",
+            )
+            for header_name in passthrough_headers:
+                header_value = source_response.headers.get(header_name)
+                if header_value is not None:
+                    response.headers[header_name] = header_value
+
         return response
     
     # Register chat routes

@@ -217,6 +217,7 @@
         let encryptionKey = null;
         let pollInterval = null;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+        let sendCooldownTimer = null;
         
         // Show security warning on first load
         function showSecurityWarning() {
@@ -343,6 +344,30 @@
                 statusMsg.textContent = '';
             }, duration);
         }
+
+        function startSendCooldown(seconds) {
+            let remaining = Math.max(parseInt(seconds, 10) || 1, 1);
+            const sendBtn = document.getElementById('sendBtn');
+            const statusMsg = document.getElementById('statusMsg');
+            sendBtn.disabled = true;
+
+            if (sendCooldownTimer) {
+                clearInterval(sendCooldownTimer);
+            }
+
+            statusMsg.textContent = `Rate limit reached. Retry in ${remaining}s.`;
+            sendCooldownTimer = setInterval(() => {
+                remaining -= 1;
+                if (remaining <= 0) {
+                    clearInterval(sendCooldownTimer);
+                    sendCooldownTimer = null;
+                    sendBtn.disabled = false;
+                    statusMsg.textContent = 'Ready. You can send messages again.';
+                    return;
+                }
+                statusMsg.textContent = `Rate limit reached. Retry in ${remaining}s.`;
+            }, 1000);
+        }
         
         function scrollToBottom() {
             const container = document.getElementById('messagesContainer');
@@ -393,6 +418,10 @@
         }
         
         async function sendMessage() {
+            if (document.getElementById('sendBtn').disabled) {
+                return;
+            }
+
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
             
@@ -413,12 +442,27 @@
                     },
                     body: JSON.stringify({ message: messageToSend })
                 });
-                
+
                 if (response.ok) {
                     input.value = '';
                     await pollMessages();
                 } else {
-                    showStatus('Error sending message');
+                    let data = {};
+                    try {
+                        data = await response.json();
+                    } catch (e) {
+                        data = {};
+                    }
+
+                    if (response.status === 429) {
+                        const retryAfterHeader = response.headers.get('Retry-After');
+                        const retryAfterBody = data.retry_after_seconds;
+                        const retryAfter = parseInt(retryAfterHeader || retryAfterBody || '1', 10);
+                        startSendCooldown(retryAfter);
+                        return;
+                    }
+
+                    showStatus(data.error || 'Error sending message');
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);
