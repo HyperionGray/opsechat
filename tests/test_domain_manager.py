@@ -4,7 +4,11 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient,
+    PorkbunAPIClient,
+    NamecheapAPIClient,
+    DomainRotationManager,
+    create_domain_api_client,
 )
 
 
@@ -174,3 +178,105 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_parse_price_handles_currency_and_invalid_values(self):
+        """Test robust price parsing"""
+        manager = DomainRotationManager()
+        assert manager._parse_price("$2.99") == 2.99
+        assert manager._parse_price(" €3,100.50 ") == 3100.50
+        assert manager._parse_price(None) is None
+        assert manager._parse_price("invalid") is None
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch("domain_manager.requests.Session")
+    def test_search_domain_available(self, mock_session_class):
+        """Test Namecheap domain check parsing"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """<?xml version="1.0" encoding="utf-8"?>
+<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+  <CommandResponse Type="namecheap.domains.check">
+    <DomainCheckResult Domain="example.xyz" Available="true" IsPremiumName="false" />
+  </CommandResponse>
+</ApiResponse>
+"""
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient("key", "user")
+        result = client.search_domain("example.xyz")
+
+        assert result["available"] is True
+        assert result["domain"] == "example.xyz"
+        assert result["provider"] == "namecheap"
+
+    @patch("domain_manager.requests.Session")
+    def test_get_pricing(self, mock_session_class):
+        """Test Namecheap pricing parsing"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """<?xml version="1.0" encoding="utf-8"?>
+<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+  <CommandResponse Type="namecheap.users.getPricing">
+    <UserGetPricingResult>
+      <ProductType Name="DOMAIN">
+        <ProductCategory Name="DOMAINS">
+          <Product Name="xyz">
+            <Price Duration="1" YourPrice="2.98" />
+          </Product>
+        </ProductCategory>
+      </ProductType>
+    </UserGetPricingResult>
+  </CommandResponse>
+</ApiResponse>
+"""
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient("key", "user")
+        result = client.get_pricing("xyz")
+
+        assert result["tld"] == "xyz"
+        assert result["registration"] == "2.98"
+
+    @patch("domain_manager.requests.Session")
+    def test_purchase_domain_requires_contact_profile(self, mock_session_class):
+        """Test Namecheap purchase validation"""
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient("key", "user")
+        result = client.purchase_domain("example.xyz")
+
+        assert result["success"] is False
+        assert "Missing Namecheap contact profile" in result["message"]
+
+
+class TestDomainClientFactory:
+    """Test domain client factory helper"""
+
+    def test_create_porkbun_client(self):
+        """Factory returns Porkbun client"""
+        client = create_domain_api_client(
+            "porkbun",
+            api_key="test_key",
+            api_secret="test_secret",
+        )
+        assert isinstance(client, PorkbunAPIClient)
+
+    def test_create_namecheap_client(self):
+        """Factory returns Namecheap client"""
+        client = create_domain_api_client(
+            "namecheap",
+            api_key="test_key",
+            username="test_user",
+        )
+        assert isinstance(client, NamecheapAPIClient)
+
+    def test_create_client_rejects_unknown_provider(self):
+        """Factory rejects unsupported providers"""
+        with pytest.raises(ValueError):
+            create_domain_api_client("unknown")
