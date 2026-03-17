@@ -142,11 +142,11 @@ def test_metrics_counts_requests_and_errors():
     client = _test_app.test_client()
 
     ok_response = client.get("/health")
-    missing_response = client.get("/definitely-not-a-route")
+    method_error_response = client.post("/health")
     metrics_response = client.get("/metrics")
 
     assert ok_response.status_code == 200
-    assert missing_response.status_code == 404
+    assert method_error_response.status_code == 405
     assert metrics_response.status_code == 200
 
     metrics_data = metrics_response.get_json()
