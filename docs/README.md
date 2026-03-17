@@ -5,7 +5,7 @@ Welcome to the OpSecChat documentation. All documentation has been organized int
 ## Quick Links
 
 - **[Main README](../README.md)** - Start here for project overview
-- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes (TODO)
+- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes
 - **[Security](../SECURITY.md)** - Security information and best practices
 - **[License](../LICENSE.md)** - MIT License
 
@@ -50,6 +50,7 @@ Information for developers contributing to the project.
 - [Contributing Guide](development/CONTRIBUTING.md) - How to contribute
 - [Code of Conduct](development/CODE_OF_CONDUCT.md) - Community guidelines
 - [Modernization Notes](development/MODERNIZATION.md) - Upgrade notes
+- [Monitoring Guide](development/MONITORING.md) - Health and metrics endpoints
 - [Agent Guidelines](development/AGENTS.md) - Repository guidelines for AI agents
 
 ### ⚖️ Legal

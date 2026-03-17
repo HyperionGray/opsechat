@@ -113,3 +113,35 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_metrics_endpoint_returns_200_with_required_sections():
+    client = _test_app.test_client()
+    response = client.get("/health/metrics")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data is not None
+    assert "timestamp" in data
+    assert "uptime_seconds" in data
+    assert "requests" in data
+    assert "tor" in data
+    assert "activity" in data
+    assert "total" in data["requests"]
+    assert "error_rate" in data["requests"]
+    assert "avg_response_time" in data["requests"]
+
+
+def test_health_metrics_detailed_includes_per_endpoint_stats():
+    client = _test_app.test_client()
+    client.get("/health")
+    response = client.get("/health/metrics?detailed=true")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "requests" in data
+    assert "by_endpoint" in data["requests"]
+    assert "GET /health" in data["requests"]["by_endpoint"]
+
+    health_metrics = data["requests"]["by_endpoint"]["GET /health"]
+    assert health_metrics["count"] >= 1
+    assert "avg_response_time" in health_metrics
+    assert "error_rate" in health_metrics

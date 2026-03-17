@@ -269,6 +269,33 @@ class ApplicationPerformanceMonitor:
             ) * 100
         
         return summary
+
+    def get_detailed_metrics_summary(self) -> Dict[str, Any]:
+        """
+        Get summarized metrics with per-endpoint breakdown.
+
+        The detailed summary keeps the response small by returning aggregate
+        counters and averages per endpoint instead of raw timing samples.
+        """
+        summary = self.get_metrics_summary()
+        endpoint_summary = {}
+
+        for endpoint_key, endpoint_metrics in self.metrics['requests']['by_endpoint'].items():
+            count = endpoint_metrics['count']
+            avg_response_time = (
+                endpoint_metrics['total_time'] / count if count > 0 else 0.0
+            )
+            error_rate = (
+                (endpoint_metrics['errors'] / count) * 100 if count > 0 else 0.0
+            )
+            endpoint_summary[endpoint_key] = {
+                'count': count,
+                'avg_response_time': avg_response_time,
+                'error_rate': error_rate,
+            }
+
+        summary['requests']['by_endpoint'] = endpoint_summary
+        return summary
     
     def log_metrics_summary(self):
         """Log current metrics summary"""
