@@ -113,3 +113,26 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_active_rooms_reflects_new_rooms():
+    client = _test_app.test_client()
+    create_response = client.post("/chat/create")
+    assert create_response.status_code == 200
+
+    response = client.get("/health")
+    data = response.get_json()
+    assert data["active_rooms"] >= 1
+
+
+def test_readiness_endpoint_returns_ready():
+    client = _test_app.test_client()
+    response = client.get("/health/ready")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data is not None
+    assert data.get("ready") is True
+    assert data.get("status") == "ready"
+    assert "version" in data
+    assert "checks" in data

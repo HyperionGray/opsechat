@@ -8,7 +8,7 @@ import json
 import time
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from functools import wraps
 import traceback
@@ -321,18 +321,40 @@ def _read_version() -> str:
         return 'unknown'
 
 
-def get_health_status() -> Dict[str, Any]:
-    """Get application health status"""
+def _build_basic_checks() -> Dict[str, str]:
+    """Build baseline checks shared by health and readiness responses."""
+    return {
+        'tor_connection': 'unknown',  # Would need to check actual Tor status
+        'memory_usage': 'ok',
+        'disk_space': 'ok'
+    }
+
+
+def get_health_status(active_rooms: int = 0) -> Dict[str, Any]:
+    """Get application liveness status with lightweight runtime details."""
     return {
         'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
-        'checks': {
-            'tor_connection': 'unknown',  # Would need to check actual Tor status
-            'memory_usage': 'ok',
-            'disk_space': 'ok'
-        }
+        'active_rooms': max(active_rooms, 0),
+        'checks': _build_basic_checks()
+    }
+
+
+def get_readiness_status(active_rooms: int = 0) -> Dict[str, Any]:
+    """Get application readiness status for orchestration probes."""
+    checks = _build_basic_checks()
+    version = _read_version()
+    checks['version_file'] = 'ok' if version != 'unknown' else 'missing'
+
+    return {
+        'ready': True,
+        'status': 'ready',
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'version': version,
+        'active_rooms': max(active_rooms, 0),
+        'checks': checks
     }
 
 # Security event logging

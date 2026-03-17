@@ -190,6 +190,21 @@ Tests cover:
 
 For full testing documentation, see [Testing Guide](docs/user-guide/TESTING.md).
 
+Health Endpoints
+================
+
+Use these endpoints for operational checks and container probes:
+
+```bash
+# Liveness (includes active_rooms count)
+curl http://localhost:5000/health
+
+# Readiness (returns 200 when app is ready to serve)
+curl http://localhost:5000/health/ready
+```
+
+Both responses include the current app version from `VERSION`.
+
 
 How it works
 ============

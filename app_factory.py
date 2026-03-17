@@ -16,17 +16,6 @@ except ModuleNotFoundError:
         # was not included in the image build.
         return app
 
-
-def _read_version():
-    """Read application version from VERSION file"""
-    version_file = os.path.join(os.path.dirname(__file__), "VERSION")
-    try:
-        with open(version_file) as f:
-            return f.read().strip()
-    except OSError:
-        return "unknown"
-
-
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
@@ -103,7 +92,7 @@ def create_app():
                         check_older_than, process_chat)
     
     # Register simple chat routes (new simplified interface)
-    from simple_chat_routes import register_simple_chat_routes
+    from simple_chat_routes import register_simple_chat_routes, chat_rooms, rooms_lock
     register_simple_chat_routes(app)
     
     # Register email routes
@@ -115,11 +104,21 @@ def create_app():
                           add_review_wrapper, get_reviews, get_review_stats)
     
     # Health check endpoint
-    from monitoring import get_health_status
+    from monitoring import get_health_status, get_readiness_status
+
+    def get_active_room_count():
+        """Return active in-memory chat room count for health probes."""
+        with rooms_lock:
+            return len(chat_rooms)
 
     @app.route('/health', methods=["GET"])
     def health():
-        return jsonify(get_health_status())
+        return jsonify(get_health_status(active_rooms=get_active_room_count()))
+
+    @app.route('/health/ready', methods=["GET"])
+    def health_ready():
+        status = get_readiness_status(active_rooms=get_active_room_count())
+        return jsonify(status), (200 if status.get("ready") else 503)
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
