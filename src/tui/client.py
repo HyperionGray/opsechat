@@ -9,7 +9,7 @@ Features:
 - Real-time message updates
 - Randomized username (server-assigned)
 - Text-only interface (no images/video)
-- Messages auto-burn after 4 minutes
+- Messages auto-burn after 3 minutes
 - Tor/SOCKS proxy support for .onion addresses
 """
 
@@ -17,6 +17,7 @@ import sys
 import socket
 import json
 import threading
+import time
 import urwid
 import socks  # PySocks for SOCKS proxy support
 
@@ -58,6 +59,7 @@ class ChatClient:
         self.username = "Unknown"
         self.running = False
         self.message_buffer = ""
+        self.connected_at = None
         
         # UI components
         self.messages_walker = urwid.SimpleFocusListWalker([])
@@ -74,7 +76,7 @@ class ChatClient:
             urwid.Text([
                 ('title', 'OpSecChat TUI - Privacy First'),
                 ' | ',
-                ('info', 'Messages burn in 4 min'),
+                ('info', 'Messages burn in 3 min'),
                 ' | ',
                 ('warn', 'Text only - No images/video')
             ], align='center'),
@@ -162,6 +164,7 @@ class ChatClient:
             
             self.socket = create_socket_connection(self.host, self.port, self.use_tor, self.tor_port)
             self.running = True
+            self.connected_at = time.time()
             
             # Start receive thread
             receive_thread = threading.Thread(target=self.receive_messages, daemon=True)
@@ -217,6 +220,11 @@ class ChatClient:
             username = msg.get('username', 'Unknown')
             message = msg.get('message', '')
             self.add_message(username, message)
+
+        elif msg_type == 'system':
+            message = msg.get('message', '')
+            if message:
+                self.add_message("System", message, is_system=True)
     
     def update_footer(self):
         """Update the footer with current username"""
@@ -249,13 +257,74 @@ class ChatClient:
             self.socket.send((json.dumps(msg_obj) + '\n').encode())
         except Exception as e:
             self.add_message("System", f"Failed to send: {e}", is_system=True)
+
+    def send_command(self, command):
+        """Send a slash command request to the server."""
+        if not self.socket:
+            self.add_message("System", "Not connected to server", is_system=True)
+            return
+
+        try:
+            msg_obj = {
+                'type': 'command',
+                'command': command
+            }
+            self.socket.send((json.dumps(msg_obj) + '\n').encode())
+        except Exception as e:
+            self.add_message("System", f"Failed to send command: {e}", is_system=True)
+
+    def handle_command(self, command):
+        """Handle local slash commands."""
+        normalized = command.strip().lower()
+
+        if normalized == '/help':
+            self.add_message(
+                "System",
+                "Commands: /help, /status, /users, /quit",
+                is_system=True
+            )
+            return
+
+        if normalized == '/status':
+            status = "Connected" if self.running and self.socket else "Disconnected"
+            tor_status = "on" if self.use_tor else "off"
+            uptime = 0
+            if self.connected_at:
+                uptime = int(time.time() - self.connected_at)
+            self.add_message(
+                "System",
+                (
+                    f"Status: {status} | Server: {self.host}:{self.port} | "
+                    f"Tor: {tor_status} | Uptime: {uptime}s | Username: {self.username}"
+                ),
+                is_system=True
+            )
+            return
+
+        if normalized == '/users':
+            self.send_command('/users')
+            return
+
+        if normalized == '/quit':
+            self.add_message("System", "Disconnecting...", is_system=True)
+            raise urwid.ExitMainLoop()
+
+        self.add_message(
+            "System",
+            f"Unknown command '{command}'. Type /help for available commands.",
+            is_system=True
+        )
     
     def handle_input(self, key):
         """Handle keyboard input"""
         if key == 'enter':
             message = self.input_box.get_edit_text()
             if message.strip():
-                self.send_message(message.strip())
+                text = message.strip()
+                if text.startswith('/'):
+                    self.handle_command(text)
+                else:
+                    self.send_message(text)
                 self.input_box.set_edit_text("")
             return
         
@@ -284,6 +353,7 @@ class ChatClient:
     def cleanup(self):
         """Clean up resources"""
         self.running = False
+        self.connected_at = None
         if self.socket:
             try:
                 self.socket.close()
