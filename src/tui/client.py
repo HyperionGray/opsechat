@@ -58,6 +58,7 @@ class ChatClient:
         self.username = "Unknown"
         self.running = False
         self.message_buffer = ""
+        self.connected_users = 0
         
         # UI components
         self.messages_walker = urwid.SimpleFocusListWalker([])
@@ -87,8 +88,13 @@ class ChatClient:
             ': Send | ',
             ('info', 'Ctrl+C'),
             ': Quit | ',
+            ('info', '/status'),
+            ': Server stats | ',
             ('warn', 'Your username: '),
-            ('username', self.username)
+            ('username', self.username),
+            ' | ',
+            ('info', 'Users: '),
+            ('username', str(self.connected_users))
         ]
         footer = urwid.AttrMap(urwid.Text(footer_text), 'footer')
         
@@ -217,6 +223,20 @@ class ChatClient:
             username = msg.get('username', 'Unknown')
             message = msg.get('message', '')
             self.add_message(username, message)
+        elif msg_type == 'system':
+            self.add_message("System", msg.get('message', 'Server message'), is_system=True)
+        elif msg_type == 'status':
+            self.connected_users = int(msg.get('connected_users', 0))
+            self.update_footer()
+            rate_limit = msg.get('rate_limit', {})
+            status_line = (
+                f"Server status: users={self.connected_users}, "
+                f"buffered_messages={msg.get('buffered_messages', 0)}, "
+                f"burn={msg.get('message_lifetime_seconds', 0)}s, "
+                f"rate_limit={rate_limit.get('max_messages', '?')}/"
+                f"{rate_limit.get('window_seconds', '?')}s"
+            )
+            self.add_message("System", status_line, is_system=True)
     
     def update_footer(self):
         """Update the footer with current username"""
@@ -225,11 +245,27 @@ class ChatClient:
             ': Send | ',
             ('info', 'Ctrl+C'),
             ': Quit | ',
+            ('info', '/status'),
+            ': Server stats | ',
             ('warn', 'Your username: '),
-            ('username', self.username)
+            ('username', self.username),
+            ' | ',
+            ('info', 'Users: '),
+            ('username', str(self.connected_users))
         ]
         footer = urwid.AttrMap(urwid.Text(footer_text), 'footer')
         self.frame.footer = footer
+
+    def request_status(self):
+        """Request current server status."""
+        if not self.socket:
+            self.add_message("System", "Not connected to a server", is_system=True)
+            return
+
+        try:
+            self.socket.send((json.dumps({'type': 'status_request'}) + '\n').encode())
+        except Exception as e:
+            self.add_message("System", f"Failed to request status: {e}", is_system=True)
     
     def send_message(self, message):
         """Send a message to the server"""
@@ -255,7 +291,10 @@ class ChatClient:
         if key == 'enter':
             message = self.input_box.get_edit_text()
             if message.strip():
-                self.send_message(message.strip())
+                if message.strip() == '/status':
+                    self.request_status()
+                else:
+                    self.send_message(message.strip())
                 self.input_box.set_edit_text("")
             return
         

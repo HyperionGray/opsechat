@@ -15,6 +15,8 @@ This is a serious privacy and opsec tool for serious privacy and opsec people. I
 ✅ **Zero Disk** - Nothing touches disk except the application code  
 ✅ **Tor Integration** - Full support for Tor hidden services (.onion)  
 ✅ **SOCKS Proxy** - Client supports connecting via Tor SOCKS proxy  
+✅ **Server Rate Limiting** - Per-user flood protection in-memory  
+✅ **Live `/status` Command** - View connected users and runtime limits  
 
 ## Quick Start
 
@@ -77,6 +79,7 @@ The client will automatically use Tor SOCKS proxy if:
 ### 4. Chat!
 
 - Type your message and press **Enter** to send
+- Type `/status` and press **Enter** to request server runtime stats
 - Press **Ctrl+C** to quit
 - Your username is randomly assigned (e.g., `PhantomRaven4523`)
 - Messages automatically disappear after 4 minutes
@@ -139,6 +142,7 @@ sudo systemctl start tor
 - **No images**: Text only, no exceptions
 - **No video**: Text only, no exceptions
 - **No b64 encoding**: Large base64-like strings are rejected
+- **Rate limit**: 12 messages per 30 seconds per connected user
 
 ## Architecture
 
@@ -162,6 +166,7 @@ sudo systemctl start tor
 - Separate thread for receiving messages
 - Real-time message display
 - Color-coded messages (your messages vs others)
+- `/status` command for on-demand server runtime stats
 
 ## Development
 
@@ -243,7 +248,6 @@ Messages are:
 
 ## Coming Soon
 
-- [ ] Full Tor hidden service integration
 - [ ] PGP encryption support (optional)
 - [ ] Multi-room support
 - [ ] Message signing/verification
