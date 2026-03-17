@@ -39,7 +39,8 @@ The project now includes comprehensive testing using Playwright for both headles
 ```
 tests/
 ├── basic.spec.js          # Basic structure and module tests
-├── e2e.spec.js            # End-to-end functional tests (NEW)
+├── e2e.spec.js            # Backward-compatible entrypoint that loads split E2E suites
+├── *.e2e.spec.js          # Focused end-to-end suites (chat, landing, security, workflows, etc.)
 ├── mock-server.spec.js    # Mock server integration tests
 ├── ui-headless.spec.js    # UI tests in headless mode
 ├── ui-headed.spec.js      # UI tests in headed mode
@@ -87,6 +88,7 @@ Run only end-to-end tests:
 ```bash
 npm run test:e2e
 ```
+This command runs all `tests/*.e2e.spec.js` suites via `tests/e2e.spec.js`.
 
 ### Running Specific Browsers
 
@@ -240,9 +242,9 @@ Current test coverage includes:
 - ✅ **Multi-user concurrent chat scenarios** (NEW)
 - ✅ **Complete user journey testing** (NEW)
 
-### New E2E Test Suite
+### E2E Test Suite
 
-The new `e2e.spec.js` test suite provides comprehensive end-to-end testing that validates:
+The split `*.e2e.spec.js` suites (loaded via `e2e.spec.js`) provide comprehensive end-to-end testing that validates:
 
 1. **HTTP Status Codes AND Content**: Every test checks both the status code (200, 404, 302) and validates the actual response content
 2. **User Workflows**: Tests simulate real user interactions:

@@ -321,13 +321,24 @@ def _read_version() -> str:
         return 'unknown'
 
 
+def get_version_status() -> Dict[str, Any]:
+    """Get deploy/version metadata for operational checks."""
+    return {
+        'version': _read_version(),
+        'git_sha': os.environ.get('OPSECHAT_GIT_SHA', os.environ.get('GITHUB_SHA', 'unknown')),
+        'build_timestamp': os.environ.get('OPSECHAT_BUILD_TIMESTAMP', 'unknown'),
+        'timestamp': datetime.utcnow().isoformat()
+    }
+
+
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
+    version_status = get_version_status()
     return {
         'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': version_status['timestamp'],
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
-        'version': _read_version(),
+        'version': version_status['version'],
         # active_rooms: this app uses a single global chat room. The field is
         # included for API consistency; it always reports 1 when the service is up.
         'active_rooms': 1,

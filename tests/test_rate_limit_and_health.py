@@ -113,3 +113,33 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+# ---------------------------------------------------------------------------
+# Version endpoint integration tests
+# ---------------------------------------------------------------------------
+
+def test_version_endpoint_returns_200():
+    client = _test_app.test_client()
+    response = client.get("/version")
+    assert response.status_code == 200
+
+
+def test_version_endpoint_returns_json_with_required_fields():
+    client = _test_app.test_client()
+    response = client.get("/version")
+    data = response.get_json()
+    assert data is not None
+    assert "version" in data
+    assert "git_sha" in data
+    assert "build_timestamp" in data
+    assert "timestamp" in data
+
+
+def test_health_and_version_report_same_version():
+    client = _test_app.test_client()
+    health_data = client.get("/health").get_json()
+    version_data = client.get("/version").get_json()
+    assert health_data is not None
+    assert version_data is not None
+    assert health_data["version"] == version_data["version"]

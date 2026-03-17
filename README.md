@@ -190,6 +190,19 @@ Tests cover:
 
 For full testing documentation, see [Testing Guide](docs/user-guide/TESTING.md).
 
+Operational Endpoints
+=====================
+
+The app exposes lightweight endpoints for runtime checks and release visibility:
+
+- `GET /health` - service health, uptime, and active room count
+- `GET /version` - version metadata (`version`, `git_sha`, `build_timestamp`, `timestamp`)
+
+To enrich `/version` in deployments, set:
+
+- `OPSECHAT_GIT_SHA`
+- `OPSECHAT_BUILD_TIMESTAMP`
+
 
 How it works
 ============

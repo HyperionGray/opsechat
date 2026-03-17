@@ -106,11 +106,15 @@ def create_app():
                           add_review_wrapper, get_reviews, get_review_stats)
     
     # Health check endpoint
-    from monitoring import get_health_status
+    from monitoring import get_health_status, get_version_status
 
     @app.route('/health', methods=["GET"])
     def health():
         return jsonify(get_health_status())
+
+    @app.route('/version', methods=["GET"])
+    def version():
+        return jsonify(get_version_status())
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
