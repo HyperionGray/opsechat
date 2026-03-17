@@ -81,8 +81,8 @@
 - [x] Add rate limiting
   - [x] Implement per-session/IP limits (Flask-Limiter)
   - [x] Add per-endpoint throttling (`/chat/create`, `/chat/*/messages`, `/chat/dm/send`)
-  - [ ] Configure reasonable thresholds (review after load testing)
-  - [ ] Add backoff/retry logic
+  - [x] Configure reasonable thresholds (env-configurable per endpoint)
+  - [x] Add backoff/retry logic (429 JSON metadata + Retry-After header)
 - [ ] Integrate second domain registrar API
   - [ ] Choose registrar (Namecheap recommended)
   - [ ] Implement API client

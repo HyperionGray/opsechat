@@ -45,6 +45,29 @@ def test_post_is_rate_limited_get_is_not():
     return True
 
 
+def test_rate_limited_response_includes_retry_metadata():
+    """429 responses include retry headers and backoff metadata."""
+    print("\nTesting: 429 includes retry metadata...")
+    app = _make_app()
+
+    with app.test_client() as client:
+        for _ in range(3):
+            r = client.post("/chat/create", content_type="application/json")
+            assert r.status_code == 200
+
+        r = client.post("/chat/create", content_type="application/json")
+        assert r.status_code == 429
+        body = r.get_json()
+
+        assert "Retry-After" in r.headers
+        assert body["retry_after"] >= 1
+        assert body["suggested_backoff_seconds"] >= body["retry_after"]
+        assert body["violations_in_window"] >= 1
+
+    print("✅ 429 responses include retry metadata and Retry-After header")
+    return True
+
+
 def test_separate_sessions_have_independent_limits():
     """Two different sessions must not share rate-limit counters."""
     print("\nTesting: independent rate-limit counters per session...")
@@ -77,6 +100,7 @@ def main():
 
     tests = [
         test_post_is_rate_limited_get_is_not,
+        test_rate_limited_response_includes_retry_metadata,
         test_separate_sessions_have_independent_limits,
     ]
 

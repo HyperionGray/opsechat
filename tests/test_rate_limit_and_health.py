@@ -10,7 +10,15 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    check_rate_limit_with_metadata,
+    RATE_LIMITS,
+    _rate_limit_store,
+    _rate_limit_lock,
+    _violation_store,
+    _violation_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -24,6 +32,8 @@ def _clear_store():
     """Helper: wipe the rate limit store between tests."""
     with _rate_limit_lock:
         _rate_limit_store.clear()
+    with _violation_lock:
+        _violation_store.clear()
 
 
 def test_rate_limit_allows_requests_within_window():
@@ -85,6 +95,42 @@ def test_rate_limit_chat_message_limit():
     allowed, retry_after = check_rate_limit("session-msg", "chat_message")
     assert allowed is False
     assert retry_after >= 1
+
+
+def test_rate_limit_returns_retry_metadata_on_block():
+    _clear_store()
+    sid = "session-meta"
+    max_requests = RATE_LIMITS["dm_send"]["max_requests"]
+
+    for _ in range(max_requests):
+        allowed, retry_after, meta = check_rate_limit_with_metadata(sid, "dm_send")
+        assert allowed is True
+        assert retry_after == 0
+        assert meta["suggested_backoff_seconds"] == 0
+
+    allowed, retry_after, meta = check_rate_limit_with_metadata(sid, "dm_send")
+    assert allowed is False
+    assert retry_after >= 1
+    assert meta["retry_after"] == retry_after
+    assert meta["suggested_backoff_seconds"] >= retry_after
+    assert meta["violations_in_window"] >= 1
+
+
+def test_rate_limit_backoff_increases_with_repeat_violations():
+    _clear_store()
+    sid = "session-repeat-violations"
+    max_requests = RATE_LIMITS["dm_send"]["max_requests"]
+
+    for _ in range(max_requests):
+        check_rate_limit_with_metadata(sid, "dm_send")
+
+    _, retry_after_1, meta_1 = check_rate_limit_with_metadata(sid, "dm_send")
+    _, retry_after_2, meta_2 = check_rate_limit_with_metadata(sid, "dm_send")
+
+    assert retry_after_1 >= 1
+    assert retry_after_2 >= 1
+    assert meta_2["suggested_backoff_seconds"] >= meta_1["suggested_backoff_seconds"]
+    assert meta_2["violations_in_window"] >= meta_1["violations_in_window"]
 
 
 # ---------------------------------------------------------------------------

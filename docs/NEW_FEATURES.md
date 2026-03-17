@@ -133,6 +133,43 @@ First-time users see a prominent security warning:
 
 ---
 
+## Adaptive Chat Rate Limiting
+
+### What Changed
+Chat write endpoints now use configurable thresholds with explicit retry metadata:
+
+- `POST /chat/create`
+- `POST /chat/room/<room_id>/messages`
+- `POST /chat/dm/send`
+
+429 responses now include:
+
+- `retry_after` (seconds until the base window allows another request)
+- `suggested_backoff_seconds` (adaptive value that grows for repeated violations)
+- `violations_in_window` (recent repeated-limit count)
+- `Retry-After` response header
+
+### Configuration
+Thresholds can be tuned without code changes using environment variables:
+
+```bash
+OPSECHAT_CHAT_CREATE_HOURLY_LIMIT=10
+OPSECHAT_CHAT_CREATE_MINUTE_LIMIT=3
+OPSECHAT_CHAT_MESSAGE_HOURLY_LIMIT=600
+OPSECHAT_CHAT_MESSAGE_MINUTE_LIMIT=30
+OPSECHAT_DM_SEND_HOURLY_LIMIT=20
+OPSECHAT_DM_SEND_MINUTE_LIMIT=5
+OPSECHAT_RATE_BACKOFF_WINDOW_SECONDS=900
+OPSECHAT_RATE_MAX_BACKOFF_SECONDS=300
+```
+
+### Why This Matters
+- Operators can tighten/loosen limits per deployment profile.
+- Clients can implement safer retry behavior instead of blind immediate retries.
+- Repeated abusive bursts receive progressively stronger retry guidance.
+
+---
+
 ## 📧 Email Rate Limiting
 
 ### Purpose
