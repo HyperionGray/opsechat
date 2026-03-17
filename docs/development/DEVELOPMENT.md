@@ -74,7 +74,6 @@ These are development and testing utilities that help during development:
 - **`quick_import_test.py`** - Test Python imports
 - **`review_performance.py`** - Performance benchmarking tool
 - **`usability_assessment.py`** - UI/UX testing helper
-- **`comprehensive_functionality_test.py`** - Full functional test suite
 
 ### Main Application Files
 - **`runserver.py`** - Main entry point (legacy monolithic)
