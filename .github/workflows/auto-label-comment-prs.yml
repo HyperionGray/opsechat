@@ -5,23 +5,43 @@ on:
 jobs:
   pr_label_comment:
     runs-on: [self-hosted, linux, x64, big]
+    permissions:
+      pull-requests: write
+    env:
+      DEFAULT_PR_REVIEW_LABELS: ${{ vars.DEFAULT_PR_REVIEW_LABELS || 'needs-review,copilot' }}
+      DEFAULT_PR_REVIEW_COMMENT: ${{ vars.DEFAULT_PR_REVIEW_COMMENT || 'Thanks for the PR! Copilot will assist with review.' }}
     steps:
       - uses: actions/github-script@main
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const pr_number = context.payload.pull_request.number;
-            // Add label
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr_number,
-              labels: ["needs-review", "copilot"] // <-- TUNE ME
-            });
-            // Add automated comment
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr_number,
-              body: "Thanks for the PR! Copilot will assist with review."
-            });
+            const labels = (process.env.DEFAULT_PR_REVIEW_LABELS || "needs-review,copilot")
+              .split(",")
+              .map((label) => label.trim())
+              .filter(Boolean);
+            const commentBody = (process.env.DEFAULT_PR_REVIEW_COMMENT || "").trim();
+
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr_number,
+                labels
+              });
+              console.log(`Applied PR labels: ${labels.join(", ")}`);
+            } else {
+              console.log("No labels configured via DEFAULT_PR_REVIEW_LABELS; skipping labels.");
+            }
+
+            if (commentBody) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr_number,
+                body: commentBody
+              });
+              console.log("Posted automated PR review comment.");
+            } else {
+              console.log("DEFAULT_PR_REVIEW_COMMENT is empty; skipping comment.");
+            }

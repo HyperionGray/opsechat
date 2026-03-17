@@ -1,5 +1,4 @@
-# Auto Assign Copilot (or any username) to every new pull request.
-# Tweak the username(s) below as needed!
+# Auto assign configured users to every new pull request.
 
 name: Auto Assign Copilot to PRs
 
@@ -10,15 +9,26 @@ on:
 jobs:
   auto-assign:
     runs-on: [self-hosted, linux, x64, big]
+    permissions:
+      pull-requests: write
+    env:
+      DEFAULT_PR_ASSIGNEES: ${{ vars.DEFAULT_PR_ASSIGNEES || 'copilot' }}
     steps:
       - name: Assign Copilot (or others) to new PRs
         uses: actions/github-script@main
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            // Assign PRs to Copilot or other users
-            const copilotUsername = "copilot"; // <-- TUNE ME!
-            const assignees = [copilotUsername]; // Or: ["copilot","anotheruser"]
+            const assignees = (process.env.DEFAULT_PR_ASSIGNEES || "copilot")
+              .split(",")
+              .map((assignee) => assignee.trim())
+              .filter(Boolean);
+
+            if (assignees.length === 0) {
+              console.log("No assignees configured via DEFAULT_PR_ASSIGNEES; skipping.");
+              return;
+            }
+
             const currentAssignees = context.payload.pull_request.assignees.map(u => u.login);
             if (!assignees.every(a => currentAssignees.includes(a))) {
               await github.rest.issues.addAssignees({

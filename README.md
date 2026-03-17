@@ -368,6 +368,8 @@ We welcome contributions to opsechat! Please see [Contributing Guide](docs/devel
 - Testing requirements
 - Security considerations
 
+Automation maintainers should also review the [Automation Configuration Guide](docs/development/AUTOMATION_CONFIGURATION.md) for workflow variable and manual dispatch settings.
+
 License
 =======
 
