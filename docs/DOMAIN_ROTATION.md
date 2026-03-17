@@ -52,37 +52,49 @@ export DOMAIN_BUDGET="10"  # Monthly budget in USD
 ```python
 from domain_manager import domain_rotation_manager
 
-# Check available domains
-available_domains = domain_rotation_manager.search_cheap_domains()
-print(available_domains)
+# Configure API credentials once at startup
+domain_rotation_manager.configure(
+    api_key="pk1_xxx",
+    secret_key="sk1_xxx",
+    monthly_budget=10.0,
+)
 
-# Purchase a domain
-result = domain_rotation_manager.rotate_to_new_domain()
-if result['success']:
-    print(f"New domain: {result['domain']}")
-    print(f"Cost: ${result['cost']}")
+# Find a cheap candidate
+candidate = domain_rotation_manager.find_cheap_available_domain(
+    max_price=3.0,
+    max_attempts=10,
+    tlds=["xyz", "club"],
+)
+print(candidate)
+
+# Rotate and purchase a new active domain
+new_domain = domain_rotation_manager.rotate_domain()
+if new_domain:
+    print(f"New active domain: {new_domain}")
 else:
-    print(f"Error: {result['error']}")
+    print("No purchasable domain found within budget")
 ```
 
 ### CLI Commands
 
 ```bash
-# Check available cheap domains
-python -c "from domain_manager import domain_rotation_manager; \
-    print(domain_rotation_manager.search_cheap_domains(tlds=['xyz', 'club', 'online']))"
+# Configure credentials and budget (interactive)
+python domain_rotation_cli.py config
 
-# Get current budget status
-python -c "from domain_manager import domain_rotation_manager; \
-    print(f'Budget: ${domain_rotation_manager.budget_manager.monthly_budget}'); \
-    print(f'Spent: ${domain_rotation_manager.budget_manager.get_month_spending()}'); \
-    print(f'Remaining: ${domain_rotation_manager.budget_manager.get_remaining_budget()}')"
+# Search for cheap available domains
+python domain_rotation_cli.py search
 
-# Rotate to new domain
-python -c "from domain_manager import domain_rotation_manager; \
-    result = domain_rotation_manager.rotate_to_new_domain(); \
-    print(result)"
+# Rotate to a newly purchased domain
+python domain_rotation_cli.py rotate
+
+# Show current budget and active domain
+python domain_rotation_cli.py status
+
+# List purchased domains
+python domain_rotation_cli.py list
 ```
+
+Note: CLI state persistence now safely serializes purchase timestamps, so domain history can be saved and reloaded without datetime JSON errors.
 
 ### Automated Rotation
 
@@ -103,16 +115,17 @@ crontab -e
 ```python
 from domain_manager import domain_rotation_manager
 
-# Set monthly budget to $20
-domain_rotation_manager.budget_manager.set_monthly_budget(20.0)
+# Configure with budget
+domain_rotation_manager.configure(
+    api_key="pk1_xxx",
+    secret_key="sk1_xxx",
+    monthly_budget=20.0,
+)
 
-# Check spending
-spending = domain_rotation_manager.budget_manager.get_month_spending()
-print(f"Spent this month: ${spending}")
-
-# Check remaining budget
-remaining = domain_rotation_manager.budget_manager.get_remaining_budget()
-print(f"Remaining: ${remaining}")
+# Check budget
+status = domain_rotation_manager.get_budget_status()
+print(f"Spent this month: ${status['current_spending']}")
+print(f"Remaining: ${status['remaining']}")
 ```
 
 ### Budget Safety Features

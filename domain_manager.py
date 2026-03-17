@@ -134,10 +134,62 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+        self.api_key_hint: Optional[str] = None
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+
+    @staticmethod
+    def _parse_price(price_value) -> Optional[float]:
+        """Convert API price values to float safely."""
+        if price_value is None:
+            return None
+        if isinstance(price_value, (int, float)):
+            return float(price_value)
+        if isinstance(price_value, str):
+            normalized = price_value.strip().replace("$", "").replace("€", "")
+            if not normalized:
+                return None
+            try:
+                return float(normalized)
+            except ValueError:
+                return None
+        return None
+
+    def configure(self, api_key: str, secret_key: str, monthly_budget: Optional[float] = None) -> None:
+        """
+        Configure domain rotation with Porkbun credentials.
+
+        Raises:
+            ValueError: When credentials or budget are invalid.
+        """
+        api_key = (api_key or "").strip()
+        secret_key = (secret_key or "").strip()
+
+        if not api_key or not secret_key:
+            raise ValueError("API key and secret key are required")
+
+        if monthly_budget is not None:
+            if monthly_budget <= 0:
+                raise ValueError("Monthly budget must be greater than zero")
+            self.monthly_budget = float(monthly_budget)
+
+        self.api_client = PorkbunAPIClient(api_key, secret_key)
+        # Store only a short hint for display to avoid leaking full credentials.
+        self.api_key_hint = api_key[-4:]
+
+    def get_config(self) -> Dict:
+        """Return a safe snapshot of current domain rotation configuration."""
+        return {
+            "configured": self.api_client is not None,
+            "api_key_hint": self.api_key_hint,
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "remaining_budget": self.monthly_budget - self.current_spending,
+            "active_domain": self.active_domain,
+            "domains_owned": len(self.owned_domains),
+        }
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -148,8 +200,10 @@ class DomainRotationManager:
         random_name = ''.join(random.choice(chars) for _ in range(length))
         return f"{random_name}.{tld}"
     
-    def find_cheap_available_domain(self, max_price: float = 5.0, 
-                                   max_attempts: int = 10) -> Optional[Dict]:
+    def find_cheap_available_domain(self, max_price: float = 5.0,
+                                   max_attempts: int = 10,
+                                   tlds: Optional[List[str]] = None,
+                                   exclude_owned: bool = True) -> Optional[Dict]:
         """
         Find a cheap available domain
         Returns domain info or None
@@ -159,20 +213,22 @@ class DomainRotationManager:
             return None
         
         # Try cheap TLDs
-        cheap_tlds = ["xyz", "club", "online", "site", "website"]
+        cheap_tlds = tlds or ["xyz", "club", "online", "site", "website"]
+        owned_names = {entry.get("domain") for entry in self.owned_domains if entry.get("domain")} if exclude_owned else set()
         
         for attempt in range(max_attempts):
             tld = random.choice(cheap_tlds)
             domain = self.generate_random_domain(tld)
+
+            if domain in owned_names:
+                continue
             
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
+                price = self._parse_price(result.get("price"))
+                if price is None:
+                    continue
                 
                 if price <= max_price:
                     return {

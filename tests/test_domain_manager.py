@@ -174,3 +174,33 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    @patch('domain_manager.PorkbunAPIClient')
+    def test_configure_and_get_config(self, mock_client_class):
+        """Test runtime configuration and safe config snapshot."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client_class.return_value = mock_client
+
+        manager = DomainRotationManager(monthly_budget=10.0)
+        manager.configure(api_key="pk1_test_key", secret_key="sk1_test_secret", monthly_budget=25.0)
+
+        config = manager.get_config()
+        assert config["configured"] is True
+        assert config["api_key_hint"] == "_key"
+        assert config["monthly_budget"] == 25.0
+        assert config["current_spending"] == 0.0
+        assert config["domains_owned"] == 0
+
+    def test_find_cheap_available_domain_invalid_price(self):
+        """Invalid API price values should be skipped safely."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test999.xyz",
+            "price": "not-a-number"
+        }
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is None
