@@ -321,6 +321,38 @@ def _read_version() -> str:
         return 'unknown'
 
 
+def get_version_info() -> Dict[str, Any]:
+    """Return basic version/build information."""
+    return {
+        'version': _read_version(),
+        'service': 'opsechat',
+        'timestamp': datetime.utcnow().isoformat()
+    }
+
+
+def get_readiness_status() -> Dict[str, Any]:
+    """
+    Get runtime readiness status for load balancers/orchestrators.
+
+    This endpoint is intentionally lightweight and avoids external network checks.
+    """
+    version = _read_version()
+    apm.update_system_metrics()
+    checks = {
+        'version_loaded': version != 'unknown',
+        'apm_initialized': isinstance(apm.metrics, dict),
+        'memory_metrics_collected': apm.metrics['system']['memory_usage_mb'] >= 0
+    }
+    is_ready = all(checks.values())
+
+    return {
+        'status': 'ready' if is_ready else 'not_ready',
+        'timestamp': datetime.utcnow().isoformat(),
+        'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
+        'checks': checks
+    }
+
+
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
     return {

@@ -6,7 +6,8 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+import time
+from flask import Flask, jsonify, g, request
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -68,6 +69,11 @@ def create_app():
         return add_review(reviews, user_id, rating, review_text)
     
     # Add security headers after every response
+    @app.before_request
+    def track_request_start():
+        """Capture request start time for lightweight latency metrics."""
+        g._request_start_time = time.time()
+
     @app.after_request
     def add_security_headers(response):
         response.headers["Server"] = ""
@@ -87,6 +93,21 @@ def create_app():
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
+
+        # Record basic request metrics without impacting response success.
+        try:
+            from monitoring import apm
+            started_at = getattr(g, "_request_start_time", None)
+            if started_at is not None:
+                apm.record_request(
+                    endpoint=request.path,
+                    method=request.method,
+                    response_time=max(time.time() - started_at, 0.0),
+                    status_code=response.status_code
+                )
+        except Exception:
+            # Monitoring must never break request handling.
+            pass
         return response
     
     # Register chat routes
@@ -106,25 +127,28 @@ def create_app():
                           add_review_wrapper, get_reviews, get_review_stats)
     
     # Health check endpoint
-    from monitoring import get_health_status
+    from monitoring import get_health_status, get_readiness_status, get_version_info, apm
 
     @app.route('/health', methods=["GET"])
     def health():
         return jsonify(get_health_status())
 
+    @app.route('/ready', methods=["GET"])
+    def ready():
+        readiness = get_readiness_status()
+        return jsonify(readiness), (200 if readiness["status"] == "ready" else 503)
+
+    @app.route('/version', methods=["GET"])
+    def version():
+        return jsonify(get_version_info())
+
+    @app.route('/metrics/summary', methods=["GET"])
+    def metrics_summary():
+        return jsonify(apm.get_metrics_summary())
+
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # CHANGELOG (AI assistant):
-    # - Made rate_limiter import optional with a no-op fallback to prevent
-    #   ModuleNotFoundError in containerized installs that omit rate_limiter.py.
-    #
-    # Remaining checklist (non-blocking for runtime):
-    # - Update container/Podman build configuration to ensure rate_limiter.py
-    #   is included in the image (e.g., COPY list or packaging config).
-    # - Once packaging reliably includes rate_limiter.py, consider removing
-    #   the fallback or turning it into an explicit configuration option.
-    
+
     return app

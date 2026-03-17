@@ -190,6 +190,39 @@ Tests cover:
 
 For full testing documentation, see [Testing Guide](docs/user-guide/TESTING.md).
 
+Operational Endpoints
+=====================
+
+The app now exposes lightweight observability endpoints for health checks and runtime visibility:
+
+- `GET /health` - Liveness information (`status`, `version`, `uptime_seconds`)
+- `GET /ready` - Readiness signal for orchestrators/load balancers
+- `GET /version` - Build/service version information
+- `GET /metrics/summary` - In-memory request/latency summary from the built-in APM collector
+
+Quick check:
+
+```bash
+curl http://localhost:5000/health
+curl http://localhost:5000/ready
+curl http://localhost:5000/version
+curl http://localhost:5000/metrics/summary
+```
+
+CI and Label-Triggered Automation
+=================================
+
+The repository uses a consolidated CI workflow plus label-triggered review workflows:
+
+- `.github/workflows/ci.yml`
+  - `python-tests`
+  - `playwright-e2e`
+  - `security-baseline`
+- `.github/workflows/auto-llm-pr-review.yml` (PR label-triggered)
+- `.github/workflows/auto-llm-issue-review.yml` (issue model-label-triggered)
+
+This keeps default PR checks focused while still allowing on-demand AI review via labels/workflow dispatch.
+
 
 How it works
 ============

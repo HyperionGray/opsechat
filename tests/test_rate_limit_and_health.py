@@ -88,7 +88,7 @@ def test_rate_limit_chat_message_limit():
 
 
 # ---------------------------------------------------------------------------
-# Health endpoint integration tests
+# Observability endpoint integration tests
 # ---------------------------------------------------------------------------
 
 def test_health_endpoint_returns_200():
@@ -113,3 +113,38 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_ready_endpoint_returns_200_and_ready_status():
+    client = _test_app.test_client()
+    response = client.get("/ready")
+    data = response.get_json()
+    assert response.status_code == 200
+    assert data["status"] == "ready"
+    assert "checks" in data
+    assert data["checks"]["apm_initialized"] is True
+
+
+def test_version_endpoint_returns_service_and_version():
+    client = _test_app.test_client()
+    response = client.get("/version")
+    data = response.get_json()
+    assert response.status_code == 200
+    assert data["service"] == "opsechat"
+    assert isinstance(data["version"], str)
+    assert len(data["version"]) > 0
+
+
+def test_metrics_summary_endpoint_returns_request_counters():
+    client = _test_app.test_client()
+
+    # Generate at least one tracked request before fetching metrics.
+    client.get("/health")
+
+    response = client.get("/metrics/summary")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert "requests" in data
+    assert data["requests"]["total"] >= 1
+    assert "avg_response_time" in data["requests"]
