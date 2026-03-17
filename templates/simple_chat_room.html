@@ -122,6 +122,13 @@
         .input-container button:active {
             transform: scale(0.95);
         }
+
+        .input-container button:disabled,
+        .input-container input:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
         
         .status {
             font-size: 0.8em;
@@ -216,6 +223,7 @@
         let encryptionEnabled = false;
         let encryptionKey = null;
         let pollInterval = null;
+        let sendCooldownTimer = null;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
         
         // Show security warning on first load
@@ -231,9 +239,11 @@
             securityWarningAccepted = true;
             sessionStorage.setItem('securityWarningAccepted', 'true');
             document.getElementById('securityWarning').style.display = 'none';
-            document.getElementById('messageInput').disabled = false;
-            document.getElementById('sendBtn').disabled = false;
-            document.getElementById('messageInput').focus();
+            if (!sendCooldownTimer) {
+                document.getElementById('messageInput').disabled = false;
+                document.getElementById('sendBtn').disabled = false;
+                document.getElementById('messageInput').focus();
+            }
         }
         
         // Automated key exchange - fetch room's shared key
@@ -343,6 +353,40 @@
                 statusMsg.textContent = '';
             }, duration);
         }
+
+        function startSendCooldown(seconds, reason) {
+            const sendBtn = document.getElementById('sendBtn');
+            const messageInput = document.getElementById('messageInput');
+            const statusMsg = document.getElementById('statusMsg');
+            let remaining = Math.max(1, Number.parseInt(seconds || 0, 10));
+
+            sendBtn.disabled = true;
+            messageInput.disabled = true;
+
+            const renderCooldown = () => {
+                statusMsg.textContent = `${reason} Retry in ${remaining}s.`;
+            };
+
+            if (sendCooldownTimer) {
+                clearInterval(sendCooldownTimer);
+            }
+
+            renderCooldown();
+            sendCooldownTimer = setInterval(() => {
+                remaining -= 1;
+                if (remaining <= 0) {
+                    clearInterval(sendCooldownTimer);
+                    sendCooldownTimer = null;
+                    sendBtn.disabled = false;
+                    if (securityWarningAccepted) {
+                        messageInput.disabled = false;
+                    }
+                    statusMsg.textContent = 'Rate limit cooldown complete.';
+                    return;
+                }
+                renderCooldown();
+            }, 1000);
+        }
         
         function scrollToBottom() {
             const container = document.getElementById('messagesContainer');
@@ -418,7 +462,20 @@
                     input.value = '';
                     await pollMessages();
                 } else {
-                    showStatus('Error sending message');
+                    if (response.status === 429) {
+                        let retryAfter = Number.parseInt(response.headers.get('Retry-After') || '0', 10);
+                        let reason = 'Rate limit exceeded.';
+                        try {
+                            const rateLimitData = await response.json();
+                            reason = rateLimitData.error || reason;
+                            retryAfter = Number.parseInt(rateLimitData.retry_after_seconds || retryAfter, 10);
+                        } catch (_) {
+                            // Keep header-derived retry value if response body is not JSON.
+                        }
+                        startSendCooldown(retryAfter || 5, reason);
+                        return;
+                    }
+                    showStatus(`Error sending message (HTTP ${response.status})`);
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);

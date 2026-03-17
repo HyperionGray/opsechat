@@ -142,6 +142,31 @@ POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
 
+#### Rate-limit Backoff Metadata
+Write endpoints now return structured retry metadata when rate limited:
+
+```
+HTTP/1.1 429 Too Many Requests
+Retry-After: 17
+X-RateLimit-Limit: 30
+X-RateLimit-Window: 60
+Content-Type: application/json
+
+{
+  "error": "Rate limit exceeded. Maximum 30 messages per minute. Try again in 17 seconds.",
+  "rate_limited": true,
+  "endpoint": "chat_message",
+  "retry_after_seconds": 17,
+  "limit": {
+    "max_requests": 30,
+    "window_seconds": 60
+  }
+}
+```
+
+The web UI now consumes these values and automatically enters a countdown cooldown
+instead of repeatedly sending blocked requests.
+
 ### Encryption Implementation
 
 The E2E encryption uses native Web Crypto API:

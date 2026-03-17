@@ -71,6 +71,46 @@ def test_separate_sessions_have_independent_limits():
     return True
 
 
+def test_custom_rate_limit_response_includes_retry_metadata():
+    """Custom in-route limiter should return structured retry metadata."""
+    print("\nTesting: custom limiter includes retry metadata...")
+    app = _make_app()
+
+    with app.test_client() as client:
+        create_response = client.post("/chat/create", content_type="application/json")
+        assert create_response.status_code == 200, (
+            f"Expected room creation to succeed, got {create_response.status_code}"
+        )
+        room_id = create_response.get_json()["room_id"]
+
+        endpoint = f"/chat/room/{room_id}/messages"
+        for i in range(30):
+            r = client.post(
+                endpoint,
+                data=json.dumps({"message": f"message-{i}"}),
+                content_type="application/json",
+            )
+            assert r.status_code == 200, f"Expected message {i + 1} to succeed, got {r.status_code}"
+
+        blocked = client.post(
+            endpoint,
+            data=json.dumps({"message": "overflow"}),
+            content_type="application/json",
+        )
+        assert blocked.status_code == 429, f"31st message should be blocked, got {blocked.status_code}"
+        payload = blocked.get_json()
+        assert payload is not None, "Rate-limited response should be JSON"
+        assert payload.get("rate_limited") is True
+        assert payload.get("endpoint") == "chat_message"
+        assert payload.get("retry_after_seconds", 0) >= 1
+        assert payload.get("limit", {}).get("max_requests") == 30
+        assert payload.get("limit", {}).get("window_seconds") == 60
+        assert int(blocked.headers.get("Retry-After", "0")) >= 1
+
+    print("✅ Custom limiter returns retry metadata and headers")
+    return True
+
+
 def main():
     print("=== Rate Limiter Integration Tests ===\n")
     results = []
@@ -78,6 +118,7 @@ def main():
     tests = [
         test_post_is_rate_limited_get_is_not,
         test_separate_sessions_have_independent_limits,
+        test_custom_rate_limit_response_includes_retry_metadata,
     ]
 
     for test_fn in tests:
