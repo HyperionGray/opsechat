@@ -2,7 +2,6 @@
 Tests for domain management module
 """
 from datetime import datetime
-import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager, NamecheapAPIClient
