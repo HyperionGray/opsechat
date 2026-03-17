@@ -6,7 +6,7 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -27,6 +27,48 @@ def create_app():
     
     # Initialize rate limiter
     init_limiter(app)
+
+    def _extract_retry_after_seconds(error):
+        """
+        Best-effort extraction of retry-after for 429 responses.
+
+        Flask-Limiter may provide this in different places depending on version.
+        """
+        candidates = []
+
+        retry_after = getattr(error, "retry_after", None)
+        if retry_after is not None:
+            candidates.append(retry_after)
+
+        response = getattr(error, "response", None)
+        if response is not None:
+            header_value = response.headers.get("Retry-After")
+            if header_value:
+                candidates.append(header_value)
+
+        for value in candidates:
+            try:
+                retry_seconds = int(float(value))
+                if retry_seconds > 0:
+                    return retry_seconds
+            except (TypeError, ValueError):
+                continue
+
+        return 60
+
+    @app.errorhandler(429)
+    def handle_rate_limit(error):
+        """Return consistent JSON and Retry-After for throttled requests."""
+        retry_after = _extract_retry_after_seconds(error)
+        response = jsonify({
+            "error": "Rate limit exceeded. Please retry with backoff.",
+            "code": "rate_limit_exceeded",
+            "retry_after_seconds": retry_after,
+            "path": request.path,
+        })
+        response.status_code = 429
+        response.headers["Retry-After"] = str(retry_after)
+        return response
     
     # Initialize global state
     chatters = []

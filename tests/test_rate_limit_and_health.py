@@ -87,6 +87,34 @@ def test_rate_limit_chat_message_limit():
     assert retry_after >= 1
 
 
+def test_chat_message_429_includes_retry_after_header_and_json():
+    _clear_store()
+    client = _test_app.test_client()
+
+    create_response = client.post("/chat/create", content_type="application/json")
+    assert create_response.status_code == 200
+    room_id = create_response.get_json()["room_id"]
+
+    for _ in range(30):
+        response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "test message"},
+        )
+        assert response.status_code == 200
+
+    blocked = client.post(
+        f"/chat/room/{room_id}/messages",
+        json={"message": "this one should be throttled"},
+    )
+    assert blocked.status_code == 429
+
+    payload = blocked.get_json()
+    assert payload is not None
+    assert payload.get("code") == "rate_limit_exceeded"
+    assert payload.get("retry_after_seconds", 0) >= 1
+    assert int(blocked.headers.get("Retry-After", "0")) >= 1
+
+
 # ---------------------------------------------------------------------------
 # Health endpoint integration tests
 # ---------------------------------------------------------------------------
