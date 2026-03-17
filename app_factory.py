@@ -16,17 +16,6 @@ except ModuleNotFoundError:
         # was not included in the image build.
         return app
 
-
-def _read_version():
-    """Read application version from VERSION file"""
-    version_file = os.path.join(os.path.dirname(__file__), "VERSION")
-    try:
-        with open(version_file) as f:
-            return f.read().strip()
-    except OSError:
-        return "unknown"
-
-
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
@@ -91,8 +80,6 @@ def create_app():
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
@@ -125,15 +112,5 @@ def create_app():
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # CHANGELOG (AI assistant):
-    # - Made rate_limiter import optional with a no-op fallback to prevent
-    #   ModuleNotFoundError in containerized installs that omit rate_limiter.py.
-    #
-    # Remaining checklist (non-blocking for runtime):
-    # - Update container/Podman build configuration to ensure rate_limiter.py
-    #   is included in the image (e.g., COPY list or packaging config).
-    # - Once packaging reliably includes rate_limiter.py, consider removing
-    #   the fallback or turning it into an explicit configuration option.
     
     return app

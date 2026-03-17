@@ -9,14 +9,14 @@ const http = require('http');
 
 async function testServer() {
   console.log('Testing mock server startup...');
-  
+
   // Start the mock server
   const serverProcess = spawn('python3', ['tests/mock_server.py'], {
     stdio: 'pipe'
   });
 
   let serverOutput = '';
-  
+
   serverProcess.stdout.on('data', (data) => {
     const output = data.toString();
     serverOutput += output;
@@ -28,21 +28,21 @@ async function testServer() {
   });
 
   // Wait for server to start
-  await new Promise(resolve => setTimeout(resolve, 3000));
+  await new Promise((resolve) => setTimeout(resolve, 3000));
 
   // Test health endpoint
   try {
     const response = await fetch('http://127.0.0.1:5001/health');
     const data = await response.json();
     console.log('Health check response:', data);
-    
+
     // Test main endpoint
     const mainResponse = await fetch('http://127.0.0.1:5001/test-path-12345');
     console.log('Main endpoint status:', mainResponse.status);
-    
-    console.log('✅ Server test passed!');
+
+    console.log('Server test passed');
   } catch (error) {
-    console.error('❌ Server test failed:', error.message);
+    console.error('Server test failed:', error.message);
   }
 
   // Clean up
