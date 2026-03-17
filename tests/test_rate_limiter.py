@@ -40,6 +40,11 @@ def test_post_is_rate_limited_get_is_not():
 
         r = client.post("/chat/create", content_type="application/json")
         assert r.status_code == 429, f"4th POST should be rate-limited (429), got {r.status_code}"
+        assert r.headers.get("Retry-After") is not None
+        payload = r.get_json()
+        assert payload["endpoint"] == "chat_create"
+        assert payload["retry_after_seconds"] >= 1
+        assert payload["limit_per_minute"] == 3
 
     print("✅ POST /chat/create is rate-limited after 3 requests; GET / is never throttled")
     return True

@@ -9,6 +9,19 @@ from flask import session
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import secrets
+import os
+
+
+def _read_positive_int_env(var_name, default):
+    """Read positive integer from environment, falling back to default."""
+    raw = os.environ.get(var_name)
+    if raw in (None, ""):
+        return default
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
 
 def _get_client_identifier():
     """
@@ -27,10 +40,15 @@ def _get_client_identifier():
 
 
 # Global limiter instance - configured per-app in init_limiter()
+_default_limits = [
+    f"{_read_positive_int_env('OPSECHAT_DEFAULT_RATE_LIMIT_PER_HOUR', 200)} per hour",
+    f"{_read_positive_int_env('OPSECHAT_DEFAULT_RATE_LIMIT_PER_MINUTE', 50)} per minute",
+]
+
 limiter = Limiter(
     key_func=_get_client_identifier,
-    default_limits=["200 per hour", "50 per minute"],
-    storage_uri="memory://",
+    default_limits=_default_limits,
+    storage_uri=os.environ.get("OPSECHAT_RATE_LIMIT_STORAGE_URI", "memory://"),
 )
 
 
