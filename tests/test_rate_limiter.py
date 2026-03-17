@@ -11,19 +11,37 @@ import json
 import sys
 
 
+_CACHED_APP = None
+
+
 def _make_app():
     """Return a fresh Flask test app with rate limiter enabled."""
+    global _CACHED_APP
+    if _CACHED_APP is not None:
+        return _CACHED_APP
+
     from app_factory import create_app
     app = create_app()
     app.config["TESTING"] = True
     # Disable the security-warning session flag so chat room pages render
     app.config["SECRET_KEY"] = "test-secret"
-    return app
+    _CACHED_APP = app
+    return _CACHED_APP
+
+
+def _reset_limiter_state():
+    """Reset Flask-Limiter storage between tests."""
+    app = _make_app()
+    from rate_limiter import limiter
+
+    with app.app_context():
+        limiter.reset()
 
 
 def test_post_is_rate_limited_get_is_not():
     """POST /chat/create is rate-limited; GET / is never rate-limited."""
     print("\nTesting: POST is rate-limited, GET is not...")
+    _reset_limiter_state()
     app = _make_app()
 
     with app.test_client() as client:
@@ -47,12 +65,12 @@ def test_post_is_rate_limited_get_is_not():
         assert payload["limit_per_minute"] == 3
 
     print("✅ POST /chat/create is rate-limited after 3 requests; GET / is never throttled")
-    return True
 
 
 def test_separate_sessions_have_independent_limits():
     """Two different sessions must not share rate-limit counters."""
     print("\nTesting: independent rate-limit counters per session...")
+    _reset_limiter_state()
     app = _make_app()
 
     with app.test_client() as client_a:
@@ -73,7 +91,6 @@ def test_separate_sessions_have_independent_limits():
         )
 
     print("✅ Different sessions have independent rate-limit counters")
-    return True
 
 
 def main():
