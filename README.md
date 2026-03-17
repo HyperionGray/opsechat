@@ -33,6 +33,7 @@ OpSecChat now includes both **Web-Based Chat Rooms** and **Terminal UI (TUI)** f
 - ✅ **In-Memory Only** - Zero disk writes
 - ✅ **Tor Ready** - Works seamlessly with Tor hidden services
 - ✅ **Direct Messages** - Share room IDs securely (1-minute expiry)
+- ✅ **Configurable Rate Limits** - Tune chat write limits with environment variables (see [Rate Limit Configuration](docs/user-guide/RATE_LIMIT_CONFIGURATION.md))
 
 ### Quick Start (Web Chat)
 

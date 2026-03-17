@@ -10,7 +10,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    parse_rate_limit_expression,
+    RATE_LIMIT_EXPRESSIONS,
+    _rate_limit_store,
+    _rate_limit_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -74,6 +80,30 @@ def test_rate_limit_unknown_endpoint_always_allows():
     for _ in range(100):
         allowed, _ = check_rate_limit("session-x", "nonexistent_endpoint")
         assert allowed is True
+
+
+def test_parse_rate_limit_expression_multiple_windows():
+    rules = parse_rate_limit_expression("20 per hour; 5 per minute")
+    assert rules == [
+        {"max_requests": 20, "window_seconds": 3600},
+        {"max_requests": 5, "window_seconds": 60},
+    ]
+
+
+def test_rate_limit_defaults_are_loaded():
+    assert RATE_LIMIT_EXPRESSIONS["chat_create"] == "10 per hour; 3 per minute"
+    assert RATE_LIMIT_EXPRESSIONS["chat_message"] == "30 per minute"
+    assert RATE_LIMIT_EXPRESSIONS["dm_send"] == "20 per hour; 5 per minute"
+
+
+def test_rate_limit_chat_create_short_window_limit():
+    _clear_store()
+    for _ in range(3):
+        allowed, _ = check_rate_limit("session-create", "chat_create")
+        assert allowed is True
+    allowed, retry_after = check_rate_limit("session-create", "chat_create")
+    assert allowed is False
+    assert retry_after >= 1
 
 
 def test_rate_limit_chat_message_limit():

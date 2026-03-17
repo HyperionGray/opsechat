@@ -19,7 +19,7 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from flask import Flask, session
+from flask import Flask
 from mock_routes import create_mock_routes
 
 # Create Flask app with absolute paths for better CI compatibility
@@ -69,14 +69,44 @@ except ImportError as e:
     print(f"Warning: Could not import email_system: {e}")
     # Create mock objects for testing
     class MockEmailStorage:
-        def create_user_inbox(self, user_id): pass
+        def __init__(self):
+            self.inboxes = set()
+
+        def create_user_inbox(self, user_id):
+            self.inboxes.add(user_id)
+            return True
+
     class MockBurnerManager:
-        def cleanup_expired(self): pass
-        def generate_burner_email(self, user_id): return f"test{user_id}@example.com"
-        def rotate_burner(self, user_id, old_email): return f"test{user_id}@example.com"
-        def get_user_burners(self, user_id): return []
-        def get_user_for_burner(self, email): return None
-        def expire_burner(self, email): pass
+        def __init__(self):
+            self._burners_by_user = {}
+            self._owner_by_email = {}
+
+        def cleanup_expired(self):
+            return 0
+
+        def generate_burner_email(self, user_id):
+            burner_email = f"test{user_id}@example.com"
+            self._burners_by_user.setdefault(user_id, []).append(burner_email)
+            self._owner_by_email[burner_email] = user_id
+            return burner_email
+
+        def rotate_burner(self, user_id, old_email):
+            if old_email in self._owner_by_email:
+                self.expire_burner(old_email)
+            return self.generate_burner_email(user_id)
+
+        def get_user_burners(self, user_id):
+            return list(self._burners_by_user.get(user_id, []))
+
+        def get_user_for_burner(self, email):
+            return self._owner_by_email.get(email)
+
+        def expire_burner(self, email):
+            owner = self._owner_by_email.pop(email, None)
+            if owner:
+                user_burners = self._burners_by_user.get(owner, [])
+                self._burners_by_user[owner] = [addr for addr in user_burners if addr != email]
+            return owner is not None
     
     email_storage = MockEmailStorage()
     burner_manager = MockBurnerManager()
