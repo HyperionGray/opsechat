@@ -3,7 +3,7 @@
 Domain Rotation CLI for Burner Emails
 
 This CLI tool allows easy rotation of domains for burner email services.
-It integrates with Porkbun API (and can be extended for other registrars).
+It integrates with Porkbun and Namecheap APIs.
 
 Usage:
     python domain_rotation_cli.py list          # List owned domains
@@ -19,7 +19,9 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
-from domain_manager import PorkbunAPIClient, DomainRotationManager
+from datetime import datetime
+
+from domain_manager import DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
@@ -54,32 +56,78 @@ def save_config(config):
 def configure_api():
     """Configure API credentials"""
     print("\n=== Domain API Configuration ===\n")
-    print("This tool supports Porkbun API for domain management.")
-    print("You can get API credentials from: https://porkbun.com/account/api\n")
+    print("Supported providers: porkbun, namecheap")
+    print("Porkbun API docs: https://porkbun.com/account/api")
+    print("Namecheap API docs: https://www.namecheap.com/support/api/\n")
     
     config = load_config()
+    providers = config.setdefault("providers", {})
+    selected_provider = (config.get("provider", "porkbun") or "porkbun").lower()
     
     print("Current configuration:")
-    if config.get('api_key'):
-        print(f"  API Key: {'*' * 20}{config['api_key'][-4:]}")
-    else:
-        print("  API Key: Not configured")
+    print(f"  Active Provider: {selected_provider}")
     
-    if config.get('monthly_budget'):
+    if config.get('monthly_budget') is not None:
         print(f"  Monthly Budget: ${config['monthly_budget']}")
     else:
         print("  Monthly Budget: Not configured")
     
+    for provider_name in ("porkbun", "namecheap"):
+        provider_cfg = providers.get(provider_name, {})
+        has_key = bool(provider_cfg.get("api_key"))
+        masked = f"{'*' * 20}{provider_cfg['api_key'][-4:]}" if has_key else "Not configured"
+        print(f"  {provider_name.title()} API Key: {masked}")
+
     print("\nEnter new values (or press Enter to keep current):\n")
-    
-    api_key = input("Porkbun API Key: ").strip()
+
+    provider_input = input("Active Provider [porkbun/namecheap]: ").strip().lower()
+    if provider_input in {"porkbun", "namecheap"}:
+        selected_provider = provider_input
+    config["provider"] = selected_provider
+
+    provider_cfg = providers.setdefault(selected_provider, {})
+    api_key = input(f"{selected_provider.title()} API Key: ").strip()
     if api_key:
-        config['api_key'] = api_key
-    
-    api_secret = getpass("Porkbun API Secret: ").strip()
-    if api_secret:
-        config['api_secret'] = api_secret
-    
+        provider_cfg["api_key"] = api_key
+
+    if selected_provider == "porkbun":
+        api_secret = getpass("Porkbun API Secret: ").strip()
+        if api_secret:
+            provider_cfg["api_secret"] = api_secret
+    elif selected_provider == "namecheap":
+        username = input("Namecheap Username: ").strip()
+        if username:
+            provider_cfg["username"] = username
+
+        client_ip = input("Namecheap Client IP (whitelisted): ").strip()
+        if client_ip:
+            provider_cfg["client_ip"] = client_ip
+
+        sandbox = input("Use Namecheap sandbox? [y/N]: ").strip().lower()
+        if sandbox:
+            provider_cfg["sandbox"] = sandbox in {"y", "yes", "true", "1"}
+
+        print(
+            "Optional: set contact profile fields for purchases "
+            "(FirstName, LastName, Address1, City, StateProvince, PostalCode, Country, Phone, EmailAddress)."
+        )
+        if input("Configure purchase contact profile now? [y/N]: ").strip().lower() in {"y", "yes"}:
+            contact_profile = provider_cfg.setdefault("contact_profile", {})
+            for key in (
+                "FirstName",
+                "LastName",
+                "Address1",
+                "City",
+                "StateProvince",
+                "PostalCode",
+                "Country",
+                "Phone",
+                "EmailAddress",
+            ):
+                value = input(f"  {key}: ").strip()
+                if value:
+                    contact_profile[key] = value
+
     budget = input("Monthly Budget (USD) [default: 50]: ").strip()
     if budget:
         try:
@@ -89,6 +137,7 @@ def configure_api():
     elif 'monthly_budget' not in config:
         config['monthly_budget'] = 50.0
     
+    config["providers"] = providers
     save_config(config)
     print("\n✅ Configuration updated successfully!")
 
@@ -96,35 +145,91 @@ def configure_api():
 def get_manager():
     """Get configured domain manager"""
     config = load_config()
-    
-    if not config.get('api_key') or not config.get('api_secret'):
+
+    manager = DomainRotationManager(monthly_budget=config.get('monthly_budget', 50.0))
+    providers = config.get("providers", {})
+    active_provider = (config.get("provider", "porkbun") or "porkbun").lower()
+
+    # Backward compatibility for older config shape.
+    if not providers and config.get("api_key"):
+        providers = {
+            "porkbun": {
+                "api_key": config.get("api_key"),
+                "api_secret": config.get("api_secret"),
+            }
+        }
+        config["providers"] = providers
+
+    for provider_name, provider_cfg in providers.items():
+        api_key = provider_cfg.get("api_key")
+        if not api_key:
+            continue
+
+        if provider_name == "porkbun":
+            api_secret = provider_cfg.get("api_secret")
+            if not api_secret:
+                continue
+            manager.configure(
+                provider="porkbun",
+                api_key=api_key,
+                secret_key=api_secret,
+                monthly_budget=config.get("monthly_budget", 50.0),
+            )
+        elif provider_name == "namecheap":
+            username = provider_cfg.get("username")
+            client_ip = provider_cfg.get("client_ip")
+            if not username or not client_ip:
+                continue
+            manager.configure(
+                provider="namecheap",
+                api_key=api_key,
+                username=username,
+                client_ip=client_ip,
+                sandbox=provider_cfg.get("sandbox", False),
+                contact_profile=provider_cfg.get("contact_profile"),
+                monthly_budget=config.get("monthly_budget", 50.0),
+            )
+
+    if not manager.get_provider_names():
         print("❌ Error: API credentials not configured.")
         print("Run: python domain_rotation_cli.py config")
         sys.exit(1)
-    
-    client = PorkbunAPIClient(config['api_key'], config['api_secret'])
-    manager = DomainRotationManager(
-        api_client=client,
-        monthly_budget=config.get('monthly_budget', 50.0)
-    )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
-    
+
+    if active_provider and not manager.set_active_provider(active_provider):
+        # Keep first configured provider as active if the configured value is stale.
+        pass
+
+    if config.get("state"):
+        manager.import_state(config["state"])
+    else:
+        # Backward compatibility for old in-root state fields.
+        manager.import_state({
+            "current_spending": config.get("current_spending", 0.0),
+            "owned_domains": config.get("owned_domains", []),
+            "active_domain": config.get("active_domain"),
+            "monthly_budget": config.get("monthly_budget", 50.0),
+            "active_provider": active_provider,
+        })
+
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    config['state'] = manager.export_state()
+    config['provider'] = manager.active_provider or config.get("provider", "porkbun")
     save_config(config)
+
+
+def _format_datetime(value):
+    if isinstance(value, datetime):
+        return value.strftime('%Y-%m-%d %H:%M')
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value).strftime('%Y-%m-%d %H:%M')
+        except ValueError:
+            return value
+    return "unknown"
 
 
 def list_domains():
@@ -142,33 +247,45 @@ def list_domains():
     
     for i, domain in enumerate(domains, 1):
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
+        provider = domain.get("provider", "unknown")
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Provider: {provider}")
+        print(f"   Purchased: {_format_datetime(domain.get('purchased_at'))}")
+        expires_value = _format_datetime(domain.get('expires_at'))
+        print(f"   Expires: {expires_value.split(' ')[0] if ' ' in expires_value else expires_value}")
         print()
 
 
-def search_domains():
+def search_domains(provider_preference=None):
     """Search for available cheap domains"""
     manager, config = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
+    if provider_preference:
+        print(f"Provider preference: {provider_preference}")
     print("Searching for domains under $5...\n")
     
     for i in range(5):
         print(f"Attempt {i+1}/5...")
-        domain_info = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+        domain_info = manager.find_cheap_available_domain(
+            max_price=5.0,
+            max_attempts=1,
+            provider_preference=provider_preference,
+        )
         
         if domain_info:
-            print(f"  ✅ Found: {domain_info['domain']} - ${domain_info['price']}")
+            print(
+                f"  ✅ Found: {domain_info['domain']} - ${domain_info['price']} "
+                f"({domain_info.get('provider', 'unknown')})"
+            )
         else:
             print(f"  ❌ No cheap domain found in this attempt")
     
     print("\nTo purchase a domain, run: python domain_rotation_cli.py rotate")
 
 
-def rotate_domain():
+def rotate_domain(provider_preference=None):
     """Rotate to a new domain"""
     manager, config = get_manager()
     
@@ -185,14 +302,20 @@ def rotate_domain():
         return
     
     print("Searching for available cheap domain...")
-    
-    domain_info = manager.find_cheap_available_domain(max_price=min(5.0, budget_status['remaining']))
-    
+
+    domain_info = manager.find_cheap_available_domain(
+        max_price=min(5.0, budget_status['remaining']),
+        provider_preference=provider_preference,
+    )
+
     if not domain_info:
         print("❌ Could not find an available cheap domain within budget.")
         return
-    
-    print(f"\nFound: {domain_info['domain']} for ${domain_info['price']}")
+
+    print(
+        f"\nFound: {domain_info['domain']} for ${domain_info['price']} "
+        f"via {domain_info.get('provider', 'unknown')}"
+    )
     
     confirm = input("\nProceed with purchase? (yes/no): ").strip().lower()
     
@@ -202,15 +325,19 @@ def rotate_domain():
     
     print("\nPurchasing domain...")
     success = manager.purchase_domain_if_budget_allows(
-        domain_info['domain'],
-        domain_info['price']
+        domain_info["domain"],
+        domain_info["price"],
+        provider=domain_info.get("provider"),
     )
-    
+
     if success:
-        print(f"\n✅ Successfully purchased and activated: {domain_info['domain']}")
+        print(
+            f"\n✅ Successfully purchased and activated: {domain_info['domain']} "
+            f"({domain_info.get('provider', 'unknown')})"
+        )
         save_manager_state(manager, config)
     else:
-        print("\n❌ Failed to purchase domain. Check API credentials and budget.")
+        print("\n❌ Failed to purchase domain. Check API credentials, contact profile, and budget.")
 
 
 def show_status():
@@ -222,6 +349,8 @@ def show_status():
     budget_status = manager.get_budget_status()
     
     print(f"Active Domain: {manager.active_domain or 'None'}")
+    print(f"Active Provider: {manager.active_provider or 'None'}")
+    print(f"Configured Providers: {', '.join(manager.get_provider_names())}")
     print(f"\nBudget:")
     print(f"  Monthly: ${budget_status['monthly_budget']}")
     print(f"  Spent: ${budget_status['current_spending']}")
@@ -253,6 +382,11 @@ Examples:
         choices=['config', 'status', 'search', 'rotate', 'list'],
         help='Command to execute'
     )
+    parser.add_argument(
+        '--provider',
+        choices=['porkbun', 'namecheap'],
+        help='Optional provider preference for search/rotate operations',
+    )
     
     args = parser.parse_args()
     
@@ -261,9 +395,9 @@ Examples:
     elif args.command == 'status':
         show_status()
     elif args.command == 'search':
-        search_domains()
+        search_domains(provider_preference=args.provider)
     elif args.command == 'rotate':
-        rotate_domain()
+        rotate_domain(provider_preference=args.provider)
     elif args.command == 'list':
         list_domains()
 

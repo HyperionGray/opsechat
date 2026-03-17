@@ -1,10 +1,11 @@
 """
 Tests for domain management module
 """
+from datetime import datetime
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, DomainRotationManager, NamecheapAPIClient
 )
 
 
@@ -174,3 +175,110 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_rotate_to_new_domain_result_shape(self):
+        """Test structured rotate result"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test789.xyz",
+            "price": 2.49
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "test789.xyz"
+        }
+
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.add_api_client("porkbun", mock_client, set_active=True)
+        result = manager.rotate_to_new_domain()
+
+        assert result["success"] is True
+        assert result["domain"].endswith(".xyz")
+        assert result["provider"] == "porkbun"
+
+    def test_configure_and_get_config(self):
+        """Test dynamic provider configuration metadata"""
+        manager = DomainRotationManager(monthly_budget=10.0)
+        with patch("domain_manager.PorkbunAPIClient") as mock_porkbun:
+            manager.configure(
+                provider="porkbun",
+                api_key="pk_test",
+                secret_key="sk_test",
+                monthly_budget=25.0,
+            )
+            assert mock_porkbun.called
+
+        config = manager.get_config()
+        assert config["configured"] is True
+        assert config["active_provider"] == "porkbun"
+        assert "porkbun" in config["providers"]
+        assert config["monthly_budget"] == 25.0
+
+    def test_find_domain_uses_pricing_fallback(self):
+        """When search has no price, fallback to provider pricing endpoint."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {"available": True, "domain": "abc.xyz", "price": None}
+        mock_client.get_pricing.return_value = {"registration": "2.99"}
+
+        manager = DomainRotationManager(monthly_budget=20.0)
+        manager.add_api_client("porkbun", mock_client, set_active=True)
+
+        result = manager.find_cheap_available_domain(max_price=3.0, max_attempts=1)
+        assert result is not None
+        assert result["price"] == 2.99
+        assert result["provider"] == "porkbun"
+
+    def test_export_import_state_roundtrip(self):
+        """State export/import should preserve datetimes and metadata."""
+        manager = DomainRotationManager(monthly_budget=30.0)
+        manager.current_spending = 5.0
+        manager.active_domain = "roundtrip.xyz"
+        manager.active_provider = "porkbun"
+        manager.owned_domains = [{
+            "domain": "roundtrip.xyz",
+            "price": 1.99,
+            "purchased_at": datetime.now(),
+            "expires_at": datetime.now(),
+            "provider": "porkbun",
+        }]
+
+        exported = manager.export_state()
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(exported["owned_domains"][0]["expires_at"], str)
+
+        restored = DomainRotationManager(monthly_budget=1.0)
+        restored.import_state(exported)
+        assert restored.active_domain == "roundtrip.xyz"
+        assert restored.active_provider == "porkbun"
+        assert restored.current_spending == 5.0
+        assert restored.owned_domains[0]["domain"] == "roundtrip.xyz"
+        assert hasattr(restored.owned_domains[0]["purchased_at"], "isoformat")
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client parsing behavior."""
+
+    @patch("domain_manager.requests.Session")
+    def test_search_domain_available(self, mock_session_class):
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """<?xml version="1.0" encoding="UTF-8"?>
+<ApiResponse Status="OK">
+  <CommandResponse>
+    <DomainCheckResult Domain="example.xyz" Available="true" IsPremiumName="false" />
+  </CommandResponse>
+</ApiResponse>
+"""
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_key="test_key",
+            username="test_user",
+            client_ip="127.0.0.1",
+            sandbox=True,
+        )
+        result = client.search_domain("example.xyz")
+        assert result["available"] is True
+        assert result["domain"] == "example.xyz"
