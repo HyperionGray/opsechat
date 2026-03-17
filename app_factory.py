@@ -16,15 +16,28 @@ except ModuleNotFoundError:
         # was not included in the image build.
         return app
 
+def _safe_retry_after_from_error(error):
+    """
+    Best-effort extraction of Retry-After seconds from 429 exceptions.
+    """
+    candidates = [
+        getattr(error, "retry_after", None),
+        getattr(getattr(error, "response", None), "retry_after", None),
+    ]
+    headers = getattr(getattr(error, "response", None), "headers", None)
+    if headers is not None:
+        candidates.append(headers.get("Retry-After"))
 
-def _read_version():
-    """Read application version from VERSION file"""
-    version_file = os.path.join(os.path.dirname(__file__), "VERSION")
-    try:
-        with open(version_file) as f:
-            return f.read().strip()
-    except OSError:
-        return "unknown"
+    for value in candidates:
+        try:
+            if value is not None:
+                parsed = int(float(value))
+                if parsed > 0:
+                    return parsed
+        except (TypeError, ValueError):
+            continue
+
+    return 1
 
 
 def create_app():
@@ -36,6 +49,18 @@ def create_app():
     
     # Initialize rate limiter
     init_limiter(app)
+
+    @app.errorhandler(429)
+    def handle_rate_limit_exceeded(error):
+        retry_after = _safe_retry_after_from_error(error)
+        response = jsonify({
+            "error": "Rate limit exceeded",
+            "retry_after": retry_after,
+            "backoff_strategy": "exponential",
+        })
+        response.status_code = 429
+        response.headers["Retry-After"] = str(retry_after)
+        return response
     
     # Initialize global state
     chatters = []
@@ -125,15 +150,5 @@ def create_app():
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # CHANGELOG (AI assistant):
-    # - Made rate_limiter import optional with a no-op fallback to prevent
-    #   ModuleNotFoundError in containerized installs that omit rate_limiter.py.
-    #
-    # Remaining checklist (non-blocking for runtime):
-    # - Update container/Podman build configuration to ensure rate_limiter.py
-    #   is included in the image (e.g., COPY list or packaging config).
-    # - Once packaging reliably includes rate_limiter.py, consider removing
-    #   the fallback or turning it into an explicit configuration option.
     
     return app

@@ -172,6 +172,35 @@ When limit exceeded:
 
 ---
 
+## HTTP Retry Metadata for Chat Rate Limits
+
+Chat write endpoints now return a consistent JSON contract when throttled (HTTP 429),
+including machine-readable retry hints for clients.
+
+### Endpoints covered
+- `POST /chat/create`
+- `POST /chat/room/<room_id>/messages`
+- `POST /chat/dm/send`
+
+### 429 response format
+```json
+{
+  "error": "Rate limit exceeded",
+  "retry_after": 12,
+  "backoff_strategy": "exponential"
+}
+```
+
+### HTTP headers
+- `Retry-After: <seconds>`
+
+### Client behavior
+- The create-room page now disables the button during cooldown and shows a countdown.
+- The room page now pauses send actions during cooldown and resumes automatically.
+- Clients can use `retry_after` and `Retry-After` to implement bounded retry loops.
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

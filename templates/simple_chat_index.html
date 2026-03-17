@@ -161,11 +161,41 @@
     </div>
     
     <script>
-        // Simple room creation with no external dependencies
-        document.getElementById('createRoomBtn').addEventListener('click', async function() {
-            const statusDiv = document.getElementById('status');
+        // Simple room creation with retry-aware backoff handling.
+        const createRoomBtn = document.getElementById('createRoomBtn');
+        const statusDiv = document.getElementById('status');
+        let createCooldownTimer = null;
+
+        function startCreateCooldown(seconds) {
+            let remaining = Math.max(seconds, 1);
+            createRoomBtn.disabled = true;
+            statusDiv.textContent = `Rate limit reached. Retry in ${remaining}s.`;
+
+            if (createCooldownTimer) {
+                clearInterval(createCooldownTimer);
+            }
+
+            createCooldownTimer = setInterval(() => {
+                remaining -= 1;
+                if (remaining > 0) {
+                    statusDiv.textContent = `Rate limit reached. Retry in ${remaining}s.`;
+                    return;
+                }
+
+                clearInterval(createCooldownTimer);
+                createCooldownTimer = null;
+                createRoomBtn.disabled = false;
+                statusDiv.textContent = 'Ready.';
+            }, 1000);
+        }
+
+        createRoomBtn.addEventListener('click', async function() {
+            if (createRoomBtn.disabled) {
+                return;
+            }
+
             statusDiv.textContent = 'Creating room...';
-            
+
             try {
                 const response = await fetch('/chat/create', {
                     method: 'POST',
@@ -173,13 +203,23 @@
                         'Content-Type': 'application/json'
                     }
                 });
-                
+
+                if (response.status === 429) {
+                    const data = await response.json().catch(() => ({}));
+                    const retryAfter = parseInt(
+                        data.retry_after || response.headers.get('Retry-After') || '1',
+                        10
+                    );
+                    startCreateCooldown(Number.isNaN(retryAfter) ? 1 : retryAfter);
+                    return;
+                }
+
                 if (!response.ok) {
                     throw new Error('Failed to create room');
                 }
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     statusDiv.innerHTML = `Room created! Redirecting...<br><a href="${data.room_url}">${window.location.origin}${data.room_url}</a>`;
                     setTimeout(() => {

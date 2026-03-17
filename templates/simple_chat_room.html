@@ -217,6 +217,8 @@
         let encryptionKey = null;
         let pollInterval = null;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+        let sendCooldownTimer = null;
+        let sendCooldownUntil = 0;
         
         // Show security warning on first load
         function showSecurityWarning() {
@@ -348,6 +350,37 @@
             const container = document.getElementById('messagesContainer');
             container.scrollTop = container.scrollHeight;
         }
+
+        function startSendCooldown(seconds) {
+            const safeSeconds = Math.max(seconds, 1);
+            const sendBtn = document.getElementById('sendBtn');
+            const messageInput = document.getElementById('messageInput');
+            sendCooldownUntil = Date.now() + safeSeconds * 1000;
+            sendBtn.disabled = true;
+            messageInput.disabled = true;
+
+            if (sendCooldownTimer) {
+                clearInterval(sendCooldownTimer);
+            }
+
+            let remaining = safeSeconds;
+            showStatus(`Rate limit reached. Retry in ${remaining}s.`, 1000);
+
+            sendCooldownTimer = setInterval(() => {
+                remaining -= 1;
+                if (remaining > 0) {
+                    showStatus(`Rate limit reached. Retry in ${remaining}s.`, 1000);
+                    return;
+                }
+
+                clearInterval(sendCooldownTimer);
+                sendCooldownTimer = null;
+                sendCooldownUntil = 0;
+                sendBtn.disabled = false;
+                messageInput.disabled = false;
+                showStatus('You can send messages again.', 1500);
+            }, 1000);
+        }
         
         async function renderMessages(messages) {
             const container = document.getElementById('messagesContainer');
@@ -395,7 +428,13 @@
         async function sendMessage() {
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
-            
+
+            if (Date.now() < sendCooldownUntil) {
+                const remaining = Math.ceil((sendCooldownUntil - Date.now()) / 1000);
+                showStatus(`Rate limit reached. Retry in ${remaining}s.`, 1000);
+                return;
+            }
+
             if (!message) return;
             
             let messageToSend = message;
@@ -413,7 +452,17 @@
                     },
                     body: JSON.stringify({ message: messageToSend })
                 });
-                
+
+                if (response.status === 429) {
+                    const data = await response.json().catch(() => ({}));
+                    const retryAfter = parseInt(
+                        data.retry_after || response.headers.get('Retry-After') || '1',
+                        10
+                    );
+                    startSendCooldown(Number.isNaN(retryAfter) ? 1 : retryAfter);
+                    return;
+                }
+
                 if (response.ok) {
                     input.value = '';
                     await pollMessages();
