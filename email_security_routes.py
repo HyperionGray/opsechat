@@ -121,9 +121,12 @@ def create_email_security_blueprint(id_generator, get_random_color):
             
             elif config_type == "domain":
                 domain_config_data = {
+                    "provider": request.form.get("domain_provider", "porkbun").strip() or "porkbun",
                     "api_key": request.form.get("porkbun_api_key", "").strip(),
                     "secret_key": request.form.get("porkbun_secret_key", "").strip(),
-                    "monthly_budget": float(request.form.get("monthly_budget", 10.0))
+                    "monthly_budget": float(request.form.get("monthly_budget", 10.0)),
+                    "username": request.form.get("namecheap_username", "").strip() or None,
+                    "client_ip": request.form.get("namecheap_client_ip", "127.0.0.1").strip() or "127.0.0.1",
                 }
                 
                 try:
@@ -199,7 +202,7 @@ def create_email_security_blueprint(id_generator, get_random_color):
             return jsonify({"success": False, "error": "No session"})
         
         try:
-            result = domain_rotation_manager.rotate_domain()
+            result = domain_rotation_manager.rotate_domain_with_details()
             return jsonify(result)
         except Exception as e:
             logging.exception("Error in email_domain_rotate")

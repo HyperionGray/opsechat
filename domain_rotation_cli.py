@@ -3,7 +3,7 @@
 Domain Rotation CLI for Burner Emails
 
 This CLI tool allows easy rotation of domains for burner email services.
-It integrates with Porkbun API (and can be extended for other registrars).
+It integrates with Porkbun and Namecheap APIs.
 
 Usage:
     python domain_rotation_cli.py list          # List owned domains
@@ -17,9 +17,10 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from getpass import getpass
-from domain_manager import PorkbunAPIClient, DomainRotationManager
+from domain_manager import DomainRotationManager, create_domain_api_client
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
@@ -51,19 +52,59 @@ def save_config(config):
         print(f"Error saving config: {e}")
 
 
+def _mask_key(value: str) -> str:
+    """Mask API keys for display."""
+    if not value:
+        return "Not configured"
+    if len(value) <= 4:
+        return "*" * len(value)
+    return f"{'*' * (len(value) - 4)}{value[-4:]}"
+
+
+def _serialize_owned_domains(domains):
+    """Serialize domain state to JSON-safe objects."""
+    serialized = []
+    for domain in domains or []:
+        item = dict(domain)
+        for key in ("purchased_at", "expires_at"):
+            value = item.get(key)
+            if isinstance(value, datetime):
+                item[key] = value.isoformat()
+        serialized.append(item)
+    return serialized
+
+
+def _deserialize_owned_domains(domains):
+    """Deserialize domain state from JSON-safe objects."""
+    deserialized = []
+    for domain in domains or []:
+        item = dict(domain)
+        for key in ("purchased_at", "expires_at"):
+            value = item.get(key)
+            if isinstance(value, str):
+                try:
+                    item[key] = datetime.fromisoformat(value)
+                except ValueError:
+                    # Keep unparseable values as-is for backward compatibility
+                    pass
+        deserialized.append(item)
+    return deserialized
+
+
 def configure_api():
     """Configure API credentials"""
     print("\n=== Domain API Configuration ===\n")
-    print("This tool supports Porkbun API for domain management.")
-    print("You can get API credentials from: https://porkbun.com/account/api\n")
+    print("Supported providers: porkbun, namecheap\n")
     
     config = load_config()
+    provider = config.get('provider', 'porkbun')
     
     print("Current configuration:")
-    if config.get('api_key'):
-        print(f"  API Key: {'*' * 20}{config['api_key'][-4:]}")
-    else:
-        print("  API Key: Not configured")
+    print(f"  Provider: {provider}")
+    print(f"  API Key: {_mask_key(config.get('api_key', ''))}")
+    if provider == "namecheap":
+        print(f"  Username: {config.get('username', 'Not configured')}")
+        print(f"  Client IP: {config.get('client_ip', '127.0.0.1')}")
     
     if config.get('monthly_budget'):
         print(f"  Monthly Budget: ${config['monthly_budget']}")
@@ -71,14 +112,38 @@ def configure_api():
         print("  Monthly Budget: Not configured")
     
     print("\nEnter new values (or press Enter to keep current):\n")
-    
-    api_key = input("Porkbun API Key: ").strip()
+
+    provider_input = input(f"Provider [porkbun/namecheap] (current: {provider}): ").strip().lower()
+    if provider_input in {"porkbun", "namecheap"}:
+        provider = provider_input
+        config['provider'] = provider
+
+    api_key = input(f"{provider.capitalize()} API Key: ").strip()
     if api_key:
         config['api_key'] = api_key
-    
-    api_secret = getpass("Porkbun API Secret: ").strip()
-    if api_secret:
-        config['api_secret'] = api_secret
+
+    if provider == "porkbun":
+        print("Porkbun credentials: https://porkbun.com/account/api")
+        api_secret = getpass("Porkbun API Secret: ").strip()
+        if api_secret:
+            config['api_secret'] = api_secret
+        # Remove provider-specific fields from previous configs
+        config.pop('username', None)
+        config.pop('client_ip', None)
+    else:
+        print("Namecheap API docs: https://www.namecheap.com/support/api/intro/")
+        username = input("Namecheap Username: ").strip()
+        if username:
+            config['username'] = username
+        client_ip = input(
+            f"Namecheap Whitelisted Client IP [default: {config.get('client_ip', '127.0.0.1')}]: "
+        ).strip()
+        if client_ip:
+            config['client_ip'] = client_ip
+        elif 'client_ip' not in config:
+            config['client_ip'] = "127.0.0.1"
+        # Remove provider-specific fields from previous configs
+        config.pop('api_secret', None)
     
     budget = input("Monthly Budget (USD) [default: 50]: ").strip()
     if budget:
@@ -93,16 +158,39 @@ def configure_api():
     print("\n✅ Configuration updated successfully!")
 
 
-def get_manager():
+def get_manager(provider_override=None):
     """Get configured domain manager"""
     config = load_config()
-    
-    if not config.get('api_key') or not config.get('api_secret'):
-        print("❌ Error: API credentials not configured.")
+    provider = provider_override or config.get('provider', 'porkbun')
+    api_key = config.get('api_key')
+    if not api_key:
+        print("❌ Error: API key not configured.")
         print("Run: python domain_rotation_cli.py config")
         sys.exit(1)
-    
-    client = PorkbunAPIClient(config['api_key'], config['api_secret'])
+
+    if provider == "porkbun" and not config.get('api_secret'):
+        print("❌ Error: Porkbun API secret not configured.")
+        print("Run: python domain_rotation_cli.py config")
+        sys.exit(1)
+
+    if provider == "namecheap" and not config.get('username'):
+        print("❌ Error: Namecheap username not configured.")
+        print("Run: python domain_rotation_cli.py config")
+        sys.exit(1)
+
+    try:
+        client = create_domain_api_client(
+            provider=provider,
+            api_key=api_key,
+            api_secret=config.get('api_secret'),
+            username=config.get('username'),
+            client_ip=config.get('client_ip', '127.0.0.1'),
+            sandbox=bool(config.get('sandbox', False)),
+        )
+    except ValueError as e:
+        print(f"❌ Error: {e}")
+        sys.exit(1)
+
     manager = DomainRotationManager(
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
@@ -112,7 +200,7 @@ def get_manager():
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = _deserialize_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,14 +210,15 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['provider'] = manager.provider
+    config['owned_domains'] = _serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
     save_config(config)
 
 
-def list_domains():
+def list_domains(provider_override=None):
     """List owned domains"""
-    manager, config = get_manager()
+    manager, config = get_manager(provider_override)
     
     print("\n=== Owned Domains ===\n")
     
@@ -144,14 +233,30 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        purchased_at = domain.get('purchased_at')
+        expires_at = domain.get('expires_at')
+
+        if isinstance(purchased_at, str):
+            try:
+                purchased_at = datetime.fromisoformat(purchased_at)
+            except ValueError:
+                pass
+        if isinstance(expires_at, str):
+            try:
+                expires_at = datetime.fromisoformat(expires_at)
+            except ValueError:
+                pass
+
+        purchased_display = purchased_at.strftime('%Y-%m-%d %H:%M') if hasattr(purchased_at, 'strftime') else str(purchased_at)
+        expires_display = expires_at.strftime('%Y-%m-%d') if hasattr(expires_at, 'strftime') else str(expires_at)
+        print(f"   Purchased: {purchased_display}")
+        print(f"   Expires: {expires_display}")
         print()
 
 
-def search_domains():
+def search_domains(provider_override=None):
     """Search for available cheap domains"""
-    manager, config = get_manager()
+    manager, config = get_manager(provider_override)
     
     print("\n=== Searching for Available Cheap Domains ===\n")
     print("Searching for domains under $5...\n")
@@ -168,9 +273,9 @@ def search_domains():
     print("\nTo purchase a domain, run: python domain_rotation_cli.py rotate")
 
 
-def rotate_domain():
+def rotate_domain(provider_override=None):
     """Rotate to a new domain"""
-    manager, config = get_manager()
+    manager, config = get_manager(provider_override)
     
     print("\n=== Domain Rotation ===\n")
     
@@ -213,14 +318,15 @@ def rotate_domain():
         print("\n❌ Failed to purchase domain. Check API credentials and budget.")
 
 
-def show_status():
+def show_status(provider_override=None):
     """Show current status"""
-    manager, config = get_manager()
+    manager, config = get_manager(provider_override)
     
     print("\n=== Domain Rotation Status ===\n")
     
     budget_status = manager.get_budget_status()
     
+    print(f"Provider: {manager.provider}")
     print(f"Active Domain: {manager.active_domain or 'None'}")
     print(f"\nBudget:")
     print(f"  Monthly: ${budget_status['monthly_budget']}")
@@ -253,19 +359,25 @@ Examples:
         choices=['config', 'status', 'search', 'rotate', 'list'],
         help='Command to execute'
     )
+    parser.add_argument(
+        '--provider',
+        choices=['porkbun', 'namecheap'],
+        default=None,
+        help='Override configured provider for this command'
+    )
     
     args = parser.parse_args()
     
     if args.command == 'config':
         configure_api()
     elif args.command == 'status':
-        show_status()
+        show_status(args.provider)
     elif args.command == 'search':
-        search_domains()
+        search_domains(args.provider)
     elif args.command == 'rotate':
-        rotate_domain()
+        rotate_domain(args.provider)
     elif args.command == 'list':
-        list_domains()
+        list_domains(args.provider)
 
 
 if __name__ == '__main__':

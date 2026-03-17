@@ -4,7 +4,11 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient,
+    PorkbunAPIClient,
+    NamecheapAPIClient,
+    DomainRotationManager,
+    create_domain_api_client,
 )
 
 
@@ -74,6 +78,46 @@ class TestPorkbunAPIClient:
         
         assert result["tld"] == "com"
         assert result["registration"] == "9.99"
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch('domain_manager.requests.Session')
+    def test_search_domain_available(self, mock_session_class):
+        """Test Namecheap domain availability parsing"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """<?xml version="1.0" encoding="utf-8"?>
+<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+  <CommandResponse Type="namecheap.domains.check">
+    <DomainCheckResult Domain="test123.xyz" Available="true" PremiumRegistrationPrice="2.88"/>
+  </CommandResponse>
+</ApiResponse>
+"""
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_key="test_key",
+            username="test_user",
+            client_ip="127.0.0.1",
+        )
+        result = client.search_domain("test123.xyz")
+
+        assert result["available"] is True
+        assert result["domain"] == "test123.xyz"
+        assert result["price"] == 2.88
+
+    def test_factory_creates_namecheap_client(self):
+        """Factory should construct Namecheap client with required params"""
+        client = create_domain_api_client(
+            provider="namecheap",
+            api_key="test_key",
+            username="test_user",
+            client_ip="127.0.0.1",
+        )
+        assert isinstance(client, NamecheapAPIClient)
 
 
 class TestDomainRotationManager:
@@ -174,3 +218,45 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    @patch('domain_manager.requests.Session')
+    def test_configure_porkbun(self, _mock_session_class):
+        """Configure manager for Porkbun provider"""
+        manager = DomainRotationManager()
+        config = manager.configure(
+            provider="porkbun",
+            api_key="pk_test_1234",
+            secret_key="sk_test_5678",
+            monthly_budget=25.0,
+        )
+
+        assert manager.provider == "porkbun"
+        assert config["configured"] is True
+        assert config["monthly_budget"] == 25.0
+        assert config["api_key"].endswith("1234")
+
+    @patch('domain_manager.requests.Session')
+    def test_configure_namecheap(self, _mock_session_class):
+        """Configure manager for Namecheap provider"""
+        manager = DomainRotationManager()
+        config = manager.configure(
+            provider="namecheap",
+            api_key="nc_test_1234",
+            username="namecheap-user",
+            client_ip="127.0.0.1",
+            monthly_budget=30.0,
+        )
+
+        assert manager.provider == "namecheap"
+        assert config["configured"] is True
+        assert config["username"] == "namecheap-user"
+
+    def test_configure_namecheap_missing_username(self):
+        """Namecheap configuration should require username"""
+        manager = DomainRotationManager()
+        with pytest.raises(ValueError):
+            manager.configure(
+                provider="namecheap",
+                api_key="nc_test_1234",
+                monthly_budget=30.0,
+            )

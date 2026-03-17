@@ -8,7 +8,7 @@ Opsechat supports automated domain purchasing for rotating burner email addresse
 
 ## Supported Registrars
 
-### Porkbun (Recommended)
+### Porkbun (Recommended for Simplicity)
 
 **Why Porkbun?**
 - Competitive pricing on cheap TLDs (.xyz from $1.99/yr)
@@ -59,14 +59,45 @@ Key endpoints used by opsechat:
 - `pricing/get` - Get TLD pricing
 - `domain/listAll` - List owned domains
 
+### Namecheap
+
+Namecheap support is now available in the domain manager and CLI.
+
+**Requirements:**
+- Namecheap API-enabled account
+- Whitelisted client IP in Namecheap API settings
+- Username + API key
+- Contact profile fields for automated purchases (Namecheap requirement)
+
+**Key notes:**
+- Availability checks are supported.
+- Pricing lookup is supported.
+- Purchases require complete contact profile data (Registrant/Admin/Tech/AuxBilling).
+
+#### Getting Namecheap API Access
+
+1. Log into Namecheap and enable API access.
+2. Add your server/client IP to the API whitelist.
+3. Generate an API key.
+4. Configure opsechat with provider `namecheap`.
+
+CLI example:
+
+```bash
+python domain_rotation_cli.py config
+# Choose provider: namecheap
+```
+
+Run commands with an explicit provider override:
+
+```bash
+python domain_rotation_cli.py status --provider namecheap
+python domain_rotation_cli.py search --provider namecheap
+```
+
 ## Other Registrars (Future Support)
 
 The opsechat domain manager is designed to be extensible. Future registrar support may include:
-
-### Namecheap
-- API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
-- Cheap TLDs: .xyz, .club, .online
 
 ### Namesilo
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)
@@ -110,6 +141,12 @@ Environment=DOMAIN_MONTHLY_BUDGET=50.0
 ```
 
 Then modify the runserver.py to read these on startup.
+
+For Namecheap-style deployments, persist equivalent values in your domain config:
+- `provider=namecheap`
+- `api_key=<namecheap-api-key>`
+- `username=<namecheap-username>`
+- `client_ip=<whitelisted-ip>`
 
 ## Budget Management
 
