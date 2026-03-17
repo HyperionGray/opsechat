@@ -9,6 +9,7 @@ Usage:
     python domain_rotation_cli.py list          # List owned domains
     python domain_rotation_cli.py search        # Search for available cheap domains
     python domain_rotation_cli.py rotate        # Rotate to a new domain
+    python domain_rotation_cli.py test-rotate   # Simulate rotate without purchase
     python domain_rotation_cli.py status        # Show budget status
     python domain_rotation_cli.py config        # Configure API credentials
 """
@@ -107,24 +108,45 @@ def get_manager():
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
-    
+
+    # Load saved state (new format first, then legacy fallback)
+    if isinstance(config.get('state'), dict):
+        manager.import_state(config['state'])
+    else:
+        legacy_state = {
+            'current_spending': config.get('current_spending', 0.0),
+            'owned_domains': config.get('owned_domains', []),
+            'active_domain': config.get('active_domain'),
+            'monthly_budget': config.get('monthly_budget', 50.0),
+        }
+        manager.import_state(legacy_state)
+
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    state = manager.export_state()
+    config['state'] = state
+    # Keep legacy keys for backward compatibility with older tooling.
+    config['current_spending'] = state['current_spending']
+    config['owned_domains'] = state['owned_domains']
+    config['active_domain'] = state['active_domain']
+    config['monthly_budget'] = state['monthly_budget']
     save_config(config)
+
+
+def _format_date(value, fmt: str) -> str:
+    """Format dates loaded from either datetime or serialized strings."""
+    if hasattr(value, "strftime"):
+        return value.strftime(fmt)
+    if isinstance(value, str):
+        try:
+            from datetime import datetime
+            return datetime.fromisoformat(value).strftime(fmt)
+        except ValueError:
+            return value
+    return "unknown"
 
 
 def list_domains():
@@ -144,27 +166,25 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_date(domain.get('purchased_at'), '%Y-%m-%d %H:%M')}")
+        print(f"   Expires: {_format_date(domain.get('expires_at'), '%Y-%m-%d')}")
         print()
 
 
 def search_domains():
     """Search for available cheap domains"""
     manager, config = get_manager()
-    
+
     print("\n=== Searching for Available Cheap Domains ===\n")
     print("Searching for domains under $5...\n")
-    
-    for i in range(5):
-        print(f"Attempt {i+1}/5...")
-        domain_info = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
-        
-        if domain_info:
-            print(f"  ✅ Found: {domain_info['domain']} - ${domain_info['price']}")
-        else:
-            print(f"  ❌ No cheap domain found in this attempt")
-    
+
+    results = manager.search_cheap_domains(max_price=5.0, limit=5, max_attempts=25)
+    if not results:
+        print("  No cheap domains found.")
+    else:
+        for i, domain_info in enumerate(results, 1):
+            print(f"  {i}. {domain_info['domain']} - ${domain_info['price']}")
+
     print("\nTo purchase a domain, run: python domain_rotation_cli.py rotate")
 
 
@@ -185,32 +205,52 @@ def rotate_domain():
         return
     
     print("Searching for available cheap domain...")
-    
-    domain_info = manager.find_cheap_available_domain(max_price=min(5.0, budget_status['remaining']))
-    
+
+    domain_info = manager.find_cheap_available_domain(
+        max_price=min(5.0, budget_status['remaining'])
+    )
+
     if not domain_info:
         print("❌ Could not find an available cheap domain within budget.")
         return
-    
+
     print(f"\nFound: {domain_info['domain']} for ${domain_info['price']}")
-    
+
     confirm = input("\nProceed with purchase? (yes/no): ").strip().lower()
-    
+
     if confirm != 'yes':
         print("Purchase cancelled.")
         return
-    
+
     print("\nPurchasing domain...")
-    success = manager.purchase_domain_if_budget_allows(
-        domain_info['domain'],
-        domain_info['price']
+
+    result = manager.rotate_to_new_domain(
+        max_price=min(5.0, budget_status['remaining'])
     )
-    
-    if success:
-        print(f"\n✅ Successfully purchased and activated: {domain_info['domain']}")
+
+    if result.get("success"):
+        print(f"\n✅ Successfully purchased and activated: {result['domain']}")
         save_manager_state(manager, config)
     else:
-        print("\n❌ Failed to purchase domain. Check API credentials and budget.")
+        print(f"\n❌ Failed to purchase domain: {result.get('error', 'unknown error')}")
+
+
+def test_rotate_domain():
+    """Simulate rotation without spending money."""
+    manager, config = get_manager()
+    manager.set_test_mode(True)
+
+    print("\n=== Domain Rotation (Test Mode) ===\n")
+    print("Purchases are simulated and no registrar charge is made.\n")
+
+    budget_status = manager.get_budget_status()
+    result = manager.rotate_to_new_domain(max_price=min(5.0, budget_status['remaining']))
+
+    if result.get("success"):
+        print(f"✅ Simulated rotation complete. New active domain: {result['domain']}")
+        save_manager_state(manager, config)
+    else:
+        print(f"❌ Test rotation failed: {result.get('error', 'unknown error')}")
 
 
 def show_status():
@@ -244,13 +284,14 @@ Examples:
   python domain_rotation_cli.py status     # Show current status
   python domain_rotation_cli.py search     # Search for available domains
   python domain_rotation_cli.py rotate     # Rotate to a new domain
+  python domain_rotation_cli.py test-rotate # Simulate a rotate
   python domain_rotation_cli.py list       # List owned domains
         """
     )
     
     parser.add_argument(
         'command',
-        choices=['config', 'status', 'search', 'rotate', 'list'],
+        choices=['config', 'status', 'search', 'rotate', 'test-rotate', 'list'],
         help='Command to execute'
     )
     
@@ -264,6 +305,8 @@ Examples:
         search_domains()
     elif args.command == 'rotate':
         rotate_domain()
+    elif args.command == 'test-rotate':
+        test_rotate_domain()
     elif args.command == 'list':
         list_domains()
 

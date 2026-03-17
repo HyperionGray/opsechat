@@ -1,5 +1,9 @@
 # Domain Rotation Guide
 
+> NOTE: For the latest CLI behavior (state persistence, dry-run rotation, and structured
+> manager APIs), see:
+> `docs/implementation/DOMAIN_ROTATION_ENHANCEMENTS_2026-03-17.md`.
+
 ## Overview
 
 OpSecChat supports automated domain rotation for burner email systems. This allows you to quickly purchase and rotate domains to enhance privacy and avoid domain-based blocking.
@@ -9,6 +13,7 @@ OpSecChat supports automated domain rotation for burner email systems. This allo
 Currently supported:
 - **Porkbun** (Recommended - cheap .xyz, .club domains)
 - Additional registrars can be added by extending `DomainAPIClient`
+- **Dry-run mode** is available via CLI: `python domain_rotation_cli.py test-rotate`
 
 ## Setup
 

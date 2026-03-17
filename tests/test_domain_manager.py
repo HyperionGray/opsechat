@@ -3,6 +3,7 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -174,3 +175,79 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_search_cheap_domains_returns_unique_results(self):
+        """search_cheap_domains returns unique domain candidates."""
+        mock_client = Mock(spec=DomainAPIClient)
+        manager = DomainRotationManager(mock_client)
+        manager.generate_random_domain = Mock(
+            side_effect=["alpha.xyz", "alpha.xyz", "beta.xyz", "gamma.xyz"]
+        )
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": "1.99",
+        }
+
+        results = manager.search_cheap_domains(limit=3, max_attempts=4, tlds=["xyz"])
+
+        assert len(results) == 3
+        assert [item["domain"] for item in results] == ["alpha.xyz", "beta.xyz", "gamma.xyz"]
+
+    def test_rotate_to_new_domain_in_test_mode_skips_real_purchase(self):
+        """Test mode performs simulated purchase without API purchase call."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": 1.50,
+        }
+        manager = DomainRotationManager(mock_client, monthly_budget=10.0)
+        manager.generate_random_domain = Mock(return_value="dryrun.xyz")
+        manager.set_test_mode(True)
+
+        result = manager.rotate_to_new_domain(max_price=2.0)
+
+        assert result["success"] is True
+        assert result["domain"] == "dryrun.xyz"
+        assert result["test_mode"] is True
+        assert manager.current_spending == 1.5
+        assert manager.active_domain == "dryrun.xyz"
+        mock_client.purchase_domain.assert_not_called()
+
+    def test_export_import_state_roundtrip(self):
+        """State export/import preserves key manager values."""
+        mock_client = Mock(spec=DomainAPIClient)
+        manager = DomainRotationManager(mock_client, monthly_budget=42.0)
+        manager.current_spending = 7.25
+        manager.active_domain = "persisted.xyz"
+        manager.test_mode = True
+        manager.owned_domains = [
+            {
+                "domain": "persisted.xyz",
+                "price": 2.99,
+                "purchased_at": datetime(2026, 3, 17, 1, 2, 3),
+                "expires_at": datetime(2027, 3, 17, 1, 2, 3),
+            }
+        ]
+
+        state = manager.export_state()
+        restored = DomainRotationManager(mock_client)
+        restored.import_state(state)
+
+        assert restored.monthly_budget == 42.0
+        assert restored.current_spending == 7.25
+        assert restored.active_domain == "persisted.xyz"
+        assert restored.test_mode is True
+        assert isinstance(restored.owned_domains[0]["purchased_at"], datetime)
+
+    def test_get_config_masks_secrets(self):
+        """get_config masks API credentials by default."""
+        client = PorkbunAPIClient("pk_test_12345678", "sk_test_87654321")
+        manager = DomainRotationManager(client)
+
+        config = manager.get_config(mask_secrets=True)
+        raw_config = manager.get_config(mask_secrets=False)
+
+        assert config["api_key"].endswith("5678")
+        assert config["secret_key"].endswith("4321")
+        assert "*" in config["api_key"]
+        assert raw_config["api_key"] == "pk_test_12345678"
