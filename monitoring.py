@@ -8,6 +8,8 @@ import json
 import time
 import sys
 import os
+import socket
+import shutil
 from datetime import datetime
 from typing import Dict, Any, Optional
 from functools import wraps
@@ -321,21 +323,150 @@ def _read_version() -> str:
         return 'unknown'
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    """Parse a boolean environment variable."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_float(name: str, default: float) -> float:
+    """Parse a float environment variable with safe fallback."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def _check_tor_connection() -> Dict[str, Any]:
+    """
+    Check whether Tor ControlPort is reachable.
+
+    If OPSECHAT_REQUIRE_TOR is false, Tor being unavailable is reported as
+    "unknown" rather than a failing health condition.
+    """
+    require_tor = _env_bool("OPSECHAT_REQUIRE_TOR", default=False)
+    control_port = int(_env_float("TOR_CONTROL_PORT", 9051))
+    timeout_seconds = _env_float("OPSECHAT_HEALTH_SOCKET_TIMEOUT_SECONDS", 0.25)
+
+    reachable = False
+    try:
+        with socket.create_connection(("127.0.0.1", control_port), timeout=timeout_seconds):
+            reachable = True
+    except OSError:
+        reachable = False
+
+    if reachable:
+        status = "ok"
+        message = "Tor control port reachable"
+    elif require_tor:
+        status = "fail"
+        message = "Tor required but control port is unreachable"
+    else:
+        status = "unknown"
+        message = "Tor not required and control port is unreachable"
+
+    return {
+        "status": status,
+        "required": require_tor,
+        "control_port": control_port,
+        "message": message,
+    }
+
+
+def _check_memory_usage() -> Dict[str, Any]:
+    """Check process RSS memory against configured threshold."""
+    threshold_mb = _env_float("OPSECHAT_HEALTH_MAX_MEMORY_MB", 1024.0)
+    try:
+        import psutil
+
+        process = psutil.Process()
+        rss_mb = process.memory_info().rss / 1024 / 1024
+        status = "ok" if rss_mb <= threshold_mb else "fail"
+        return {
+            "status": status,
+            "used_mb": round(rss_mb, 2),
+            "max_allowed_mb": threshold_mb,
+        }
+    except ImportError:
+        return {
+            "status": "unknown",
+            "message": "psutil not installed; memory check unavailable",
+            "max_allowed_mb": threshold_mb,
+        }
+
+
+def _check_disk_space() -> Dict[str, Any]:
+    """Check free disk space where the repository is mounted."""
+    min_free_mb = _env_float("OPSECHAT_HEALTH_MIN_DISK_FREE_MB", 100.0)
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    total, used, free = shutil.disk_usage(root_dir)
+    free_mb = free / 1024 / 1024
+    status = "ok" if free_mb >= min_free_mb else "fail"
+    return {
+        "status": status,
+        "free_mb": round(free_mb, 2),
+        "min_required_mb": min_free_mb,
+        "total_mb": round(total / 1024 / 1024, 2),
+        "used_mb": round(used / 1024 / 1024, 2),
+    }
+
+
+def _overall_health_from_checks(checks: Dict[str, Dict[str, Any]]) -> str:
+    """Collapse individual check states into overall health status."""
+    statuses = [check.get("status", "unknown") for check in checks.values()]
+    if "fail" in statuses:
+        return "unhealthy"
+    if "warn" in statuses:
+        return "degraded"
+    return "healthy"
+
+
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
+    checks = {
+        'tor_connection': _check_tor_connection(),
+        'memory_usage': _check_memory_usage(),
+        'disk_space': _check_disk_space(),
+    }
+
     return {
-        'status': 'healthy',
+        'status': _overall_health_from_checks(checks),
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
         # active_rooms: this app uses a single global chat room. The field is
         # included for API consistency; it always reports 1 when the service is up.
         'active_rooms': 1,
-        'checks': {
-            'tor_connection': 'unknown',  # Would need to check actual Tor status
-            'memory_usage': 'ok',
-            'disk_space': 'ok'
-        }
+        'checks': checks,
+    }
+
+
+def get_readiness_status() -> Dict[str, Any]:
+    """
+    Return readiness information suitable for load balancers/orchestrators.
+
+    A service is ready only when no critical checks are failing.
+    """
+    health = get_health_status()
+    failed_checks = [
+        check_name
+        for check_name, check_data in health["checks"].items()
+        if check_data.get("status") == "fail"
+    ]
+    ready = len(failed_checks) == 0
+    return {
+        "status": "ready" if ready else "not_ready",
+        "ready": ready,
+        "timestamp": datetime.utcnow().isoformat(),
+        "failed_checks": failed_checks,
+        "health_status": health["status"],
+        "checks": health["checks"],
+        "version": health["version"],
     }
 
 # Security event logging

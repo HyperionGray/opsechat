@@ -102,7 +102,7 @@ def test_health_endpoint_returns_json_with_required_fields():
     response = client.get("/health")
     data = response.get_json()
     assert data is not None
-    assert data.get("status") == "healthy"
+    assert data.get("status") in {"healthy", "degraded", "unhealthy"}
     assert "version" in data
     assert "active_rooms" in data
 
@@ -113,3 +113,44 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_returns_check_objects():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    data = response.get_json()
+
+    checks = data.get("checks")
+    assert isinstance(checks, dict)
+    assert "tor_connection" in checks
+    assert "memory_usage" in checks
+    assert "disk_space" in checks
+
+    for check_name in ("tor_connection", "memory_usage", "disk_space"):
+        assert "status" in checks[check_name], f"missing status for {check_name}"
+        assert checks[check_name]["status"] in {"ok", "warn", "fail", "unknown"}
+
+
+def test_ready_endpoint_returns_readiness_payload():
+    client = _test_app.test_client()
+    response = client.get("/ready")
+    data = response.get_json()
+
+    assert response.status_code in {200, 503}
+    assert data["status"] in {"ready", "not_ready"}
+    assert isinstance(data["ready"], bool)
+    assert isinstance(data["failed_checks"], list)
+    assert "checks" in data
+    assert "version" in data
+
+
+def test_ready_endpoint_returns_503_when_memory_threshold_forces_failure(monkeypatch):
+    monkeypatch.setenv("OPSECHAT_HEALTH_MAX_MEMORY_MB", "0")
+
+    client = _test_app.test_client()
+    response = client.get("/ready")
+    data = response.get_json()
+
+    assert response.status_code == 503
+    assert data["ready"] is False
+    assert "memory_usage" in data["failed_checks"]
