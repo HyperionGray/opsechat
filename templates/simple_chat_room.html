@@ -217,6 +217,7 @@
         let encryptionKey = null;
         let pollInterval = null;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+        let sendCooldownTimer = null;
         
         // Show security warning on first load
         function showSecurityWarning() {
@@ -343,6 +344,54 @@
                 statusMsg.textContent = '';
             }, duration);
         }
+
+        function getRetryAfterSeconds(response, payload) {
+            const payloadRetry = Number(payload && payload.retry_after);
+            if (Number.isFinite(payloadRetry) && payloadRetry > 0) {
+                return Math.ceil(payloadRetry);
+            }
+
+            const headerRetry = Number(response.headers.get('Retry-After'));
+            if (Number.isFinite(headerRetry) && headerRetry > 0) {
+                return Math.ceil(headerRetry);
+            }
+
+            return 5;
+        }
+
+        function startSendCooldown(seconds) {
+            const input = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendBtn');
+
+            if (sendCooldownTimer) {
+                clearInterval(sendCooldownTimer);
+                sendCooldownTimer = null;
+            }
+
+            let remaining = Math.max(1, Math.ceil(seconds));
+            input.disabled = true;
+            sendBtn.disabled = true;
+
+            const updateStatus = () => {
+                showStatus(`Rate limit reached. You can send again in ${remaining}s.`, 1000);
+            };
+
+            updateStatus();
+            sendCooldownTimer = setInterval(() => {
+                remaining -= 1;
+                if (remaining <= 0) {
+                    clearInterval(sendCooldownTimer);
+                    sendCooldownTimer = null;
+                    if (securityWarningAccepted) {
+                        input.disabled = false;
+                        sendBtn.disabled = false;
+                    }
+                    showStatus('You can send messages again now.', 1500);
+                    return;
+                }
+                updateStatus();
+            }, 1000);
+        }
         
         function scrollToBottom() {
             const container = document.getElementById('messagesContainer');
@@ -394,6 +443,8 @@
         
         async function sendMessage() {
             const input = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendBtn');
+            if (sendBtn.disabled) return;
             const message = input.value.trim();
             
             if (!message) return;
@@ -418,7 +469,12 @@
                     input.value = '';
                     await pollMessages();
                 } else {
-                    showStatus('Error sending message');
+                    const errorData = await response.json().catch(() => ({}));
+                    if (response.status === 429) {
+                        startSendCooldown(getRetryAfterSeconds(response, errorData));
+                        return;
+                    }
+                    showStatus(errorData.error || 'Error sending message');
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);

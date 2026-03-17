@@ -5,7 +5,8 @@ This module handles Flask application creation and configuration,
 extracted from runserver.py to improve code organization.
 """
 
-from flask import Flask, jsonify
+import os
+from flask import Flask, jsonify, request
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -30,6 +31,7 @@ def _read_version():
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
+    app.config["RATELIMIT_HEADERS_ENABLED"] = True
     
     # Set secret key for sessions
     app.secret_key = id_generator(size=64)
@@ -91,11 +93,37 @@ def create_app():
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
+        return response
+
+    @app.errorhandler(429)
+    def handle_rate_limit_exceeded(error):
+        """
+        Return consistent JSON rate-limit responses for chat APIs.
+
+        Flask-Limiter decorator breaches can produce HTML by default. For chat
+        clients we normalize that to JSON with retry metadata.
+        """
+        if not request.path.startswith("/chat/"):
+            return error
+
+        retry_after = getattr(error, "retry_after", None)
+        try:
+            retry_after = int(retry_after) if retry_after is not None else 0
+        except (TypeError, ValueError):
+            retry_after = 0
+        if retry_after <= 0:
+            retry_after = 60
+
+        response = jsonify({
+            "error": "Rate limit exceeded.",
+            "retry_after": retry_after,
+            "endpoint": request.path,
+        })
+        response.status_code = 429
+        response.headers["Retry-After"] = str(retry_after)
         return response
     
     # Register chat routes
@@ -125,15 +153,5 @@ def create_app():
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # CHANGELOG (AI assistant):
-    # - Made rate_limiter import optional with a no-op fallback to prevent
-    #   ModuleNotFoundError in containerized installs that omit rate_limiter.py.
-    #
-    # Remaining checklist (non-blocking for runtime):
-    # - Update container/Podman build configuration to ensure rate_limiter.py
-    #   is included in the image (e.g., COPY list or packaging config).
-    # - Once packaging reliably includes rate_limiter.py, consider removing
-    #   the fallback or turning it into an explicit configuration option.
     
     return app

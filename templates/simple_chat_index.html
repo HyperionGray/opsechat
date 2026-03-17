@@ -162,8 +162,54 @@
     
     <script>
         // Simple room creation with no external dependencies
-        document.getElementById('createRoomBtn').addEventListener('click', async function() {
-            const statusDiv = document.getElementById('status');
+        const createRoomBtn = document.getElementById('createRoomBtn');
+        const statusDiv = document.getElementById('status');
+        let createRoomCooldownTimer = null;
+
+        function getRetryAfterSeconds(response, payload) {
+            const payloadRetry = Number(payload && payload.retry_after);
+            if (Number.isFinite(payloadRetry) && payloadRetry > 0) {
+                return Math.ceil(payloadRetry);
+            }
+
+            const headerRetry = Number(response.headers.get('Retry-After'));
+            if (Number.isFinite(headerRetry) && headerRetry > 0) {
+                return Math.ceil(headerRetry);
+            }
+
+            return 5;
+        }
+
+        function startCreateRoomCooldown(seconds) {
+            if (createRoomCooldownTimer) {
+                clearInterval(createRoomCooldownTimer);
+                createRoomCooldownTimer = null;
+            }
+
+            let remaining = Math.max(1, Math.ceil(seconds));
+            createRoomBtn.disabled = true;
+
+            const updateText = () => {
+                createRoomBtn.textContent = `Wait ${remaining}s`;
+                statusDiv.textContent = `Rate limit reached. Try again in ${remaining} seconds.`;
+            };
+
+            updateText();
+            createRoomCooldownTimer = setInterval(() => {
+                remaining -= 1;
+                if (remaining <= 0) {
+                    clearInterval(createRoomCooldownTimer);
+                    createRoomCooldownTimer = null;
+                    createRoomBtn.disabled = false;
+                    createRoomBtn.textContent = 'Create New Chat Room';
+                    statusDiv.textContent = '';
+                    return;
+                }
+                updateText();
+            }, 1000);
+        }
+
+        createRoomBtn.addEventListener('click', async function() {
             statusDiv.textContent = 'Creating room...';
             
             try {
@@ -175,7 +221,13 @@
                 });
                 
                 if (!response.ok) {
-                    throw new Error('Failed to create room');
+                    const errorData = await response.json().catch(() => ({}));
+                    if (response.status === 429) {
+                        const retryAfter = getRetryAfterSeconds(response, errorData);
+                        startCreateRoomCooldown(retryAfter);
+                        return;
+                    }
+                    throw new Error(errorData.error || 'Failed to create room');
                 }
                 
                 const data = await response.json();

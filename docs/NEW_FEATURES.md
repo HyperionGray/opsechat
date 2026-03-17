@@ -172,6 +172,36 @@ When limit exceeded:
 
 ---
 
+## ⏱ Chat Rate-Limit Backoff Metadata (NEW)
+
+### What Changed
+Chat write endpoints now return structured rate-limit metadata so clients can
+back off automatically instead of repeatedly sending failing requests.
+
+### API Behavior
+For chat write endpoints, `429` responses now include:
+- JSON payload fields: `retry_after`, `endpoint`, `max_requests`, `window_seconds`
+- `Retry-After` response header
+- `X-RateLimit-*` metadata headers where available
+
+Example:
+```json
+{
+  "error": "Rate limit exceeded. Maximum 30 requests per 60 seconds.",
+  "endpoint": "chat_message",
+  "retry_after": 17,
+  "max_requests": 30,
+  "window_seconds": 60
+}
+```
+
+### User Experience Improvements
+- Room creation now shows a cooldown timer when limit is reached
+- Message sending now temporarily disables input/button and shows a countdown
+- UI resumes automatically when retry window expires
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose
