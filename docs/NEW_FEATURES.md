@@ -172,6 +172,51 @@ When limit exceeded:
 
 ---
 
+## Chat API Retry and Backoff Contract
+
+### Purpose
+Chat write endpoints now return consistent rate-limit metadata so clients can
+retry safely instead of sending repeated bursts.
+
+### Endpoints Covered
+- `POST /chat/create`
+- `POST /chat/room/{room_id}/messages`
+- `POST /chat/dm/send`
+- `GET /chat/rate-limits` (policy discovery endpoint)
+
+### 429 Response Shape
+When a chat write endpoint is throttled, the response now includes:
+
+```json
+{
+  "error": "Rate limit exceeded. Try again in 23 seconds.",
+  "endpoint": "chat_message",
+  "retry_after_seconds": 23,
+  "max_requests": 30,
+  "window_seconds": 60,
+  "backoff": {
+    "strategy": "exponential_full_jitter",
+    "base_delay_seconds": 1,
+    "max_delay_seconds": 30,
+    "max_retries": 4
+  }
+}
+```
+
+### Rate-Limit Headers
+The same information is also exposed via headers:
+- `Retry-After`
+- `X-RateLimit-Endpoint`
+- `X-RateLimit-Retry-After`
+- `X-RateLimit-Limit`
+- `X-RateLimit-Window`
+
+### Client Behavior
+The web chat UI now applies exponential backoff with jitter for throttled
+requests and retries automatically up to a safe limit.
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

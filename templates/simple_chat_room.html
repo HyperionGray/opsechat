@@ -348,6 +348,47 @@
             const container = document.getElementById('messagesContainer');
             container.scrollTop = container.scrollHeight;
         }
+
+        function calculateRetryDelayMs(response, body, attempt) {
+            const retryAfterHeader = parseInt(response.headers.get('Retry-After') || '0', 10);
+            const retryAfterBody = body && Number.isFinite(body.retry_after_seconds)
+                ? body.retry_after_seconds
+                : 0;
+            const serverSuggestedMs = Math.max(retryAfterHeader, retryAfterBody, 0) * 1000;
+            const exponentialMs = Math.min(1000 * (2 ** Math.max(attempt - 1, 0)), 10000);
+            return Math.max(serverSuggestedMs, exponentialMs, 250);
+        }
+
+        async function postMessageWithBackoff(messageToSend, attempt = 1) {
+            const response = await fetch(`/chat/room/${roomId}/messages`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ message: messageToSend })
+            });
+
+            let data = null;
+            try {
+                data = await response.json();
+            } catch (_error) {
+                data = null;
+            }
+
+            if (response.ok) {
+                return { response, data };
+            }
+
+            if (response.status === 429 && attempt <= 4) {
+                const delayMs = calculateRetryDelayMs(response, data, attempt);
+                const delaySeconds = (delayMs / 1000).toFixed(1);
+                showStatus(`Rate limited. Retrying in ${delaySeconds}s...`, delayMs + 500);
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+                return postMessageWithBackoff(messageToSend, attempt + 1);
+            }
+
+            return { response, data };
+        }
         
         async function renderMessages(messages) {
             const container = document.getElementById('messagesContainer');
@@ -394,6 +435,7 @@
         
         async function sendMessage() {
             const input = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendBtn');
             const message = input.value.trim();
             
             if (!message) return;
@@ -406,22 +448,22 @@
             }
             
             try {
-                const response = await fetch(`/chat/room/${roomId}/messages`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ message: messageToSend })
-                });
-                
+                sendButton.disabled = true;
+                const { response, data } = await postMessageWithBackoff(messageToSend);
                 if (response.ok) {
                     input.value = '';
                     await pollMessages();
                 } else {
-                    showStatus('Error sending message');
+                    if (data && data.error) {
+                        showStatus(data.error);
+                    } else {
+                        showStatus(`Error sending message (HTTP ${response.status})`);
+                    }
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);
+            } finally {
+                sendButton.disabled = false;
             }
         }
         
