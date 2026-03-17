@@ -321,10 +321,12 @@ This project includes comprehensive Amazon Q Code Review integration with automa
 - **Algorithm Efficiency**: Critical bug fixes applied for index deletion operations
 - **Resource Optimization**: Container limits and health checks for reliability
 - **Monitoring**: CloudWatch integration with appropriate retention policies
+- **Runtime Health Metrics**: `/health` now includes live chat/DM/rate-limit counters
 
 For detailed information, see:
 - [Latest Amazon Q Code Review (2026-01-06)](docs/assessment/AMAZON_Q_CODE_REVIEW_2026-01-06.md) - ✅ **EXCELLENT** rating
 - [Amazon Q Implementation Summary](docs/implementation/AMAZON_Q_IMPLEMENTATION_SUMMARY.md)
+- [Health Endpoint Runtime Status](docs/implementation/HEALTH_ENDPOINT_RUNTIME_STATUS.md)
 - [AWS Deployment Guide](docs/setup/AWS_DEPLOYMENT.md)
 - [All Documentation](docs/README.md)
 

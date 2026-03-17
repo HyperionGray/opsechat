@@ -222,6 +222,48 @@ def cleanup_rate_limits():
             del _rate_limit_store[sid]
 
 
+def get_simple_chat_runtime_stats():
+    """
+    Return runtime stats for simple chat health reporting.
+
+    This intentionally returns only aggregate counters (no user/message content).
+    """
+    # Prune expired state before reporting metrics.
+    cleanup_old_rooms()
+    cleanup_old_dms()
+    cleanup_rate_limits()
+
+    with rooms_lock:
+        rooms = list(chat_rooms.values())
+
+    total_messages = 0
+    active_users = 0
+    for room in rooms:
+        total_messages += len(room.get_messages())
+        active_users += room.get_user_count()
+
+    with dm_lock:
+        active_direct_messages = len(direct_messages)
+
+    with _rate_limit_lock:
+        active_rate_limited_sessions = len(_rate_limit_store)
+
+    return {
+        "active_rooms": len(rooms),
+        "active_users": active_users,
+        "active_direct_messages": active_direct_messages,
+        "total_room_messages": total_messages,
+        "active_rate_limited_sessions": active_rate_limited_sessions,
+        "rate_limits": {
+            endpoint: {
+                "max_requests": cfg["max_requests"],
+                "window_seconds": cfg["window_seconds"],
+            }
+            for endpoint, cfg in RATE_LIMITS.items()
+        },
+    }
+
+
 # Background cleanup thread
 def cleanup_loop():
     """Continuously clean up old messages and rooms"""

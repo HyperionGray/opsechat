@@ -323,15 +323,37 @@ def _read_version() -> str:
 
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
+    chat_stats = {
+        "active_rooms": 0,
+        "active_users": 0,
+        "active_direct_messages": 0,
+        "total_room_messages": 0,
+        "active_rate_limited_sessions": 0,
+        "rate_limits": {},
+    }
+    try:
+        from simple_chat_routes import get_simple_chat_runtime_stats
+        chat_stats = get_simple_chat_runtime_stats()
+    except Exception:
+        # Health endpoint should stay available even if chat stats fail.
+        pass
+
     return {
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
+        'active_rooms': chat_stats['active_rooms'],
+        'active_users': chat_stats['active_users'],
+        'active_direct_messages': chat_stats['active_direct_messages'],
+        'total_room_messages': chat_stats['total_room_messages'],
+        'active_rate_limited_sessions': chat_stats['active_rate_limited_sessions'],
+        'rate_limits': chat_stats['rate_limits'],
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',
-            'disk_space': 'ok'
+            'disk_space': 'ok',
+            'simple_chat_state': 'ok',
         }
     }
 

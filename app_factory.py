@@ -17,16 +17,6 @@ except ModuleNotFoundError:
         return app
 
 
-def _read_version():
-    """Read application version from VERSION file"""
-    version_file = os.path.join(os.path.dirname(__file__), "VERSION")
-    try:
-        with open(version_file) as f:
-            return f.read().strip()
-    except OSError:
-        return "unknown"
-
-
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
