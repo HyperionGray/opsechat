@@ -22,7 +22,7 @@ The script scans source-like files (`.py`, `.js`, `.ts`, `.tsx`, `.jsx`, `.go`, 
 2. Top files with the highest marker density
 3. Potential cleanup candidates based on filename patterns (for example: `backup`, `deprecated`, `*_old`, `*.bak`)
 
-To keep the signal useful for implementation work, marker scanning ignores documentation and backup trees (`docs/`, `bak/`) and common generated directories (`node_modules/`, `build/`, `.venv/`, and similar).
+To keep the signal useful for implementation work, marker scanning ignores documentation and backup trees (`docs/`, `bak/`), support/asset trees (`tests/`, `scripts/`, `static/`), and common generated directories (`node_modules/`, `build/`, `.venv/`, and similar).
 
 ## Workflow integration
 

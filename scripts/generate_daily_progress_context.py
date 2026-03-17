@@ -53,6 +53,9 @@ SKIP_DIRECTORIES = {
 SKIP_MARKER_ROOTS = {
     "docs",
     "bak",
+    "tests",
+    "scripts",
+    "static",
 }
 
 
