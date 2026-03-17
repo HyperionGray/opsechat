@@ -88,6 +88,44 @@ def create_app():
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
         return response
+
+    @app.errorhandler(429)
+    def handle_rate_limit_exceeded(error):
+        """
+        Normalize rate-limit responses to consistent JSON for clients.
+
+        Flask-Limiter can raise 429 before route handlers run, so this ensures
+        callers always receive retry metadata in a machine-readable format.
+        """
+        retry_after = 1
+        limit_description = ""
+
+        # Flask/Werkzeug exception objects expose response metadata inconsistently
+        # across versions, so probe defensively.
+        get_response = getattr(error, "get_response", None)
+        if callable(get_response):
+            original_response = get_response()
+            header_value = original_response.headers.get("Retry-After")
+            if header_value and str(header_value).isdigit():
+                retry_after = max(int(header_value), 1)
+
+        description = getattr(error, "description", "")
+        if isinstance(description, str) and description.strip():
+            limit_description = description.strip()
+
+        payload = {
+            "error": "Rate limit exceeded.",
+            "retry_after": retry_after,
+            "suggested_backoff_seconds": retry_after,
+            "violations_in_window": 1,
+        }
+        if limit_description:
+            payload["limit"] = limit_description
+
+        response = jsonify(payload)
+        response.status_code = 429
+        response.headers["Retry-After"] = str(retry_after)
+        return response
     
     # Register chat routes
     register_chat_routes(app, chatlines, chatters, id_generator, get_random_color,
