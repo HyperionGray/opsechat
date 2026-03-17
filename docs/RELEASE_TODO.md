@@ -43,8 +43,8 @@
 
 ### 2. Domain Rotation CLI Tool
 
-**Current State:** Python API only (requires programming)  
-**Desired State:** Simple CLI tool for non-programmers
+**Current State:** Completed (`rotate-domain.py` and `domain_rotation_cli.py` available)  
+**Desired State:** Keep extending registrar support while preserving simple CLI UX
 
 **Create:** `rotate-domain.py`
 
