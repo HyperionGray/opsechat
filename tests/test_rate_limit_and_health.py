@@ -144,8 +144,10 @@ def test_ready_endpoint_returns_readiness_payload():
     assert "version" in data
 
 
-def test_ready_endpoint_returns_503_when_memory_threshold_forces_failure(monkeypatch):
-    monkeypatch.setenv("OPSECHAT_HEALTH_MAX_MEMORY_MB", "0")
+def test_ready_endpoint_returns_503_when_tor_is_required_but_unreachable(monkeypatch):
+    monkeypatch.setenv("OPSECHAT_REQUIRE_TOR", "true")
+    # Port 1 is expected to be closed in normal environments.
+    monkeypatch.setenv("TOR_CONTROL_PORT", "1")
 
     client = _test_app.test_client()
     response = client.get("/ready")
@@ -153,4 +155,4 @@ def test_ready_endpoint_returns_503_when_memory_threshold_forces_failure(monkeyp
 
     assert response.status_code == 503
     assert data["ready"] is False
-    assert "memory_usage" in data["failed_checks"]
+    assert "tor_connection" in data["failed_checks"]
