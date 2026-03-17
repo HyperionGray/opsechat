@@ -39,6 +39,7 @@ Documentation for end users and operators.
 
 - [Email System](user-guide/EMAIL_SYSTEM.md) - Comprehensive email documentation
 - [Email Quick Start](user-guide/EMAIL_QUICKSTART.md) - Quick email setup guide
+- [Health and Metrics](user-guide/HEALTH_AND_METRICS.md) - Operational health probes and metrics endpoint
 - [PGP Usage](user-guide/PGP_USAGE.md) - PGP encryption guide
 - [PGP Test Examples](user-guide/PGP_TEST_EXAMPLE.md) - PGP testing examples
 - [Testing Guide](user-guide/TESTING.md) - How to run tests

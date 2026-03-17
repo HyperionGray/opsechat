@@ -8,6 +8,7 @@ import json
 import time
 import sys
 import os
+import shutil
 from datetime import datetime
 from typing import Dict, Any, Optional
 from functools import wraps
@@ -322,20 +323,125 @@ def _read_version() -> str:
 
 
 def get_health_status() -> Dict[str, Any]:
-    """Get application health status"""
+    """Get backward-compatible aggregate health status."""
+    liveness = get_liveness_status()
+    readiness = get_readiness_status()
     return {
-        'status': 'healthy',
+        'status': 'healthy' if readiness['ready'] else 'degraded',
         'timestamp': datetime.utcnow().isoformat(),
-        'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
-        'version': _read_version(),
+        'uptime_seconds': liveness['uptime_seconds'],
+        'version': liveness['version'],
         # active_rooms: this app uses a single global chat room. The field is
         # included for API consistency; it always reports 1 when the service is up.
         'active_rooms': 1,
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
-            'memory_usage': 'ok',
-            'disk_space': 'ok'
+            'memory_usage': readiness['checks']['memory_usage'],
+            'disk_space': readiness['checks']['disk_space']
         }
+    }
+
+
+def _check_disk_space(min_free_percent: float = 5.0) -> Dict[str, Any]:
+    """Check local disk availability for readiness decisions."""
+    try:
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+        total, used, free = shutil.disk_usage(app_dir)
+    except OSError:
+        return {
+            'ok': False,
+            'free_percent': 0.0,
+            'total_mb': 0.0,
+            'free_mb': 0.0,
+        }
+
+    free_percent = (free / total) * 100 if total else 0.0
+    return {
+        'ok': free_percent >= min_free_percent,
+        'free_percent': round(free_percent, 2),
+        'total_mb': round(total / (1024 * 1024), 2),
+        'free_mb': round(free / (1024 * 1024), 2),
+    }
+
+
+def get_liveness_status() -> Dict[str, Any]:
+    """Return lightweight process liveness information."""
+    return {
+        'status': 'alive',
+        'timestamp': datetime.utcnow().isoformat(),
+        'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
+        'version': _read_version(),
+    }
+
+
+def get_readiness_status() -> Dict[str, Any]:
+    """Return readiness checks used by operators/load balancers."""
+    apm.update_system_metrics()
+    version = _read_version()
+    disk = _check_disk_space()
+
+    checks = {
+        'version_file': 'ok' if version != 'unknown' else 'missing',
+        'memory_usage': 'ok',
+        'disk_space': 'ok' if disk['ok'] else 'low',
+    }
+    ready = checks['version_file'] == 'ok' and disk['ok']
+
+    return {
+        'status': 'ready' if ready else 'degraded',
+        'ready': ready,
+        'timestamp': datetime.utcnow().isoformat(),
+        'checks': checks,
+        'system': {
+            'memory_usage_mb': apm.metrics['system']['memory_usage_mb'],
+            'disk': disk,
+        },
+    }
+
+
+def get_metrics_payload() -> Dict[str, Any]:
+    """Return detailed request/activity metrics for /metrics endpoint."""
+    apm.update_system_metrics()
+    request_total = apm.metrics['requests']['total']
+    request_errors = apm.metrics['requests']['errors']
+    response_times = apm.metrics['requests']['response_times']
+
+    by_endpoint = {}
+    for endpoint_key, endpoint_data in apm.metrics['requests']['by_endpoint'].items():
+        count = endpoint_data['count']
+        avg_time = (endpoint_data['total_time'] / count) if count else 0.0
+        by_endpoint[endpoint_key] = {
+            'count': count,
+            'errors': endpoint_data['errors'],
+            'avg_response_time': round(avg_time, 6),
+        }
+
+    return {
+        'timestamp': datetime.utcnow().isoformat(),
+        'uptime_seconds': apm.metrics['system']['uptime_seconds'],
+        'requests': {
+            'total': request_total,
+            'errors': request_errors,
+            'error_rate': ((request_errors / request_total) * 100) if request_total else 0.0,
+            'avg_response_time': (sum(response_times) / len(response_times)) if response_times else 0.0,
+            'by_endpoint': by_endpoint,
+        },
+        'activity': {
+            'chat_messages': apm.metrics['chat']['messages_sent'],
+            'emails_composed': apm.metrics['email']['emails_composed'],
+            'emails_sent': apm.metrics['email']['emails_sent'],
+            'burner_emails': apm.metrics['email']['burner_emails_created'],
+        },
+        'tor': {
+            'connection_attempts': apm.metrics['tor']['connection_attempts'],
+            'connection_failures': apm.metrics['tor']['connection_failures'],
+            'hidden_service_creations': apm.metrics['tor']['hidden_service_creations'],
+            'hidden_service_failures': apm.metrics['tor']['hidden_service_failures'],
+        },
+        'system': {
+            'memory_usage_mb': apm.metrics['system']['memory_usage_mb'],
+            'start_time': apm.metrics['system']['start_time'],
+        },
     }
 
 # Security event logging

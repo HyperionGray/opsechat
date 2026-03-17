@@ -113,3 +113,36 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_liveness_endpoint_returns_alive():
+    client = _test_app.test_client()
+    response = client.get("/health/live")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data is not None
+    assert data.get("status") == "alive"
+
+
+def test_readiness_endpoint_returns_status_and_checks():
+    client = _test_app.test_client()
+    response = client.get("/health/ready")
+    assert response.status_code in (200, 503)
+    data = response.get_json()
+    assert data is not None
+    assert isinstance(data.get("ready"), bool)
+    assert "checks" in data
+    assert "disk_space" in data["checks"]
+    assert "version_file" in data["checks"]
+
+
+def test_metrics_endpoint_records_requests():
+    client = _test_app.test_client()
+    baseline = client.get("/metrics").get_json()["requests"]["total"]
+
+    response = client.get("/health")
+    assert response.status_code == 200
+
+    metrics_data = client.get("/metrics").get_json()
+    assert metrics_data["requests"]["total"] >= baseline + 1
+    assert "by_endpoint" in metrics_data["requests"]

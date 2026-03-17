@@ -6,7 +6,8 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+import time
+from flask import Flask, jsonify, request, g
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -68,8 +69,22 @@ def create_app():
         return add_review(reviews, user_id, rating, review_text)
     
     # Add security headers after every response
+    @app.before_request
+    def record_request_start():
+        g.request_start_time = time.time()
+
     @app.after_request
     def add_security_headers(response):
+        request_start = getattr(g, "request_start_time", None)
+        if request_start is not None:
+            from monitoring import apm
+            apm.record_request(
+                endpoint=request.path,
+                method=request.method,
+                response_time=time.time() - request_start,
+                status_code=response.status_code,
+            )
+
         response.headers["Server"] = ""
         response.headers["Date"] = ""
         # Content Security Policy: restrict resources to same origin, block inline scripts
@@ -106,11 +121,29 @@ def create_app():
                           add_review_wrapper, get_reviews, get_review_stats)
     
     # Health check endpoint
-    from monitoring import get_health_status
+    from monitoring import (
+        get_health_status,
+        get_liveness_status,
+        get_readiness_status,
+        get_metrics_payload,
+    )
 
     @app.route('/health', methods=["GET"])
     def health():
         return jsonify(get_health_status())
+
+    @app.route('/health/live', methods=["GET"])
+    def health_live():
+        return jsonify(get_liveness_status())
+
+    @app.route('/health/ready', methods=["GET"])
+    def health_ready():
+        readiness = get_readiness_status()
+        return jsonify(readiness), (200 if readiness["ready"] else 503)
+
+    @app.route('/metrics', methods=["GET"])
+    def metrics():
+        return jsonify(get_metrics_payload())
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])

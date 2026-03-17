@@ -320,6 +320,7 @@ This project includes comprehensive Amazon Q Code Review integration with automa
 - **Memory Management**: Automatic cleanup with bounded storage (3-minute chat expiry)
 - **Algorithm Efficiency**: Critical bug fixes applied for index deletion operations
 - **Resource Optimization**: Container limits and health checks for reliability
+- **Operational Probes**: `/health`, `/health/live`, `/health/ready`, and `/metrics` for runtime monitoring
 - **Monitoring**: CloudWatch integration with appropriate retention policies
 
 For detailed information, see:
