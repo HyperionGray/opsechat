@@ -7,8 +7,28 @@ Compatible with pf-web-poly-compile-helper-runner patterns
 import subprocess
 import sys
 import shutil
+import os
+import re
 from pathlib import Path
 import argparse
+
+
+ARTIFACT_FILENAMES = {".bish-index", ".bish.sqlite"}
+REPO_SCAN_SKIP_DIRS = {
+    ".git",
+    ".venv",
+    ".cache",
+    "node_modules",
+    "playwright-report",
+    "test-results",
+    "__pycache__",
+}
+MARKER_PATTERN = re.compile(r"\b(TODO|FIXME|STUB|TBD|WIP|HACK|XXX)\b")
+MARKER_FILE_SUFFIXES = {".py", ".js", ".ts", ".tsx", ".sh", ".yml", ".yaml", ".json"}
+STALE_DUPLICATE_CANDIDATES = {
+    "runserver_refactored.py": "runserver.py",
+    "tests/mock_server_refactored.py": "tests/mock_server.py",
+}
 
 def run_command(cmd, cwd=None, check=True):
     """Run command with proper error handling"""
@@ -187,6 +207,118 @@ def clean_build_artifacts():
     
     return True
 
+
+def iter_repo_files(project_root):
+    """Yield repo files while pruning noisy or archived directories."""
+    for root, dirs, files in os.walk(project_root):
+        dirs[:] = [d for d in dirs if d not in REPO_SCAN_SKIP_DIRS]
+        root_path = Path(root)
+        for filename in files:
+            yield root_path / filename
+
+
+def find_artifact_files(project_root):
+    """Find tracked/generated artifact files that should not live in git."""
+    artifact_files = []
+    for file_path in iter_repo_files(project_root):
+        if file_path.name in ARTIFACT_FILENAMES:
+            artifact_files.append(file_path)
+    return sorted(artifact_files)
+
+
+def find_stale_duplicates(project_root):
+    """Find stale duplicate files that are byte-identical to canonical files."""
+    stale_files = []
+    for stale_rel, canonical_rel in STALE_DUPLICATE_CANDIDATES.items():
+        stale_path = project_root / stale_rel
+        canonical_path = project_root / canonical_rel
+        if not stale_path.exists() or not canonical_path.exists():
+            continue
+        if stale_path.read_bytes() == canonical_path.read_bytes():
+            stale_files.append(stale_path)
+    return stale_files
+
+
+def find_unfinished_markers(project_root, include_docs=False):
+    """Search for unfinished markers in active code files."""
+    marker_hits = []
+    for file_path in iter_repo_files(project_root):
+        suffix = file_path.suffix.lower()
+        if "bak" in file_path.parts:
+            continue
+        if not include_docs and "docs" in file_path.parts:
+            continue
+        if suffix == ".md" and include_docs:
+            pass
+        elif suffix not in MARKER_FILE_SUFFIXES:
+            continue
+        if file_path.name.endswith(".min.js"):
+            continue
+
+        try:
+            with file_path.open("r", encoding="utf-8", errors="ignore") as handle:
+                for line_number, line in enumerate(handle, 1):
+                    if MARKER_PATTERN.search(line):
+                        marker_hits.append((file_path, line_number, line.strip()))
+        except OSError:
+            continue
+    return marker_hits
+
+
+def remove_files(paths):
+    """Remove files and return True when all removals succeed."""
+    success = True
+    for path in paths:
+        try:
+            path.unlink()
+            print(f"[*] Removed {path}")
+        except OSError as exc:
+            print(f"[!] Failed to remove {path}: {exc}")
+            success = False
+    return success
+
+
+def run_repository_hygiene(project_root, apply=False, include_docs=False):
+    """
+    Audit and optionally clean repository hygiene issues.
+
+    Returns:
+        tuple: (cleanup_ok, marker_hits)
+    """
+    print("[*] Running repository hygiene audit")
+    artifact_files = find_artifact_files(project_root)
+    stale_duplicates = find_stale_duplicates(project_root)
+    marker_hits = find_unfinished_markers(project_root, include_docs=include_docs)
+
+    print(f"[*] Artifact files detected: {len(artifact_files)}")
+    for path in artifact_files:
+        print(f"    - {path.relative_to(project_root)}")
+
+    print(f"[*] Stale duplicate files detected: {len(stale_duplicates)}")
+    for path in stale_duplicates:
+        print(f"    - {path.relative_to(project_root)}")
+
+    if marker_hits:
+        print(f"[*] Unfinished markers detected: {len(marker_hits)}")
+        for file_path, line_number, line in marker_hits[:30]:
+            relative = file_path.relative_to(project_root)
+            print(f"    - {relative}:{line_number} {line}")
+        if len(marker_hits) > 30:
+            print(f"    ... {len(marker_hits) - 30} additional markers omitted")
+    else:
+        print("[*] No unfinished markers detected in scanned files")
+
+    cleanup_ok = True
+    if apply:
+        removable_files = artifact_files + stale_duplicates
+        if removable_files:
+            print("[*] Applying repository cleanup")
+            cleanup_ok = remove_files(removable_files)
+        else:
+            print("[*] No removable repository artifacts found")
+
+    return cleanup_ok, marker_hits
+
 def determine_cleanup_method(args):
     """
     Determine which cleanup method to use based on arguments.
@@ -203,6 +335,9 @@ def determine_cleanup_method(args):
         if args.artifacts and not args.images:
             # Only clean artifacts when --artifacts is specified alone
             return None
+        if (args.repo_hygiene or args.apply_repo_cleanup) and not args.images and not args.artifacts:
+            # Repository cleanup mode should not implicitly stop deployments.
+            return None
         else:
             # Default to 'all' for other cases (no args, --images alone, etc.)
             return 'all'
@@ -218,6 +353,14 @@ def main():
     parser.add_argument('--images', action='store_true', help='Also remove container images')
     parser.add_argument('--force', action='store_true', help='Force removal of images')
     parser.add_argument('--artifacts', action='store_true', help='Clean build artifacts')
+    parser.add_argument('--repo-hygiene', action='store_true',
+                       help='Audit repository for artifact files and unfinished markers')
+    parser.add_argument('--apply-repo-cleanup', action='store_true',
+                       help='Remove detected artifact files and stale duplicate files')
+    parser.add_argument('--include-doc-markers', action='store_true',
+                       help='Include docs/*.md files in unfinished marker scan')
+    parser.add_argument('--fail-on-markers', action='store_true',
+                       help='Exit non-zero if unfinished markers are found during repo hygiene scan')
     
     args = parser.parse_args()
     
@@ -244,6 +387,20 @@ def main():
     # Only clean artifacts if explicitly requested via --artifacts flag
     if args.artifacts:
         success &= clean_build_artifacts()
+
+    run_repo_hygiene = args.repo_hygiene or args.apply_repo_cleanup
+    marker_hits = []
+    if run_repo_hygiene:
+        repo_ok, marker_hits = run_repository_hygiene(
+            Path(__file__).parent.parent,
+            apply=args.apply_repo_cleanup,
+            include_docs=args.include_doc_markers,
+        )
+        success &= repo_ok
+
+    if args.fail_on_markers and marker_hits:
+        print("[!] Failing due to unfinished markers found during repo hygiene scan")
+        success = False
     
     if success:
         print("[✓] Cleanup completed successfully")

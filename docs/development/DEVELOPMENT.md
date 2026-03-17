@@ -77,8 +77,7 @@ These are development and testing utilities that help during development:
 - **`comprehensive_functionality_test.py`** - Full functional test suite
 
 ### Main Application Files
-- **`runserver.py`** - Main entry point (legacy monolithic)
-- **`runserver_refactored.py`** - Refactored version (blueprint-based)
+- **`runserver.py`** - Main Flask/Tor entry point (app-factory/blueprint based)
 - **`app_factory.py`** - Flask app factory pattern
 - **`chat-room.py`** - Standalone chat room creator
 - **`tui-server.py`** - Terminal UI server
@@ -123,6 +122,9 @@ python -m pytest
 
 # Run specific test file
 npx playwright test tests/basic.spec.js
+
+# Run repository hygiene audit/cleanup task
+python3 pf-tasks/clean.py --repo-hygiene
 ```
 
 ### Test Organization

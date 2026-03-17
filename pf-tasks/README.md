@@ -89,6 +89,15 @@ python pf-tasks/clean.py --images --force
 
 # Clean build artifacts
 python pf-tasks/clean.py --artifacts
+
+# Audit repository hygiene (stray artifacts + unfinished markers)
+python pf-tasks/clean.py --repo-hygiene
+
+# Apply repository cleanup for detected artifacts/stale duplicates
+python pf-tasks/clean.py --repo-hygiene --apply-repo-cleanup
+
+# Fail CI if unfinished markers are found
+python pf-tasks/clean.py --repo-hygiene --fail-on-markers
 ```
 
 **Features:**
@@ -98,6 +107,9 @@ python pf-tasks/clean.py --artifacts
 - Removes networks and volumes
 - Optionally removes container images
 - Cleans build artifacts and cache
+- Audits unfinished markers in active code files
+- Detects and removes stray `.bish-*` artifact files
+- Detects stale duplicate files that match canonical sources
 
 ## Usage Patterns
 
@@ -157,6 +169,9 @@ python pf-tasks/clean.py --images --artifacts
 
 # Clean only build artifacts
 python pf-tasks/clean.py --artifacts
+
+# Scheduled hygiene sweep (safe by default)
+python pf-tasks/clean.py --repo-hygiene
 ```
 
 ## Integration with Existing Scripts
