@@ -157,7 +157,7 @@
 - [ ] Create disaster recovery plan
 - [ ] Test horizontal scaling
 - [ ] Set up load balancer (nginx or HAProxy)
-- [ ] Configure health check endpoints
+- [x] Configure health check endpoints (`/health`, `/health/live`, `/health/ready`)
 - [ ] Test failover scenarios
 - [ ] Add CDN for static assets (optional)
 - [ ] Create production deployment guide
