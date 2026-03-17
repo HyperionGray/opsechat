@@ -25,67 +25,116 @@ jobs:
         # This also allows the Copilot coding agent to respond to the assignment.
         # NOTE: If GH_PAT is not configured this falls back to GITHUB_TOKEN, which
         # will NOT trigger the Copilot coding agent reliably. Ensure GH_PAT is set.
+        env:
+          HAS_GH_PAT: ${{ secrets.GH_PAT != '' }}
         with:
           github-token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           script: |
-            const issueTitle = 'Daily Progress: ' + new Date().toISOString().split('T')[0];
-            
-            // Check if issue already exists for today
+            const dateStamp = new Date().toISOString().split('T')[0];
+            const issueTitle = `Daily Progress: ${dateStamp}`;
+            const requiredLabels = ['automation', 'continuous-progress', 'copilot'];
+            const triggerCommentMarker = '<!-- daily-progress-copilot-trigger -->';
+            const hasGhPat = process.env.HAS_GH_PAT === 'true';
+
+            const triggerCommentBody = `${triggerCommentMarker}
+            @copilot please analyze the repository and:
+            1. Review recent commits and identify the natural direction of the project
+            2. Suggest next logical improvements or features to implement
+            3. Create actionable tasks that align with the project goals
+            4. Prioritize quick wins and incremental progress`;
+
+            async function ensureIssueState(issue) {
+              const labelNames = new Set((issue.labels || []).map(label => typeof label === 'string' ? label : label.name));
+              const missingLabels = requiredLabels.filter(label => !labelNames.has(label));
+
+              if (missingLabels.length > 0) {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  labels: missingLabels
+                });
+                console.log(`Added missing labels to issue #${issue.number}: ${missingLabels.join(', ')}`);
+              }
+
+              const assignees = (issue.assignees || []).map(assignee => assignee.login);
+              if (!assignees.includes('copilot')) {
+                try {
+                  await github.rest.issues.addAssignees({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issue.number,
+                    assignees: ['copilot']
+                  });
+                  console.log(`Assigned @copilot to issue #${issue.number}`);
+                } catch (error) {
+                  console.log(`Unable to assign @copilot to issue #${issue.number}: ${error.message}`);
+                }
+              }
+
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                per_page: 100
+              });
+
+              const hasTriggerComment = comments.some(comment => (comment.body || '').includes(triggerCommentMarker));
+              if (!hasTriggerComment) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: triggerCommentBody
+                });
+                console.log(`Posted Copilot trigger comment on issue #${issue.number}`);
+              } else {
+                console.log(`Trigger comment already exists for issue #${issue.number}`);
+              }
+            }
+
+            // Check if issue already exists for today.
             const existingIssues = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
-              labels: 'automation,continuous-progress'
+              labels: 'automation,continuous-progress',
+              per_page: 100
             });
-            
-            const todayIssue = existingIssues.data.find(i => i.title === issueTitle);
+
+            const todayIssue = existingIssues.data.find(issue => issue.title === issueTitle);
             if (todayIssue) {
-              console.log('Issue already exists for today:', todayIssue.html_url);
+              console.log(`Issue already exists for today: ${todayIssue.html_url}`);
+              await ensureIssueState(todayIssue);
               return;
             }
-            
-            // Create new daily progress issue
+
+            const tokenStatusLine = hasGhPat
+              ? '- Copilot trigger token: GH_PAT configured'
+              : '- Copilot trigger token: GH_PAT missing (fallback token may not trigger Copilot reliably)';
+
+            // Create new daily progress issue.
             const body = `## Daily Continuous Progress
-            
-            This issue tracks continuous progress for ${new Date().toISOString().split('T')[0]}.
-            
+
+            This issue tracks continuous progress for ${dateStamp}.
+
             **Context:**
             - Look at recent issues and PRs
             - Review README and documentation
             - Identify incomplete features or TODOs
             - Consider project structure and organization
-            `;
-            
+
+            **Automation Status:**
+            ${tokenStatusLine}`;
+
             const issue = await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: issueTitle,
               body: body,
-              labels: ['automation', 'continuous-progress', 'copilot']
-            });
-            
-            console.log('Created issue:', issue.data.html_url);
-            
-            // Assign to copilot
-            await github.rest.issues.addAssignees({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issue.data.number,
-              assignees: ['copilot']
+              labels: requiredLabels
             });
 
-            // Post a comment that explicitly mentions @copilot to trigger the
-            // Copilot coding agent. Assignment alone may not be sufficient when
-            // done via automation; a mention in a comment is the reliable trigger.
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issue.data.number,
-              body: `@copilot please analyze the repository and:
-1. Review recent commits and identify the natural direction of the project
-2. Suggest next logical improvements or features to implement
-3. Create actionable tasks that align with the project goals
-4. Prioritize quick wins and incremental progress`
-            });
-
-            console.log('Triggered Copilot coding agent via comment on issue #' + issue.data.number);
+            console.log(`Created issue: ${issue.data.html_url}`);
+            await ensureIssueState(issue.data);
+            console.log(`Daily progress automation completed for issue #${issue.data.number}`);
