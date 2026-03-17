@@ -321,6 +321,20 @@ def _read_version() -> str:
         return 'unknown'
 
 
+def _get_active_room_count() -> int:
+    """
+    Return the current number of active simple-chat rooms.
+
+    Import is performed lazily to avoid circular imports during app startup.
+    """
+    try:
+        from simple_chat_routes import chat_rooms, rooms_lock
+        with rooms_lock:
+            return len(chat_rooms)
+    except Exception:
+        return 0
+
+
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
     return {
@@ -328,6 +342,7 @@ def get_health_status() -> Dict[str, Any]:
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
+        'active_rooms': _get_active_room_count(),
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',
