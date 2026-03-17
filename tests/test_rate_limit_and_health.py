@@ -113,3 +113,31 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_metrics_endpoint_returns_summary_shape():
+    client = _test_app.test_client()
+    response = client.get("/health/metrics")
+    assert response.status_code == 200
+
+    data = response.get_json()
+    assert data is not None
+    assert "timestamp" in data
+    assert "uptime_seconds" in data
+    assert "requests" in data
+    assert "tor" in data
+    assert "activity" in data
+    assert "total" in data["requests"]
+    assert "avg_response_time" in data["requests"]
+
+
+def test_health_metrics_request_total_increments_with_requests():
+    client = _test_app.test_client()
+
+    baseline = client.get("/health/metrics").get_json()["requests"]["total"]
+    client.get("/")
+    client.get("/health")
+    after = client.get("/health/metrics").get_json()["requests"]["total"]
+
+    # Two requests above should always increase the global request counter.
+    assert after >= baseline + 2

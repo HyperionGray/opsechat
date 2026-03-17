@@ -6,7 +6,8 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+import time
+from flask import Flask, jsonify, g, request
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -70,6 +71,19 @@ def create_app():
     # Add security headers after every response
     @app.after_request
     def add_security_headers(response):
+        # Record request telemetry, but never fail response generation if metrics fail.
+        try:
+            start_time = getattr(g, "_request_start_time", None)
+            if start_time is not None:
+                apm.record_request(
+                    endpoint=request.path,
+                    method=request.method,
+                    response_time=time.perf_counter() - start_time,
+                    status_code=response.status_code,
+                )
+        except Exception:
+            pass
+
         response.headers["Server"] = ""
         response.headers["Date"] = ""
         # Content Security Policy: restrict resources to same origin, block inline scripts
@@ -106,11 +120,19 @@ def create_app():
                           add_review_wrapper, get_reviews, get_review_stats)
     
     # Health check endpoint
-    from monitoring import get_health_status
+    from monitoring import apm, get_health_status
+
+    @app.before_request
+    def _start_request_timer():
+        g._request_start_time = time.perf_counter()
 
     @app.route('/health', methods=["GET"])
     def health():
         return jsonify(get_health_status())
+
+    @app.route('/health/metrics', methods=["GET"])
+    def health_metrics():
+        return jsonify(apm.get_metrics_summary())
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])

@@ -10,6 +10,7 @@
 - 🔒 **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
 - 🌐 **Domain Rotation CLI** - Easy burner email domain management
 - 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
+- 📊 **Runtime Metrics Endpoint** - `GET /health/metrics` with request and activity summaries
 - ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use
 - 🚀 **Production Deployment** - Robust systemd units with auto-restart
 
@@ -326,6 +327,7 @@ For detailed information, see:
 - [Latest Amazon Q Code Review (2026-01-06)](docs/assessment/AMAZON_Q_CODE_REVIEW_2026-01-06.md) - ✅ **EXCELLENT** rating
 - [Amazon Q Implementation Summary](docs/implementation/AMAZON_Q_IMPLEMENTATION_SUMMARY.md)
 - [AWS Deployment Guide](docs/setup/AWS_DEPLOYMENT.md)
+- [Monitoring Guide](docs/user-guide/MONITORING.md)
 - [All Documentation](docs/README.md)
 
 Security
