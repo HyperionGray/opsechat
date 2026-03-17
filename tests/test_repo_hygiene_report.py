@@ -48,6 +48,7 @@ def test_collect_marker_hits_ignores_marker_literals(tmp_path: Path) -> None:
         'message = "Detect TODO comments"\n'
         'MARKER_PATTERN = r"TODO|FIXME"\n'
         'MARKER_LITERAL_PATTERN = r"TODO:"\n'
+        'name = "NotImplementedError"\n'
         "raise NotImplementedError\n",
     )
 
