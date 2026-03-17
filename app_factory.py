@@ -6,7 +6,8 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+import re
+from flask import Flask, jsonify, request
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -87,6 +88,43 @@ def create_app():
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
+        return response
+
+    @app.errorhandler(429)
+    def handle_rate_limit_exceeded(error):
+        """
+        Return a consistent JSON payload for all rate-limit responses.
+
+        Flask-Limiter can raise 429 before hitting route handlers. Normalizing
+        response shape here lets clients implement generic Retry-After backoff.
+        """
+        retry_after = 1
+
+        # Prefer Retry-After provided by underlying limiter response.
+        try:
+            default_response = error.get_response()
+            header_value = default_response.headers.get("Retry-After")
+            if header_value:
+                retry_after = int(header_value)
+        except Exception:
+            pass
+
+        # Fallback: parse "X per Y second" style text from limiter description.
+        if retry_after <= 1:
+            description = str(getattr(error, "description", "") or "")
+            match = re.search(r"(\d+)\s*second", description, flags=re.IGNORECASE)
+            if match:
+                retry_after = max(int(match.group(1)), 1)
+
+        response = jsonify({
+            "error": f"Rate limit exceeded. Try again in {retry_after} seconds.",
+            "error_code": "rate_limit_exceeded",
+            "retry_after": retry_after,
+            "path": request.path
+        })
+        response.status_code = 429
+        response.headers["Retry-After"] = str(retry_after)
+        response.headers["X-RateLimit-Retry-After"] = str(retry_after)
         return response
     
     # Register chat routes

@@ -172,6 +172,36 @@ When limit exceeded:
 
 ---
 
+## 🔁 Chat API Retry-After + Automatic Backoff (NEW)
+
+### What Changed
+Chat API endpoints now return a consistent JSON contract when rate-limited:
+
+```json
+{
+  "error": "Rate limit exceeded. Try again in 12 seconds.",
+  "error_code": "rate_limit_exceeded",
+  "retry_after": 12
+}
+```
+
+And every 429 includes:
+- `Retry-After: <seconds>`
+- `X-RateLimit-Retry-After: <seconds>`
+
+### Why This Matters
+- Frontends and scripts can reliably back off instead of spamming retries.
+- `/chat/create` and room message send flows now auto-retry using this metadata.
+- Failures are clearer to users and safer under load.
+
+### Scope
+- Server-side normalization for 429 responses (including Flask-Limiter responses)
+- UI retry/backoff for:
+  - `POST /chat/create`
+  - `POST /chat/room/<room_id>/messages`
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

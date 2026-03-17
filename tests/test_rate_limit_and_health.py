@@ -87,6 +87,55 @@ def test_rate_limit_chat_message_limit():
     assert retry_after >= 1
 
 
+def test_chat_create_429_includes_retry_metadata():
+    app = create_app()
+    client = app.test_client()
+
+    # /chat/create is limited to 3 requests per minute by Flask-Limiter.
+    for _ in range(3):
+        ok_response = client.post("/chat/create", content_type="application/json")
+        assert ok_response.status_code == 200
+
+    limited_response = client.post("/chat/create", content_type="application/json")
+    assert limited_response.status_code == 429
+
+    payload = limited_response.get_json()
+    assert payload is not None
+    assert payload.get("error_code") == "rate_limit_exceeded"
+    assert isinstance(payload.get("retry_after"), int)
+    assert payload["retry_after"] >= 1
+    assert limited_response.headers.get("Retry-After") == str(payload["retry_after"])
+
+
+def test_chat_message_429_includes_retry_metadata():
+    _clear_store()
+    app = create_app()
+    client = app.test_client()
+
+    create_response = client.post("/chat/create", content_type="application/json")
+    assert create_response.status_code == 200
+    room_id = create_response.get_json()["room_id"]
+
+    for idx in range(30):
+        msg_response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": f"test message {idx}"}
+        )
+        assert msg_response.status_code == 200
+
+    limited_response = client.post(
+        f"/chat/room/{room_id}/messages",
+        json={"message": "this should be limited"}
+    )
+    assert limited_response.status_code == 429
+    payload = limited_response.get_json()
+    assert payload is not None
+    assert payload.get("error_code") == "rate_limit_exceeded"
+    assert isinstance(payload.get("retry_after"), int)
+    assert payload["retry_after"] >= 1
+    assert limited_response.headers.get("Retry-After") == str(payload["retry_after"])
+
+
 # ---------------------------------------------------------------------------
 # Health endpoint integration tests
 # ---------------------------------------------------------------------------
