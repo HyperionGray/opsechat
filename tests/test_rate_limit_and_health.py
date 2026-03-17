@@ -10,7 +10,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_lock,
+    build_chat_rate_limits,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -85,6 +90,49 @@ def test_rate_limit_chat_message_limit():
     allowed, retry_after = check_rate_limit("session-msg", "chat_message")
     assert allowed is False
     assert retry_after >= 1
+
+
+def test_build_chat_rate_limits_defaults():
+    limits = build_chat_rate_limits({})
+    assert limits["chat_create"]["per_hour"] == 10
+    assert limits["chat_create"]["per_minute"] == 3
+    assert limits["chat_message"]["per_minute"] == 30
+    assert limits["dm_send"]["per_hour"] == 20
+    assert limits["dm_send"]["per_minute"] == 5
+
+
+def test_build_chat_rate_limits_supports_env_overrides():
+    limits = build_chat_rate_limits(
+        {
+            "OPSECHAT_CHAT_CREATE_PER_HOUR": "42",
+            "OPSECHAT_CHAT_CREATE_PER_MINUTE": "7",
+            "OPSECHAT_CHAT_MESSAGE_PER_MINUTE": "55",
+            "OPSECHAT_DM_SEND_PER_HOUR": "99",
+            "OPSECHAT_DM_SEND_PER_MINUTE": "8",
+        }
+    )
+    assert limits["chat_create"]["per_hour"] == 42
+    assert limits["chat_create"]["per_minute"] == 7
+    assert limits["chat_message"]["per_minute"] == 55
+    assert limits["dm_send"]["per_hour"] == 99
+    assert limits["dm_send"]["per_minute"] == 8
+
+
+def test_build_chat_rate_limits_rejects_invalid_values():
+    limits = build_chat_rate_limits(
+        {
+            "OPSECHAT_CHAT_CREATE_PER_HOUR": "abc",
+            "OPSECHAT_CHAT_CREATE_PER_MINUTE": "0",
+            "OPSECHAT_CHAT_MESSAGE_PER_MINUTE": "-5",
+            "OPSECHAT_DM_SEND_PER_HOUR": "",
+            "OPSECHAT_DM_SEND_PER_MINUTE": "-1",
+        }
+    )
+    assert limits["chat_create"]["per_hour"] == 10
+    assert limits["chat_create"]["per_minute"] == 3
+    assert limits["chat_message"]["per_minute"] == 30
+    assert limits["dm_send"]["per_hour"] == 20
+    assert limits["dm_send"]["per_minute"] == 5
 
 
 # ---------------------------------------------------------------------------

@@ -172,6 +172,36 @@ When limit exceeded:
 
 ---
 
+## Configurable Chat API Rate Limits
+
+Chat write endpoints now support environment-based tuning so deployments can
+adjust anti-abuse thresholds without code changes.
+
+### Environment Variables
+
+- `OPSECHAT_CHAT_CREATE_PER_HOUR` (default: `10`)
+- `OPSECHAT_CHAT_CREATE_PER_MINUTE` (default: `3`)
+- `OPSECHAT_CHAT_MESSAGE_PER_MINUTE` (default: `30`)
+- `OPSECHAT_DM_SEND_PER_HOUR` (default: `20`)
+- `OPSECHAT_DM_SEND_PER_MINUTE` (default: `5`)
+
+### Example
+
+```bash
+export OPSECHAT_CHAT_CREATE_PER_MINUTE=5
+export OPSECHAT_CHAT_MESSAGE_PER_MINUTE=45
+export OPSECHAT_DM_SEND_PER_MINUTE=8
+python runserver.py
+```
+
+### Notes
+
+- Invalid or non-positive values fall back to safe defaults.
+- Limits are applied consistently in both Flask-Limiter route decorators and
+  JSON retry-after responses.
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

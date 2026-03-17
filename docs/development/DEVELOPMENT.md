@@ -222,6 +222,11 @@ npm run lint
 - `TOR_CONTROL_PORT` - Tor control port (default: 9051)
 - `PORT` - Flask server port (default: 5000)
 - `FLASK_ENV` - Development/production mode
+- `OPSECHAT_CHAT_CREATE_PER_HOUR` - `/chat/create` write limit per hour (default: 10)
+- `OPSECHAT_CHAT_CREATE_PER_MINUTE` - `/chat/create` write limit per minute (default: 3)
+- `OPSECHAT_CHAT_MESSAGE_PER_MINUTE` - `/chat/room/<id>/messages` POST limit per minute (default: 30)
+- `OPSECHAT_DM_SEND_PER_HOUR` - `/chat/dm/send` limit per hour (default: 20)
+- `OPSECHAT_DM_SEND_PER_MINUTE` - `/chat/dm/send` limit per minute (default: 5)
 
 ## Troubleshooting
 

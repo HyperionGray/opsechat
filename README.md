@@ -190,6 +190,28 @@ Tests cover:
 
 For full testing documentation, see [Testing Guide](docs/user-guide/TESTING.md).
 
+Configurable Chat API Rate Limits
+=================================
+
+Chat API write limits are configurable through environment variables so operators
+can tune anti-abuse settings without editing code.
+
+Defaults:
+
+- `OPSECHAT_CHAT_CREATE_PER_HOUR=10`
+- `OPSECHAT_CHAT_CREATE_PER_MINUTE=3`
+- `OPSECHAT_CHAT_MESSAGE_PER_MINUTE=30`
+- `OPSECHAT_DM_SEND_PER_HOUR=20`
+- `OPSECHAT_DM_SEND_PER_MINUTE=5`
+
+Example:
+
+```bash
+export OPSECHAT_CHAT_CREATE_PER_MINUTE=5
+export OPSECHAT_CHAT_MESSAGE_PER_MINUTE=45
+python runserver.py
+```
+
 
 How it works
 ============

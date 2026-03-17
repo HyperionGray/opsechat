@@ -7,7 +7,6 @@ Tests:
 2. Two different client sessions do not share rate-limit counters.
 """
 
-import json
 import sys
 
 
