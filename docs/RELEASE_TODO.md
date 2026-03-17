@@ -57,13 +57,13 @@ python rotate-domain.py --get-pricing xyz
 ```
 
 **Implementation:**
-- [ ] Create CLI argument parser
-- [ ] Add interactive mode
-- [ ] Display pricing before purchase
-- [ ] Confirm purchases with user
-- [ ] Add budget checking
-- [ ] Store API credentials securely
-- [ ] Add to documentation
+- [x] Create CLI argument parser
+- [x] Add interactive mode
+- [x] Display pricing before purchase
+- [x] Confirm purchases with user
+- [x] Add budget checking
+- [x] Store API credentials securely
+- [x] Add to documentation
 
 **Estimated Effort:** 1-2 days
 

@@ -294,6 +294,15 @@ For Amazon Q setup instructions, see [Amazon Q Setup Guide](docs/setup/AMAZON_Q_
 
 For full documentation, see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md).
 
+Domain rotation CLI quick commands:
+
+```bash
+python domain_rotation_cli.py config
+python rotate-domain.py --search example.xyz
+python rotate-domain.py --buy example.xyz --years 1
+python rotate-domain.py --list-owned
+```
+
 Security & Code Quality
 =======================
 

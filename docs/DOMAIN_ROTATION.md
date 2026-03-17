@@ -52,36 +52,38 @@ export DOMAIN_BUDGET="10"  # Monthly budget in USD
 ```python
 from domain_manager import domain_rotation_manager
 
-# Check available domains
-available_domains = domain_rotation_manager.search_cheap_domains()
-print(available_domains)
+# Check budget and active domain
+print(domain_rotation_manager.get_budget_status())
+print(domain_rotation_manager.get_active_domain())
 
-# Purchase a domain
-result = domain_rotation_manager.rotate_to_new_domain()
-if result['success']:
-    print(f"New domain: {result['domain']}")
-    print(f"Cost: ${result['cost']}")
+# Rotate to a newly discovered cheap domain
+new_domain = domain_rotation_manager.rotate_domain()
+if new_domain:
+    print(f"New domain: {new_domain}")
 else:
-    print(f"Error: {result['error']}")
+    print("Rotation failed")
 ```
 
 ### CLI Commands
 
 ```bash
-# Check available cheap domains
-python -c "from domain_manager import domain_rotation_manager; \
-    print(domain_rotation_manager.search_cheap_domains(tlds=['xyz', 'club', 'online']))"
+# Configure credentials and budget
+python domain_rotation_cli.py config
 
-# Get current budget status
-python -c "from domain_manager import domain_rotation_manager; \
-    print(f'Budget: ${domain_rotation_manager.budget_manager.monthly_budget}'); \
-    print(f'Spent: ${domain_rotation_manager.budget_manager.get_month_spending()}'); \
-    print(f'Remaining: ${domain_rotation_manager.budget_manager.get_remaining_budget()}')"
+# Check budget/domain status
+python domain_rotation_cli.py status
 
-# Rotate to new domain
-python -c "from domain_manager import domain_rotation_manager; \
-    result = domain_rotation_manager.rotate_to_new_domain(); \
-    print(result)"
+# Search candidate cheap random domains
+python domain_rotation_cli.py search
+
+# Rotate by purchasing a new random domain
+python domain_rotation_cli.py rotate
+
+# Release TODO flag-style CLI
+python rotate-domain.py --search example.xyz
+python rotate-domain.py --buy example.xyz --years 1
+python rotate-domain.py --list-owned
+python rotate-domain.py --get-pricing xyz
 ```
 
 ### Automated Rotation
@@ -93,7 +95,7 @@ Set up a cron job for weekly rotation:
 crontab -e
 
 # Add rotation job (runs every Sunday at 2 AM)
-0 2 * * 0 cd /path/to/opsechat && python -c "from domain_manager import domain_rotation_manager; domain_rotation_manager.rotate_to_new_domain()"
+0 2 * * 0 cd /path/to/opsechat && python domain_rotation_cli.py rotate
 ```
 
 ## Budget Management
@@ -103,16 +105,13 @@ crontab -e
 ```python
 from domain_manager import domain_rotation_manager
 
-# Set monthly budget to $20
-domain_rotation_manager.budget_manager.set_monthly_budget(20.0)
+# Budget is set when the manager is created
+domain_rotation_manager.monthly_budget = 20.0
 
-# Check spending
-spending = domain_rotation_manager.budget_manager.get_month_spending()
-print(f"Spent this month: ${spending}")
-
-# Check remaining budget
-remaining = domain_rotation_manager.budget_manager.get_remaining_budget()
-print(f"Remaining: ${remaining}")
+# Check spending and remaining budget
+status = domain_rotation_manager.get_budget_status()
+print(f"Spent this month: ${status['current_spending']}")
+print(f"Remaining: ${status['remaining']}")
 ```
 
 ### Budget Safety Features
@@ -294,10 +293,10 @@ curl -X POST https://porkbun.com/api/json/v3/ping \
 from domain_manager import domain_rotation_manager
 
 # Check current budget
-print(domain_rotation_manager.budget_manager.get_remaining_budget())
+print(domain_rotation_manager.get_budget_status()["remaining"])
 
 # Increase monthly budget
-domain_rotation_manager.budget_manager.set_monthly_budget(50.0)
+domain_rotation_manager.monthly_budget = 50.0
 ```
 
 ### Domain Not Available
@@ -306,10 +305,16 @@ domain_rotation_manager.budget_manager.set_monthly_budget(50.0)
 
 **Solution:**
 ```python
-# Generate alternative domains
-alternatives = domain_rotation_manager.search_cheap_domains(limit=20)
-for domain in alternatives:
-    print(f"{domain['name']}: ${domain['price']}")
+from domain_manager import domain_rotation_manager
+
+# Retry random-domain discovery
+for _ in range(20):
+    result = domain_rotation_manager.find_cheap_available_domain(
+        max_price=3.00,
+        max_attempts=1
+    )
+    if result:
+        print(f"{result['domain']}: ${result['price']}")
 ```
 
 ### DNS Not Updating
@@ -364,26 +369,18 @@ domain = domain_rotation_manager.generate_domain_from_pattern(pattern, tld='xyz'
 All domain rotation commands:
 
 ```bash
-# Check available domains
-python -m domain_manager search --tld xyz --max-price 2.00
+# Existing interactive CLI
+python domain_rotation_cli.py config
+python domain_rotation_cli.py status
+python domain_rotation_cli.py search
+python domain_rotation_cli.py rotate
+python domain_rotation_cli.py list
 
-# Purchase specific domain
-python -m domain_manager purchase --domain example.xyz
-
-# Rotate to new random domain
-python -m domain_manager rotate
-
-# Check budget status
-python -m domain_manager budget status
-
-# Set monthly budget
-python -m domain_manager budget set --amount 20.00
-
-# List all active domains
-python -m domain_manager list
-
-# Configure DNS
-python -m domain_manager dns --domain example.xyz --mx "mail.example.xyz"
+# New flag-based CLI
+python rotate-domain.py --search example.xyz
+python rotate-domain.py --buy example.xyz --years 1
+python rotate-domain.py --list-owned
+python rotate-domain.py --get-pricing xyz
 ```
 
 ## Summary
