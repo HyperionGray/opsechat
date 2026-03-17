@@ -10,7 +10,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_lock,
+    _rate_limit_penalties,
+    RATE_LIMITS,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -24,6 +30,7 @@ def _clear_store():
     """Helper: wipe the rate limit store between tests."""
     with _rate_limit_lock:
         _rate_limit_store.clear()
+        _rate_limit_penalties.clear()
 
 
 def test_rate_limit_allows_requests_within_window():
@@ -85,6 +92,59 @@ def test_rate_limit_chat_message_limit():
     allowed, retry_after = check_rate_limit("session-msg", "chat_message")
     assert allowed is False
     assert retry_after >= 1
+
+
+def test_rate_limit_backoff_increases_for_repeated_violations():
+    _clear_store()
+    sid = "session-backoff"
+    endpoint = "dm_send"
+    max_requests = RATE_LIMITS[endpoint]["max_requests"]
+
+    for _ in range(max_requests):
+        allowed, _ = check_rate_limit(sid, endpoint)
+        assert allowed is True
+
+    # Set timestamps close to window expiry so backoff controls retry_after.
+    with _rate_limit_lock:
+        _rate_limit_store[sid][endpoint] = [
+            datetime.datetime.now() - datetime.timedelta(seconds=59)
+        ] * max_requests
+
+    allowed, retry_first = check_rate_limit(sid, endpoint)
+    assert allowed is False
+    assert retry_first >= 1
+
+    # Force unblock while keeping over-limit timestamps to trigger another violation.
+    with _rate_limit_lock:
+        _rate_limit_penalties[sid][endpoint]["blocked_until"] = (
+            datetime.datetime.now() - datetime.timedelta(seconds=1)
+        )
+
+    allowed, retry_second = check_rate_limit(sid, endpoint)
+    assert allowed is False
+    assert retry_second > retry_first
+
+
+def test_messages_endpoint_returns_retry_after_header_when_throttled():
+    _clear_store()
+    client = create_app().test_client()
+
+    create_room = client.post("/chat/create", content_type="application/json")
+    assert create_room.status_code == 200
+    room_id = create_room.get_json()["room_id"]
+
+    message_url = f"/chat/room/{room_id}/messages"
+    payload = {"message": "hello world"}
+
+    for _ in range(30):
+        response = client.post(message_url, json=payload)
+        assert response.status_code == 200
+
+    throttled = client.post(message_url, json=payload)
+    assert throttled.status_code == 429
+    body = throttled.get_json()
+    assert body["retry_after"] >= 1
+    assert throttled.headers.get("Retry-After") == str(body["retry_after"])
 
 
 # ---------------------------------------------------------------------------
