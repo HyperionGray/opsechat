@@ -16,7 +16,8 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
+import os
+from flask import render_template, request, session, jsonify
 from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
@@ -31,14 +32,60 @@ dm_lock = threading.Lock()
 # In-memory rate limiter: tracks requests per session per endpoint
 # Structure: { session_id: { endpoint: [timestamp, ...] } }
 _rate_limit_store = {}
+# In-memory penalty tracking for progressive backoff
+# Structure: { session_id: { endpoint: {"violations": int, "cooldown_until": datetime|None} } }
+_rate_limit_penalties = {}
 _rate_limit_lock = threading.Lock()
 
-# Rate limit configuration
+def _env_int(name: str, default: int, minimum: int = 1) -> int:
+    """Read an integer environment variable with bounds checking."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return max(int(raw), minimum)
+    except ValueError:
+        return default
+
+
+def _env_float(name: str, default: float, minimum: float = 1.0) -> float:
+    """Read a float environment variable with bounds checking."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return max(float(raw), minimum)
+    except ValueError:
+        return default
+
+
+# Rate limit configuration (configurable via environment variables)
 RATE_LIMITS = {
-    "chat_create": {"max_requests": 10, "window_seconds": 60},
-    "chat_message": {"max_requests": 30, "window_seconds": 60},
-    "dm_send": {"max_requests": 5, "window_seconds": 60},
+    "chat_create": {
+        "max_requests": _env_int("OPSECHAT_RATE_CHAT_CREATE_MAX_REQUESTS", 3),
+        "window_seconds": _env_int("OPSECHAT_RATE_CHAT_CREATE_WINDOW_SECONDS", 60),
+    },
+    "chat_message": {
+        "max_requests": _env_int("OPSECHAT_RATE_CHAT_MESSAGE_MAX_REQUESTS", 30),
+        "window_seconds": _env_int("OPSECHAT_RATE_CHAT_MESSAGE_WINDOW_SECONDS", 60),
+    },
+    "dm_send": {
+        "max_requests": _env_int("OPSECHAT_RATE_DM_SEND_MAX_REQUESTS", 5),
+        "window_seconds": _env_int("OPSECHAT_RATE_DM_SEND_WINDOW_SECONDS", 60),
+    },
 }
+
+# Flask-Limiter remains as a coarse safety layer above custom per-session logic.
+FLASK_LIMIT_STRINGS = {
+    "chat_create": os.getenv("OPSECHAT_FLASK_LIMIT_CHAT_CREATE", "10 per hour; 5 per minute"),
+    "chat_message": os.getenv("OPSECHAT_FLASK_LIMIT_CHAT_MESSAGE", "60 per minute"),
+    "dm_send": os.getenv("OPSECHAT_FLASK_LIMIT_DM_SEND", "20 per hour; 10 per minute"),
+}
+
+# Progressive backoff configuration
+BACKOFF_BASE_SECONDS = _env_int("OPSECHAT_RATE_BACKOFF_BASE_SECONDS", 5)
+BACKOFF_MULTIPLIER = _env_float("OPSECHAT_RATE_BACKOFF_MULTIPLIER", 2.0)
+BACKOFF_MAX_SECONDS = _env_int("OPSECHAT_RATE_BACKOFF_MAX_SECONDS", 300)
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
@@ -183,10 +230,24 @@ def check_rate_limit(session_id: str, endpoint: str) -> tuple:
     with _rate_limit_lock:
         if session_id not in _rate_limit_store:
             _rate_limit_store[session_id] = {}
+        if session_id not in _rate_limit_penalties:
+            _rate_limit_penalties[session_id] = {}
 
         session_limits = _rate_limit_store[session_id]
+        session_penalties = _rate_limit_penalties[session_id]
         if endpoint not in session_limits:
             session_limits[endpoint] = []
+        if endpoint not in session_penalties:
+            session_penalties[endpoint] = {"violations": 0, "cooldown_until": None}
+
+        penalty = session_penalties[endpoint]
+        cooldown_until = penalty.get("cooldown_until")
+        if cooldown_until:
+            if now < cooldown_until:
+                retry_after = int((cooldown_until - now).total_seconds()) + 1
+                return False, max(retry_after, 1)
+            # Cooldown elapsed; clear it.
+            penalty["cooldown_until"] = None
 
         # Remove timestamps outside the current window
         session_limits[endpoint] = [
@@ -195,11 +256,36 @@ def check_rate_limit(session_id: str, endpoint: str) -> tuple:
 
         if len(session_limits[endpoint]) >= max_requests:
             oldest = session_limits[endpoint][0]
-            retry_after = int(window - (now - oldest).total_seconds()) + 1
+            window_retry_after = int(window - (now - oldest).total_seconds()) + 1
+
+            # Apply progressive backoff on repeated violations.
+            penalty["violations"] += 1
+            exponent = max(penalty["violations"] - 1, 0)
+            backoff_seconds = int(
+                min(BACKOFF_BASE_SECONDS * (BACKOFF_MULTIPLIER ** exponent), BACKOFF_MAX_SECONDS)
+            )
+            retry_after = max(window_retry_after, 1) + max(backoff_seconds, 1)
+            penalty["cooldown_until"] = now + datetime.timedelta(seconds=retry_after)
             return False, max(retry_after, 1)
 
         session_limits[endpoint].append(now)
+        # Decay violation score when requests are flowing within configured limits.
+        if penalty["violations"] > 0:
+            penalty["violations"] -= 1
         return True, 0
+
+
+def _rate_limited_response(error_message: str, retry_after: int):
+    """Create consistent 429 responses with backoff guidance."""
+    payload = {
+        "error": error_message,
+        "retry_after": max(retry_after, 1),
+        "retry_strategy": "exponential_backoff",
+    }
+    response = jsonify(payload)
+    response.status_code = 429
+    response.headers["Retry-After"] = str(payload["retry_after"])
+    return response
 
 
 def cleanup_rate_limits():
@@ -220,6 +306,31 @@ def cleanup_rate_limits():
 
         for sid in stale_sessions:
             del _rate_limit_store[sid]
+
+        stale_penalty_sessions = []
+        for sid, endpoints in _rate_limit_penalties.items():
+            stale_endpoints = []
+            for ep, penalty in endpoints.items():
+                cooldown_until = penalty.get("cooldown_until")
+                if cooldown_until and cooldown_until <= now:
+                    penalty["cooldown_until"] = None
+
+                has_recent_requests = bool(_rate_limit_store.get(sid, {}).get(ep))
+                if (
+                    penalty.get("violations", 0) <= 0
+                    and penalty.get("cooldown_until") is None
+                    and not has_recent_requests
+                ):
+                    stale_endpoints.append(ep)
+
+            for ep in stale_endpoints:
+                del endpoints[ep]
+
+            if not endpoints:
+                stale_penalty_sessions.append(sid)
+
+        for sid in stale_penalty_sessions:
+            del _rate_limit_penalties[sid]
 
 
 # Background cleanup thread
@@ -262,13 +373,13 @@ def register_simple_chat_routes(app):
         try:
             with open('VERSION', 'r') as f:
                 version = f.read().strip()
-        except:
+        except OSError:
             version = '0.8.0-alpha'  # fallback
         
         return render_template("simple_chat_index.html", version=version)
     
     @app.route('/chat/create', methods=['POST'])
-    @limiter.limit("10 per hour; 3 per minute")
+    @limiter.limit(FLASK_LIMIT_STRINGS["chat_create"])
     def chat_create():
         """Create a new chat room with cryptographically secure ID"""
         # Ensure session exists for rate limiting
@@ -279,9 +390,14 @@ def register_simple_chat_routes(app):
 
         allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Try again in {retry_after} seconds."
-            }), 429
+            config = RATE_LIMITS["chat_create"]
+            return _rate_limited_response(
+                (
+                    f"Rate limit exceeded. Maximum {config['max_requests']} requests "
+                    f"per {config['window_seconds']} seconds."
+                ),
+                retry_after,
+            )
 
         room_id = generate_secure_room_id(32)
         
@@ -314,7 +430,7 @@ def register_simple_chat_routes(app):
                              color=session["color"])
     
     @app.route('/chat/room/<string:room_id>/messages', methods=['GET', 'POST'])
-    @limiter.limit("60 per minute", methods=["POST"])
+    @limiter.limit(FLASK_LIMIT_STRINGS["chat_message"], methods=["POST"])
     def simple_chat_messages(room_id):
         """Get or post messages to a room"""
         with rooms_lock:
@@ -332,9 +448,14 @@ def register_simple_chat_routes(app):
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
             if not allowed:
-                return jsonify({
-                    "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds."
-                }), 429
+                config = RATE_LIMITS["chat_message"]
+                return _rate_limited_response(
+                    (
+                        f"Rate limit exceeded. Maximum {config['max_requests']} messages "
+                        f"per {config['window_seconds']} seconds."
+                    ),
+                    retry_after,
+                )
             
             # Get message from request
             data = request.get_json()
@@ -397,7 +518,7 @@ def register_simple_chat_routes(app):
             })
     
     @app.route('/chat/dm/send', methods=['POST'])
-    @limiter.limit("20 per hour; 5 per minute")
+    @limiter.limit(FLASK_LIMIT_STRINGS["dm_send"])
     def send_dm():
         """Send a direct message (for sharing room IDs) - expires in 1 minute"""
         # Initialize user session if needed
@@ -409,9 +530,14 @@ def register_simple_chat_routes(app):
         # Check rate limit for DMs
         allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds."
-            }), 429
+            config = RATE_LIMITS["dm_send"]
+            return _rate_limited_response(
+                (
+                    f"Rate limit exceeded. Maximum {config['max_requests']} DMs "
+                    f"per {config['window_seconds']} seconds."
+                ),
+                retry_after,
+            )
         
         data = request.get_json()
         if not data or "room_id" not in data or "message" not in data:
