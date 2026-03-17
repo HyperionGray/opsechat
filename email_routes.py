@@ -99,18 +99,32 @@ def register_email_routes(app, id_generator, get_random_color):
 
     @app.route('/<string:url_addition>/email/burner/list.json', methods=["GET"])
     def email_burner_list_json(url_addition):
-        """JSON API for burner email list"""
+        """JSON API for burner email list with stats"""
         if url_addition != app.config["path"]:
             return ('', 404)
         
         if "_id" not in session:
             return jsonify({"error": "No session"}), 401
         
+        burner_manager.cleanup_expired()
         burner_emails = burner_manager.get_user_burners(session["_id"])
         return jsonify({
             "burners": burner_emails,
             "stats": burner_manager.get_user_stats(session["_id"])
         })
+
+    @app.route('/<string:url_addition>/email/burner/list', methods=["GET"])
+    def email_burner_list(url_addition):
+        """Compatibility JSON API for burner list used by UI/tests."""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        if "_id" not in session:
+            return jsonify([])
+
+        burner_manager.cleanup_expired()
+        burner_emails = burner_manager.get_user_burners(session["_id"])
+        return jsonify(burner_emails)
 
     @app.route('/<string:url_addition>/email/config', methods=["GET", "POST"])
     def email_config(url_addition):

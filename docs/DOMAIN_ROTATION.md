@@ -4,6 +4,24 @@
 
 OpSecChat supports automated domain rotation for burner email systems. This allows you to quickly purchase and rotate domains to enhance privacy and avoid domain-based blocking.
 
+## Current Implementation Status
+
+The supported command-line interface is `domain_rotation_cli.py`.
+
+```bash
+python domain_rotation_cli.py config
+python domain_rotation_cli.py status
+python domain_rotation_cli.py search
+python domain_rotation_cli.py rotate
+python domain_rotation_cli.py list
+```
+
+The CLI persists state in:
+
+`~/.opsechat/domain_config.json`
+
+The `owned_domains` records are now stored using JSON-safe ISO timestamps and are restored on load so saved state survives restarts cleanly.
+
 ## Supported Registrars
 
 Currently supported:
@@ -361,29 +379,23 @@ domain = domain_rotation_manager.generate_domain_from_pattern(pattern, tld='xyz'
 
 ## CLI Reference
 
-All domain rotation commands:
+Use the current CLI entrypoint:
 
 ```bash
-# Check available domains
-python -m domain_manager search --tld xyz --max-price 2.00
+# Configure API credentials and budget
+python domain_rotation_cli.py config
 
-# Purchase specific domain
-python -m domain_manager purchase --domain example.xyz
+# Check budget and active domain status
+python domain_rotation_cli.py status
 
-# Rotate to new random domain
-python -m domain_manager rotate
+# Search for cheap available domains (read-only)
+python domain_rotation_cli.py search
 
-# Check budget status
-python -m domain_manager budget status
+# Rotate to a new domain (prompts before purchase)
+python domain_rotation_cli.py rotate
 
-# Set monthly budget
-python -m domain_manager budget set --amount 20.00
-
-# List all active domains
-python -m domain_manager list
-
-# Configure DNS
-python -m domain_manager dns --domain example.xyz --mx "mail.example.xyz"
+# List owned domains from persisted state
+python domain_rotation_cli.py list
 ```
 
 ## Summary
