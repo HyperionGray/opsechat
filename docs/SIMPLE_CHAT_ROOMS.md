@@ -118,6 +118,27 @@ This prevents memory forensics from recovering deleted messages.
 - Examples: `SilentWolf0423`, `GhostRaven7821`
 - Each username is assigned a distinct color for easy identification
 
+### Adaptive Write Throttling
+- Write endpoints (`/chat/create`, `/chat/room/<id>/messages`, `/chat/dm/send`) now apply:
+  - Per-session sliding-window limits
+  - Progressive exponential backoff on repeated violations
+  - `Retry-After` response header plus JSON `retry_after` guidance
+- This keeps normal chat usage responsive while forcing abusive clients to slow down.
+
+Environment variables (optional overrides):
+
+```bash
+OPSECHAT_RATE_CHAT_CREATE_MAX_REQUESTS=3
+OPSECHAT_RATE_CHAT_CREATE_WINDOW_SECONDS=60
+OPSECHAT_RATE_CHAT_MESSAGE_MAX_REQUESTS=30
+OPSECHAT_RATE_CHAT_MESSAGE_WINDOW_SECONDS=60
+OPSECHAT_RATE_DM_SEND_MAX_REQUESTS=5
+OPSECHAT_RATE_DM_SEND_WINDOW_SECONDS=60
+OPSECHAT_RATE_BACKOFF_BASE_SECONDS=5
+OPSECHAT_RATE_BACKOFF_MULTIPLIER=2
+OPSECHAT_RATE_BACKOFF_MAX_SECONDS=300
+```
+
 ### E2E Encryption (Optional)
 - Uses Web Crypto API (AES-GCM with 256-bit keys)
 - Simple, reviewable JavaScript implementation

@@ -325,7 +325,7 @@ def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
     return {
         'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
         'checks': {
