@@ -16,8 +16,10 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+import os
+from typing import Dict, Mapping, Optional, Tuple
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Global room storage (in-memory only)
@@ -31,17 +33,120 @@ dm_lock = threading.Lock()
 # In-memory rate limiter: tracks requests per session per endpoint
 # Structure: { session_id: { endpoint: [timestamp, ...] } }
 _rate_limit_store = {}
+_rate_limit_penalties = {}
 _rate_limit_lock = threading.Lock()
 
-# Rate limit configuration
-RATE_LIMITS = {
+# Default rate limit configuration
+DEFAULT_RATE_LIMITS = {
     "chat_create": {"max_requests": 10, "window_seconds": 60},
     "chat_message": {"max_requests": 30, "window_seconds": 60},
     "dm_send": {"max_requests": 5, "window_seconds": 60},
 }
+DEFAULT_BACKOFF_BASE_SECONDS = 5
+DEFAULT_BACKOFF_MAX_SECONDS = 300
+
+
+def _read_env_int(
+    env: Mapping[str, str],
+    key: str,
+    default: int,
+    minimum: int = 1
+) -> int:
+    """Safely parse a positive integer from environment settings."""
+    raw = env.get(key)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return max(value, minimum)
+
+
+def load_rate_limit_settings(
+    env: Optional[Mapping[str, str]] = None
+) -> Tuple[Dict[str, Dict[str, int]], int, int]:
+    """
+    Load endpoint rate limits and backoff settings from environment.
+
+    Supported variables:
+    - OPSECHAT_CHAT_CREATE_MAX_REQUESTS
+    - OPSECHAT_CHAT_CREATE_WINDOW_SECONDS
+    - OPSECHAT_CHAT_MESSAGE_MAX_REQUESTS
+    - OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS
+    - OPSECHAT_DM_SEND_MAX_REQUESTS
+    - OPSECHAT_DM_SEND_WINDOW_SECONDS
+    - OPSECHAT_RATE_LIMIT_BACKOFF_BASE_SECONDS
+    - OPSECHAT_RATE_LIMIT_BACKOFF_MAX_SECONDS
+    """
+    env_map = env or os.environ
+    limits = {
+        "chat_create": {
+            "max_requests": _read_env_int(
+                env_map,
+                "OPSECHAT_CHAT_CREATE_MAX_REQUESTS",
+                DEFAULT_RATE_LIMITS["chat_create"]["max_requests"],
+            ),
+            "window_seconds": _read_env_int(
+                env_map,
+                "OPSECHAT_CHAT_CREATE_WINDOW_SECONDS",
+                DEFAULT_RATE_LIMITS["chat_create"]["window_seconds"],
+            ),
+        },
+        "chat_message": {
+            "max_requests": _read_env_int(
+                env_map,
+                "OPSECHAT_CHAT_MESSAGE_MAX_REQUESTS",
+                DEFAULT_RATE_LIMITS["chat_message"]["max_requests"],
+            ),
+            "window_seconds": _read_env_int(
+                env_map,
+                "OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS",
+                DEFAULT_RATE_LIMITS["chat_message"]["window_seconds"],
+            ),
+        },
+        "dm_send": {
+            "max_requests": _read_env_int(
+                env_map,
+                "OPSECHAT_DM_SEND_MAX_REQUESTS",
+                DEFAULT_RATE_LIMITS["dm_send"]["max_requests"],
+            ),
+            "window_seconds": _read_env_int(
+                env_map,
+                "OPSECHAT_DM_SEND_WINDOW_SECONDS",
+                DEFAULT_RATE_LIMITS["dm_send"]["window_seconds"],
+            ),
+        },
+    }
+
+    backoff_base = _read_env_int(
+        env_map,
+        "OPSECHAT_RATE_LIMIT_BACKOFF_BASE_SECONDS",
+        DEFAULT_BACKOFF_BASE_SECONDS,
+    )
+    backoff_max = _read_env_int(
+        env_map,
+        "OPSECHAT_RATE_LIMIT_BACKOFF_MAX_SECONDS",
+        DEFAULT_BACKOFF_MAX_SECONDS,
+        minimum=backoff_base,
+    )
+    return limits, backoff_base, backoff_max
+
+
+RATE_LIMITS, BACKOFF_BASE_SECONDS, BACKOFF_MAX_SECONDS = load_rate_limit_settings()
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
+
+
+def _read_version() -> str:
+    """Read app version from VERSION file with a safe fallback."""
+    version_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "VERSION")
+    try:
+        with open(version_file, encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return "0.8.0-alpha"
 
 # Room class to manage chat state
 class ChatRoom:
@@ -159,7 +264,7 @@ def check_rate_limit(session_id: str, endpoint: str) -> tuple:
     """
     Check if a session has exceeded its rate limit for an endpoint.
 
-    Uses a sliding-window algorithm with in-memory storage.
+    Uses a sliding-window algorithm with in-memory storage and adaptive backoff.
 
     Args:
         session_id: Unique identifier for the requesting session.
@@ -169,6 +274,7 @@ def check_rate_limit(session_id: str, endpoint: str) -> tuple:
         tuple[bool, int]: (allowed, retry_after_seconds).
             - allowed=True, retry_after=0 when the request is permitted.
             - allowed=False, retry_after>=1 when the limit is exceeded.
+              Repeated violations increase retry_after via exponential backoff.
             - For unknown endpoints (not in RATE_LIMITS) always returns (True, 0).
     """
     config = RATE_LIMITS.get(endpoint)
@@ -181,24 +287,42 @@ def check_rate_limit(session_id: str, endpoint: str) -> tuple:
     cutoff = now - datetime.timedelta(seconds=window)
 
     with _rate_limit_lock:
-        if session_id not in _rate_limit_store:
-            _rate_limit_store[session_id] = {}
+        session_limits = _rate_limit_store.setdefault(session_id, {})
+        session_penalties = _rate_limit_penalties.setdefault(session_id, {})
+        session_penalty = session_penalties.setdefault(
+            endpoint,
+            {"violations": 0, "blocked_until": None},
+        )
+        endpoint_timestamps = session_limits.setdefault(endpoint, [])
 
-        session_limits = _rate_limit_store[session_id]
-        if endpoint not in session_limits:
-            session_limits[endpoint] = []
+        blocked_until = session_penalty.get("blocked_until")
+        if blocked_until and blocked_until > now:
+            retry_after = int((blocked_until - now).total_seconds()) + 1
+            return False, max(retry_after, 1)
+        if blocked_until and blocked_until <= now:
+            session_penalty["blocked_until"] = None
 
         # Remove timestamps outside the current window
-        session_limits[endpoint] = [
-            ts for ts in session_limits[endpoint] if ts > cutoff
-        ]
+        endpoint_timestamps[:] = [ts for ts in endpoint_timestamps if ts > cutoff]
 
-        if len(session_limits[endpoint]) >= max_requests:
-            oldest = session_limits[endpoint][0]
+        if len(endpoint_timestamps) >= max_requests:
+            oldest = endpoint_timestamps[0]
             retry_after = int(window - (now - oldest).total_seconds()) + 1
-            return False, max(retry_after, 1)
+            violation_count = session_penalty["violations"] + 1
+            session_penalty["violations"] = violation_count
 
-        session_limits[endpoint].append(now)
+            penalty_seconds = min(
+                BACKOFF_BASE_SECONDS * (2 ** (violation_count - 1)),
+                BACKOFF_MAX_SECONDS,
+            )
+            retry_after = max(retry_after, 1) + penalty_seconds
+            session_penalty["blocked_until"] = now + datetime.timedelta(seconds=retry_after)
+            return False, retry_after
+
+        endpoint_timestamps.append(now)
+        if session_penalty["violations"] > 0:
+            # Decay violations on successful requests so clients can recover.
+            session_penalty["violations"] -= 1
         return True, 0
 
 
@@ -220,6 +344,32 @@ def cleanup_rate_limits():
 
         for sid in stale_sessions:
             del _rate_limit_store[sid]
+
+        stale_penalty_sessions = []
+        for sid, endpoints in _rate_limit_penalties.items():
+            session_limits = _rate_limit_store.get(sid, {})
+            for ep in list(endpoints.keys()):
+                penalty = endpoints[ep]
+                blocked_until = penalty.get("blocked_until")
+                if blocked_until and blocked_until <= now:
+                    penalty["blocked_until"] = None
+
+                has_recent_requests = bool(session_limits.get(ep))
+                if not has_recent_requests and penalty.get("blocked_until") is None:
+                    penalty["violations"] = 0
+
+                if (
+                    not has_recent_requests
+                    and penalty.get("blocked_until") is None
+                    and penalty.get("violations", 0) == 0
+                ):
+                    del endpoints[ep]
+
+            if not endpoints:
+                stale_penalty_sessions.append(sid)
+
+        for sid in stale_penalty_sessions:
+            del _rate_limit_penalties[sid]
 
 
 # Background cleanup thread
@@ -258,13 +408,7 @@ def register_simple_chat_routes(app):
     @app.route('/chat')
     def chat_index():
         """Landing page for creating/joining chat rooms"""
-        # Read version from VERSION file
-        try:
-            with open('VERSION', 'r') as f:
-                version = f.read().strip()
-        except:
-            version = '0.8.0-alpha'  # fallback
-        
+        version = _read_version()
         return render_template("simple_chat_index.html", version=version)
     
     @app.route('/chat/create', methods=['POST'])

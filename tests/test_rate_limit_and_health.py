@@ -10,7 +10,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    load_rate_limit_settings,
+    _rate_limit_store,
+    _rate_limit_penalties,
+    _rate_limit_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -24,6 +30,7 @@ def _clear_store():
     """Helper: wipe the rate limit store between tests."""
     with _rate_limit_lock:
         _rate_limit_store.clear()
+        _rate_limit_penalties.clear()
 
 
 def test_rate_limit_allows_requests_within_window():
@@ -85,6 +92,66 @@ def test_rate_limit_chat_message_limit():
     allowed, retry_after = check_rate_limit("session-msg", "chat_message")
     assert allowed is False
     assert retry_after >= 1
+
+
+def test_rate_limit_repeated_violations_increase_backoff():
+    _clear_store()
+    sid = "session-backoff"
+
+    # First violation
+    for _ in range(5):
+        check_rate_limit(sid, "dm_send")
+    allowed, retry_after_first = check_rate_limit(sid, "dm_send")
+    assert allowed is False
+
+    # Force the temporary block to expire while keeping request history in-window.
+    with _rate_limit_lock:
+        _rate_limit_penalties[sid]["dm_send"]["blocked_until"] = (
+            datetime.datetime.now() - datetime.timedelta(seconds=1)
+        )
+
+    # Second violation should carry a stronger penalty than the first.
+    allowed, retry_after_second = check_rate_limit(sid, "dm_send")
+    assert allowed is False
+    assert retry_after_second > retry_after_first
+
+
+def test_load_rate_limit_settings_from_env_values():
+    env = {
+        "OPSECHAT_CHAT_CREATE_MAX_REQUESTS": "12",
+        "OPSECHAT_CHAT_CREATE_WINDOW_SECONDS": "90",
+        "OPSECHAT_CHAT_MESSAGE_MAX_REQUESTS": "45",
+        "OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS": "120",
+        "OPSECHAT_DM_SEND_MAX_REQUESTS": "7",
+        "OPSECHAT_DM_SEND_WINDOW_SECONDS": "75",
+        "OPSECHAT_RATE_LIMIT_BACKOFF_BASE_SECONDS": "8",
+        "OPSECHAT_RATE_LIMIT_BACKOFF_MAX_SECONDS": "144",
+    }
+    limits, backoff_base, backoff_max = load_rate_limit_settings(env)
+
+    assert limits["chat_create"]["max_requests"] == 12
+    assert limits["chat_create"]["window_seconds"] == 90
+    assert limits["chat_message"]["max_requests"] == 45
+    assert limits["chat_message"]["window_seconds"] == 120
+    assert limits["dm_send"]["max_requests"] == 7
+    assert limits["dm_send"]["window_seconds"] == 75
+    assert backoff_base == 8
+    assert backoff_max == 144
+
+
+def test_load_rate_limit_settings_invalid_values_fall_back():
+    env = {
+        "OPSECHAT_CHAT_CREATE_MAX_REQUESTS": "invalid",
+        "OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS": "0",  # minimum should clamp to 1
+        "OPSECHAT_RATE_LIMIT_BACKOFF_BASE_SECONDS": "abc",
+        "OPSECHAT_RATE_LIMIT_BACKOFF_MAX_SECONDS": "2",  # should be clamped >= base
+    }
+    limits, backoff_base, backoff_max = load_rate_limit_settings(env)
+
+    assert limits["chat_create"]["max_requests"] == 10
+    assert limits["chat_message"]["window_seconds"] == 1
+    assert backoff_base == 5
+    assert backoff_max == 5
 
 
 # ---------------------------------------------------------------------------
