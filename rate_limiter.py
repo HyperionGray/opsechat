@@ -5,10 +5,19 @@ Configures Flask-Limiter to protect API endpoints from abuse.
 Limits are applied per client session (falling back to client IP).
 """
 
-from flask import session
+from flask import jsonify, request, session
 from flask_limiter import Limiter
+from flask_limiter.errors import RateLimitExceeded
 from flask_limiter.util import get_remote_address
 import secrets
+
+
+SIMPLE_CHAT_LIMIT_POLICIES = {
+    "chat_create": "10 per hour; 3 per minute",
+    "chat_message_write": "60 per minute",
+    "dm_send": "20 per hour; 5 per minute",
+}
+
 
 def _get_client_identifier():
     """
@@ -48,5 +57,23 @@ def init_limiter(app):
             # Use a cryptographically secure, URL-safe token.
             session["client_id"] = secrets.token_urlsafe(16)
 
+    @app.errorhandler(RateLimitExceeded)
+    def _handle_rate_limit_exceeded(error):
+        """Return consistent JSON metadata for client retry/backoff logic."""
+        retry_after = int(getattr(error, "retry_after", 1) or 1)
+        endpoint = (request.endpoint or "unknown").split(".")[-1]
+
+        response = jsonify({
+            "error": "rate_limit_exceeded",
+            "message": "Too many requests. Back off and retry later.",
+            "retry_after_seconds": max(retry_after, 1),
+            "endpoint": endpoint,
+        })
+        response.status_code = 429
+        response.headers["Retry-After"] = str(max(retry_after, 1))
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    app.config.setdefault("RATELIMIT_HEADERS_ENABLED", True)
     limiter.init_app(app)
     return limiter

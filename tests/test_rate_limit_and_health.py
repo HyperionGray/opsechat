@@ -1,115 +1,86 @@
 """
-Tests for rate limiting (simple_chat_routes) and the /health endpoint (app_factory).
+Integration tests for simple-chat rate-limiting and /health endpoint behavior.
 """
 
-import datetime
-import sys
 import os
+import sys
 
 # Ensure the project root is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
-
-# Shared test Flask app (avoids importing all of runserver.py)
-_test_app = create_app()
 
 
-# ---------------------------------------------------------------------------
-# Rate limiter unit tests
-# ---------------------------------------------------------------------------
-
-def _clear_store():
-    """Helper: wipe the rate limit store between tests."""
-    with _rate_limit_lock:
-        _rate_limit_store.clear()
+def _make_app():
+    app = create_app()
+    app.config["TESTING"] = True
+    app.config["SECRET_KEY"] = "test-secret"
+    return app
 
 
-def test_rate_limit_allows_requests_within_window():
-    _clear_store()
-    for _ in range(5):
-        allowed, retry_after = check_rate_limit("session-1", "dm_send")
-        assert allowed is True
-        assert retry_after == 0
+def _exhaust_chat_create_limit(client):
+    for _ in range(3):
+        r = client.post("/chat/create", content_type="application/json")
+        assert r.status_code == 200
+    return client.post("/chat/create", content_type="application/json")
 
 
-def test_rate_limit_blocks_when_exceeded():
-    _clear_store()
-    # dm_send: 5 requests per 60 seconds
-    for _ in range(5):
-        check_rate_limit("session-block", "dm_send")
-    allowed, retry_after = check_rate_limit("session-block", "dm_send")
-    assert allowed is False
-    assert retry_after >= 1
+def test_rate_limit_429_includes_retry_headers_and_metadata():
+    app = _make_app()
+    with app.test_client() as client:
+        limited = _exhaust_chat_create_limit(client)
+        assert limited.status_code == 429
+
+        payload = limited.get_json()
+        assert payload is not None
+        assert payload.get("error") == "rate_limit_exceeded"
+        assert payload.get("retry_after_seconds", 0) >= 1
+        assert payload.get("endpoint") == "chat_create"
+
+        retry_after_header = limited.headers.get("Retry-After")
+        assert retry_after_header is not None
+        assert int(retry_after_header) >= 1
 
 
-def test_rate_limit_tracks_sessions_independently():
-    _clear_store()
-    # Exhaust session-a
-    for _ in range(5):
-        check_rate_limit("session-a", "dm_send")
-    # session-b should still be allowed
-    allowed, _ = check_rate_limit("session-b", "dm_send")
-    assert allowed is True
+def test_rate_limit_isolation_between_sessions():
+    app = _make_app()
+    with app.test_client() as client_a:
+        limited = _exhaust_chat_create_limit(client_a)
+        assert limited.status_code == 429
+
+    with app.test_client() as client_b:
+        fresh = client_b.post("/chat/create", content_type="application/json")
+        assert fresh.status_code == 200
 
 
-def test_rate_limit_resets_after_window():
-    _clear_store()
-    sid = "session-expire"
-    # Backdate all existing timestamps so they fall outside the window
-    with _rate_limit_lock:
-        _rate_limit_store[sid] = {
-            "dm_send": [
-                datetime.datetime.now() - datetime.timedelta(seconds=120)
-            ] * 5
-        }
-    allowed, retry_after = check_rate_limit(sid, "dm_send")
-    assert allowed is True
-    assert retry_after == 0
+def test_chat_limits_endpoint_returns_policies():
+    app = _make_app()
+    with app.test_client() as client:
+        response = client.get("/chat/limits")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data is not None
+        assert data.get("chat_create") == "10 per hour; 3 per minute"
+        assert data.get("chat_message_write") == "60 per minute"
+        assert data.get("dm_send") == "20 per hour; 5 per minute"
+        assert "retry_hint" in data
 
-
-def test_rate_limit_unknown_endpoint_always_allows():
-    _clear_store()
-    for _ in range(100):
-        allowed, _ = check_rate_limit("session-x", "nonexistent_endpoint")
-        assert allowed is True
-
-
-def test_rate_limit_chat_message_limit():
-    _clear_store()
-    # chat_message: 30 requests per 60 seconds
-    for _ in range(30):
-        allowed, _ = check_rate_limit("session-msg", "chat_message")
-        assert allowed is True
-    allowed, retry_after = check_rate_limit("session-msg", "chat_message")
-    assert allowed is False
-    assert retry_after >= 1
-
-
-# ---------------------------------------------------------------------------
-# Health endpoint integration tests
-# ---------------------------------------------------------------------------
 
 def test_health_endpoint_returns_200():
-    client = _test_app.test_client()
-    response = client.get("/health")
-    assert response.status_code == 200
+    app = _make_app()
+    with app.test_client() as client:
+        response = client.get("/health")
+        assert response.status_code == 200
 
 
-def test_health_endpoint_returns_json_with_required_fields():
-    client = _test_app.test_client()
-    response = client.get("/health")
-    data = response.get_json()
-    assert data is not None
-    assert data.get("status") == "healthy"
-    assert "version" in data
-    assert "active_rooms" in data
-
-
-def test_health_endpoint_active_rooms_is_integer():
-    client = _test_app.test_client()
-    response = client.get("/health")
-    data = response.get_json()
-    assert isinstance(data["active_rooms"], int)
-    assert data["active_rooms"] >= 0
+def test_health_endpoint_returns_expected_fields():
+    app = _make_app()
+    with app.test_client() as client:
+        response = client.get("/health")
+        data = response.get_json()
+        assert data is not None
+        assert data.get("status") == "healthy"
+        assert "version" in data
+        assert "checks" in data
+        assert isinstance(data.get("checks"), dict)
+        assert isinstance(data.get("uptime_seconds"), (int, float))

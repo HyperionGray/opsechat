@@ -41,6 +41,7 @@ Documentation for end users and operators.
 - [Email Quick Start](user-guide/EMAIL_QUICKSTART.md) - Quick email setup guide
 - [PGP Usage](user-guide/PGP_USAGE.md) - PGP encryption guide
 - [PGP Test Examples](user-guide/PGP_TEST_EXAMPLE.md) - PGP testing examples
+- [Rate Limiting](user-guide/RATE_LIMITING.md) - Limits, retry headers, and backoff guidance
 - [Testing Guide](user-guide/TESTING.md) - How to run tests
 
 ### 👨‍💻 Development
