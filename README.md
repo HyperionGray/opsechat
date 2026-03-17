@@ -190,6 +190,23 @@ Tests cover:
 
 For full testing documentation, see [Testing Guide](docs/user-guide/TESTING.md).
 
+Repository Hygiene
+==================
+
+Daily automation now generates a repository hygiene report that highlights:
+
+- Unfinished code markers (`TODO`, `FIXME`, `STUB`, `NotImplementedError`)
+- Duplicate workflow definitions (`.yml` / `.yaml`)
+- Deprecated workflows still active
+
+Run it locally:
+
+```bash
+python scripts/repo_hygiene_report.py --repo-root . --format markdown
+```
+
+See [Repository Hygiene Automation](docs/development/REPO_HYGIENE.md) for details.
+
 
 How it works
 ============

@@ -48,6 +48,7 @@ Information for developers contributing to the project.
 
 - [Development Guide](development/DEVELOPMENT.md) - **NEW!** Complete development setup and workflow
 - [Contributing Guide](development/CONTRIBUTING.md) - How to contribute
+- [Repository Hygiene Automation](development/REPO_HYGIENE.md) - Daily automated cleanup and unfinished-work reporting
 - [Code of Conduct](development/CODE_OF_CONDUCT.md) - Community guidelines
 - [Modernization Notes](development/MODERNIZATION.md) - Upgrade notes
 - [Agent Guidelines](development/AGENTS.md) - Repository guidelines for AI agents

@@ -32,11 +32,13 @@
 - [ ] Consider whether `playwright-tests.yml` and `python-tests.yml` should be kept or deprecated
   - Currently they're callable via `workflow_call` but not directly triggered
   - Could inline them into `ci.yml` if they're not used elsewhere
-- [ ] Review if any of the removed workflows in `bak/workflows-removed/` should be converted to manual/label-triggered
+- [x] Review if any of the removed workflows in `bak/workflows-removed/` should be converted to manual/label-triggered
+  - Confirmed deprecated workflows should remain inactive; removed stale active copies from `.github/workflows/`
 - [ ] Consider adding more comprehensive security checks to the CI baseline if needed
 
 ### 4. Documentation Updates
-- [ ] Update repository README or contributing guide to mention the new CI workflow
+- [x] Update repository README or contributing guide to mention the new CI workflow
+  - Added repository hygiene automation documentation and linked it from `README.md` and `docs/README.md`
 - [ ] Document the label-based triggering system for team members
 - [ ] Add instructions on how to manually trigger scheduled workflows if needed
 
