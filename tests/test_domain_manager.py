@@ -87,6 +87,34 @@ class TestDomainRotationManager:
         
         assert domain.endswith(".xyz")
         assert len(domain.split(".")[0]) == 8
+
+    def test_generate_domain_name_alias(self):
+        """Legacy alias should map to random domain generation."""
+        manager = DomainRotationManager()
+        domain = manager.generate_domain_name("club", 6)
+        assert domain.endswith(".club")
+        assert len(domain.split(".")[0]) == 6
+
+    def test_configure_and_get_config(self):
+        """Manager should support runtime API configuration."""
+        manager = DomainRotationManager()
+        config = manager.configure(
+            api_key="pk_test_1234",
+            secret_key="sk_test_secret",
+            monthly_budget=25.0
+        )
+
+        assert manager.api_client is not None
+        assert manager.api_client.api_key == "pk_test_1234"
+        assert manager.monthly_budget == 25.0
+        assert config["api_configured"] is True
+        assert config["api_key_masked"].endswith("1234")
+
+    def test_set_monthly_budget(self):
+        """Budget helper should update monthly budget."""
+        manager = DomainRotationManager(monthly_budget=10.0)
+        manager.set_monthly_budget(15.5)
+        assert manager.monthly_budget == 15.5
     
     def test_find_cheap_available_domain_no_client(self):
         """Test finding domain without API client"""
@@ -112,6 +140,19 @@ class TestDomainRotationManager:
         assert result is not None
         assert result["domain"].endswith((".xyz", ".club", ".online", ".site", ".website"))
         assert result["price"] <= 5.0
+
+    def test_find_cheap_available_domain_handles_unparseable_price(self):
+        """Unparseable price values should be skipped safely."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test123.xyz",
+            "price": "invalid-price"
+        }
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+        assert result is None
     
     def test_purchase_domain_if_budget_allows_success(self):
         """Test domain purchase within budget"""

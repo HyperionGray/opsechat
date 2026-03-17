@@ -120,9 +120,18 @@ def create_email_security_blueprint(id_generator, get_random_color):
                     message = {"type": "error", "text": f"IMAP configuration failed: {str(e)}"}
             
             elif config_type == "domain":
+                api_key = (
+                    request.form.get("porkbun_api_key", "").strip()
+                    or request.form.get("api_key", "").strip()
+                )
+                secret_key = (
+                    request.form.get("porkbun_secret_key", "").strip()
+                    or request.form.get("api_secret", "").strip()
+                    or request.form.get("secret_key", "").strip()
+                )
                 domain_config_data = {
-                    "api_key": request.form.get("porkbun_api_key", "").strip(),
-                    "secret_key": request.form.get("porkbun_secret_key", "").strip(),
+                    "api_key": api_key,
+                    "secret_key": secret_key,
                     "monthly_budget": float(request.form.get("monthly_budget", 10.0))
                 }
                 
@@ -199,8 +208,14 @@ def create_email_security_blueprint(id_generator, get_random_color):
             return jsonify({"success": False, "error": "No session"})
         
         try:
-            result = domain_rotation_manager.rotate_domain()
-            return jsonify(result)
+            new_domain = domain_rotation_manager.rotate_domain()
+            if not new_domain:
+                return jsonify({"success": False, "error": "No domain rotated"}), 400
+            return jsonify({
+                "success": True,
+                "active_domain": new_domain,
+                "budget_status": domain_rotation_manager.get_budget_status()
+            })
         except Exception as e:
             logging.exception("Error in email_domain_rotate")
             return jsonify({"success": False, "error": "Failed to rotate domain"})

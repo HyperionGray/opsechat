@@ -264,6 +264,7 @@ Features
   - **Instant Copy** - Copy burner emails to clipboard with one click
   - **Smart Stats Dashboard** - Track active burners and total time remaining
 - **Automated Domain Purchasing** - Porkbun API integration for cheap domain rotation (.xyz, .club, etc.) - see [Domain Registrar API](docs/setup/DOMAIN_REGISTRAR_API.md)
+- **Automation-friendly Domain CLI** - Scriptable commands (`rotate-domain.py`) for search, pricing, list, and purchase flows - see [Domain Rotation CLI Guide](docs/user-guide/DOMAIN_ROTATION_CLI.md)
 - **Budget Management** - Configurable monthly spending limits for domain purchases
 - **Spoofing Detection** - Test emails for spoofing attempts (unicode lookalikes, typosquatting, homographs)
 - **Phishing Simulation** - Gamified training with scoring and achievements

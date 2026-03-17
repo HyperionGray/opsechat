@@ -19,6 +19,7 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
@@ -49,6 +50,47 @@ def save_config(config):
         print(f"Configuration saved to {CONFIG_FILE}")
     except Exception as e:
         print(f"Error saving config: {e}")
+
+
+def _serialize_owned_domains(owned_domains):
+    """Serialize owned domain records to JSON-safe dicts."""
+    serialized = []
+    for domain_record in owned_domains or []:
+        record = dict(domain_record)
+        for field in ("purchased_at", "expires_at"):
+            value = record.get(field)
+            if isinstance(value, datetime):
+                record[field] = value.isoformat()
+        serialized.append(record)
+    return serialized
+
+
+def _deserialize_owned_domains(serialized_domains):
+    """Deserialize persisted domain records back into runtime values."""
+    deserialized = []
+    for domain_record in serialized_domains or []:
+        record = dict(domain_record)
+        for field in ("purchased_at", "expires_at"):
+            value = record.get(field)
+            if isinstance(value, str):
+                try:
+                    record[field] = datetime.fromisoformat(value)
+                except ValueError:
+                    # Keep the original string if it was not an ISO datetime.
+                    pass
+        deserialized.append(record)
+    return deserialized
+
+
+def _format_domain_datetime(value, fmt):
+    if isinstance(value, datetime):
+        return value.strftime(fmt)
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value).strftime(fmt)
+        except ValueError:
+            return value
+    return "Unknown"
 
 
 def configure_api():
@@ -97,12 +139,13 @@ def get_manager():
     """Get configured domain manager"""
     config = load_config()
     
-    if not config.get('api_key') or not config.get('api_secret'):
+    api_secret = config.get('api_secret') or config.get('secret_key')
+    if not config.get('api_key') or not api_secret:
         print("❌ Error: API credentials not configured.")
         print("Run: python domain_rotation_cli.py config")
         sys.exit(1)
     
-    client = PorkbunAPIClient(config['api_key'], config['api_secret'])
+    client = PorkbunAPIClient(config['api_key'], api_secret)
     manager = DomainRotationManager(
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
@@ -112,7 +155,7 @@ def get_manager():
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = _deserialize_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +165,7 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = _serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -144,8 +187,8 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_domain_datetime(domain.get('purchased_at'), '%Y-%m-%d %H:%M')}")
+        print(f"   Expires: {_format_domain_datetime(domain.get('expires_at'), '%Y-%m-%d')}")
         print()
 
 

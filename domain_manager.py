@@ -20,6 +20,8 @@ class DomainAPIClient:
     def __init__(self, api_key: str, api_secret: Optional[str] = None):
         self.api_key = api_key
         self.api_secret = api_secret
+        # Backward-compatible attribute name used by legacy scripts/tests.
+        self.secret_key = api_secret
     
     def search_domain(self, domain: str) -> Dict:
         """Search if domain is available"""
@@ -138,6 +140,58 @@ class DomainRotationManager:
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+
+    def configure(self, api_key: str, secret_key: Optional[str] = None,
+                  api_secret: Optional[str] = None,
+                  monthly_budget: Optional[float] = None) -> Dict:
+        """
+        Configure domain API credentials and budget.
+        Supports both `secret_key` and `api_secret` for compatibility.
+        """
+        if not api_key:
+            raise ValueError("api_key is required")
+
+        resolved_secret = api_secret or secret_key
+        if not resolved_secret:
+            raise ValueError("api_secret/secret_key is required")
+
+        self.api_client = PorkbunAPIClient(api_key, resolved_secret)
+
+        if monthly_budget is not None:
+            budget = float(monthly_budget)
+            if budget <= 0:
+                raise ValueError("monthly_budget must be greater than 0")
+            self.monthly_budget = budget
+
+        return self.get_config()
+
+    def get_config(self) -> Dict:
+        """Return non-sensitive configuration and runtime status."""
+        api_configured = self.api_client is not None
+        masked_api_key = None
+        if api_configured and getattr(self.api_client, "api_key", None):
+            api_key = self.api_client.api_key
+            masked_api_key = ("*" * max(len(api_key) - 4, 0)) + api_key[-4:]
+
+        return {
+            "api_configured": api_configured,
+            "api_key_masked": masked_api_key,
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "active_domain": self.active_domain,
+            "domains_owned": len(self.owned_domains),
+        }
+
+    def set_monthly_budget(self, monthly_budget: float):
+        """Set monthly budget with validation."""
+        budget = float(monthly_budget)
+        if budget <= 0:
+            raise ValueError("monthly_budget must be greater than 0")
+        self.monthly_budget = budget
+
+    def generate_domain_name(self, tld: str = "xyz", length: int = 8) -> str:
+        """Backward-compatible alias for random domain generation."""
+        return self.generate_random_domain(tld=tld, length=length)
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -168,11 +222,9 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
+                price = self._parse_price(result.get("price", 999))
+                if price is None:
+                    continue
                 
                 if price <= max_price:
                     return {
@@ -182,6 +234,53 @@ class DomainRotationManager:
                     }
         
         return None
+
+    @staticmethod
+    def _parse_price(price_value) -> Optional[float]:
+        """Parse registrar price values safely into floats."""
+        if isinstance(price_value, (int, float)):
+            return float(price_value)
+
+        if isinstance(price_value, str):
+            cleaned = (
+                price_value.strip()
+                .replace("$", "")
+                .replace("€", "")
+                .replace(",", "")
+            )
+            try:
+                return float(cleaned)
+            except ValueError:
+                logger.warning("Could not parse domain price: %s", price_value)
+                return None
+
+        logger.warning("Unsupported domain price type: %s", type(price_value).__name__)
+        return None
+
+    def search_cheap_domains(self, max_price: float = 5.0, limit: int = 5) -> List[Dict]:
+        """
+        Return a small list of available domains under max_price.
+        """
+        if limit <= 0:
+            return []
+
+        results: List[Dict] = []
+        seen = set()
+        attempts = max(limit * 4, 1)
+
+        for _ in range(attempts):
+            if len(results) >= limit:
+                break
+            domain_info = self.find_cheap_available_domain(max_price=max_price, max_attempts=1)
+            if not domain_info:
+                continue
+            domain_name = domain_info.get("domain")
+            if domain_name in seen:
+                continue
+            seen.add(domain_name)
+            results.append(domain_info)
+
+        return results
     
     def purchase_domain_if_budget_allows(self, domain: str, price: float) -> bool:
         """
