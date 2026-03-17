@@ -190,6 +190,27 @@ Tests cover:
 
 For full testing documentation, see [Testing Guide](docs/user-guide/TESTING.md).
 
+Rate Limit Configuration
+========================
+
+Chat endpoint write limits are configurable with environment variables:
+
+- `OPSECHAT_CHAT_CREATE_PER_MINUTE` (default: `3`)
+- `OPSECHAT_CHAT_CREATE_PER_HOUR` (default: `10`)
+- `OPSECHAT_CHAT_MESSAGE_PER_MINUTE` (default: `30`)
+- `OPSECHAT_DM_SEND_PER_MINUTE` (default: `5`)
+- `OPSECHAT_DM_SEND_PER_HOUR` (default: `20`)
+
+Example:
+
+```bash
+export OPSECHAT_CHAT_MESSAGE_PER_MINUTE=45
+export OPSECHAT_DM_SEND_PER_HOUR=40
+python runserver.py
+```
+
+Values must be positive integers. Invalid values automatically fall back to defaults.
+
 
 How it works
 ============

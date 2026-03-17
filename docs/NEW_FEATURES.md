@@ -376,6 +376,17 @@ Each chat room gets a unique 256-bit AES-GCM key:
 self.room_key = base64.b64encode(secrets.token_bytes(32)).decode('utf-8')
 ```
 
+### Configurable Chat Rate Limits
+Chat write endpoint limits are now loaded from environment variables, so operators can tune abuse protection without changing code:
+
+- `OPSECHAT_CHAT_CREATE_PER_MINUTE` (default `3`)
+- `OPSECHAT_CHAT_CREATE_PER_HOUR` (default `10`)
+- `OPSECHAT_CHAT_MESSAGE_PER_MINUTE` (default `30`)
+- `OPSECHAT_DM_SEND_PER_MINUTE` (default `5`)
+- `OPSECHAT_DM_SEND_PER_HOUR` (default `20`)
+
+Invalid or non-positive values are ignored and replaced with safe defaults.
+
 ---
 
 ## 📋 Migration Guide
