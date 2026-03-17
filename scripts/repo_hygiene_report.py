@@ -95,7 +95,11 @@ def collect_marker_hits(repo_root: Path) -> list[MarkerHit]:
                 continue
             if "Detect TODO comments" in line:
                 continue
-            if "MARKER_PATTERN" in line or "MARKER_LITERAL_PATTERN" in line:
+            if (
+                "MARKER_PATTERN" in line
+                or "MARKER_LITERAL_PATTERN" in line
+                or "NOT_IMPLEMENTED_LITERAL_PATTERN" in line
+            ):
                 continue
             marker = match.group(1) or "NotImplementedError"
             hits.append(
