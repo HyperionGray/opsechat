@@ -332,22 +332,34 @@ dig @8.8.8.8 yourdomain.xyz MX
 Add support for additional registrars:
 
 ```python
-from domain_manager import DomainAPIClient
+from domain_manager import (
+    DomainRotationManager,
+    PorkbunAPIClient,
+    NamecheapAPIClient,
+)
 
-class NamecheapAPIClient(DomainAPIClient):
-    def __init__(self, api_key: str):
-        super().__init__(api_key)
-    
-    def search_domain(self, domain: str):
-        # Implementation here
-        pass
-    
-    def purchase_domain(self, domain: str, years: int = 1):
-        # Implementation here
-        pass
+manager = DomainRotationManager(monthly_budget=50.0)
 
-# Register new client
-domain_rotation_manager.add_api_client('namecheap', NamecheapAPIClient(api_key))
+# Add one or more providers
+manager.add_api_client(
+    "porkbun",
+    PorkbunAPIClient(api_key="PORKBUN_KEY", api_secret="PORKBUN_SECRET"),
+    make_default=True,
+)
+manager.add_api_client(
+    "namecheap",
+    NamecheapAPIClient(
+        api_user="NAMECHEAP_API_USER",
+        api_key="NAMECHEAP_API_KEY",
+        client_ip="YOUR_WHITELISTED_IP",
+    ),
+)
+
+# Rotate using default provider fallback
+new_domain = manager.rotate_domain()
+
+# Or force a specific provider
+namecheap_domain = manager.rotate_domain(provider="namecheap")
 ```
 
 ### Custom Domain Patterns
@@ -364,26 +376,29 @@ domain = domain_rotation_manager.generate_domain_from_pattern(pattern, tld='xyz'
 All domain rotation commands:
 
 ```bash
-# Check available domains
-python -m domain_manager search --tld xyz --max-price 2.00
+# Configure provider credentials and budget
+python domain_rotation_cli.py config
 
-# Purchase specific domain
-python -m domain_manager purchase --domain example.xyz
+# Show active domain, provider list, and budget
+python domain_rotation_cli.py status
 
-# Rotate to new random domain
-python -m domain_manager rotate
+# Search for cheap domains across all configured providers
+python domain_rotation_cli.py search
 
-# Check budget status
-python -m domain_manager budget status
+# Search only one provider
+python domain_rotation_cli.py search --provider namecheap
 
-# Set monthly budget
-python -m domain_manager budget set --amount 20.00
+# Rotate domain using provider fallback
+python domain_rotation_cli.py rotate
 
-# List all active domains
-python -m domain_manager list
+# Rotate with a specific provider
+python domain_rotation_cli.py rotate --provider porkbun
 
-# Configure DNS
-python -m domain_manager dns --domain example.xyz --mx "mail.example.xyz"
+# List owned domains
+python domain_rotation_cli.py list
+
+# List owned domains for one provider only
+python domain_rotation_cli.py list --provider namecheap
 ```
 
 ## Summary
