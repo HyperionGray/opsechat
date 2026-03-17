@@ -10,7 +10,6 @@ import random
 import datetime
 import textwrap
 import re
-from flask import session
 
 
 def id_generator(size=6, chars=None):
@@ -144,7 +143,8 @@ def process_chat(chat_dic):
     Process chat messages for display, handling text wrapping and PGP preservation.
     
     Args:
-        chat_dic: Dictionary containing chat message data
+        chat_dic: Dictionary containing chat message data with keys:
+                  'message' (or 'msg'), 'user_id', 'color', 'timestamp'
         
     Returns:
         List of chat dictionaries (may be split for long messages)
@@ -152,20 +152,25 @@ def process_chat(chat_dic):
     chats = []
     max_chat_len = 69
     
+    # Support both 'message' and 'msg' key names for compatibility
+    msg_text = chat_dic["msg"] if "msg" in chat_dic else chat_dic.get("message", "")
+    user_id = chat_dic["user_id"] if "user_id" in chat_dic else chat_dic.get("username", "")
+    color = chat_dic.get("color", "")
+    
     # Check if this is a PGP encrypted message - don't wrap it
-    is_pgp = "-----BEGIN PGP MESSAGE-----" in chat_dic["msg"]
+    is_pgp = "-----BEGIN PGP MESSAGE-----" in msg_text
     
     if is_pgp:
         # Don't wrap PGP messages, keep them as single chat
         chats = [chat_dic]
-    elif len(chat_dic["msg"]) > max_chat_len:
+    elif len(msg_text) > max_chat_len:
         # Split long messages into multiple parts
-        for message in textwrap.wrap(chat_dic["msg"], width=max_chat_len):
+        for message in textwrap.wrap(msg_text, width=max_chat_len):
             partial_chat = {}
             partial_chat["msg"] = message.strip()
-            partial_chat["timestamp"] = datetime.datetime.now()
-            partial_chat["username"] = session["_id"]
-            partial_chat["color"] = session["color"]
+            partial_chat["timestamp"] = chat_dic.get("timestamp", datetime.datetime.now())
+            partial_chat["username"] = user_id
+            partial_chat["color"] = color
             chats.append(partial_chat)
     else:
         chats = [chat_dic]
