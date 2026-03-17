@@ -5,8 +5,8 @@ This module handles Flask application creation and configuration,
 extracted from runserver.py to improve code organization.
 """
 
-import os
-from flask import Flask, jsonify
+import time
+from flask import Flask, jsonify, g, request
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -87,7 +87,25 @@ def create_app():
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
+        request_start = getattr(g, "_request_start", None)
+        if request_start is not None:
+            try:
+                from monitoring import apm
+                elapsed = time.perf_counter() - request_start
+                apm.record_request(
+                    endpoint=request.path,
+                    method=request.method,
+                    response_time=elapsed,
+                    status_code=response.status_code,
+                )
+            except Exception:
+                # Metrics must never impact request handling.
+                pass
         return response
+
+    @app.before_request
+    def start_request_timer():
+        g._request_start = time.perf_counter()
     
     # Register chat routes
     register_chat_routes(app, chatlines, chatters, id_generator, get_random_color,
@@ -112,19 +130,15 @@ def create_app():
     def health():
         return jsonify(get_health_status())
 
+    from monitoring import get_public_metrics
+
+    @app.route('/metrics', methods=["GET"])
+    def metrics():
+        return jsonify(get_public_metrics())
+
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # CHANGELOG (AI assistant):
-    # - Made rate_limiter import optional with a no-op fallback to prevent
-    #   ModuleNotFoundError in containerized installs that omit rate_limiter.py.
-    #
-    # Remaining checklist (non-blocking for runtime):
-    # - Update container/Podman build configuration to ensure rate_limiter.py
-    #   is included in the image (e.g., COPY list or packaging config).
-    # - Once packaging reliably includes rate_limiter.py, consider removing
-    #   the fallback or turning it into an explicit configuration option.
     
     return app

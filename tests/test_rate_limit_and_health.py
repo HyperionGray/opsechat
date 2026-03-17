@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
 from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from monitoring import apm
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -24,6 +25,11 @@ def _clear_store():
     """Helper: wipe the rate limit store between tests."""
     with _rate_limit_lock:
         _rate_limit_store.clear()
+
+
+def _reset_apm():
+    """Reset APM state to keep tests deterministic."""
+    apm.reset_metrics()
 
 
 def test_rate_limit_allows_requests_within_window():
@@ -92,12 +98,14 @@ def test_rate_limit_chat_message_limit():
 # ---------------------------------------------------------------------------
 
 def test_health_endpoint_returns_200():
+    _reset_apm()
     client = _test_app.test_client()
     response = client.get("/health")
     assert response.status_code == 200
 
 
 def test_health_endpoint_returns_json_with_required_fields():
+    _reset_apm()
     client = _test_app.test_client()
     response = client.get("/health")
     data = response.get_json()
@@ -108,8 +116,44 @@ def test_health_endpoint_returns_json_with_required_fields():
 
 
 def test_health_endpoint_active_rooms_is_integer():
+    _reset_apm()
     client = _test_app.test_client()
     response = client.get("/health")
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_metrics_endpoint_returns_200_and_shape():
+    _reset_apm()
+    client = _test_app.test_client()
+    response = client.get("/metrics")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data is not None
+    assert data.get("status") == "ok"
+    assert "requests" in data
+    assert "runtime" in data
+    assert "activity" in data
+
+
+def test_metrics_counts_requests_and_errors():
+    _reset_apm()
+    client = _test_app.test_client()
+
+    ok_response = client.get("/health")
+    missing_response = client.get("/definitely-not-a-route")
+    metrics_response = client.get("/metrics")
+
+    assert ok_response.status_code == 200
+    assert missing_response.status_code == 404
+    assert metrics_response.status_code == 200
+
+    metrics_data = metrics_response.get_json()
+    assert metrics_data["requests"]["total"] == 2
+    assert metrics_data["requests"]["error_rate"] == 50.0
+    assert metrics_data["requests"]["tracked_endpoints"] >= 2
+
+    top_endpoints = metrics_data["requests"]["top_endpoints"]
+    endpoint_names = {item["endpoint"] for item in top_endpoints}
+    assert "GET /health" in endpoint_names

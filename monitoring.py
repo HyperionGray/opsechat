@@ -105,7 +105,12 @@ class ApplicationPerformanceMonitor:
     """
     
     def __init__(self):
-        self.metrics = {
+        self.metrics = self._new_metrics_snapshot()
+        self.logger = StructuredLogger("opsechat.apm")
+
+    def _new_metrics_snapshot(self) -> Dict[str, Any]:
+        """Create a fresh metrics structure."""
+        return {
             'requests': {
                 'total': 0,
                 'by_endpoint': {},
@@ -135,7 +140,10 @@ class ApplicationPerformanceMonitor:
                 'start_time': time.time()
             }
         }
-        self.logger = StructuredLogger("opsechat.apm")
+
+    def reset_metrics(self):
+        """Reset all runtime metrics (used by tests and diagnostics)."""
+        self.metrics = self._new_metrics_snapshot()
     
     def record_request(self, endpoint: str, method: str, response_time: float, status_code: int):
         """Record HTTP request metrics"""
@@ -336,6 +344,57 @@ def get_health_status() -> Dict[str, Any]:
             'memory_usage': 'ok',
             'disk_space': 'ok'
         }
+    }
+
+
+def _percentile(values, percentile: float) -> float:
+    """Calculate percentile value for a non-empty list."""
+    if not values:
+        return 0.0
+    sorted_values = sorted(values)
+    index = int(round((len(sorted_values) - 1) * percentile))
+    return sorted_values[max(0, min(index, len(sorted_values) - 1))]
+
+
+def get_public_metrics(max_endpoints: int = 10) -> Dict[str, Any]:
+    """
+    Return a sanitized, aggregated metrics payload for operational monitoring.
+    """
+    summary = apm.get_metrics_summary()
+    endpoint_items = []
+
+    for endpoint_name, endpoint_data in apm.metrics['requests']['by_endpoint'].items():
+        count = endpoint_data.get('count', 0)
+        total_time = endpoint_data.get('total_time', 0.0)
+        errors = endpoint_data.get('errors', 0)
+        avg_ms = (total_time / count * 1000.0) if count else 0.0
+        error_rate = (errors / count * 100.0) if count else 0.0
+        endpoint_items.append({
+            'endpoint': endpoint_name,
+            'count': count,
+            'error_rate': round(error_rate, 2),
+            'avg_response_time_ms': round(avg_ms, 2),
+        })
+
+    endpoint_items.sort(key=lambda item: item['count'], reverse=True)
+    response_times = apm.metrics['requests']['response_times']
+
+    return {
+        'status': 'ok',
+        'timestamp': datetime.utcnow().isoformat(),
+        'requests': {
+            'total': summary['requests']['total'],
+            'error_rate': round(summary['requests']['error_rate'], 2),
+            'avg_response_time_ms': round(summary['requests']['avg_response_time'] * 1000.0, 2),
+            'p95_response_time_ms': round(_percentile(response_times, 0.95) * 1000.0, 2),
+            'tracked_endpoints': len(apm.metrics['requests']['by_endpoint']),
+            'top_endpoints': endpoint_items[:max_endpoints],
+        },
+        'runtime': {
+            'uptime_seconds': round(summary['uptime_seconds'], 2),
+            'memory_usage_mb': round(apm.metrics['system']['memory_usage_mb'], 2),
+        },
+        'activity': summary['activity'],
     }
 
 # Security event logging
