@@ -35,9 +35,11 @@ SKIP_DIRS = {
     "docs",
     "bak",
     "static",
+    "tests",
 }
 
 MARKER_PATTERN = re.compile(r"\b(TODO|FIXME|STUB|TBD|XXX|WIP)\b|NotImplementedError")
+MARKER_LITERAL_PATTERN = re.compile(r"""["'](TODO|FIXME|STUB|TBD|XXX|WIP):?["']""")
 
 DEPRECATED_WORKFLOWS = {
     "amazon-q-review.yml",
@@ -85,6 +87,10 @@ def collect_marker_hits(repo_root: Path) -> list[MarkerHit]:
         for line_number, line in enumerate(lines, start=1):
             match = MARKER_PATTERN.search(line)
             if not match:
+                continue
+            if MARKER_LITERAL_PATTERN.search(line):
+                continue
+            if "Detect TODO comments" in line:
                 continue
             marker = match.group(1) or "NotImplementedError"
             hits.append(

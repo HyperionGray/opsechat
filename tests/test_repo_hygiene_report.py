@@ -39,3 +39,17 @@ def test_collect_deprecated_active_workflows(tmp_path: Path) -> None:
     stale = repo_hygiene_report.collect_deprecated_active_workflows(tmp_path)
 
     assert stale == ["auto-gpt5-implementation.yml"]
+
+
+def test_collect_marker_hits_ignores_marker_literals(tmp_path: Path) -> None:
+    write_file(
+        tmp_path / "src" / "rules.py",
+        'patterns = ["TODO:", "FIXME:"]\n'
+        'message = "Detect TODO comments"\n'
+        "raise NotImplementedError\n",
+    )
+
+    hits = repo_hygiene_report.collect_marker_hits(tmp_path)
+
+    assert len(hits) == 1
+    assert hits[0].marker == "NotImplementedError"
