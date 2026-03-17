@@ -18,6 +18,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Generate repository context
+        run: python scripts/generate_daily_progress_context.py > /tmp/daily-progress-context.md
+
       - name: Analyze repo and create progress issue
         uses: actions/github-script@v7
         # Use GH_PAT so that issue creation events trigger other workflows
@@ -28,7 +36,14 @@ jobs:
         with:
           github-token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           script: |
+            const fs = require('fs');
             const issueTitle = 'Daily Progress: ' + new Date().toISOString().split('T')[0];
+            let contextMarkdown = '';
+            try {
+              contextMarkdown = fs.readFileSync('/tmp/daily-progress-context.md', 'utf8').trim();
+            } catch (error) {
+              console.log('No generated context file found, continuing with default prompt.');
+            }
             
             // Check if issue already exists for today
             const existingIssues = await github.rest.issues.listForRepo({
@@ -54,6 +69,8 @@ jobs:
             - Review README and documentation
             - Identify incomplete features or TODOs
             - Consider project structure and organization
+
+            ${contextMarkdown || '_No automated context available for this run._'}
             `;
             
             const issue = await github.rest.issues.create({
@@ -83,9 +100,10 @@ jobs:
               issue_number: issue.data.number,
               body: `@copilot please analyze the repository and:
 1. Review recent commits and identify the natural direction of the project
-2. Suggest next logical improvements or features to implement
-3. Create actionable tasks that align with the project goals
-4. Prioritize quick wins and incremental progress`
+2. Use the automated repository context in the issue body to prioritize unfinished code markers and cleanup candidates
+3. Suggest next logical improvements or features to implement
+4. Create actionable tasks that align with the project goals
+5. Prioritize quick wins and incremental progress`
             });
 
             console.log('Triggered Copilot coding agent via comment on issue #' + issue.data.number);
