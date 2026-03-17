@@ -9,9 +9,14 @@ import sys
 import shutil
 from pathlib import Path
 import argparse
+from types import SimpleNamespace
 
-def run_command(cmd, cwd=None, check=True):
+def run_command(cmd, cwd=None, check=True, dry_run=False):
     """Run command with proper error handling"""
+    if dry_run:
+        print(f"[dry-run] Would run: {' '.join(cmd)}")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
     print(f"[*] Running: {' '.join(cmd)}")
     try:
         result = subprocess.run(cmd, cwd=cwd, check=check, capture_output=True, text=True)
@@ -26,7 +31,25 @@ def run_command(cmd, cwd=None, check=True):
             sys.exit(1)
         return e
 
-def clean_systemd_services():
+def remove_path(path, dry_run=False):
+    """Remove a file or directory path with dry-run support"""
+    if not path.exists():
+        return
+
+    if dry_run:
+        print(f"[dry-run] Would remove {path}")
+        return
+
+    print(f"[*] Removing {path}")
+    try:
+        if path.is_dir():
+            shutil.rmtree(path, ignore_errors=True)
+        else:
+            path.unlink(missing_ok=True)
+    except PermissionError:
+        print(f"[!] Permission denied removing {path}")
+
+def clean_systemd_services(dry_run=False):
     """Clean up systemd services and quadlets"""
     print("[*] Cleaning systemd services")
     
@@ -41,10 +64,10 @@ def clean_systemd_services():
     
     for service in services:
         print(f"[*] Stopping {service}")
-        run_command(['systemctl', '--user', 'stop', service], check=False)
+        run_command(['systemctl', '--user', 'stop', service], check=False, dry_run=dry_run)
         
         print(f"[*] Disabling {service}")
-        run_command(['systemctl', '--user', 'disable', service], check=False)
+        run_command(['systemctl', '--user', 'disable', service], check=False, dry_run=dry_run)
     
     # Remove quadlet files
     user_systemd_dir = Path.home() / ".config" / "containers" / "systemd"
@@ -63,20 +86,15 @@ def clean_systemd_services():
         if systemd_dir.exists():
             for file in quadlet_files:
                 file_path = systemd_dir / file
-                if file_path.exists():
-                    print(f"[*] Removing {file_path}")
-                    try:
-                        file_path.unlink()
-                    except PermissionError:
-                        print(f"[!] Permission denied removing {file_path}")
+                remove_path(file_path, dry_run=dry_run)
     
     # Reload systemd
     print("[*] Reloading systemd daemon")
-    run_command(['systemctl', '--user', 'daemon-reload'], check=False)
+    run_command(['systemctl', '--user', 'daemon-reload'], check=False, dry_run=dry_run)
     
     return True
 
-def clean_containers():
+def clean_containers(dry_run=False):
     """Clean up containers and images"""
     print("[*] Cleaning containers")
     
@@ -87,19 +105,19 @@ def clean_containers():
             # Stop containers
             for container in containers:
                 print(f"[*] Stopping {container} ({tool})")
-                run_command([tool, 'stop', container], check=False)
+                run_command([tool, 'stop', container], check=False, dry_run=dry_run)
                 
                 print(f"[*] Removing {container} ({tool})")
-                run_command([tool, 'rm', container], check=False)
+                run_command([tool, 'rm', container], check=False, dry_run=dry_run)
             
             # Remove network
             print(f"[*] Removing opsechat-network ({tool})")
-            run_command([tool, 'network', 'rm', 'opsechat-network'], check=False)
+            run_command([tool, 'network', 'rm', 'opsechat-network'], check=False, dry_run=dry_run)
             
             # Remove volumes
             print(f"[*] Removing volumes ({tool})")
-            run_command([tool, 'volume', 'rm', 'opsechat_tor-data'], check=False)
-            run_command([tool, 'volume', 'rm', 'opsechat-tor-data'], check=False)
+            run_command([tool, 'volume', 'rm', 'opsechat_tor-data'], check=False, dry_run=dry_run)
+            run_command([tool, 'volume', 'rm', 'opsechat-tor-data'], check=False, dry_run=dry_run)
             
             break  # If one tool works, don't try the other
             
@@ -108,7 +126,7 @@ def clean_containers():
     
     return True
 
-def clean_compose():
+def clean_compose(dry_run=False):
     """Clean up using compose tools"""
     print("[*] Cleaning with compose tools")
     
@@ -118,13 +136,13 @@ def clean_compose():
     compose_down_script = project_root / "compose-down.sh"
     if compose_down_script.exists():
         print("[*] Using compose-down.sh script")
-        run_command([str(compose_down_script)], cwd=project_root, check=False)
+        run_command([str(compose_down_script)], cwd=project_root, check=False, dry_run=dry_run)
     
     # Try compose tools directly
     for tool in ['podman-compose', 'docker-compose']:
         try:
             print(f"[*] Cleaning with {tool}")
-            run_command([tool, 'down', '-v'], cwd=project_root, check=False)
+            run_command([tool, 'down', '-v'], cwd=project_root, check=False, dry_run=dry_run)
             break
         except (subprocess.CalledProcessError, FileNotFoundError):
             continue
@@ -132,13 +150,13 @@ def clean_compose():
     # Try docker compose plugin
     try:
         print("[*] Cleaning with docker compose plugin")
-        run_command(['docker', 'compose', 'down', '-v'], cwd=project_root, check=False)
+        run_command(['docker', 'compose', 'down', '-v'], cwd=project_root, check=False, dry_run=dry_run)
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass
     
     return True
 
-def clean_images(force=False):
+def clean_images(force=False, dry_run=False):
     """Clean up container images"""
     print("[*] Cleaning container images")
     
@@ -151,7 +169,7 @@ def clean_images(force=False):
                 cmd = [tool, 'rmi', image]
                 if force:
                     cmd.append('-f')
-                run_command(cmd, check=False)
+                run_command(cmd, check=False, dry_run=dry_run)
             
             break  # If one tool works, don't try the other
             
@@ -160,7 +178,7 @@ def clean_images(force=False):
     
     return True
 
-def clean_build_artifacts():
+def clean_build_artifacts(dry_run=False):
     """Clean up build artifacts and cache"""
     print("[*] Cleaning build artifacts")
     
@@ -169,21 +187,17 @@ def clean_build_artifacts():
     # Remove Python cache
     for cache_dir in project_root.rglob('__pycache__'):
         if cache_dir.is_dir():
-            print(f"[*] Removing {cache_dir}")
-            shutil.rmtree(cache_dir, ignore_errors=True)
+            remove_path(cache_dir, dry_run=dry_run)
     
     # Remove .pyc files
     for pyc_file in project_root.rglob('*.pyc'):
-        print(f"[*] Removing {pyc_file}")
-        pyc_file.unlink(missing_ok=True)
+        remove_path(pyc_file, dry_run=dry_run)
     
     # Remove test artifacts
     test_dirs = ['test-results', 'playwright-report', '.pytest_cache']
     for test_dir in test_dirs:
         test_path = project_root / test_dir
-        if test_path.exists():
-            print(f"[*] Removing {test_path}")
-            shutil.rmtree(test_path, ignore_errors=True)
+        remove_path(test_path, dry_run=dry_run)
     
     return True
 
@@ -218,6 +232,7 @@ def main():
     parser.add_argument('--images', action='store_true', help='Also remove container images')
     parser.add_argument('--force', action='store_true', help='Force removal of images')
     parser.add_argument('--artifacts', action='store_true', help='Clean build artifacts')
+    parser.add_argument('--dry-run', action='store_true', help='Preview cleanup actions without making changes')
     
     args = parser.parse_args()
     
@@ -225,25 +240,27 @@ def main():
     effective_method = determine_cleanup_method(args)
     
     print("=== PF Task: Clean ===")
+    if args.dry_run:
+        print("[*] Dry-run mode enabled: no changes will be applied")
     
     success = True
     
     if effective_method in ['systemd', 'all']:
-        success &= clean_systemd_services()
+        success &= clean_systemd_services(dry_run=args.dry_run)
     
     if effective_method in ['compose', 'all']:
-        success &= clean_compose()
+        success &= clean_compose(dry_run=args.dry_run)
     
     if effective_method in ['containers', 'all']:
-        success &= clean_containers()
+        success &= clean_containers(dry_run=args.dry_run)
     
     # Only clean images if explicitly requested via --images flag
     if args.images:
-        success &= clean_images(force=args.force)
+        success &= clean_images(force=args.force, dry_run=args.dry_run)
     
     # Only clean artifacts if explicitly requested via --artifacts flag
     if args.artifacts:
-        success &= clean_build_artifacts()
+        success &= clean_build_artifacts(dry_run=args.dry_run)
     
     if success:
         print("[✓] Cleanup completed successfully")

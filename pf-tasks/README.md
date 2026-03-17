@@ -89,6 +89,9 @@ python pf-tasks/clean.py --images --force
 
 # Clean build artifacts
 python pf-tasks/clean.py --artifacts
+
+# Preview cleanup without changing anything
+python pf-tasks/clean.py --method all --images --artifacts --dry-run
 ```
 
 **Features:**
@@ -98,6 +101,7 @@ python pf-tasks/clean.py --artifacts
 - Removes networks and volumes
 - Optionally removes container images
 - Cleans build artifacts and cache
+- Supports non-destructive dry-run previews
 
 ## Usage Patterns
 
@@ -157,6 +161,9 @@ python pf-tasks/clean.py --images --artifacts
 
 # Clean only build artifacts
 python pf-tasks/clean.py --artifacts
+
+# Preview complete cleanup before executing it
+python pf-tasks/clean.py --method all --images --artifacts --dry-run
 ```
 
 ## Integration with Existing Scripts
