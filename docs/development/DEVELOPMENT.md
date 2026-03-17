@@ -78,7 +78,6 @@ These are development and testing utilities that help during development:
 
 ### Main Application Files
 - **`runserver.py`** - Main entry point (legacy monolithic)
-- **`runserver_refactored.py`** - Refactored version (blueprint-based)
 - **`app_factory.py`** - Flask app factory pattern
 - **`chat-room.py`** - Standalone chat room creator
 - **`tui-server.py`** - Terminal UI server
@@ -181,7 +180,7 @@ npm run lint
 ### In-Memory Storage
 - All data (chats, emails, sessions) stored in Python dictionaries
 - Nothing written to disk except application code
-- Messages auto-expire (3 minutes for chat)
+- Messages auto-expire (4 minutes for TUI chat)
 - Memory overwriting on deletion for security
 
 ### Ephemeral Hidden Services
