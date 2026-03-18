@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, jsonify, request, session
 from email_security_tools import spoofing_tester, phishing_simulator
 from email_transport import transport_manager
 from domain_manager import domain_rotation_manager
-from email_system import EmailComposer, email_storage
+from email_system import email_storage
 import logging
 
 def create_email_security_blueprint(id_generator, get_random_color):
@@ -83,18 +83,24 @@ def create_email_security_blueprint(id_generator, get_random_color):
             session["color"] = get_random_color()
         
         message = None
-        current_config = transport_manager.get_config()
+        current_config = transport_manager.is_configured()
         domain_config = domain_rotation_manager.get_config()
         
         if request.method == "POST":
-            config_type = request.form.get("config_type")
+            config_type = request.form.get("config_type") or request.form.get("action")
+            if config_type == "configure_smtp":
+                config_type = "smtp"
+            elif config_type == "configure_imap":
+                config_type = "imap"
+            elif config_type == "configure_domain_api":
+                config_type = "domain"
             
             if config_type == "smtp":
                 smtp_config = {
                     "smtp_server": request.form.get("smtp_server", "").strip(),
                     "smtp_port": int(request.form.get("smtp_port", 587)),
-                    "smtp_username": request.form.get("smtp_username", "").strip(),
-                    "smtp_password": request.form.get("smtp_password", "").strip(),
+                    "username": request.form.get("smtp_username", "").strip(),
+                    "password": request.form.get("smtp_password", "").strip(),
                     "use_tls": request.form.get("use_tls") == "on"
                 }
                 
@@ -108,8 +114,8 @@ def create_email_security_blueprint(id_generator, get_random_color):
                 imap_config = {
                     "imap_server": request.form.get("imap_server", "").strip(),
                     "imap_port": int(request.form.get("imap_port", 993)),
-                    "imap_username": request.form.get("imap_username", "").strip(),
-                    "imap_password": request.form.get("imap_password", "").strip(),
+                    "username": request.form.get("imap_username", "").strip(),
+                    "password": request.form.get("imap_password", "").strip(),
                     "use_ssl": request.form.get("use_ssl") == "on"
                 }
                 
@@ -121,8 +127,8 @@ def create_email_security_blueprint(id_generator, get_random_color):
             
             elif config_type == "domain":
                 domain_config_data = {
-                    "api_key": request.form.get("porkbun_api_key", "").strip(),
-                    "secret_key": request.form.get("porkbun_secret_key", "").strip(),
+                    "api_key": request.form.get("porkbun_api_key", "").strip() or request.form.get("api_key", "").strip(),
+                    "secret_key": request.form.get("porkbun_secret_key", "").strip() or request.form.get("api_secret", "").strip(),
                     "monthly_budget": float(request.form.get("monthly_budget", 10.0))
                 }
                 
@@ -151,16 +157,16 @@ def create_email_security_blueprint(id_generator, get_random_color):
         
         try:
             data = request.get_json()
-            composer = EmailComposer()
-            
-            result = composer.send_email(
-                to_email=data.get("to"),
+            success = transport_manager.send_email(
+                from_addr=data.get("from"),
+                to_addr=data.get("to"),
                 subject=data.get("subject"),
                 body=data.get("body"),
-                from_email=data.get("from")
             )
-            
-            return jsonify(result)
+
+            if success:
+                return jsonify({"success": True})
+            return jsonify({"success": False, "error": "Failed to send email"})
         except Exception as e:
             logging.exception("Error in email_send_api")
             return jsonify({"success": False, "error": "Failed to send email"})
@@ -176,14 +182,13 @@ def create_email_security_blueprint(id_generator, get_random_color):
             return jsonify({"success": False, "error": "No session"})
         
         try:
-            result = transport_manager.receive_emails()
+            received_emails = transport_manager.receive_emails()
             
             # Store received emails
-            if result["success"] and result["emails"]:
-                for email_data in result["emails"]:
-                    email_storage.add_email(session["_id"], email_data)
+            for email_data in received_emails:
+                email_storage.add_email(session["_id"], email_data)
             
-            return jsonify(result)
+            return jsonify({"success": True, "emails": received_emails})
         except Exception as e:
             logging.exception("Error in email_receive_api")
             return jsonify({"success": False, "error": "Failed to receive emails"})
@@ -199,7 +204,7 @@ def create_email_security_blueprint(id_generator, get_random_color):
             return jsonify({"success": False, "error": "No session"})
         
         try:
-            result = domain_rotation_manager.rotate_domain()
+            result = domain_rotation_manager.rotate_domain_with_details()
             return jsonify(result)
         except Exception as e:
             logging.exception("Error in email_domain_rotate")
