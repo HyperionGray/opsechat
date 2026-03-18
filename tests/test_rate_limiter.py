@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-Integration tests for Flask-Limiter rate limiting behavior.
+Integration tests for chat API rate limiting behavior.
 
 Tests:
 1. Write (POST) endpoints are rate-limited; read (GET) endpoints are not.
 2. Two different client sessions do not share rate-limit counters.
 """
 
-import json
 import sys
 
 
@@ -40,6 +39,21 @@ def test_post_is_rate_limited_get_is_not():
 
         r = client.post("/chat/create", content_type="application/json")
         assert r.status_code == 429, f"4th POST should be rate-limited (429), got {r.status_code}"
+
+        # 429 response must include machine-readable retry guidance
+        assert r.is_json, "Rate-limit response should be JSON"
+        data = r.get_json()
+        assert data["error"] == "rate_limit_exceeded"
+        assert data["endpoint"] == "chat_create"
+        assert data["retry_after_seconds"] >= 1
+        assert data["limit"]["max_requests"] == 3
+        assert data["limit"]["window_seconds"] == 60
+        assert data["backoff"]["strategy"] == "exponential"
+        assert data["backoff"]["schedule_seconds"][0] == data["retry_after_seconds"]
+
+        retry_after_header = r.headers.get("Retry-After")
+        assert retry_after_header is not None, "Retry-After header should be set"
+        assert int(retry_after_header) == data["retry_after_seconds"]
 
     print("✅ POST /chat/create is rate-limited after 3 requests; GET / is never throttled")
     return True

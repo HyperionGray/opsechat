@@ -10,7 +10,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    RATE_LIMITS,
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -113,3 +118,73 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+# ---------------------------------------------------------------------------
+# Rate-limit API response integration tests
+# ---------------------------------------------------------------------------
+
+def test_rate_limit_status_endpoint_reports_expected_shape():
+    _clear_store()
+    client = _test_app.test_client()
+
+    response = client.get("/chat/rate-limit-status")
+    assert response.status_code == 200
+    assert response.is_json
+    data = response.get_json()
+
+    assert "limits" in data
+    assert "timestamp" in data
+
+    limits = data["limits"]
+    for endpoint, config in RATE_LIMITS.items():
+        assert endpoint in limits
+        assert limits[endpoint]["max_requests"] == config["max_requests"]
+        assert limits[endpoint]["window_seconds"] == config["window_seconds"]
+        assert limits[endpoint]["used"] == 0
+        assert limits[endpoint]["retry_after_seconds"] == 0
+
+
+def test_rate_limit_status_updates_after_requests():
+    _clear_store()
+    client = _test_app.test_client()
+
+    # Consume part of chat_create quota (3/min)
+    for _ in range(2):
+        r = client.post("/chat/create", content_type="application/json")
+        assert r.status_code == 200
+
+    status = client.get("/chat/rate-limit-status")
+    data = status.get_json()
+    chat_create = data["limits"]["chat_create"]
+
+    assert chat_create["used"] == 2
+    assert chat_create["remaining"] == 1
+    assert chat_create["retry_after_seconds"] == 0
+
+
+def test_dm_rate_limit_returns_retry_metadata():
+    _clear_store()
+    client = _test_app.test_client()
+
+    payload = {"room_id": "room-123", "message": "hello"}
+    for _ in range(5):
+        r = client.post("/chat/dm/send", json=payload)
+        assert r.status_code == 200
+
+    blocked = client.post("/chat/dm/send", json=payload)
+    assert blocked.status_code == 429
+    assert blocked.is_json
+
+    data = blocked.get_json()
+    assert data["error"] == "rate_limit_exceeded"
+    assert data["endpoint"] == "dm_send"
+    assert data["retry_after_seconds"] >= 1
+    assert data["limit"]["max_requests"] == 5
+    assert data["limit"]["window_seconds"] == 60
+    assert data["backoff"]["strategy"] == "exponential"
+    assert data["backoff"]["schedule_seconds"][0] == data["retry_after_seconds"]
+
+    retry_after_header = blocked.headers.get("Retry-After")
+    assert retry_after_header is not None
+    assert int(retry_after_header) == data["retry_after_seconds"]
