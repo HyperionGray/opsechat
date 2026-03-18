@@ -4,7 +4,10 @@ Focused tests for email route domain rotation integration.
 
 from pathlib import Path
 
-from flask import Flask
+import pytest
+
+flask = pytest.importorskip("flask")
+Flask = flask.Flask
 
 from email_routes import register_email_routes
 
