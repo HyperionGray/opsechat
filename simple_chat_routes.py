@@ -356,7 +356,7 @@ def register_simple_chat_routes(app):
 
         return jsonify({
             "limits": get_rate_limit_status(session["_id"]),
-            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
         })
     
     @app.route('/chat/create', methods=['POST'])
