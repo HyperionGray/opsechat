@@ -4,7 +4,7 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, NamecheapAPIClient, PorkbunAPIClient, DomainRotationManager
 )
 
 
@@ -76,6 +76,38 @@ class TestPorkbunAPIClient:
         assert result["registration"] == "9.99"
 
 
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch('domain_manager.requests.Session')
+    def test_search_domain_available(self, mock_session_class):
+        """Test Namecheap domain availability search"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """
+        <ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+          <CommandResponse>
+            <DomainCheckResult Domain="demoexample.xyz" Available="true" PremiumRegistrationPrice="3.88" />
+          </CommandResponse>
+        </ApiResponse>
+        """
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_user="test-user",
+            api_key="test-key",
+            username="test-user",
+            client_ip="127.0.0.1",
+            use_sandbox=True,
+        )
+        result = client.search_domain("demoexample.xyz")
+
+        assert result["available"] is True
+        assert result["domain"] == "demoexample.xyz"
+        assert result["price"] == "3.88"
+
+
 class TestDomainRotationManager:
     """Test domain rotation manager"""
     
@@ -112,6 +144,45 @@ class TestDomainRotationManager:
         assert result is not None
         assert result["domain"].endswith((".xyz", ".club", ".online", ".site", ".website"))
         assert result["price"] <= 5.0
+        assert result["provider"] == "default"
+
+    def test_find_cheap_available_domain_parses_currency_prices(self):
+        """Test price parsing from formatted strings"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "cheapone.xyz",
+            "price": "$2.49 USD",
+        }
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=3.0, max_attempts=1)
+
+        assert result is not None
+        assert result["price"] == 2.49
+    
+    def test_multi_provider_fallback_uses_active_provider_first(self):
+        """Test active provider preference with fallback support"""
+        porkbun_client = Mock(spec=DomainAPIClient)
+        porkbun_client.search_domain.return_value = {"available": False}
+
+        namecheap_client = Mock(spec=DomainAPIClient)
+        namecheap_client.search_domain.return_value = {
+            "available": True,
+            "domain": "fallback.xyz",
+            "price": "1.99",
+        }
+
+        manager = DomainRotationManager(monthly_budget=20.0)
+        manager.add_api_client("porkbun", porkbun_client)
+        manager.add_api_client("namecheap", namecheap_client)
+        manager.set_active_provider("namecheap")
+
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["provider"] == "namecheap"
+        assert result["price"] == 1.99
     
     def test_purchase_domain_if_budget_allows_success(self):
         """Test domain purchase within budget"""
@@ -174,3 +245,36 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_rotate_to_new_domain_returns_structured_result(self):
+        """Test structured rotation response payload"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "structured.xyz",
+            "price": "2.99",
+            "currency": "USD",
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "structured.xyz",
+            "currency": "USD",
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        result = manager.rotate_to_new_domain()
+
+        assert result["success"] is True
+        assert result["domain"] == "structured.xyz"
+        assert result["provider"] == "default"
+        assert result["cost"] == 2.99
+
+    def test_configure_and_get_config(self):
+        """Test configuration methods used by web routes"""
+        manager = DomainRotationManager(monthly_budget=10.0)
+        manager.configure(api_key="pk_test", secret_key="sk_test", monthly_budget=15.0)
+        config = manager.get_config()
+
+        assert config["api_configured"] is True
+        assert config["active_provider"] == "porkbun"
+        assert config["monthly_budget"] == 15.0
