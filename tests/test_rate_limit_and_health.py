@@ -10,7 +10,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_backoff,
+    _rate_limit_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -24,6 +29,7 @@ def _clear_store():
     """Helper: wipe the rate limit store between tests."""
     with _rate_limit_lock:
         _rate_limit_store.clear()
+        _rate_limit_backoff.clear()
 
 
 def test_rate_limit_allows_requests_within_window():
@@ -87,6 +93,25 @@ def test_rate_limit_chat_message_limit():
     assert retry_after >= 1
 
 
+def test_rate_limit_backoff_applies_during_repeated_violation_attempts():
+    _clear_store()
+    sid = "session-backoff"
+    # dm_send: 5 requests per 60 seconds
+    for _ in range(5):
+        allowed, _ = check_rate_limit(sid, "dm_send")
+        assert allowed is True
+
+    # First violation
+    allowed, first_retry_after = check_rate_limit(sid, "dm_send")
+    assert allowed is False
+    assert first_retry_after >= 1
+
+    # Immediate retry should still be blocked by backoff.
+    allowed, second_retry_after = check_rate_limit(sid, "dm_send")
+    assert allowed is False
+    assert second_retry_after >= 1
+
+
 # ---------------------------------------------------------------------------
 # Health endpoint integration tests
 # ---------------------------------------------------------------------------
@@ -113,3 +138,34 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_rate_limited_http_responses_include_retry_metadata():
+    _clear_store()
+    client = _test_app.test_client()
+
+    create_resp = client.post("/chat/create", json={})
+    assert create_resp.status_code == 200
+    room_id = create_resp.get_json()["room_id"]
+
+    # In-memory message limit is 30/min while Flask-Limiter allows 60/min.
+    for i in range(30):
+        response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": f"hello {i}"},
+        )
+        assert response.status_code == 200
+
+    blocked = client.post(
+        f"/chat/room/{room_id}/messages",
+        json={"message": "blocked attempt"},
+    )
+    assert blocked.status_code == 429
+    data = blocked.get_json()
+
+    assert data is not None
+    assert data["retryable"] is True
+    assert data["endpoint"] == "chat_message"
+    assert isinstance(data["retry_after_seconds"], int)
+    assert data["retry_after_seconds"] >= 1
+    assert blocked.headers.get("Retry-After") == str(data["retry_after_seconds"])

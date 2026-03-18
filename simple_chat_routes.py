@@ -31,6 +31,9 @@ dm_lock = threading.Lock()
 # In-memory rate limiter: tracks requests per session per endpoint
 # Structure: { session_id: { endpoint: [timestamp, ...] } }
 _rate_limit_store = {}
+# Backoff state for repeated rate-limit violations:
+# { session_id: { endpoint: {"violations": int, "blocked_until": datetime|None, "last_violation": datetime|None} } }
+_rate_limit_backoff = {}
 _rate_limit_lock = threading.Lock()
 
 # Rate limit configuration
@@ -183,10 +186,24 @@ def check_rate_limit(session_id: str, endpoint: str) -> tuple:
     with _rate_limit_lock:
         if session_id not in _rate_limit_store:
             _rate_limit_store[session_id] = {}
+        if session_id not in _rate_limit_backoff:
+            _rate_limit_backoff[session_id] = {}
 
         session_limits = _rate_limit_store[session_id]
         if endpoint not in session_limits:
             session_limits[endpoint] = []
+        if endpoint not in _rate_limit_backoff[session_id]:
+            _rate_limit_backoff[session_id][endpoint] = {
+                "violations": 0,
+                "blocked_until": None,
+                "last_violation": None,
+            }
+        endpoint_backoff = _rate_limit_backoff[session_id][endpoint]
+
+        blocked_until = endpoint_backoff.get("blocked_until")
+        if blocked_until and now < blocked_until:
+            retry_after = int((blocked_until - now).total_seconds()) + 1
+            return False, max(retry_after, 1)
 
         # Remove timestamps outside the current window
         session_limits[endpoint] = [
@@ -195,11 +212,46 @@ def check_rate_limit(session_id: str, endpoint: str) -> tuple:
 
         if len(session_limits[endpoint]) >= max_requests:
             oldest = session_limits[endpoint][0]
-            retry_after = int(window - (now - oldest).total_seconds()) + 1
+            base_retry_after = int(window - (now - oldest).total_seconds()) + 1
+            endpoint_backoff["violations"] += 1
+            # Add exponential cooldown on repeated abuse attempts, capped by
+            # endpoint window so users can recover quickly after waiting.
+            penalty_seconds = min(2 ** (endpoint_backoff["violations"] - 1), window)
+            retry_after = max(base_retry_after, penalty_seconds)
+            endpoint_backoff["blocked_until"] = now + datetime.timedelta(seconds=retry_after)
+            endpoint_backoff["last_violation"] = now
             return False, max(retry_after, 1)
+
+        # Fully reset backoff state once the endpoint has been idle for a full
+        # window. This avoids penalizing clients long after they stop flooding.
+        if not session_limits[endpoint]:
+            endpoint_backoff["violations"] = 0
+            endpoint_backoff["blocked_until"] = None
+            endpoint_backoff["last_violation"] = None
 
         session_limits[endpoint].append(now)
         return True, 0
+
+
+def build_rate_limit_response(endpoint: str, retry_after: int, message: str):
+    """Build a consistent 429 payload with retry/backoff metadata."""
+    config = RATE_LIMITS.get(endpoint, {})
+    payload = {
+        "error": message,
+        "endpoint": endpoint,
+        "retryable": True,
+        "retry_after_seconds": retry_after,
+        "backoff": {
+            "strategy": "exponential",
+            "window_seconds": config.get("window_seconds"),
+            "max_requests": config.get("max_requests"),
+        },
+    }
+    headers = {
+        "Retry-After": str(retry_after),
+        "Cache-Control": "no-store",
+    }
+    return jsonify(payload), 429, headers
 
 
 def cleanup_rate_limits():
@@ -220,6 +272,23 @@ def cleanup_rate_limits():
 
         for sid in stale_sessions:
             del _rate_limit_store[sid]
+
+        stale_backoff_sessions = []
+        for sid, endpoints in _rate_limit_backoff.items():
+            for ep in list(endpoints.keys()):
+                state = endpoints[ep]
+                blocked_until = state.get("blocked_until")
+                last_violation = state.get("last_violation")
+                if blocked_until and blocked_until > now:
+                    continue
+                if last_violation and last_violation > cutoff:
+                    continue
+                del endpoints[ep]
+            if not endpoints:
+                stale_backoff_sessions.append(sid)
+
+        for sid in stale_backoff_sessions:
+            del _rate_limit_backoff[sid]
 
 
 # Background cleanup thread
@@ -279,9 +348,11 @@ def register_simple_chat_routes(app):
 
         allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Try again in {retry_after} seconds."
-            }), 429
+            return build_rate_limit_response(
+                "chat_create",
+                retry_after,
+                f"Rate limit exceeded. Try again in {retry_after} seconds.",
+            )
 
         room_id = generate_secure_room_id(32)
         
@@ -332,9 +403,11 @@ def register_simple_chat_routes(app):
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
             if not allowed:
-                return jsonify({
-                    "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds."
-                }), 429
+                return build_rate_limit_response(
+                    "chat_message",
+                    retry_after,
+                    f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds.",
+                )
             
             # Get message from request
             data = request.get_json()
@@ -409,9 +482,11 @@ def register_simple_chat_routes(app):
         # Check rate limit for DMs
         allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds."
-            }), 429
+            return build_rate_limit_response(
+                "dm_send",
+                retry_after,
+                f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds.",
+            )
         
         data = request.get_json()
         if not data or "room_id" not in data or "message" not in data:
