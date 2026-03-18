@@ -9,10 +9,15 @@ import time
 import sys
 import os
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from functools import wraps
 import traceback
+
+def _utc_now_iso() -> str:
+    """Return an ISO 8601 UTC timestamp."""
+    return datetime.now(timezone.utc).isoformat()
+
 
 class StructuredLogger:
     """
@@ -45,7 +50,7 @@ class StructuredLogger:
     def log_event(self, level: str, event: str, **kwargs):
         """Log a structured event"""
         log_data = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': _utc_now_iso(),
             'event': event,
             'level': level.upper(),
             **kwargs
@@ -85,7 +90,7 @@ class StructuredFormatter(logging.Formatter):
         except (json.JSONDecodeError, ValueError):
             # Create structured log entry for non-JSON messages
             log_data = {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': _utc_now_iso(),
                 'level': record.levelname,
                 'logger': record.name,
                 'message': record.getMessage(),
@@ -258,7 +263,7 @@ class ApplicationPerformanceMonitor:
             self.update_system_metrics()
             
             summary = {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': _utc_now_iso(),
                 'uptime_seconds': self.metrics['system']['uptime_seconds'],
                 'system': {
                     'memory_usage_mb': self.metrics['system']['memory_usage_mb'],
@@ -374,7 +379,7 @@ def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
     return {
         'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': _utc_now_iso(),
         'uptime_seconds': apm.get_uptime_seconds(),
         'version': _read_version(),
         # active_rooms: this app uses a single global chat room. The field is
