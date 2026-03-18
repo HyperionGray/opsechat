@@ -1,7 +1,23 @@
 # Production TODO List
 
-**Last Updated:** February 23, 2026  
+**Last Updated:** March 18, 2026  
 **Priority Order:** Critical → High → Medium → Low
+
+---
+
+## Recently Completed (2026-03)
+
+- [x] Rate limiting on chat/create, chat/messages, and dm/send endpoints
+- [x] `/health` endpoint returning JSON status with version and uptime
+- [x] Domain rotation CLI and `domain_manager.py`
+- [x] Simple web-based chat rooms (`simple_chat_routes.py`)
+- [x] TUI server (`tui-server.py`) and client
+- [x] In-memory message expiry with memory overwriting (3-min chat, 1-min DM)
+- [x] Automated E2E encryption key exchange (`/chat/room/<id>/key`)
+- [x] Security headers on every response (CSP, X-Frame-Options, etc.)
+- [x] Structured logging / APM via `monitoring.py`
+- [x] Test suite for `simple_chat_routes.py` (31 tests)
+- [x] Fixed `datetime.utcnow()` deprecation – use `datetime.now(timezone.utc)`
 
 ---
 
