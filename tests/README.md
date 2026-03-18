@@ -10,6 +10,7 @@ This directory contains the automated test suite for opsechat.
 - **ui-headless.spec.js** - UI tests that run in headless browser mode (no visible window)
 - **ui-headed.spec.js** - UI tests that run in headed mode (with visible browser window) for visual validation
 - **mock_server.py** - A lightweight Flask server that simulates opsechat without requiring Tor
+- **test_mock_server_fallback_email.py** - Unit tests for mock server fallback email/burner components
 
 ## Running Tests
 
@@ -36,6 +37,19 @@ npm run test:e2e
 ## Mock Server
 
 The mock server (`mock_server.py`) provides a test environment that doesn't require Tor to be running. It implements the same Flask routes as the main application but with simpler configuration.
+
+### Fallback email/burner feature
+
+If `email_system` imports fail (for example in minimal CI images), the mock server now
+automatically uses in-memory fallback components that support:
+
+- user inbox creation
+- burner generation with expiration metadata
+- burner rotation
+- expired burner cleanup
+- ownership resolution and explicit expiration
+
+This keeps mock server behavior deterministic and testable even without full email dependencies.
 
 To use the mock server:
 ```bash
