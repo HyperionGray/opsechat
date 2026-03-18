@@ -19,7 +19,7 @@ def _color_generator():
 
 
 def _build_app():
-    app = Flask(__name__)
+    app = Flask(__name__, template_folder="/workspace/templates")
     app.secret_key = "test-secret"
     app.config["TESTING"] = True
     app.config["path"] = "test-path"

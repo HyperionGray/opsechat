@@ -7,7 +7,7 @@ import random
 import string
 import logging
 from typing import Any, Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +134,7 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
-        self.spending_period = datetime.utcnow().strftime("%Y-%m")
+        self.spending_period = datetime.now(timezone.utc).strftime("%Y-%m")
         self._api_key_suffix: Optional[str] = None
     
     def set_api_client(self, api_client: DomainAPIClient):
@@ -183,7 +183,7 @@ class DomainRotationManager:
 
     def _reset_budget_if_new_month(self):
         """Reset tracked spending when a new UTC month begins."""
-        current_period = datetime.utcnow().strftime("%Y-%m")
+        current_period = datetime.now(timezone.utc).strftime("%Y-%m")
         if self.spending_period != current_period:
             self.current_spending = 0.0
             self.spending_period = current_period
