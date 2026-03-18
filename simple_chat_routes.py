@@ -317,8 +317,11 @@ def check_rate_limit(session_id: str, endpoint: str) -> tuple:
 
         blocked_until = backoff_state.get("blocked_until")
         if blocked_until and blocked_until > now:
+            remaining = max(int((blocked_until - now).total_seconds()) + 1, 1)
             attempts = int(backoff_state.get("attempts", 0)) + 1
-            retry_after = _calculate_backoff_seconds(attempts)
+            penalty = _calculate_backoff_seconds(attempts)
+            max_retry = window + RATE_LIMIT_BACKOFF["max_seconds"]
+            retry_after = min(remaining + penalty, max_retry)
             backoff_state["attempts"] = attempts
             backoff_state["blocked_until"] = now + datetime.timedelta(seconds=retry_after)
             return False, retry_after
