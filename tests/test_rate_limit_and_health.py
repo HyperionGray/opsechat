@@ -10,7 +10,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_backoff_store,
+    _rate_limit_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -24,6 +29,7 @@ def _clear_store():
     """Helper: wipe the rate limit store between tests."""
     with _rate_limit_lock:
         _rate_limit_store.clear()
+        _rate_limit_backoff_store.clear()
 
 
 def test_rate_limit_allows_requests_within_window():
@@ -85,6 +91,71 @@ def test_rate_limit_chat_message_limit():
     allowed, retry_after = check_rate_limit("session-msg", "chat_message")
     assert allowed is False
     assert retry_after >= 1
+
+
+def test_rate_limit_cooldown_blocks_even_if_request_window_is_cleared():
+    _clear_store()
+    sid = "session-cooldown"
+
+    # Trigger first violation on dm_send (5/min)
+    for _ in range(5):
+        allowed, _ = check_rate_limit(sid, "dm_send")
+        assert allowed is True
+    allowed, retry_after = check_rate_limit(sid, "dm_send")
+    assert allowed is False
+    assert retry_after >= 5
+
+    # Simulate cleared request history while cooldown is still active
+    with _rate_limit_lock:
+        _rate_limit_store[sid]["dm_send"] = []
+
+    # Should still be blocked due to cooldown
+    allowed, retry_after = check_rate_limit(sid, "dm_send")
+    assert allowed is False
+    assert retry_after >= 1
+
+
+def test_rate_limit_backoff_escalates_on_repeated_violations():
+    _clear_store()
+    sid = "session-backoff"
+    now = datetime.datetime.now()
+
+    # Force first violation
+    with _rate_limit_lock:
+        _rate_limit_store[sid] = {"dm_send": [now] * 5}
+    allowed, retry_after_first = check_rate_limit(sid, "dm_send")
+    assert allowed is False
+    assert retry_after_first >= 5
+
+    # Expire cooldown only (keep violation history) and trigger violation again.
+    with _rate_limit_lock:
+        _rate_limit_backoff_store[sid]["dm_send"]["cooldown_until"] = (
+            datetime.datetime.now() - datetime.timedelta(seconds=1)
+        )
+        _rate_limit_store[sid]["dm_send"] = [datetime.datetime.now()] * 5
+
+    allowed, retry_after_second = check_rate_limit(sid, "dm_send")
+    assert allowed is False
+    assert retry_after_second >= 10
+
+
+def test_dm_send_rate_limited_response_includes_retry_metadata():
+    _clear_store()
+    client = _test_app.test_client()
+    payload = {"room_id": "room-x", "message": "hello"}
+
+    for _ in range(5):
+        response = client.post("/chat/dm/send", json=payload)
+        assert response.status_code == 200
+
+    response = client.post("/chat/dm/send", json=payload)
+    assert response.status_code == 429
+    data = response.get_json()
+    assert data is not None
+    assert data.get("rate_limited") is True
+    assert isinstance(data.get("retry_after"), int)
+    assert data["retry_after"] >= 1
+    assert response.headers.get("Retry-After") == str(data["retry_after"])
 
 
 # ---------------------------------------------------------------------------
