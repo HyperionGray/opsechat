@@ -174,3 +174,54 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    @patch("domain_manager.PorkbunAPIClient")
+    def test_configure_sets_runtime_configuration(self, mock_porkbun_client):
+        """Configuring manager should set credentials, provider, and budget."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_porkbun_client.return_value = mock_client
+
+        manager = DomainRotationManager()
+        manager.configure(
+            api_key="pk_test_1234",
+            api_secret="sk_test_9876",
+            monthly_budget=15.5,
+        )
+
+        assert manager.api_client is mock_client
+        assert manager.provider == "porkbun"
+        assert manager.monthly_budget == 15.5
+
+        config = manager.get_config()
+        assert config["configured"] is True
+        assert config["provider"] == "porkbun"
+        assert config["monthly_budget"] == 15.5
+        assert config["api_key_masked"].endswith("1234")
+
+    def test_export_and_load_state_round_trip(self):
+        """State export/import should preserve domains and datetimes."""
+        manager = DomainRotationManager(monthly_budget=20.0)
+        manager.current_spending = 3.99
+        manager.active_domain = "active-domain.xyz"
+        manager.owned_domains = [
+            {
+                "domain": "active-domain.xyz",
+                "price": 1.99,
+                "purchased_at": "2026-01-01T10:00:00",
+                "expires_at": "2027-01-01T10:00:00",
+            }
+        ]
+
+        exported = manager.export_state()
+        assert exported["monthly_budget"] == 20.0
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+
+        restored = DomainRotationManager()
+        restored.load_state(exported)
+
+        assert restored.monthly_budget == 20.0
+        assert restored.current_spending == 3.99
+        assert restored.active_domain == "active-domain.xyz"
+        assert len(restored.owned_domains) == 1
+        assert restored.owned_domains[0]["purchased_at"].year == 2026
+        assert restored.owned_domains[0]["expires_at"].year == 2027
