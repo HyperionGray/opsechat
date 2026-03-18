@@ -2,7 +2,7 @@
 Tests for domain management module
 """
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -224,7 +224,7 @@ class TestDomainRotationManager:
         """Test monthly spending resets automatically on month rollover."""
         manager = DomainRotationManager(monthly_budget=30.0)
         manager.current_spending = 12.0
-        manager.last_budget_reset_month = (datetime.utcnow() - timedelta(days=35)).strftime("%Y-%m")
+        manager.last_budget_reset_month = (datetime.now(timezone.utc) - timedelta(days=35)).strftime("%Y-%m")
 
         status = manager.get_budget_status()
 

@@ -7,7 +7,7 @@ import random
 import string
 import logging
 from typing import Any, Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +147,7 @@ class DomainRotationManager:
     @staticmethod
     def _current_month_key() -> str:
         """Return current month key for budget tracking (UTC)."""
-        return datetime.utcnow().strftime("%Y-%m")
+        return datetime.now(timezone.utc).strftime("%Y-%m")
 
     @staticmethod
     def _mask_secret(value: Optional[str]) -> Optional[str]:

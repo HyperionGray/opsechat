@@ -2,7 +2,7 @@
 Tests for domain_rotation_cli state persistence helpers.
 """
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import domain_rotation_cli as cli
 from domain_manager import DomainRotationManager
@@ -16,8 +16,8 @@ def test_save_manager_state_serializes_datetime_fields(monkeypatch):
     manager.owned_domains = [{
         "domain": "abc123.xyz",
         "price": 2.99,
-        "purchased_at": datetime.utcnow(),
-        "expires_at": datetime.utcnow() + timedelta(days=365),
+        "purchased_at": datetime.now(timezone.utc),
+        "expires_at": datetime.now(timezone.utc) + timedelta(days=365),
     }]
 
     saved = {}
@@ -40,7 +40,7 @@ def test_save_manager_state_serializes_datetime_fields(monkeypatch):
 
 def test_get_manager_imports_legacy_top_level_state(monkeypatch):
     """get_manager should preserve backward compatibility with legacy config keys."""
-    now_iso = datetime.utcnow().isoformat()
+    now_iso = datetime.now(timezone.utc).isoformat()
     legacy_config = {
         "api_key": "pk_test",
         "api_secret": "sk_test",
