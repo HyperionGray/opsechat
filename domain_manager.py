@@ -5,7 +5,7 @@ Supports automated domain purchasing for burner email rotation.
 import logging
 import random
 import string
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence
 
 import requests
@@ -185,13 +185,17 @@ class DomainRotationManager:
     @staticmethod
     def _format_timestamp(value: Any) -> str:
         if isinstance(value, datetime):
-            return value.isoformat(timespec="seconds") + "Z"
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=timezone.utc)
+            else:
+                value = value.astimezone(timezone.utc)
+            return value.isoformat(timespec="seconds").replace("+00:00", "Z")
         if isinstance(value, str) and value:
             return value
-        return datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
     def _record_purchase(self, domain: str, price: float, currency: str = "USD") -> None:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         self.current_spending += price
         self.owned_domains.append(
             {
