@@ -133,6 +133,48 @@ First-time users see a prominent security warning:
 
 ---
 
+## ⏱ Chat Rate-Limit Backoff Metadata (NEW)
+
+### What Changed
+Simple chat write endpoints now return consistent, machine-readable 429 responses and retry headers:
+
+- `POST /chat/create`
+- `POST /chat/room/{room_id}/messages`
+- `POST /chat/dm/send`
+
+On rate limit, the API now returns:
+
+```json
+{
+  "error": "rate_limit_exceeded",
+  "message": "Rate limit exceeded for chat_message. Retry in 10 seconds.",
+  "endpoint": "chat_message",
+  "retry_after_seconds": 10,
+  "max_requests": 30,
+  "window_seconds": 60
+}
+```
+
+Headers include:
+- `Retry-After`
+- `X-RateLimit-Limit`
+- `X-RateLimit-Window`
+
+### User Experience Improvement
+The web chat UI now reads these values and applies countdown-based backoff (temporarily disabling send/create controls) instead of showing generic failure messages.
+
+### Runtime Configuration
+Sliding-window limits are configurable via environment variables:
+
+- `OPSECHAT_CHAT_CREATE_MAX_REQUESTS`
+- `OPSECHAT_CHAT_CREATE_WINDOW_SECONDS`
+- `OPSECHAT_CHAT_MESSAGE_MAX_REQUESTS`
+- `OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS`
+- `OPSECHAT_DM_SEND_MAX_REQUESTS`
+- `OPSECHAT_DM_SEND_WINDOW_SECONDS`
+
+---
+
 ## 📧 Email Rate Limiting
 
 ### Purpose

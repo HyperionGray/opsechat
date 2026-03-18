@@ -142,6 +142,46 @@ POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
 
+#### Rate Limit Response (429)
+When a write endpoint is rate-limited (`/chat/create`, `/chat/room/<id>/messages`, `/chat/dm/send`),
+the API returns structured retry metadata:
+
+```json
+{
+  "error": "rate_limit_exceeded",
+  "message": "Rate limit exceeded for chat_message. Retry in 12 seconds.",
+  "endpoint": "chat_message",
+  "retry_after_seconds": 12,
+  "max_requests": 30,
+  "window_seconds": 60
+}
+```
+
+Response headers also include:
+
+- `Retry-After`: seconds until the next allowed request
+- `X-RateLimit-Limit`: max requests in the window
+- `X-RateLimit-Window`: window size in seconds
+
+The web UI now uses this metadata to show countdown-based backoff guidance instead of generic errors.
+
+### Configurable Sliding-Window Limits
+
+Simple chat write limits can now be tuned via environment variables:
+
+- `OPSECHAT_CHAT_CREATE_MAX_REQUESTS` (default: `10`)
+- `OPSECHAT_CHAT_CREATE_WINDOW_SECONDS` (default: `60`)
+- `OPSECHAT_CHAT_MESSAGE_MAX_REQUESTS` (default: `30`)
+- `OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS` (default: `60`)
+- `OPSECHAT_DM_SEND_MAX_REQUESTS` (default: `5`)
+- `OPSECHAT_DM_SEND_WINDOW_SECONDS` (default: `60`)
+
+Coarse Flask-Limiter decorator limits can also be overridden:
+
+- `OPSECHAT_CHAT_CREATE_DECORATOR_LIMIT` (default: `10 per hour; 3 per minute`)
+- `OPSECHAT_CHAT_MESSAGE_DECORATOR_LIMIT` (default: `60 per minute`)
+- `OPSECHAT_DM_SEND_DECORATOR_LIMIT` (default: `20 per hour; 5 per minute`)
+
 ### Encryption Implementation
 
 The E2E encryption uses native Web Crypto API:

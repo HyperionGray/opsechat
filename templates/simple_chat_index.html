@@ -162,7 +162,32 @@
     
     <script>
         // Simple room creation with no external dependencies
+        let createRoomCooldownTimer = null;
+
+        function startCreateRoomCooldown(seconds, statusDiv, button) {
+            if (createRoomCooldownTimer) {
+                clearInterval(createRoomCooldownTimer);
+            }
+
+            let remaining = seconds;
+            button.disabled = true;
+            statusDiv.textContent = `Rate limit reached. Retry in ${remaining}s.`;
+
+            createRoomCooldownTimer = setInterval(() => {
+                remaining -= 1;
+                if (remaining <= 0) {
+                    clearInterval(createRoomCooldownTimer);
+                    createRoomCooldownTimer = null;
+                    button.disabled = false;
+                    statusDiv.textContent = 'You can create a room again.';
+                    return;
+                }
+                statusDiv.textContent = `Rate limit reached. Retry in ${remaining}s.`;
+            }, 1000);
+        }
+
         document.getElementById('createRoomBtn').addEventListener('click', async function() {
+            const button = document.getElementById('createRoomBtn');
             const statusDiv = document.getElementById('status');
             statusDiv.textContent = 'Creating room...';
             
@@ -175,7 +200,26 @@
                 });
                 
                 if (!response.ok) {
-                    throw new Error('Failed to create room');
+                    let errorPayload = {};
+                    try {
+                        errorPayload = await response.json();
+                    } catch (e) {
+                        errorPayload = {};
+                    }
+
+                    if (response.status === 429) {
+                        const retryAfter = Number(
+                            response.headers.get('Retry-After') ||
+                            errorPayload.retry_after_seconds ||
+                            0
+                        );
+                        if (retryAfter > 0) {
+                            startCreateRoomCooldown(retryAfter, statusDiv, button);
+                            return;
+                        }
+                    }
+
+                    throw new Error(errorPayload.message || 'Failed to create room');
                 }
                 
                 const data = await response.json();

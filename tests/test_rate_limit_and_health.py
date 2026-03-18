@@ -87,6 +87,42 @@ def test_rate_limit_chat_message_limit():
     assert retry_after >= 1
 
 
+def test_chat_message_rate_limit_response_has_retry_metadata():
+    _clear_store()
+    client = _test_app.test_client()
+
+    create_resp = client.post("/chat/create")
+    assert create_resp.status_code == 200
+    room_id = create_resp.get_json()["room_id"]
+
+    # Consume allowed message budget for this session.
+    for i in range(30):
+        resp = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": f"message-{i}"},
+        )
+        assert resp.status_code == 200
+
+    blocked = client.post(
+        f"/chat/room/{room_id}/messages",
+        json={"message": "blocked-message"},
+    )
+    assert blocked.status_code == 429
+
+    payload = blocked.get_json()
+    assert payload["error"] == "rate_limit_exceeded"
+    assert payload["endpoint"] == "chat_message"
+    assert payload["max_requests"] == 30
+    assert payload["window_seconds"] == 60
+    assert payload["retry_after_seconds"] >= 1
+
+    retry_after_header = blocked.headers.get("Retry-After")
+    assert retry_after_header is not None
+    assert int(retry_after_header) >= 1
+    assert blocked.headers.get("X-RateLimit-Limit") == "30"
+    assert blocked.headers.get("X-RateLimit-Window") == "60"
+
+
 # ---------------------------------------------------------------------------
 # Health endpoint integration tests
 # ---------------------------------------------------------------------------

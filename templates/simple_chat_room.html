@@ -216,6 +216,7 @@
         let encryptionEnabled = false;
         let encryptionKey = null;
         let pollInterval = null;
+        let sendCooldownTimer = null;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
         
         // Show security warning on first load
@@ -343,6 +344,40 @@
                 statusMsg.textContent = '';
             }, duration);
         }
+
+        function startSendCooldown(seconds) {
+            if (sendCooldownTimer) {
+                clearInterval(sendCooldownTimer);
+            }
+
+            const input = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendBtn');
+            const statusMsg = document.getElementById('statusMsg');
+            let remaining = seconds;
+
+            input.disabled = true;
+            sendBtn.disabled = true;
+            statusMsg.textContent = `Rate limit reached. Retry in ${remaining}s.`;
+
+            sendCooldownTimer = setInterval(() => {
+                remaining -= 1;
+                if (remaining <= 0) {
+                    clearInterval(sendCooldownTimer);
+                    sendCooldownTimer = null;
+                    input.disabled = false;
+                    sendBtn.disabled = false;
+                    statusMsg.textContent = 'You can send messages again.';
+                    setTimeout(() => {
+                        if (statusMsg.textContent === 'You can send messages again.') {
+                            statusMsg.textContent = '';
+                        }
+                    }, 2000);
+                    input.focus();
+                    return;
+                }
+                statusMsg.textContent = `Rate limit reached. Retry in ${remaining}s.`;
+            }, 1000);
+        }
         
         function scrollToBottom() {
             const container = document.getElementById('messagesContainer');
@@ -394,6 +429,9 @@
         
         async function sendMessage() {
             const input = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendBtn');
+            if (sendBtn.disabled || input.disabled) return;
+
             const message = input.value.trim();
             
             if (!message) return;
@@ -418,7 +456,26 @@
                     input.value = '';
                     await pollMessages();
                 } else {
-                    showStatus('Error sending message');
+                    let errorPayload = {};
+                    try {
+                        errorPayload = await response.json();
+                    } catch (e) {
+                        errorPayload = {};
+                    }
+
+                    if (response.status === 429) {
+                        const retryAfter = Number(
+                            response.headers.get('Retry-After') ||
+                            errorPayload.retry_after_seconds ||
+                            0
+                        );
+                        if (retryAfter > 0) {
+                            startSendCooldown(retryAfter);
+                            return;
+                        }
+                    }
+
+                    showStatus(errorPayload.message || 'Error sending message');
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);
