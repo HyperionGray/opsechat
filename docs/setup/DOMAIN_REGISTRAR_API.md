@@ -124,6 +124,20 @@ View budget status:
 http://yourservice.onion/{path}/email/config
 ```
 
+### Domain Rotation CLI Local State
+
+When using `domain_rotation_cli.py`, local state is stored in:
+
+```
+~/.opsechat/domain_config.json
+```
+
+This state includes owned domains, spending totals, and active domain metadata. The CLI stores timestamps in ISO format and validates them on load. To remove expired local records:
+
+```bash
+python domain_rotation_cli.py prune
+```
+
 ## Domain Rotation Workflow
 
 1. **Initial Setup**: Configure API and budget

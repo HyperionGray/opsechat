@@ -177,6 +177,11 @@ When limit exceeded:
 ### Purpose
 Easy domain rotation for burner email service to avoid domain bans and maintain service availability.
 
+### Reliability Improvements
+- CLI state now persists datetime fields in JSON-safe ISO format.
+- Stored domain records are parsed and validated on load, skipping malformed entries safely.
+- New `prune` command removes expired persisted records and repairs the active-domain pointer.
+
 ### Installation
 ```bash
 # The CLI is included in the main repository
@@ -271,6 +276,19 @@ Output:
    Price: $0.99
    Purchased: 2026-03-02 10:15
    Expires: 2027-03-02
+```
+
+#### Prune Local Domain State
+```bash
+python domain_rotation_cli.py prune
+
+Output:
+=== Domain State Prune ===
+
+Records before: 5
+Records removed: 2
+Records after:  3
+Active domain:  n5x8q2k7.xyz
 ```
 
 ### Integration with Burner Email

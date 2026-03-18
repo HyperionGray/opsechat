@@ -265,6 +265,7 @@ Features
   - **Smart Stats Dashboard** - Track active burners and total time remaining
 - **Automated Domain Purchasing** - Porkbun API integration for cheap domain rotation (.xyz, .club, etc.) - see [Domain Registrar API](docs/setup/DOMAIN_REGISTRAR_API.md)
 - **Budget Management** - Configurable monthly spending limits for domain purchases
+- **Persistent Domain CLI State** - `domain_rotation_cli.py` now persists owned-domain timestamps safely and includes `prune` to clean expired local records
 - **Spoofing Detection** - Test emails for spoofing attempts (unicode lookalikes, typosquatting, homographs)
 - **Phishing Simulation** - Gamified training with scoring and achievements
 - **Security Research Tools** - For authorized penetration testing and awareness training

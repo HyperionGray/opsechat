@@ -11,6 +11,7 @@ Usage:
     python domain_rotation_cli.py rotate        # Rotate to a new domain
     python domain_rotation_cli.py status        # Show budget status
     python domain_rotation_cli.py config        # Configure API credentials
+    python domain_rotation_cli.py prune         # Remove expired/malformed local state
 """
 
 import argparse
@@ -19,10 +20,79 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+STATE_SCHEMA_VERSION = 1
+
+
+def _serialize_datetime(value):
+    """Convert datetimes to ISO strings for JSON persistence."""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
+
+
+def _serialize_owned_domains(owned_domains):
+    """Serialize owned domain state to JSON-safe structures."""
+    serialized = []
+    for domain in owned_domains:
+        if not isinstance(domain, dict):
+            continue
+        serialized.append({
+            "domain": domain.get("domain"),
+            "price": domain.get("price"),
+            "purchased_at": _serialize_datetime(domain.get("purchased_at")),
+            "expires_at": _serialize_datetime(domain.get("expires_at")),
+        })
+    return serialized
+
+
+def _parse_datetime(value):
+    """Parse persisted datetime values into datetime objects."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str) and value:
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _deserialize_owned_domains(owned_domains):
+    """
+    Deserialize persisted domain entries.
+
+    Invalid entries are skipped to keep CLI state resilient.
+    """
+    if not isinstance(owned_domains, list):
+        return []
+
+    deserialized = []
+    for domain in owned_domains:
+        if not isinstance(domain, dict):
+            continue
+        domain_name = domain.get("domain")
+        if not domain_name:
+            continue
+        deserialized.append({
+            "domain": domain_name,
+            "price": domain.get("price"),
+            "purchased_at": _parse_datetime(domain.get("purchased_at")),
+            "expires_at": _parse_datetime(domain.get("expires_at")),
+        })
+    return deserialized
+
+
+def _format_datetime(value, fmt):
+    """Format datetime values safely, including legacy string values."""
+    parsed = _parse_datetime(value)
+    if parsed is None:
+        return "unknown"
+    return parsed.strftime(fmt)
 
 
 def load_config():
@@ -32,7 +102,10 @@ def load_config():
     
     try:
         with open(CONFIG_FILE, 'r') as f:
-            return json.load(f)
+            config = json.load(f)
+            if isinstance(config, dict):
+                return config
+            return {}
     except Exception as e:
         print(f"Error loading config: {e}")
         return {}
@@ -43,6 +116,7 @@ def save_config(config):
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     
     try:
+        config["state_schema_version"] = STATE_SCHEMA_VERSION
         with open(CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=2)
         os.chmod(CONFIG_FILE, 0o600)  # Secure permissions
@@ -112,7 +186,7 @@ def get_manager():
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = _deserialize_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +196,7 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = _serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -144,9 +218,45 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_datetime(domain.get('purchased_at'), '%Y-%m-%d %H:%M')}")
+        print(f"   Expires: {_format_datetime(domain.get('expires_at'), '%Y-%m-%d')}")
         print()
+
+
+def prune_state():
+    """
+    Remove malformed or expired domain records from persisted CLI state.
+    """
+    manager, config = get_manager()
+
+    now = datetime.now()
+    before = len(manager.owned_domains)
+    kept = []
+    for domain in manager.owned_domains:
+        if not domain.get("domain"):
+            continue
+
+        expires_at = _parse_datetime(domain.get("expires_at"))
+        if expires_at is not None and expires_at <= now:
+            continue
+
+        kept.append(domain)
+
+    manager.owned_domains = kept
+
+    if manager.active_domain and not any(
+        d.get("domain") == manager.active_domain for d in manager.owned_domains
+    ):
+        manager.active_domain = manager.owned_domains[0]["domain"] if manager.owned_domains else None
+
+    save_manager_state(manager, config)
+
+    removed = before - len(manager.owned_domains)
+    print("\n=== Domain State Prune ===\n")
+    print(f"Records before: {before}")
+    print(f"Records removed: {removed}")
+    print(f"Records after:  {len(manager.owned_domains)}")
+    print(f"Active domain:  {manager.active_domain or 'None'}")
 
 
 def search_domains():
@@ -236,7 +346,7 @@ def show_status():
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
-        description='OpSecHat Domain Rotation CLI',
+        description='OpSecChat Domain Rotation CLI',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -245,12 +355,13 @@ Examples:
   python domain_rotation_cli.py search     # Search for available domains
   python domain_rotation_cli.py rotate     # Rotate to a new domain
   python domain_rotation_cli.py list       # List owned domains
+  python domain_rotation_cli.py prune      # Remove stale persisted records
         """
     )
     
     parser.add_argument(
         'command',
-        choices=['config', 'status', 'search', 'rotate', 'list'],
+        choices=['config', 'status', 'search', 'rotate', 'list', 'prune'],
         help='Command to execute'
     )
     
@@ -266,6 +377,8 @@ Examples:
         rotate_domain()
     elif args.command == 'list':
         list_domains()
+    elif args.command == 'prune':
+        prune_state()
 
 
 if __name__ == '__main__':
