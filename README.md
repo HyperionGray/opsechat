@@ -276,6 +276,7 @@ Features
 - **Security Scanning** - CodeWhisperer-powered vulnerability detection
 - **Code Quality Analysis** - AI-powered maintainability and complexity assessment
 - **Architecture Review** - Design pattern analysis and architectural recommendations
+- **Local Heuristic Fallback** - Data-driven security/quality/architecture analysis when AWS services are unavailable
 - **Custom Review Rules** - Configurable quality thresholds and security patterns
 - **GitHub Actions Integration** - Automatic reviews on every push and PR
 - **Mock Mode Fallback** - Local analysis when AWS services are unavailable

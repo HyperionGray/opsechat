@@ -58,7 +58,7 @@ Add the following secrets to your GitHub repository:
 
 ### Installation Steps
 
-**Note**: Amazon Q Developer CLI is not yet publicly available. This configuration is prepared for future release.
+**Note**: Amazon Q Developer CLI is not yet publicly available. This configuration is prepared for future release while local analyzer modules provide actionable fallback scanning today.
 
 When available, installation will likely follow this pattern:
 
@@ -240,4 +240,4 @@ For issues with:
 
 ---
 
-**Note**: This configuration is prepared for Amazon Q Developer CLI when it becomes publicly available. Current functionality uses alternative security scanning tools as placeholders.
+**Note**: This configuration is prepared for Amazon Q Developer CLI when it becomes publicly available. Current functionality uses local heuristic analyzers for security, code quality, and architecture scoring as an actionable fallback.

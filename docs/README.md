@@ -64,6 +64,7 @@ Implementation details and summaries of major features.
 - [Alpha Implementation Roadmap](implementation/ALPHA_IMPLEMENTATION_ROADMAP.md) - Detailed implementation plan
 - [Implementation Summary](implementation/IMPLEMENTATION_SUMMARY.md) - Email feature implementation
 - [Amazon Q Integration](implementation/AMAZON_Q_IMPLEMENTATION_SUMMARY.md) - Amazon Q implementation
+- [Amazon Q Local Analyzers](implementation/AMAZON_Q_LOCAL_ANALYZERS.md) - Heuristic analyzer behavior and scoring
 - [CI/CD Implementation](implementation/CI_CD_IMPLEMENTATION_SUMMARY.md) - CI/CD setup
 - [Containerization Summary](implementation/CONTAINERIZATION_SUMMARY.md) - Container implementation
 - [jQuery Security Update](implementation/JQUERY_SECURITY_UPDATE.md) - jQuery 3.7.1 update
