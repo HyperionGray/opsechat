@@ -135,9 +135,75 @@ class DomainRotationManager:
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
     
+    @staticmethod
+    def _parse_price(price_value) -> Optional[float]:
+        """Best-effort conversion for registrar price formats."""
+        if price_value is None:
+            return None
+        if isinstance(price_value, (int, float)):
+            return float(price_value)
+        if isinstance(price_value, str):
+            cleaned = (
+                price_value.strip()
+                .replace("$", "")
+                .replace("€", "")
+                .replace(",", "")
+            )
+            try:
+                return float(cleaned)
+            except ValueError:
+                return None
+        return None
+    
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+    
+    def configure(self, api_key: str, secret_key: str, monthly_budget: float = 50.0) -> bool:
+        """
+        Configure domain rotation with Porkbun credentials.
+        Raises ValueError for invalid configuration.
+        """
+        if not api_key or not secret_key:
+            raise ValueError("API key and secret key are required")
+        if monthly_budget <= 0:
+            raise ValueError("Monthly budget must be greater than 0")
+        
+        self.set_api_client(PorkbunAPIClient(api_key, secret_key))
+        self.monthly_budget = float(monthly_budget)
+        return True
+    
+    def is_configured(self) -> bool:
+        """Check whether a registrar API client is configured."""
+        return self.api_client is not None
+    
+    def get_config(self, mask_secrets: bool = True) -> Dict:
+        """Return current domain rotation configuration summary."""
+        api_key = ""
+        secret_key = ""
+        if self.api_client:
+            api_key = getattr(self.api_client, "api_key", "") or ""
+            secret_key = getattr(self.api_client, "api_secret", "") or ""
+        
+        if mask_secrets:
+            if api_key and len(api_key) > 4:
+                api_key = ("*" * (len(api_key) - 4)) + api_key[-4:]
+            elif api_key:
+                api_key = "*" * len(api_key)
+            if secret_key and len(secret_key) > 4:
+                secret_key = ("*" * (len(secret_key) - 4)) + secret_key[-4:]
+            elif secret_key:
+                secret_key = "*" * len(secret_key)
+        
+        return {
+            "configured": self.is_configured(),
+            "api_key": api_key,
+            "secret_key": secret_key,
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "active_domain": self.active_domain,
+            "domains_owned": len(self.owned_domains),
+        }
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -168,12 +234,10 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
-                
+                price = self._parse_price(result.get("price"))
+                if price is None:
+                    continue
+
                 if price <= max_price:
                     return {
                         "domain": domain,

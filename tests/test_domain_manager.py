@@ -174,3 +174,52 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_sets_client_and_budget(self):
+        """Test manager configure helper"""
+        manager = DomainRotationManager()
+        assert manager.is_configured() is False
+
+        result = manager.configure(
+            api_key="pk_test_123456",
+            secret_key="sk_test_987654",
+            monthly_budget=25.0,
+        )
+
+        assert result is True
+        assert manager.is_configured() is True
+        assert manager.monthly_budget == 25.0
+        assert isinstance(manager.api_client, PorkbunAPIClient)
+
+    def test_configure_rejects_invalid_values(self):
+        """Test configure validation errors"""
+        manager = DomainRotationManager()
+
+        with pytest.raises(ValueError):
+            manager.configure(api_key="", secret_key="secret", monthly_budget=10.0)
+
+        with pytest.raises(ValueError):
+            manager.configure(api_key="key", secret_key="", monthly_budget=10.0)
+
+        with pytest.raises(ValueError):
+            manager.configure(api_key="key", secret_key="secret", monthly_budget=0.0)
+
+    def test_get_config_masks_secret_values(self):
+        """Test get_config masking behavior"""
+        manager = DomainRotationManager()
+        manager.configure(
+            api_key="pk_test_12345678",
+            secret_key="sk_test_87654321",
+            monthly_budget=30.0,
+        )
+
+        masked = manager.get_config(mask_secrets=True)
+        unmasked = manager.get_config(mask_secrets=False)
+
+        assert masked["configured"] is True
+        assert masked["api_key"].endswith("5678")
+        assert masked["secret_key"].endswith("4321")
+        assert "*" in masked["api_key"]
+        assert "*" in masked["secret_key"]
+        assert unmasked["api_key"] == "pk_test_12345678"
+        assert unmasked["secret_key"] == "sk_test_87654321"

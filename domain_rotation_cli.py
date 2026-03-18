@@ -18,11 +18,48 @@ import json
 import os
 import sys
 from pathlib import Path
+from datetime import datetime
 from getpass import getpass
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _serialize_domain_record(domain_record):
+    """Convert datetime fields to ISO strings for JSON persistence."""
+    record = dict(domain_record)
+    for key in ("purchased_at", "expires_at"):
+        value = record.get(key)
+        if isinstance(value, datetime):
+            record[key] = value.isoformat()
+    return record
+
+
+def _deserialize_domain_record(domain_record):
+    """Convert persisted ISO datetime strings back to datetime objects."""
+    record = dict(domain_record)
+    for key in ("purchased_at", "expires_at"):
+        value = record.get(key)
+        if isinstance(value, str):
+            try:
+                record[key] = datetime.fromisoformat(value)
+            except ValueError:
+                # Keep original string if parsing fails.
+                pass
+    return record
+
+
+def _format_timestamp(value, fmt):
+    """Format datetime-like values safely for display."""
+    if isinstance(value, datetime):
+        return value.strftime(fmt)
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value).strftime(fmt)
+        except ValueError:
+            return value
+    return "Unknown"
 
 
 def load_config():
@@ -112,7 +149,10 @@ def get_manager():
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = [
+            _deserialize_domain_record(record)
+            for record in config['owned_domains']
+        ]
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +162,10 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = [
+        _serialize_domain_record(record)
+        for record in manager.owned_domains
+    ]
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -144,8 +187,8 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_timestamp(domain.get('purchased_at'), '%Y-%m-%d %H:%M')}")
+        print(f"   Expires: {_format_timestamp(domain.get('expires_at'), '%Y-%m-%d')}")
         print()
 
 
@@ -236,7 +279,7 @@ def show_status():
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
-        description='OpSecHat Domain Rotation CLI',
+        description='OpSecChat Domain Rotation CLI',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
