@@ -2,9 +2,10 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, NamecheapAPIClient, DomainRotationManager
 )
 
 
@@ -74,6 +75,53 @@ class TestPorkbunAPIClient:
         
         assert result["tld"] == "com"
         assert result["registration"] == "9.99"
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch('domain_manager.requests.Session')
+    def test_search_domain_available(self, mock_session_class):
+        """Test Namecheap domain availability parsing."""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """<?xml version="1.0" encoding="utf-8"?>
+<ApiResponse Status="OK">
+  <CommandResponse Type="namecheap.domains.check">
+    <DomainCheckResult Domain="test123.xyz" Available="true" />
+  </CommandResponse>
+</ApiResponse>
+"""
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_key="test_key",
+            api_user="test_user",
+            username="test_user",
+            client_ip="127.0.0.1",
+        )
+        result = client.search_domain("test123.xyz")
+
+        assert result["domain"] == "test123.xyz"
+        assert result["available"] is True
+        assert result["currency"] == "USD"
+
+    @patch('domain_manager.requests.Session')
+    def test_purchase_domain_invalid_format(self, mock_session_class):
+        """Invalid domain strings should fail fast before API call."""
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_key="test_key",
+            api_user="test_user",
+        )
+        result = client.purchase_domain("invalid-domain", years=1)
+
+        assert result["success"] is False
+        assert "Invalid domain format" in result["message"]
+        assert mock_session.get.call_count == 0
 
 
 class TestDomainRotationManager:
@@ -174,3 +222,61 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    @patch('domain_manager.PorkbunAPIClient')
+    def test_configure_sets_provider_and_budget(self, mock_porkbun_class):
+        """Configure should initialize provider client and budget."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_porkbun_class.return_value = mock_client
+
+        manager = DomainRotationManager()
+        config = manager.configure(
+            api_key="api-key",
+            secret_key="secret-key",
+            monthly_budget=25.0,
+            provider="porkbun",
+        )
+
+        assert manager.get_active_provider() == "porkbun"
+        assert manager.api_client is mock_client
+        assert manager.monthly_budget == 25.0
+        assert config["configured"] is True
+        assert config["provider"] == "porkbun"
+
+    def test_add_api_clients_and_switch_active_provider(self):
+        """Multiple clients can be registered and switched."""
+        manager = DomainRotationManager()
+        porkbun_client = Mock(spec=DomainAPIClient)
+        namecheap_client = Mock(spec=DomainAPIClient)
+
+        manager.add_api_client("porkbun", porkbun_client, set_active=True)
+        manager.add_api_client("namecheap", namecheap_client, set_active=False)
+
+        assert manager.get_active_provider() == "porkbun"
+        assert manager.set_active_provider("namecheap") is True
+        assert manager.get_active_provider() == "namecheap"
+        assert manager.api_client is namecheap_client
+
+    def test_owned_domain_serialization_round_trip(self):
+        """Owned domains should serialize and deserialize datetimes safely."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.owned_domains = [
+            {
+                "domain": "abc123.xyz",
+                "price": 2.99,
+                "provider": "porkbun",
+                "purchased_at": datetime(2026, 3, 18, 12, 0, 0),
+                "expires_at": datetime(2027, 3, 18, 12, 0, 0),
+            }
+        ]
+
+        serialized = manager.get_owned_domains_serializable()
+        assert isinstance(serialized[0]["purchased_at"], str)
+        assert isinstance(serialized[0]["expires_at"], str)
+
+        reloaded = DomainRotationManager()
+        reloaded.load_owned_domains(serialized)
+
+        assert isinstance(reloaded.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(reloaded.owned_domains[0]["expires_at"], datetime)
+        assert reloaded.owned_domains[0]["domain"] == "abc123.xyz"

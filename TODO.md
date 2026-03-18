@@ -84,10 +84,10 @@
   - [ ] Configure reasonable thresholds (review after load testing)
   - [ ] Add backoff/retry logic
 - [ ] Integrate second domain registrar API
-  - [ ] Choose registrar (Namecheap recommended)
-  - [ ] Implement API client
-  - [ ] Update domain rotation logic
-  - [ ] Test automated purchasing
+  - [x] Choose registrar (Namecheap)
+  - [x] Implement API client
+  - [x] Update domain rotation logic for multi-provider support
+  - [ ] Test automated purchasing against live registrar sandbox
 - [ ] Add abuse detection
   - [ ] Keyword filtering
   - [ ] Pattern detection
