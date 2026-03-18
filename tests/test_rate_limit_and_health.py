@@ -10,6 +10,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
+from monitoring import get_readiness_status
 from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
 
 # Shared test Flask app (avoids importing all of runserver.py)
@@ -113,3 +114,34 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_healthz_endpoint_returns_alive():
+    client = _test_app.test_client()
+    response = client.get("/healthz")
+    data = response.get_json()
+    assert response.status_code == 200
+    assert data is not None
+    assert data.get("status") == "alive"
+    assert "uptime_seconds" in data
+
+
+def test_readyz_endpoint_returns_200_when_ready():
+    client = _test_app.test_client()
+    response = client.get("/readyz")
+    data = response.get_json()
+    assert response.status_code == 200
+    assert data is not None
+    assert data.get("status") == "ready"
+    assert "checks" in data
+    assert data["checks"]["critical_routes_registered"]["status"] == "ok"
+
+
+def test_readiness_reports_not_ready_when_critical_routes_missing():
+    from flask import Flask
+
+    minimal_app = Flask(__name__)
+    readiness = get_readiness_status(app=minimal_app)
+
+    assert readiness["status"] == "not_ready"
+    assert "critical_routes_registered" in readiness["not_ready_checks"]

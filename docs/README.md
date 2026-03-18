@@ -30,6 +30,7 @@ Installation and deployment guides for different environments.
 - [Docker Guide](setup/DOCKER.md) - Docker/Podman containerization
 - [Quadlets Guide](setup/QUADLETS.md) - Systemd quadlet integration
 - [AWS Deployment](setup/AWS_DEPLOYMENT.md) - AWS cloud deployment
+- [Health Checks](setup/HEALTHCHECKS.md) - `/health`, `/healthz`, and `/readyz` probes
 - [Amazon Q Setup](setup/AMAZON_Q_SETUP_GUIDE.md) - Amazon Q integration
 - [Domain API Setup](setup/DOMAIN_API_SETUP.md) - Domain registrar API configuration
 - [Domain Registrar API](setup/DOMAIN_REGISTRAR_API.md) - Registrar API documentation

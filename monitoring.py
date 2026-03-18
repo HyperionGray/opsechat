@@ -321,18 +321,68 @@ def _read_version() -> str:
         return 'unknown'
 
 
-def get_health_status() -> Dict[str, Any]:
-    """Get application health status"""
+def _critical_routes_check(app=None) -> Dict[str, Any]:
+    """Validate that essential routes are registered."""
+    if app is None:
+        return {'status': 'ok'}
+
+    required_routes = {'/health', '/chat', '/chat/create', '/chat/dm/send'}
+    registered_routes = {rule.rule for rule in app.url_map.iter_rules()}
+    missing_routes = sorted(required_routes - registered_routes)
+
+    if missing_routes:
+        return {'status': 'fail', 'missing_routes': missing_routes}
+    return {'status': 'ok'}
+
+
+def get_liveness_status() -> Dict[str, Any]:
+    """Get process liveness status for orchestration probes."""
     return {
-        'status': 'healthy',
+        'status': 'alive',
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
+    }
+
+
+def get_readiness_status(app=None) -> Dict[str, Any]:
+    """Get application readiness based on lightweight dependency checks."""
+    version = _read_version()
+    checks = {
+        'version_file': {'status': 'ok' if version != 'unknown' else 'fail'},
+        'apm_initialized': {
+            'status': 'ok' if apm.metrics['system'].get('start_time') else 'fail'
+        },
+        'critical_routes_registered': _critical_routes_check(app),
+    }
+    not_ready_checks = [
+        name for name, details in checks.items() if details.get('status') != 'ok'
+    ]
+    readiness = 'ready' if not not_ready_checks else 'not_ready'
+
+    return {
+        'status': readiness,
+        'timestamp': datetime.utcnow().isoformat(),
+        'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
+        'version': version,
+        'checks': checks,
+        'not_ready_checks': not_ready_checks,
+    }
+
+
+def get_health_status(app=None) -> Dict[str, Any]:
+    """Get backward-compatible health payload with readiness summary."""
+    readiness = get_readiness_status(app=app)
+    return {
+        'status': 'healthy' if readiness['status'] == 'ready' else 'degraded',
+        'timestamp': datetime.utcnow().isoformat(),
+        'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
+        'version': readiness['version'],
         # active_rooms: this app uses a single global chat room. The field is
         # included for API consistency; it always reports 1 when the service is up.
         'active_rooms': 1,
         'checks': {
-            'tor_connection': 'unknown',  # Would need to check actual Tor status
+            'readiness': readiness['status'],
             'memory_usage': 'ok',
             'disk_space': 'ok'
         }

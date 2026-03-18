@@ -158,6 +158,16 @@ cd ~/opsechat
 
 This will remove the installation directory and optionally clean up Tor configuration, while preserving system packages.
 
+## Health Checks
+
+OpSecChat exposes three operational health endpoints:
+
+- `/health` - Backward-compatible aggregate health status
+- `/healthz` - Liveness probe (process is up)
+- `/readyz` - Readiness probe (returns `503` when not ready)
+
+See [Health Checks Guide](docs/setup/HEALTHCHECKS.md) for payload details and integration examples.
+
 Testing
 =======
 
