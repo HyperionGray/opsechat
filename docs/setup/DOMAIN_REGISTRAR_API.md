@@ -8,7 +8,7 @@ Opsechat supports automated domain purchasing for rotating burner email addresse
 
 ## Supported Registrars
 
-### Porkbun (Recommended)
+### Porkbun (Recommended for Simplicity)
 
 **Why Porkbun?**
 - Competitive pricing on cheap TLDs (.xyz from $1.99/yr)
@@ -59,14 +59,46 @@ Key endpoints used by opsechat:
 - `pricing/get` - Get TLD pricing
 - `domain/listAll` - List owned domains
 
-## Other Registrars (Future Support)
+### Namecheap (Supported)
 
-The opsechat domain manager is designed to be extensible. Future registrar support may include:
+Namecheap support is now available in the domain manager and CLI.
 
-### Namecheap
-- API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
-- Cheap TLDs: .xyz, .club, .online
+**Best for:**
+- Teams that already operate on Namecheap
+- Environments where Namecheap API is already approved
+- Testing with Namecheap sandbox before production cutover
+
+**Requirements:**
+- API access enabled on your Namecheap account
+- Whitelisted client IP in Namecheap API settings
+- API key and account username
+
+**Current implementation notes:**
+- Domain availability checks are supported
+- Price lookups are supported (register + renew)
+- Domain purchase uses the Namecheap `domains.create` API with default contact payloads
+
+#### Getting Namecheap API Access
+
+1. Sign in at [namecheap.com](https://www.namecheap.com/)
+2. Open API settings and enable API access
+3. Add your client IP to the whitelist
+4. Save your API key and username
+5. Optionally test first in sandbox mode
+
+#### Namecheap API Documentation
+
+Full docs: [Namecheap API Intro](https://www.namecheap.com/support/api/intro/)
+
+Key endpoints used by opsechat:
+- `namecheap.domains.check`
+- `namecheap.users.getPricing`
+- `namecheap.domains.create`
+- `namecheap.domains.getList`
+
+## Additional Registrars (Planned)
+
+The opsechat domain manager is designed to be extensible. Additional registrar support may include:
 
 ### Namesilo
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)
@@ -84,6 +116,18 @@ The opsechat domain manager is designed to be extensible. Future registrar suppo
 
 ## Configuration in Opsechat
 
+### Via CLI
+
+```bash
+python domain_rotation_cli.py config
+```
+
+The CLI now prompts for registrar selection and registrar-specific fields:
+- Porkbun: `api_key`, `api_secret`
+- Namecheap: `api_key`, `username`, `client_ip`, optional `api_user`, optional `sandbox`
+
+CLI state persists to `~/.opsechat/domain_config.json` and safely serializes domain timestamps.
+
 ### Via Web Interface
 
 1. Start opsechat and access the email config page:
@@ -92,8 +136,8 @@ The opsechat domain manager is designed to be extensible. Future registrar suppo
    ```
 
 2. Under "Domain API Configuration":
-   - Enter your API Key
-   - Enter your API Secret
+   - Select registrar (`porkbun` or `namecheap`)
+   - Enter provider credentials
    - Set monthly budget limit (recommended: start with $20-50)
 
 3. Click "Configure"
@@ -104,8 +148,17 @@ For container deployments, you can set:
 
 ```bash
 # In docker-compose.yml or quadlet
+Environment=DOMAIN_REGISTRAR=porkbun
 Environment=PORKBUN_API_KEY=pk1_xxxxx
 Environment=PORKBUN_API_SECRET=sk1_xxxxx
+Environment=DOMAIN_MONTHLY_BUDGET=50.0
+
+# or Namecheap
+Environment=DOMAIN_REGISTRAR=namecheap
+Environment=NAMECHEAP_API_KEY=nc_xxxxx
+Environment=NAMECHEAP_USERNAME=your-namecheap-username
+Environment=NAMECHEAP_CLIENT_IP=203.0.113.10
+Environment=NAMECHEAP_SANDBOX=false
 Environment=DOMAIN_MONTHLY_BUDGET=50.0
 ```
 

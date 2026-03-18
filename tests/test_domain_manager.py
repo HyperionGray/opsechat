@@ -2,9 +2,10 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, NamecheapAPIClient, DomainRotationManager
 )
 
 
@@ -74,6 +75,111 @@ class TestPorkbunAPIClient:
         
         assert result["tld"] == "com"
         assert result["registration"] == "9.99"
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch('domain_manager.requests.Session')
+    def test_search_domain_available(self, mock_session_class):
+        """Test Namecheap domain availability parsing."""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """
+        <ApiResponse xmlns="http://api.namecheap.com/xml.response" Status="OK">
+          <CommandResponse Type="namecheap.domains.check">
+            <DomainCheckResult Domain="test123.xyz" Available="true" />
+          </CommandResponse>
+        </ApiResponse>
+        """
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_key="test_key",
+            username="test_user",
+            client_ip="127.0.0.1",
+        )
+
+        result = client.search_domain("test123.xyz")
+        assert result["available"] is True
+        assert result["domain"] == "test123.xyz"
+        assert result["currency"] == "USD"
+
+    @patch('domain_manager.requests.Session')
+    def test_search_domain_error_message(self, mock_session_class):
+        """Test Namecheap API error parsing."""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """
+        <ApiResponse xmlns="http://api.namecheap.com/xml.response" Status="ERROR">
+          <Errors>
+            <Error Number="2019166">Invalid request</Error>
+          </Errors>
+        </ApiResponse>
+        """
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_key="test_key",
+            username="test_user",
+            client_ip="127.0.0.1",
+        )
+
+        result = client.search_domain("taken.xyz")
+        assert result["available"] is False
+        assert "Invalid request" in result["message"]
+
+    @patch('domain_manager.requests.Session')
+    def test_get_pricing(self, mock_session_class):
+        """Test Namecheap pricing parsing for register/renew actions."""
+        mock_session = Mock()
+        register_response = Mock()
+        register_response.text = """
+        <ApiResponse xmlns="http://api.namecheap.com/xml.response" Status="OK">
+          <CommandResponse Type="namecheap.users.getPricing">
+            <UserGetPricingResult>
+              <ProductType Name="DOMAIN">
+                <ProductCategory Name="DOMAINS">
+                  <Product Name="xyz">
+                    <Price Duration="1" YourPrice="2.88" />
+                  </Product>
+                </ProductCategory>
+              </ProductType>
+            </UserGetPricingResult>
+          </CommandResponse>
+        </ApiResponse>
+        """
+        renew_response = Mock()
+        renew_response.text = """
+        <ApiResponse xmlns="http://api.namecheap.com/xml.response" Status="OK">
+          <CommandResponse Type="namecheap.users.getPricing">
+            <UserGetPricingResult>
+              <ProductType Name="DOMAIN">
+                <ProductCategory Name="DOMAINS">
+                  <Product Name="xyz">
+                    <Price Duration="1" YourPrice="14.88" />
+                  </Product>
+                </ProductCategory>
+              </ProductType>
+            </UserGetPricingResult>
+          </CommandResponse>
+        </ApiResponse>
+        """
+        mock_session.get.side_effect = [register_response, renew_response]
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_key="test_key",
+            username="test_user",
+            client_ip="127.0.0.1",
+        )
+        result = client.get_pricing("xyz")
+
+        assert result["tld"] == "xyz"
+        assert result["registration"] == 2.88
+        assert result["renewal"] == 14.88
 
 
 class TestDomainRotationManager:
@@ -174,3 +280,44 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_serialize_and_deserialize_owned_domains(self):
+        """Ensure owned domain state can be safely JSON serialized."""
+        purchased_at = datetime(2026, 3, 18, 12, 30, 0)
+        expires_at = datetime(2027, 3, 18, 12, 30, 0)
+        owned = [{
+            "domain": "test123.xyz",
+            "price": 2.99,
+            "purchased_at": purchased_at,
+            "expires_at": expires_at,
+        }]
+
+        serialized = DomainRotationManager.serialize_owned_domains(owned)
+        assert isinstance(serialized[0]["purchased_at"], str)
+        assert isinstance(serialized[0]["expires_at"], str)
+
+        deserialized = DomainRotationManager.deserialize_owned_domains(serialized)
+        assert deserialized[0]["purchased_at"] == purchased_at
+        assert deserialized[0]["expires_at"] == expires_at
+
+    def test_configure_namecheap_and_get_masked_config(self):
+        """Namecheap configuration should mask secrets in exposed config."""
+        manager = DomainRotationManager()
+        manager.configure(
+            registrar="namecheap",
+            api_key="abcd1234secret",
+            monthly_budget=25.0,
+            username="alice",
+            client_ip="127.0.0.1",
+            api_user="alice_api",
+            sandbox=True,
+        )
+
+        config = manager.get_config()
+        assert config["registrar"] == "namecheap"
+        assert config["monthly_budget"] == 25.0
+        assert config["username"] == "alice"
+        assert config["api_user"] == "alice_api"
+        assert config["sandbox"] is True
+        assert config["api_key"].endswith("cret")
+        assert "*" in config["api_key"]
