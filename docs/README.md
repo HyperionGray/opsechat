@@ -5,7 +5,7 @@ Welcome to the OpSecChat documentation. All documentation has been organized int
 ## Quick Links
 
 - **[Main README](../README.md)** - Start here for project overview
-- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes (TODO)
+- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes
 - **[Security](../SECURITY.md)** - Security information and best practices
 - **[License](../LICENSE.md)** - MIT License
 
@@ -43,6 +43,11 @@ Documentation for end users and operators.
 - [PGP Test Examples](user-guide/PGP_TEST_EXAMPLE.md) - PGP testing examples
 - [Testing Guide](user-guide/TESTING.md) - How to run tests
 
+### Operations
+Operational and observability references for running the service.
+
+- [Health and Monitoring Endpoints](operations/HEALTH_MONITORING.md) - `/health` and `/health/metrics` payloads
+
 ### 👨‍💻 Development
 Information for developers contributing to the project.
 
@@ -70,11 +75,6 @@ Implementation details and summaries of major features.
 - [Changelog](implementation/CHANGELOG.md) - Version history
 - [PR Summaries](implementation/PR_SUMMARY.md) - Pull request summaries
 
-### 🏗️ Architecture
-Architectural decisions and design documents.
-
-Currently empty - architectural decisions should be documented here as they are made.
-
 ## Contributing to Documentation
 
 When adding new documentation:
@@ -97,5 +97,5 @@ When adding new documentation:
 
 ---
 
-**Last Updated:** February 23, 2026  
+**Last Updated:** March 18, 2026  
 **Maintained by:** OpSecChat Team

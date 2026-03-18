@@ -252,6 +252,32 @@ def generate_secure_dm_id():
     return secrets.token_urlsafe(16)
 
 
+def get_chat_runtime_stats():
+    """
+    Return in-memory runtime stats for operational monitoring endpoints.
+
+    This function only exposes aggregate counts (no message content or user IDs).
+    """
+    with rooms_lock:
+        active_rooms = len(chat_rooms)
+        active_users = sum(room.get_user_count() for room in chat_rooms.values())
+        active_messages = sum(len(room.messages) for room in chat_rooms.values())
+
+    with dm_lock:
+        pending_direct_messages = len(direct_messages)
+
+    with _rate_limit_lock:
+        rate_limited_sessions = len(_rate_limit_store)
+
+    return {
+        "active_rooms": active_rooms,
+        "active_users": active_users,
+        "active_messages": active_messages,
+        "pending_direct_messages": pending_direct_messages,
+        "rate_limited_sessions": rate_limited_sessions,
+    }
+
+
 def register_simple_chat_routes(app):
     """Register simple chat routes with the Flask app"""
     

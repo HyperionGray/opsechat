@@ -310,7 +310,7 @@ def monitor_performance(operation_name: str):
 # Global APM instance
 apm = ApplicationPerformanceMonitor()
 
-# Health check endpoint data
+# Health and operational endpoint data
 def _read_version() -> str:
     """Read version from VERSION file, falling back to 'unknown'"""
     version_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'VERSION')
@@ -321,21 +321,37 @@ def _read_version() -> str:
         return 'unknown'
 
 
-def get_health_status() -> Dict[str, Any]:
-    """Get application health status"""
-    return {
+def get_health_status(runtime_stats: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Get application health status with optional runtime chat statistics."""
+    runtime_stats = runtime_stats or {}
+    active_rooms = runtime_stats.get('active_rooms', 0)
+
+    status = {
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
-        # active_rooms: this app uses a single global chat room. The field is
-        # included for API consistency; it always reports 1 when the service is up.
-        'active_rooms': 1,
+        'active_rooms': int(active_rooms) if isinstance(active_rooms, (int, float)) else 0,
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',
             'disk_space': 'ok'
         }
+    }
+
+    if runtime_stats:
+        status['runtime'] = runtime_stats
+
+    return status
+
+
+def get_operational_metrics(runtime_stats: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Get a combined operational snapshot used by /health/metrics."""
+    runtime_stats = runtime_stats or {}
+    return {
+        'health': get_health_status(runtime_stats),
+        'apm': apm.get_metrics_summary(),
+        'runtime': runtime_stats,
     }
 
 # Security event logging

@@ -10,7 +10,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_lock,
+    chat_rooms,
+    rooms_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -24,6 +30,12 @@ def _clear_store():
     """Helper: wipe the rate limit store between tests."""
     with _rate_limit_lock:
         _rate_limit_store.clear()
+
+
+def _clear_rooms():
+    """Helper: wipe all in-memory rooms between tests."""
+    with rooms_lock:
+        chat_rooms.clear()
 
 
 def test_rate_limit_allows_requests_within_window():
@@ -113,3 +125,37 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_reflects_runtime_room_count():
+    _clear_rooms()
+    client = _test_app.test_client()
+
+    create_response = client.post("/chat/create")
+    assert create_response.status_code == 200
+
+    health_response = client.get("/health")
+    data = health_response.get_json()
+    assert data["active_rooms"] == 1
+    assert "runtime" in data
+    assert data["runtime"]["active_rooms"] == 1
+
+    _clear_rooms()
+
+
+def test_health_metrics_endpoint_returns_operational_snapshot():
+    _clear_rooms()
+    client = _test_app.test_client()
+    client.post("/chat/create")
+
+    response = client.get("/health/metrics")
+    assert response.status_code == 200
+    data = response.get_json()
+
+    assert "health" in data
+    assert "apm" in data
+    assert "runtime" in data
+    assert data["health"]["active_rooms"] == 1
+    assert data["runtime"]["active_rooms"] == 1
+
+    _clear_rooms()

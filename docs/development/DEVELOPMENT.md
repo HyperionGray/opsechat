@@ -66,7 +66,7 @@ opsechat/
 
 ## Development Tools
 
-### Python Files in Root (Dev Tools)
+### Development Utility Files
 These are development and testing utilities that help during development:
 
 - **`manual-test.py`** - Manual testing script for interactive testing
@@ -75,6 +75,12 @@ These are development and testing utilities that help during development:
 - **`review_performance.py`** - Performance benchmarking tool
 - **`usability_assessment.py`** - UI/UX testing helper
 - **`comprehensive_functionality_test.py`** - Full functional test suite
+
+Manual CI/debug helpers live in `scripts/manual-tests/`:
+
+- **`scripts/manual-tests/ci_mock_server_startup.js`** - CI startup/connectivity check for `tests/mock_server.py`
+- **`scripts/manual-tests/mock_server_smoke.js`** - Lightweight mock server endpoint smoke test
+- **`scripts/manual-tests/run_targeted_runserver_helper_tests.sh`** - Targeted `tests/test_runserver_helpers.py` invocations
 
 ### Main Application Files
 - **`runserver.py`** - Main entry point (legacy monolithic)
