@@ -3,6 +3,7 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime, timedelta
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -112,6 +113,21 @@ class TestDomainRotationManager:
         assert result is not None
         assert result["domain"].endswith((".xyz", ".club", ".online", ".site", ".website"))
         assert result["price"] <= 5.0
+
+    def test_find_cheap_available_domain_currency_string_price(self):
+        """Test currency-formatted prices are parsed correctly."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test123.xyz",
+            "price": "$2.99"
+        }
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["price"] == 2.99
     
     def test_purchase_domain_if_budget_allows_success(self):
         """Test domain purchase within budget"""
@@ -174,3 +190,48 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_set_owned_domains_deserializes_state(self):
+        """Test deserialization for persisted owned domain records."""
+        manager = DomainRotationManager()
+        manager.set_owned_domains([
+            {
+                "domain": "test123.xyz",
+                "price": "2.50",
+                "purchased_at": "2026-03-01T12:00:00",
+                "expires_at": "2027-03-01T12:00:00"
+            }
+        ])
+
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["price"] == 2.5
+        assert isinstance(manager.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(manager.owned_domains[0]["expires_at"], datetime)
+
+    def test_cleanup_expired_domains_updates_active_domain(self):
+        """Test expired domain cleanup and active-domain fallback."""
+        manager = DomainRotationManager()
+        now = datetime(2026, 3, 18, 12, 0, 0)
+
+        manager.owned_domains = [
+            {
+                "domain": "expired.xyz",
+                "price": 1.0,
+                "purchased_at": now - timedelta(days=366),
+                "expires_at": now - timedelta(days=1)
+            },
+            {
+                "domain": "active.xyz",
+                "price": 2.0,
+                "purchased_at": now - timedelta(days=10),
+                "expires_at": now + timedelta(days=355)
+            }
+        ]
+        manager.active_domain = "expired.xyz"
+
+        removed = manager.cleanup_expired_domains(now=now)
+
+        assert removed == 1
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["domain"] == "active.xyz"
+        assert manager.active_domain == "active.xyz"

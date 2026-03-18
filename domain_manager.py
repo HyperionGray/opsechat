@@ -6,7 +6,7 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -138,6 +138,51 @@ class DomainRotationManager:
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+
+    @staticmethod
+    def _coerce_price(value: Any) -> Optional[float]:
+        """Best-effort conversion of registrar price values to float."""
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            cleaned = value.strip().replace("$", "").replace("€", "").replace(",", "")
+            if not cleaned:
+                return None
+            try:
+                return float(cleaned)
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _coerce_datetime(value: Any) -> Optional[datetime]:
+        """Best-effort conversion of persisted datetime values."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return None
+        return None
+
+    def set_owned_domains(self, domains: List[Dict]) -> None:
+        """Load owned domains from potentially serialized state."""
+        normalized_domains: List[Dict] = []
+        for domain_info in domains or []:
+            if not isinstance(domain_info, dict):
+                continue
+            domain_name = domain_info.get("domain")
+            if not domain_name:
+                continue
+
+            normalized_entry = dict(domain_info)
+            normalized_entry["price"] = self._coerce_price(domain_info.get("price"))
+            normalized_entry["purchased_at"] = self._coerce_datetime(domain_info.get("purchased_at"))
+            normalized_entry["expires_at"] = self._coerce_datetime(domain_info.get("expires_at"))
+            normalized_domains.append(normalized_entry)
+
+        self.owned_domains = normalized_domains
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -168,12 +213,10 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
-                
+                price = self._coerce_price(result.get("price"))
+                if price is None:
+                    continue
+
                 if price <= max_price:
                     return {
                         "domain": domain,
@@ -192,20 +235,25 @@ class DomainRotationManager:
             logger.error("No API client configured")
             return False
         
+        normalized_price = self._coerce_price(price)
+        if normalized_price is None:
+            logger.error(f"Invalid domain price for {domain}: {price}")
+            return False
+
         # Check budget
-        if self.current_spending + price > self.monthly_budget:
+        if self.current_spending + normalized_price > self.monthly_budget:
             logger.warning(f"Budget exceeded. Current: ${self.current_spending}, "
-                          f"Requested: ${price}, Budget: ${self.monthly_budget}")
+                          f"Requested: ${normalized_price}, Budget: ${self.monthly_budget}")
             return False
         
         # Attempt purchase
         result = self.api_client.purchase_domain(domain, years=1)
         
         if result.get("success"):
-            self.current_spending += price
+            self.current_spending += normalized_price
             self.owned_domains.append({
                 "domain": domain,
-                "price": price,
+                "price": normalized_price,
                 "purchased_at": datetime.now(),
                 "expires_at": datetime.now() + timedelta(days=365)
             })
@@ -214,7 +262,7 @@ class DomainRotationManager:
             if not self.active_domain:
                 self.active_domain = domain
             
-            logger.info(f"Successfully purchased domain: {domain} for ${price}")
+            logger.info(f"Successfully purchased domain: {domain} for ${normalized_price}")
             return True
         else:
             logger.error(f"Failed to purchase domain: {result.get('message')}")
@@ -251,6 +299,31 @@ class DomainRotationManager:
     def get_owned_domains(self) -> List[Dict]:
         """Get list of owned domains"""
         return self.owned_domains
+
+    def cleanup_expired_domains(self, now: Optional[datetime] = None) -> int:
+        """
+        Remove expired domains from the owned-domain list.
+        Returns number of removed domains.
+        """
+        reference_time = now or datetime.now()
+        remaining_domains: List[Dict] = []
+        removed_count = 0
+
+        for domain_info in self.owned_domains:
+            expires_at = self._coerce_datetime(domain_info.get("expires_at"))
+            if expires_at and expires_at <= reference_time:
+                removed_count += 1
+                continue
+            remaining_domains.append(domain_info)
+
+        self.owned_domains = remaining_domains
+
+        if self.active_domain and not any(
+            d.get("domain") == self.active_domain for d in self.owned_domains
+        ):
+            self.active_domain = self.owned_domains[-1]["domain"] if self.owned_domains else None
+
+        return removed_count
     
     def get_budget_status(self) -> Dict:
         """Get budget information"""

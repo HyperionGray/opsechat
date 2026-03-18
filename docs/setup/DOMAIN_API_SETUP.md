@@ -112,14 +112,14 @@ Enterprise-focused with comprehensive API.
 ### API Key Security
 
 **Storage:**
-- API keys are stored in memory only
-- Never written to disk or logs
-- Cleared when application restarts
+- CLI configuration is stored in `~/.opsechat/domain_config.json`
+- File permissions are restricted to owner-read/write (`0600`)
+- Secrets should never be committed to git or shared in logs
 
 **Access:**
-- Keys only accessible to authenticated users
-- No API key exposure in web interface
-- Secure transmission over Tor
+- Keys are readable only by the local account running the CLI
+- Avoid sharing host accounts used for domain operations
+- Use secure transport when administering systems remotely
 
 **Rotation:**
 - Regularly rotate API keys (monthly recommended)
@@ -163,18 +163,17 @@ Enterprise-focused with comprehensive API.
 ### Daily Operations
 
 1. **Generate Burner Email**
-   - Go to burner email page
-   - Click "Generate New Burner"
-   - System automatically creates domain if needed
+   - Use domain CLI commands to find/rotate domains
+   - Update burner email workflows to use active domain
 
 2. **Monitor Usage**
-   - Check budget status in configuration
+   - Check budget status in CLI
    - Monitor domain expiration times
    - Review spending in registrar dashboard
 
 3. **Rotate Domains**
-   - Click "Rotate Domain" for new domain
-   - Old domains expire automatically
+   - `python domain_rotation_cli.py rotate`
+   - Use `--yes` for non-interactive automation
    - Budget tracking prevents overspending
 
 ### Maintenance
@@ -190,9 +189,9 @@ Enterprise-focused with comprehensive API.
    - Revoke old keys in registrar dashboard
 
 3. **Cleanup**
-   - Let expired domains lapse naturally
-   - No manual cleanup required
-   - Monitor for any stuck domains
+   - Let registrar ownership expire naturally as needed
+   - Prune local expired records with `python domain_rotation_cli.py cleanup`
+   - Monitor for stale records and active-domain drift
 
 ## Troubleshooting
 
