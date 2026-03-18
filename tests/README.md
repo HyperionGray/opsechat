@@ -37,12 +37,19 @@ npm run test:e2e
 
 The mock server (`mock_server.py`) provides a test environment that doesn't require Tor to be running. It implements the same Flask routes as the main application but with simpler configuration.
 
+If `email_system.py` cannot be imported, the mock server now falls back to in-memory implementations for inbox storage and burner email lifecycle operations. This keeps mock routes functional instead of silently no-oping in degraded test environments.
+
 To use the mock server:
 ```bash
 python3 tests/mock_server.py
 ```
 
 The server will run on http://localhost:5001 and can be used for manual testing or as a target for automated tests.
+
+Fallback backend unit tests:
+```bash
+pytest tests/test_mock_server_fallback.py
+```
 
 ## Test Coverage
 
