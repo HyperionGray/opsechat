@@ -67,3 +67,6 @@ __pycache__/
 *.log
 docker-compose.override.yml
 .env
+
+# BFG Repo Cleaner (binary tool, not source)
+bfg-*.jar

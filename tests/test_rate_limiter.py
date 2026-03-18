@@ -42,7 +42,6 @@ def test_post_is_rate_limited_get_is_not():
         assert r.status_code == 429, f"4th POST should be rate-limited (429), got {r.status_code}"
 
     print("✅ POST /chat/create is rate-limited after 3 requests; GET / is never throttled")
-    return True
 
 
 def test_separate_sessions_have_independent_limits():
@@ -68,7 +67,6 @@ def test_separate_sessions_have_independent_limits():
         )
 
     print("✅ Different sessions have independent rate-limit counters")
-    return True
 
 
 def main():
@@ -82,7 +80,8 @@ def main():
 
     for test_fn in tests:
         try:
-            results.append(test_fn())
+            test_fn()
+            results.append(True)
         except AssertionError as exc:
             print(f"❌ {test_fn.__name__} FAILED: {exc}")
             results.append(False)

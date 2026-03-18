@@ -30,7 +30,6 @@ def test_secure_ids():
     assert len(sample_room_id) > 40, f"Room ID too short: {len(sample_room_id)}"
     
     print("✅ Secure ID generation works correctly")
-    return True
 
 
 def test_chat_room_key():
@@ -51,7 +50,6 @@ def test_chat_room_key():
     assert key != key2, "Each room should have unique key"
     
     print(f"✅ Room key generation works (sample: {key[:20]}...)")
-    return True
 
 
 def test_rate_limiting():
@@ -82,7 +80,6 @@ def test_rate_limiting():
     print(f"✅ Rate limiting works correctly")
     print(f"   Status: {status['sends_used']}/{status['max_sends_per_hour']} used")
     print(f"   Message: {msg[:50]}...")
-    return True
 
 
 def test_base64_detection():
@@ -115,7 +112,6 @@ def test_base64_detection():
     assert not detect_base64(short_base64), "Short message should pass"
     
     print("✅ Base64 detection logic correct")
-    return True
 
 
 def test_message_length_cap():
@@ -134,7 +130,6 @@ def test_message_length_cap():
     assert len(max_message) == MAX_MESSAGE_LENGTH, "Test message should be at limit"
     
     print(f"✅ Message length cap set correctly: {MAX_MESSAGE_LENGTH} chars")
-    return True
 
 
 def test_dm_structure():
@@ -173,7 +168,6 @@ def test_dm_structure():
         del direct_messages[dm_id]
     
     print("✅ DM functionality structure correct")
-    return True
 
 
 def run_all_tests():
@@ -181,7 +175,7 @@ def run_all_tests():
     print("=" * 60)
     print("OpSecHat v0.8.0 - New Features Test Suite")
     print("=" * 60)
-    
+
     tests = [
         test_secure_ids,
         test_chat_room_key,
@@ -190,24 +184,24 @@ def run_all_tests():
         test_message_length_cap,
         test_dm_structure,
     ]
-    
+
     passed = 0
     failed = 0
-    
+
     for test in tests:
         try:
-            if test():
-                passed += 1
+            test()
+            passed += 1
         except Exception as e:
             print(f"❌ {test.__name__} FAILED: {e}")
             failed += 1
             import traceback
             traceback.print_exc()
-    
+
     print("\n" + "=" * 60)
     print(f"Results: {passed} passed, {failed} failed")
     print("=" * 60)
-    
+
     return failed == 0
 
 
