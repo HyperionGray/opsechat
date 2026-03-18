@@ -6,7 +6,7 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -88,6 +88,44 @@ def create_app():
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
         return response
+
+    @app.errorhandler(429)
+    def handle_rate_limit(error):
+        """
+        Return JSON metadata for chat endpoint throttling.
+
+        Flask-Limiter may trigger 429 before endpoint code runs, so this
+        handler ensures the frontend still gets retry metadata.
+        """
+        retry_after = 1
+        original_response = None
+        try:
+            original_response = error.get_response()
+        except Exception:
+            original_response = None
+
+        if original_response is not None:
+            retry_header = original_response.headers.get("Retry-After")
+            if retry_header:
+                try:
+                    retry_after = max(int(float(retry_header)), 1)
+                except (TypeError, ValueError):
+                    retry_after = 1
+
+        if request.path.startswith("/chat/"):
+            response = jsonify({
+                "error": f"Rate limit exceeded. Try again in {retry_after} seconds.",
+                "retry_after": retry_after,
+                "retryable": True,
+                "path": request.path,
+            })
+            response.status_code = 429
+            response.headers["Retry-After"] = str(retry_after)
+            return response
+
+        if original_response is not None:
+            return original_response
+        return jsonify({"error": "Too Many Requests"}), 429
     
     # Register chat routes
     register_chat_routes(app, chatlines, chatters, id_generator, get_random_color,

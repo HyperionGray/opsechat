@@ -343,6 +343,60 @@
                 statusMsg.textContent = '';
             }, duration);
         }
+
+        function parseRetryAfterSeconds(response, payload, fallbackSeconds = 2) {
+            const retryHeader = response.headers.get('Retry-After');
+            if (retryHeader) {
+                const parsedHeader = parseInt(retryHeader, 10);
+                if (Number.isFinite(parsedHeader) && parsedHeader > 0) {
+                    return parsedHeader;
+                }
+            }
+
+            if (payload && Number.isFinite(payload.retry_after) && payload.retry_after > 0) {
+                return payload.retry_after;
+            }
+
+            return fallbackSeconds;
+        }
+
+        function waitForSeconds(seconds) {
+            return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+        }
+
+        async function postMessageWithRetry(messageToSend, maxRetries = 2) {
+            for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+                const response = await fetch(`/chat/room/${roomId}/messages`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message: messageToSend })
+                });
+
+                let data = null;
+                try {
+                    data = await response.json();
+                } catch (error) {
+                    data = null;
+                }
+
+                if (response.ok) {
+                    return { response, data };
+                }
+
+                if (response.status === 429 && attempt < maxRetries) {
+                    const retryAfter = parseRetryAfterSeconds(response, data, 2 ** (attempt + 1));
+                    showStatus(`Rate limited. Retrying in ${retryAfter}s...`, retryAfter * 1000);
+                    await waitForSeconds(retryAfter);
+                    continue;
+                }
+
+                return { response, data };
+            }
+
+            return { response: null, data: { error: 'Failed to send message' } };
+        }
         
         function scrollToBottom() {
             const container = document.getElementById('messagesContainer');
@@ -394,6 +448,7 @@
         
         async function sendMessage() {
             const input = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendBtn');
             const message = input.value.trim();
             
             if (!message) return;
@@ -406,22 +461,20 @@
             }
             
             try {
-                const response = await fetch(`/chat/room/${roomId}/messages`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ message: messageToSend })
-                });
-                
-                if (response.ok) {
+                sendButton.disabled = true;
+                const { response, data } = await postMessageWithRetry(messageToSend, 2);
+
+                if (response && response.ok) {
                     input.value = '';
                     await pollMessages();
                 } else {
-                    showStatus('Error sending message');
+                    const errorMessage = data && data.error ? data.error : 'Error sending message';
+                    showStatus(errorMessage);
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);
+            } finally {
+                sendButton.disabled = false;
             }
         }
         

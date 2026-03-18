@@ -8,6 +8,7 @@
 - 🔑 **Automated Key Exchange** - No manual key sharing needed
 - 💬 **Direct Messages** - Ephemeral DM feature for sharing room IDs (1-min expiry)
 - 🔒 **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
+- ⏱ **Rate-Limit Retry Metadata + Client Backoff** - Chat APIs now return `retry_after` and clients auto-retry on 429
 - 🌐 **Domain Rotation CLI** - Easy burner email domain management
 - 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
 - ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use

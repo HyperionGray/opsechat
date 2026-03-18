@@ -162,23 +162,70 @@
     
     <script>
         // Simple room creation with no external dependencies
-        document.getElementById('createRoomBtn').addEventListener('click', async function() {
+        function parseRetryAfterSeconds(response, payload, fallbackSeconds = 2) {
+            const retryHeader = response.headers.get('Retry-After');
+            if (retryHeader) {
+                const parsedHeader = parseInt(retryHeader, 10);
+                if (Number.isFinite(parsedHeader) && parsedHeader > 0) {
+                    return parsedHeader;
+                }
+            }
+
+            if (payload && Number.isFinite(payload.retry_after) && payload.retry_after > 0) {
+                return payload.retry_after;
+            }
+
+            return fallbackSeconds;
+        }
+
+        function waitForSeconds(seconds) {
+            return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+        }
+
+        async function createRoomWithRetry(maxRetries = 2) {
             const statusDiv = document.getElementById('status');
-            statusDiv.textContent = 'Creating room...';
-            
-            try {
+
+            for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
                 const response = await fetch('/chat/create', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     }
                 });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to create room');
+
+                let data = null;
+                try {
+                    data = await response.json();
+                } catch (error) {
+                    data = null;
                 }
-                
-                const data = await response.json();
+
+                if (response.ok) {
+                    return { response, data };
+                }
+
+                if (response.status === 429 && attempt < maxRetries) {
+                    const retryAfter = parseRetryAfterSeconds(response, data, 2 ** (attempt + 1));
+                    statusDiv.textContent = `Rate limited. Retrying in ${retryAfter}s...`;
+                    await waitForSeconds(retryAfter);
+                    continue;
+                }
+
+                if (data && data.error) {
+                    throw new Error(data.error);
+                }
+                throw new Error('Failed to create room');
+            }
+
+            throw new Error('Failed to create room');
+        }
+
+        document.getElementById('createRoomBtn').addEventListener('click', async function() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = 'Creating room...';
+            
+            try {
+                const { data } = await createRoomWithRetry(2);
                 
                 if (data.success) {
                     statusDiv.innerHTML = `Room created! Redirecting...<br><a href="${data.room_url}">${window.location.origin}${data.room_url}</a>`;

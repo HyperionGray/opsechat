@@ -10,7 +10,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    build_rate_limit_response,
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -85,6 +90,43 @@ def test_rate_limit_chat_message_limit():
     allowed, retry_after = check_rate_limit("session-msg", "chat_message")
     assert allowed is False
     assert retry_after >= 1
+
+
+def test_build_rate_limit_response_sets_json_and_retry_header():
+    app = create_app()
+    with app.app_context():
+        response = build_rate_limit_response(
+            "Rate limit exceeded. Try again in 7 seconds.",
+            7,
+            "chat_message",
+        )
+
+    assert response.status_code == 429
+    assert response.headers.get("Retry-After") == "7"
+    payload = response.get_json()
+    assert payload["retry_after"] == 7
+    assert payload["retryable"] is True
+    assert payload["limit_key"] == "chat_message"
+
+
+def test_chat_create_429_includes_retry_metadata_from_error_handler():
+    app = create_app()
+    app.config["TESTING"] = True
+    client = app.test_client()
+
+    # Flask-Limiter enforces /chat/create at 3 per minute, so 4th request is 429.
+    for _ in range(3):
+        response = client.post("/chat/create", content_type="application/json")
+        assert response.status_code == 200
+
+    throttled = client.post("/chat/create", content_type="application/json")
+    assert throttled.status_code == 429
+    assert throttled.headers.get("Retry-After") is not None
+    payload = throttled.get_json()
+    assert payload is not None
+    assert payload["retryable"] is True
+    assert payload["retry_after"] >= 1
+    assert "Rate limit exceeded" in payload["error"]
 
 
 # ---------------------------------------------------------------------------
