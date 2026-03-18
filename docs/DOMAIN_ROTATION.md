@@ -74,9 +74,10 @@ python -c "from domain_manager import domain_rotation_manager; \
 
 # Get current budget status
 python -c "from domain_manager import domain_rotation_manager; \
-    print(f'Budget: ${domain_rotation_manager.budget_manager.monthly_budget}'); \
-    print(f'Spent: ${domain_rotation_manager.budget_manager.get_month_spending()}'); \
-    print(f'Remaining: ${domain_rotation_manager.budget_manager.get_remaining_budget()}')"
+    status = domain_rotation_manager.get_budget_status(); \
+    print(f'Budget: ${status[\"monthly_budget\"]}'); \
+    print(f'Spent: ${status[\"current_spending\"]}'); \
+    print(f'Remaining: ${status[\"remaining\"]}')"
 
 # Rotate to new domain
 python -c "from domain_manager import domain_rotation_manager; \
@@ -104,15 +105,12 @@ crontab -e
 from domain_manager import domain_rotation_manager
 
 # Set monthly budget to $20
-domain_rotation_manager.budget_manager.set_monthly_budget(20.0)
+domain_rotation_manager.set_monthly_budget(20.0)
 
 # Check spending
-spending = domain_rotation_manager.budget_manager.get_month_spending()
-print(f"Spent this month: ${spending}")
-
-# Check remaining budget
-remaining = domain_rotation_manager.budget_manager.get_remaining_budget()
-print(f"Remaining: ${remaining}")
+status = domain_rotation_manager.get_budget_status()
+print(f"Spent this month: ${status['current_spending']}")
+print(f"Remaining: ${status['remaining']}")
 ```
 
 ### Budget Safety Features
@@ -151,10 +149,7 @@ The system can generate random domain names:
 
 ```python
 # Generate random domain
-domain = domain_rotation_manager.generate_random_domain_name(
-    length=8,
-    tld='xyz'
-)
+domain = domain_rotation_manager.generate_random_domain(tld='xyz', length=8)
 # Example: "k3s9mx2r.xyz"
 ```
 
@@ -339,24 +334,17 @@ class NamecheapAPIClient(DomainAPIClient):
         super().__init__(api_key)
     
     def search_domain(self, domain: str):
-        # Implementation here
-        pass
+        raise NotImplementedError
     
     def purchase_domain(self, domain: str, years: int = 1):
-        # Implementation here
-        pass
+        raise NotImplementedError
+
+    def get_pricing(self, tld: str):
+        raise NotImplementedError
 
 # Register new client
 domain_rotation_manager.add_api_client('namecheap', NamecheapAPIClient(api_key))
-```
-
-### Custom Domain Patterns
-
-```python
-# Use specific naming pattern
-pattern = "burner-{timestamp}-{random}"
-domain = domain_rotation_manager.generate_domain_from_pattern(pattern, tld='xyz')
-# Example: burner-20260302-k3s9.xyz
+domain_rotation_manager.set_active_provider('namecheap')
 ```
 
 ## CLI Reference
@@ -364,26 +352,20 @@ domain = domain_rotation_manager.generate_domain_from_pattern(pattern, tld='xyz'
 All domain rotation commands:
 
 ```bash
-# Check available domains
-python -m domain_manager search --tld xyz --max-price 2.00
+# Configure API credentials and budget
+python domain_rotation_cli.py config
 
-# Purchase specific domain
-python -m domain_manager purchase --domain example.xyz
+# Search for cheap available domains
+python domain_rotation_cli.py search
 
-# Rotate to new random domain
-python -m domain_manager rotate
+# Rotate to a new active domain
+python domain_rotation_cli.py rotate
 
-# Check budget status
-python -m domain_manager budget status
+# Show current budget and active domain
+python domain_rotation_cli.py status
 
-# Set monthly budget
-python -m domain_manager budget set --amount 20.00
-
-# List all active domains
-python -m domain_manager list
-
-# Configure DNS
-python -m domain_manager dns --domain example.xyz --mx "mail.example.xyz"
+# List purchased domains
+python domain_rotation_cli.py list
 ```
 
 ## Summary

@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from getpass import getpass
 from domain_manager import PorkbunAPIClient, DomainRotationManager
@@ -109,10 +110,10 @@ def get_manager():
     )
     
     # Load saved state
-    if config.get('current_spending'):
+    if config.get('current_spending') is not None:
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.load_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +123,7 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = manager.serialize_owned_domains()
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -144,8 +145,30 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        purchased_at = domain.get('purchased_at')
+        expires_at = domain.get('expires_at')
+        if isinstance(purchased_at, str):
+            try:
+                purchased_at = datetime.fromisoformat(purchased_at)
+            except ValueError:
+                pass
+        if isinstance(expires_at, str):
+            try:
+                expires_at = datetime.fromisoformat(expires_at)
+            except ValueError:
+                pass
+        purchased_label = (
+            purchased_at.strftime('%Y-%m-%d %H:%M')
+            if isinstance(purchased_at, datetime)
+            else str(purchased_at or "unknown")
+        )
+        expires_label = (
+            expires_at.strftime('%Y-%m-%d')
+            if isinstance(expires_at, datetime)
+            else str(expires_at or "unknown")
+        )
+        print(f"   Purchased: {purchased_label}")
+        print(f"   Expires: {expires_label}")
         print()
 
 
@@ -203,14 +226,16 @@ def rotate_domain():
     print("\nPurchasing domain...")
     success = manager.purchase_domain_if_budget_allows(
         domain_info['domain'],
-        domain_info['price']
+        domain_info['price'],
+        provider_name=domain_info.get('provider')
     )
-    
+
     if success:
-        print(f"\n✅ Successfully purchased and activated: {domain_info['domain']}")
+        manager.active_domain = domain_info['domain']
+        print(f"\nSuccessfully purchased and activated: {domain_info['domain']}")
         save_manager_state(manager, config)
     else:
-        print("\n❌ Failed to purchase domain. Check API credentials and budget.")
+        print("\nFailed to purchase domain. Check API credentials and budget.")
 
 
 def show_status():
