@@ -139,16 +139,24 @@ def test_rate_limit_backoff_escalates_on_repeated_violations():
     assert retry_after_second >= 10
 
 
-def test_dm_send_rate_limited_response_includes_retry_metadata():
+def test_chat_message_rate_limited_response_includes_retry_metadata():
     _clear_store()
     client = _test_app.test_client()
-    payload = {"room_id": "room-x", "message": "hello"}
+    create_response = client.post("/chat/create", json={})
+    assert create_response.status_code == 200
+    room_id = create_response.get_json()["room_id"]
 
-    for _ in range(5):
-        response = client.post("/chat/dm/send", json=payload)
+    for i in range(30):
+        response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": f"hello-{i}"},
+        )
         assert response.status_code == 200
 
-    response = client.post("/chat/dm/send", json=payload)
+    response = client.post(
+        f"/chat/room/{room_id}/messages",
+        json={"message": "blocked"},
+    )
     assert response.status_code == 429
     data = response.get_json()
     assert data is not None
