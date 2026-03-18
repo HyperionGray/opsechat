@@ -10,7 +10,16 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    get_rate_limit_headers,
+    RATE_LIMITS,
+    BACKOFF_CONFIG,
+    _calculate_backoff_seconds,
+    _rate_limit_store,
+    _rate_limit_backoff_store,
+    _rate_limit_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -24,6 +33,7 @@ def _clear_store():
     """Helper: wipe the rate limit store between tests."""
     with _rate_limit_lock:
         _rate_limit_store.clear()
+        _rate_limit_backoff_store.clear()
 
 
 def test_rate_limit_allows_requests_within_window():
@@ -85,6 +95,77 @@ def test_rate_limit_chat_message_limit():
     allowed, retry_after = check_rate_limit("session-msg", "chat_message")
     assert allowed is False
     assert retry_after >= 1
+
+
+def test_rate_limit_headers_report_remaining_budget():
+    _clear_store()
+    sid = "session-header"
+
+    allowed, retry_after = check_rate_limit(sid, "dm_send")
+    assert allowed is True
+    assert retry_after == 0
+
+    headers = get_rate_limit_headers(sid, "dm_send")
+    assert headers["X-RateLimit-Limit"] == str(RATE_LIMITS["dm_send"]["max_requests"])
+    assert headers["X-RateLimit-Remaining"] == str(RATE_LIMITS["dm_send"]["max_requests"] - 1)
+    assert "Retry-After" not in headers
+
+
+def test_rate_limit_headers_include_retry_after_when_blocked():
+    _clear_store()
+    sid = "session-header-blocked"
+    limit = RATE_LIMITS["dm_send"]["max_requests"]
+
+    for _ in range(limit):
+        allowed, _ = check_rate_limit(sid, "dm_send")
+        assert allowed is True
+
+    allowed, retry_after = check_rate_limit(sid, "dm_send")
+    assert allowed is False
+    assert retry_after >= 1
+
+    headers = get_rate_limit_headers(sid, "dm_send", retry_after=retry_after)
+    assert headers["Retry-After"] == str(retry_after)
+    assert headers["X-RateLimit-Remaining"] == "0"
+
+
+def test_backoff_calculation_doubles_until_cap():
+    base = BACKOFF_CONFIG["base_seconds"]
+    max_seconds = BACKOFF_CONFIG["max_seconds"]
+
+    assert _calculate_backoff_seconds(1) == base
+    assert _calculate_backoff_seconds(2) == min(base * 2, max_seconds)
+    assert _calculate_backoff_seconds(3) == min(base * 4, max_seconds)
+    assert _calculate_backoff_seconds(100) == max_seconds
+
+
+def test_rate_limit_violation_counter_increments_for_repeated_abuse():
+    _clear_store()
+    sid = "session-repeat-abuse"
+    endpoint = "dm_send"
+    limit = RATE_LIMITS[endpoint]["max_requests"]
+
+    for _ in range(limit):
+        check_rate_limit(sid, endpoint)
+
+    allowed, _ = check_rate_limit(sid, endpoint)
+    assert allowed is False
+
+    with _rate_limit_lock:
+        first_state = _rate_limit_backoff_store[sid][endpoint].copy()
+        # Simulate waiting out active lockout while still over budget in same window.
+        _rate_limit_backoff_store[sid][endpoint]["blocked_until"] = (
+            datetime.datetime.now() - datetime.timedelta(seconds=1)
+        )
+        _rate_limit_store[sid][endpoint] = [datetime.datetime.now()] * limit
+
+    allowed, _ = check_rate_limit(sid, endpoint)
+    assert allowed is False
+
+    with _rate_limit_lock:
+        second_state = _rate_limit_backoff_store[sid][endpoint].copy()
+
+    assert second_state["violations"] == first_state["violations"] + 1
 
 
 # ---------------------------------------------------------------------------
