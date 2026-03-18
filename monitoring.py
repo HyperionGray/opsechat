@@ -8,7 +8,7 @@ import json
 import time
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from functools import wraps
 import traceback
@@ -339,7 +339,7 @@ def get_liveness_status() -> Dict[str, Any]:
     """Get process liveness status for orchestration probes."""
     return {
         'status': 'alive',
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
     }
@@ -362,7 +362,7 @@ def get_readiness_status(app=None) -> Dict[str, Any]:
 
     return {
         'status': readiness,
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': version,
         'checks': checks,
@@ -375,7 +375,7 @@ def get_health_status(app=None) -> Dict[str, Any]:
     readiness = get_readiness_status(app=app)
     return {
         'status': 'healthy' if readiness['status'] == 'ready' else 'degraded',
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': readiness['version'],
         # active_rooms: this app uses a single global chat room. The field is
