@@ -6,7 +6,7 @@ This module provides security analysis using CodeWhisperer and pattern matching.
 
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Any
 from .utils import get_source_files
@@ -112,7 +112,7 @@ def perform_security_scan(repo_path: str, codewhisperer_client=None) -> Dict[str
             'severity_summary': severity_summary,
             'risk_score': _calculate_risk_score(severity_summary),
             'security_issues': security_issues,
-            'scan_timestamp': datetime.utcnow().isoformat() + 'Z',
+            'scan_timestamp': _utc_timestamp(),
             'scanner': scanner_name
         }
 
@@ -124,7 +124,7 @@ def perform_security_scan(repo_path: str, codewhisperer_client=None) -> Dict[str
             'severity_summary': {'high': 0, 'medium': 0, 'low': 0},
             'risk_score': 0,
             'security_issues': [],
-            'scan_timestamp': datetime.utcnow().isoformat() + 'Z',
+            'scan_timestamp': _utc_timestamp(),
             'scanner': 'error',
             'error': str(e)
         }
@@ -196,6 +196,11 @@ def _calculate_risk_score(severity_summary: Dict[str, int]) -> int:
     low = severity_summary.get('low', 0)
     score = 100 - (high * 20) - (medium * 8) - (low * 3)
     return max(0, min(100, score))
+
+
+def _utc_timestamp() -> str:
+    """Return an RFC3339-style UTC timestamp with Z suffix."""
+    return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 
 
 def _is_analyzable_file(file_path: str) -> bool:

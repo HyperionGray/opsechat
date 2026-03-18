@@ -7,7 +7,7 @@ This module provides architecture, dependency, and design pattern analysis.
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Any
 from .utils import get_source_files
@@ -44,7 +44,7 @@ def analyze_architecture(repo_path: str) -> Dict[str, Any]:
             'dependencies': dependency_analysis,
             'patterns': pattern_analysis,
             'architecture_score': architecture_score,
-            'analysis_timestamp': datetime.utcnow().isoformat() + 'Z',
+            'analysis_timestamp': _utc_timestamp(),
             'analyzer': 'amazon_q_architecture'
         }
 
@@ -55,7 +55,7 @@ def analyze_architecture(repo_path: str) -> Dict[str, Any]:
             'dependencies': {},
             'patterns': {},
             'architecture_score': 0,
-            'analysis_timestamp': datetime.utcnow().isoformat() + 'Z',
+            'analysis_timestamp': _utc_timestamp(),
             'analyzer': 'error',
             'error': str(e)
         }
@@ -345,3 +345,8 @@ def _is_analyzable_source(file_path: str) -> bool:
     if '.min.' in file_name:
         return False
     return True
+
+
+def _utc_timestamp() -> str:
+    """Return an RFC3339-style UTC timestamp with Z suffix."""
+    return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')

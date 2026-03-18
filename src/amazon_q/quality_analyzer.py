@@ -7,7 +7,7 @@ This module provides code quality metrics and issue detection.
 import ast
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from .utils import get_source_files
@@ -83,7 +83,7 @@ def analyze_code_quality(repo_path: str, custom_rules: Optional[Dict] = None, be
                 'total_issues': len(quality_issues),
                 'severity_breakdown': _count_issue_severity(quality_issues),
             },
-            'analysis_timestamp': datetime.utcnow().isoformat() + 'Z',
+            'analysis_timestamp': _utc_timestamp(),
             'analyzer': 'local_heuristic_analyzer'
         }
 
@@ -93,7 +93,7 @@ def analyze_code_quality(repo_path: str, custom_rules: Optional[Dict] = None, be
             'metrics': {},
             'issues': [],
             'total_files_analyzed': 0,
-            'analysis_timestamp': datetime.utcnow().isoformat() + 'Z',
+            'analysis_timestamp': _utc_timestamp(),
             'analyzer': 'error',
             'error': str(e)
         }
@@ -489,3 +489,8 @@ def _is_analyzable_file(file_path: str) -> bool:
     if '.min.' in file_name:
         return False
     return True
+
+
+def _utc_timestamp() -> str:
+    """Return an RFC3339-style UTC timestamp with Z suffix."""
+    return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
