@@ -80,6 +80,13 @@
         button:active {
             transform: scale(0.95);
         }
+
+        button:disabled {
+            background-color: #555;
+            color: #111;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
         
         .status {
             text-align: center;
@@ -162,8 +169,54 @@
     
     <script>
         // Simple room creation with no external dependencies
+        const createRoomBtn = document.getElementById('createRoomBtn');
+        const statusDiv = document.getElementById('status');
+        let createCooldownTimer = null;
+
+        function getRetryAfterSeconds(response, data) {
+            const retryAfterHeader = response.headers.get('Retry-After');
+            const retryAfterData = data && Number.isFinite(Number(data.retry_after))
+                ? Number(data.retry_after)
+                : NaN;
+            const retryAfter = Number.isFinite(Number(retryAfterHeader))
+                ? Number(retryAfterHeader)
+                : retryAfterData;
+            return Number.isFinite(retryAfter) && retryAfter > 0 ? Math.ceil(retryAfter) : 1;
+        }
+
+        function startCreateCooldown(seconds, reason) {
+            if (createCooldownTimer) {
+                clearInterval(createCooldownTimer);
+            }
+
+            const originalLabel = 'Create New Chat Room';
+            let remaining = Math.max(1, seconds);
+            createRoomBtn.disabled = true;
+
+            const update = () => {
+                createRoomBtn.textContent = `Retry in ${remaining}s`;
+                statusDiv.textContent = `${reason} Retry available in ${remaining}s.`;
+            };
+
+            update();
+            createCooldownTimer = setInterval(() => {
+                remaining -= 1;
+                if (remaining <= 0) {
+                    clearInterval(createCooldownTimer);
+                    createCooldownTimer = null;
+                    createRoomBtn.disabled = false;
+                    createRoomBtn.textContent = originalLabel;
+                    statusDiv.textContent = 'Rate limit window reset. You can create a room now.';
+                    return;
+                }
+                update();
+            }, 1000);
+        }
+
         document.getElementById('createRoomBtn').addEventListener('click', async function() {
-            const statusDiv = document.getElementById('status');
+            if (createRoomBtn.disabled) {
+                return;
+            }
             statusDiv.textContent = 'Creating room...';
             
             try {
@@ -174,11 +227,17 @@
                     }
                 });
                 
+                const data = await response.json().catch(() => ({}));
+
                 if (!response.ok) {
-                    throw new Error('Failed to create room');
+                    if (response.status === 429) {
+                        const retryAfter = getRetryAfterSeconds(response, data);
+                        const reason = data.error || 'Rate limit exceeded.';
+                        startCreateCooldown(retryAfter, reason);
+                        return;
+                    }
+                    throw new Error(data.error || 'Failed to create room');
                 }
-                
-                const data = await response.json();
                 
                 if (data.success) {
                     statusDiv.innerHTML = `Room created! Redirecting...<br><a href="${data.room_url}">${window.location.origin}${data.room_url}</a>`;

@@ -172,6 +172,40 @@ When limit exceeded:
 
 ---
 
+## ⏱️ Chat API Retry-After Backoff (NEW)
+
+### What Changed
+Chat write endpoints now return machine-readable rate-limit metadata and an HTTP
+`Retry-After` header so clients can back off cleanly instead of blindly retrying.
+
+### Endpoints
+- `POST /chat/create`
+- `POST /chat/room/<room_id>/messages`
+- `POST /chat/dm/send`
+
+### 429 Response Format
+```json
+{
+  "error": "Rate limit exceeded. Maximum 3 requests per 60 seconds. Try again in 52 seconds.",
+  "retry_after": 52,
+  "endpoint": "chat_create",
+  "limit": 3,
+  "window_seconds": 60
+}
+```
+
+Headers include:
+```text
+Retry-After: 52
+```
+
+### User Experience Improvements
+- "Create room" and "Send message" now honor `Retry-After`
+- Buttons/inputs are temporarily disabled during cooldown
+- A countdown is shown so users know exactly when retries are allowed
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

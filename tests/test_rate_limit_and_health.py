@@ -87,6 +87,23 @@ def test_rate_limit_chat_message_limit():
     assert retry_after >= 1
 
 
+def test_chat_create_429_contains_retry_metadata():
+    _clear_store()
+    client = _test_app.test_client()
+    for _ in range(3):
+        response = client.post("/chat/create", content_type="application/json")
+        assert response.status_code == 200
+
+    blocked = client.post("/chat/create", content_type="application/json")
+    assert blocked.status_code == 429
+    assert blocked.headers.get("Retry-After") is not None
+    payload = blocked.get_json()
+    assert payload["endpoint"] == "chat_create"
+    assert payload["retry_after"] >= 1
+    assert payload["limit"] == 3
+    assert payload["window_seconds"] == 60
+
+
 # ---------------------------------------------------------------------------
 # Health endpoint integration tests
 # ---------------------------------------------------------------------------

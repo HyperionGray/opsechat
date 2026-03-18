@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Integration tests for Flask-Limiter rate limiting behavior.
+Integration tests for chat rate limiting behavior.
 
 Tests:
 1. Write (POST) endpoints are rate-limited; read (GET) endpoints are not.
@@ -22,7 +22,7 @@ def _make_app():
 
 
 def test_post_is_rate_limited_get_is_not():
-    """POST /chat/create is rate-limited; GET / is never rate-limited."""
+    """POST /chat/create is rate-limited with Retry-After metadata."""
     print("\nTesting: POST is rate-limited, GET is not...")
     app = _make_app()
 
@@ -40,6 +40,12 @@ def test_post_is_rate_limited_get_is_not():
 
         r = client.post("/chat/create", content_type="application/json")
         assert r.status_code == 429, f"4th POST should be rate-limited (429), got {r.status_code}"
+        assert r.headers.get("Retry-After") is not None
+        body = r.get_json()
+        assert body["endpoint"] == "chat_create"
+        assert body["retry_after"] >= 1
+        assert body["limit"] == 3
+        assert body["window_seconds"] == 60
 
     print("✅ POST /chat/create is rate-limited after 3 requests; GET / is never throttled")
     return True
@@ -59,6 +65,7 @@ def test_separate_sessions_have_independent_limits():
         # Session A must now be blocked
         r = client_a.post("/chat/create", content_type="application/json")
         assert r.status_code == 429, f"Client A should be blocked, got {r.status_code}"
+        assert r.get_json()["endpoint"] == "chat_create"
 
     # A new test client gets a fresh session with its own counter
     with app.test_client() as client_b:

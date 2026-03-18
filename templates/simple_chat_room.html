@@ -122,6 +122,12 @@
         .input-container button:active {
             transform: scale(0.95);
         }
+
+        .input-container button:disabled,
+        .input-container input:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
         
         .status {
             font-size: 0.8em;
@@ -216,14 +222,71 @@
         let encryptionEnabled = false;
         let encryptionKey = null;
         let pollInterval = null;
+        let sendCooldownTimer = null;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+
+        function setSendControlsEnabled(enabled) {
+            const input = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendBtn');
+
+            if (!securityWarningAccepted) {
+                input.disabled = true;
+                sendBtn.disabled = true;
+                return;
+            }
+
+            input.disabled = !enabled;
+            sendBtn.disabled = !enabled;
+        }
+
+        function getRetryAfterSeconds(response, data) {
+            const retryAfterHeader = response.headers.get('Retry-After');
+            const retryAfterData = data && Number.isFinite(Number(data.retry_after))
+                ? Number(data.retry_after)
+                : NaN;
+            const retryAfter = Number.isFinite(Number(retryAfterHeader))
+                ? Number(retryAfterHeader)
+                : retryAfterData;
+            return Number.isFinite(retryAfter) && retryAfter > 0 ? Math.ceil(retryAfter) : 1;
+        }
+
+        function startSendCooldown(seconds, reason) {
+            if (sendCooldownTimer) {
+                clearInterval(sendCooldownTimer);
+            }
+
+            let remaining = Math.max(1, seconds);
+            setSendControlsEnabled(false);
+
+            const statusMsg = document.getElementById('statusMsg');
+            const sendBtn = document.getElementById('sendBtn');
+            const originalBtnLabel = 'Send';
+
+            const update = () => {
+                sendBtn.textContent = `Retry in ${remaining}s`;
+                statusMsg.textContent = `${reason} Retry available in ${remaining}s.`;
+            };
+
+            update();
+            sendCooldownTimer = setInterval(() => {
+                remaining -= 1;
+                if (remaining <= 0) {
+                    clearInterval(sendCooldownTimer);
+                    sendCooldownTimer = null;
+                    sendBtn.textContent = originalBtnLabel;
+                    setSendControlsEnabled(true);
+                    showStatus('Rate limit window reset. You can send messages again.', 2000);
+                    return;
+                }
+                update();
+            }, 1000);
+        }
         
         // Show security warning on first load
         function showSecurityWarning() {
             if (!securityWarningAccepted) {
                 document.getElementById('securityWarning').style.display = 'block';
-                document.getElementById('messageInput').disabled = true;
-                document.getElementById('sendBtn').disabled = true;
+                setSendControlsEnabled(false);
             }
         }
         
@@ -231,8 +294,7 @@
             securityWarningAccepted = true;
             sessionStorage.setItem('securityWarningAccepted', 'true');
             document.getElementById('securityWarning').style.display = 'none';
-            document.getElementById('messageInput').disabled = false;
-            document.getElementById('sendBtn').disabled = false;
+            setSendControlsEnabled(sendCooldownTimer === null);
             document.getElementById('messageInput').focus();
         }
         
@@ -394,6 +456,10 @@
         
         async function sendMessage() {
             const input = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendBtn');
+            if (sendBtn.disabled || input.disabled) {
+                return;
+            }
             const message = input.value.trim();
             
             if (!message) return;
@@ -413,12 +479,20 @@
                     },
                     body: JSON.stringify({ message: messageToSend })
                 });
+
+                const data = await response.json().catch(() => ({}));
                 
                 if (response.ok) {
                     input.value = '';
                     await pollMessages();
                 } else {
-                    showStatus('Error sending message');
+                    if (response.status === 429) {
+                        const retryAfter = getRetryAfterSeconds(response, data);
+                        const reason = data.error || 'Rate limit exceeded.';
+                        startSendCooldown(retryAfter, reason);
+                        return;
+                    }
+                    showStatus(data.error || 'Error sending message');
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);
