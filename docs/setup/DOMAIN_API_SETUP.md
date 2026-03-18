@@ -177,6 +177,19 @@ Enterprise-focused with comprehensive API.
    - Old domains expire automatically
    - Budget tracking prevents overspending
 
+### Standalone CLI Operations
+
+For local operations outside the web UI:
+
+```bash
+python domain_rotation_cli.py config   # Set API key/secret and budget
+python domain_rotation_cli.py rotate   # Purchase and activate a new domain
+python domain_rotation_cli.py list     # Show current local domain inventory
+python domain_rotation_cli.py cleanup  # Remove expired local domain records
+```
+
+The CLI persists state in `~/.opsechat/domain_config.json` using JSON-safe timestamps.
+
 ### Maintenance
 
 1. **Monthly Review**

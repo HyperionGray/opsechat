@@ -2,6 +2,7 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +175,80 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_export_state_serializes_datetimes(self):
+        """Exported state should be JSON-safe."""
+        manager = DomainRotationManager(monthly_budget=25.0)
+        manager.current_spending = 4.5
+        manager.active_domain = "active.xyz"
+        manager.owned_domains = [{
+            "domain": "active.xyz",
+            "price": 2.99,
+            "purchased_at": datetime(2026, 3, 1, 12, 0, 0),
+            "expires_at": datetime(2027, 3, 1, 12, 0, 0),
+        }]
+
+        state = manager.export_state()
+
+        assert state["monthly_budget"] == 25.0
+        assert state["current_spending"] == 4.5
+        assert state["active_domain"] == "active.xyz"
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(state["owned_domains"][0]["expires_at"], str)
+
+    def test_load_state_deserializes_datetimes(self):
+        """Loading exported state should restore datetime objects."""
+        manager = DomainRotationManager()
+        manager.load_state({
+            "monthly_budget": 30.0,
+            "current_spending": 3.0,
+            "active_domain": "restored.xyz",
+            "owned_domains": [{
+                "domain": "restored.xyz",
+                "price": 2.99,
+                "purchased_at": "2026-03-01T12:00:00",
+                "expires_at": "2027-03-01T12:00:00",
+            }]
+        })
+
+        assert manager.monthly_budget == 30.0
+        assert manager.current_spending == 3.0
+        assert manager.active_domain == "restored.xyz"
+        assert isinstance(manager.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(manager.owned_domains[0]["expires_at"], datetime)
+
+    def test_cleanup_expired_domains(self):
+        """Expired domains should be removed from local inventory."""
+        now = datetime.now()
+        manager = DomainRotationManager()
+        manager.active_domain = "expired.xyz"
+        manager.owned_domains = [
+            {
+                "domain": "expired.xyz",
+                "price": 1.99,
+                "expires_at": now - timedelta(days=1),
+            },
+            {
+                "domain": "valid.xyz",
+                "price": 2.99,
+                "expires_at": now + timedelta(days=7),
+            },
+        ]
+
+        removed = manager.cleanup_expired_domains(reference_time=now)
+
+        assert removed == 1
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["domain"] == "valid.xyz"
+        assert manager.active_domain == "valid.xyz"
+
+    def test_configure_and_get_config_masks_secrets(self):
+        """Configuration metadata should not expose full secrets by default."""
+        manager = DomainRotationManager()
+        config = manager.configure("pk1_example_key", "sk1_example_secret", monthly_budget=20.0)
+
+        assert config["configured"] is True
+        assert config["monthly_budget"] == 20.0
+        assert config["provider"] == "PorkbunAPIClient"
+        assert config["api_key"].endswith("key")
+        assert config["secret_key"].endswith("cret")

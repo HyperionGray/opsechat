@@ -131,6 +131,15 @@ http://yourservice.onion/{path}/email/config
 3. **Auto-Rotate**: When domain is flagged/old, rotate to new domain
 4. **Manual Rotate**: Force rotation via email config page
 
+### CLI State Persistence and Cleanup
+
+The standalone `domain_rotation_cli.py` now persists domain inventory with JSON-safe
+timestamps so purchased domains can be listed across runs without serialization errors.
+
+- `python domain_rotation_cli.py list` now handles persisted timestamps safely.
+- `python domain_rotation_cli.py cleanup` removes expired domain records from local state.
+- State file location: `~/.opsechat/domain_config.json` (permissions `0600`).
+
 ## Security Considerations
 
 ### API Key Storage
@@ -141,6 +150,9 @@ For persistent configuration:
 - Use environment variables in your deployment
 - Store encrypted credentials separately
 - Never commit API keys to version control
+
+For the standalone CLI tool, credentials are saved to
+`~/.opsechat/domain_config.json` with restrictive file permissions (`0600`).
 
 ### Domain Privacy
 
