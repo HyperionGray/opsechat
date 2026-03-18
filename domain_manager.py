@@ -10,7 +10,7 @@ import re
 import string
 import xml.etree.ElementTree as ET
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -191,7 +191,9 @@ class NamecheapAPIClient(DomainAPIClient):
             }
 
         root = result["root"]
-        node = root.find(".//DomainCheckResult") or root.find(".//{*}DomainCheckResult")
+        node = root.find(".//DomainCheckResult")
+        if node is None:
+            node = root.find(".//{*}DomainCheckResult")
         available = False
         if node is not None:
             available = node.attrib.get("Available", "false").lower() == "true"
@@ -234,7 +236,9 @@ class NamecheapAPIClient(DomainAPIClient):
 
         root = result["root"]
         success = root.attrib.get("Status", "").upper() == "OK"
-        order_id_node = root.find(".//OrderID") or root.find(".//{*}OrderID")
+        order_id_node = root.find(".//OrderID")
+        if order_id_node is None:
+            order_id_node = root.find(".//{*}OrderID")
         order_id = order_id_node.text if order_id_node is not None else None
 
         return {
@@ -259,7 +263,9 @@ class NamecheapAPIClient(DomainAPIClient):
             return {}
 
         root = result["root"]
-        price_node = root.find(".//ProductPrice") or root.find(".//{*}ProductPrice")
+        price_node = root.find(".//ProductPrice")
+        if price_node is None:
+            price_node = root.find(".//{*}ProductPrice")
         if price_node is None:
             return {}
 
@@ -325,7 +331,7 @@ class DomainRotationManager:
                 return datetime.fromisoformat(value)
             except ValueError:
                 pass
-        return datetime.utcnow()
+        return datetime.now(UTC)
 
     def add_api_client(self, provider: str, api_client: DomainAPIClient, set_active: bool = False) -> str:
         """Register an API client under a provider name."""
@@ -470,7 +476,7 @@ class DomainRotationManager:
             logger.error("Failed to purchase domain: %s", result.get("message"))
             return False
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         self.current_spending += price
         self.owned_domains.append(
             {
