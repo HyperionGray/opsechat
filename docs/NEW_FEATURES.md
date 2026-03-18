@@ -172,6 +172,71 @@ When limit exceeded:
 
 ---
 
+## Chat API Rate Limiting Configuration and Backoff (NEW)
+
+### What Changed
+- Unified simple chat write-endpoint limits under a single in-memory limiter configuration.
+- Added adaptive exponential backoff for repeated requests after a limit is exceeded.
+- Added explicit `Retry-After` headers and `retry_after` JSON fields on `429` responses.
+
+### Affected Endpoints
+- `POST /chat/create`
+- `POST /chat/room/<room_id>/messages`
+- `POST /chat/dm/send`
+
+### Default Limits
+- `chat_create`: 3 requests / 60 seconds
+- `chat_message`: 30 requests / 60 seconds
+- `dm_send`: 5 requests / 60 seconds
+
+### Runtime Configuration
+You can override limits without code changes by setting environment variables:
+
+```bash
+OPSECHAT_CHAT_CREATE_MAX_REQUESTS=3
+OPSECHAT_CHAT_CREATE_WINDOW_SECONDS=60
+
+OPSECHAT_CHAT_MESSAGE_MAX_REQUESTS=30
+OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS=60
+
+OPSECHAT_DM_SEND_MAX_REQUESTS=5
+OPSECHAT_DM_SEND_WINDOW_SECONDS=60
+
+OPSECHAT_RATE_LIMIT_BACKOFF_BASE_SECONDS=2
+OPSECHAT_RATE_LIMIT_BACKOFF_MAX_SECONDS=60
+```
+
+### App Config Overrides (for tests or embedded usage)
+
+```python
+app.config["SIMPLE_CHAT_RATE_LIMITS"] = {
+    "chat_create": {"max_requests": 2, "window_seconds": 30},
+    "chat_message": {"max_requests": 20, "window_seconds": 60},
+    "dm_send": {"max_requests": 4, "window_seconds": 60},
+}
+app.config["SIMPLE_CHAT_RATE_LIMIT_BACKOFF"] = {
+    "base_seconds": 1,
+    "max_seconds": 8,
+}
+```
+
+### 429 Response Example
+
+```json
+{
+  "error": "Rate limit exceeded. Try again in 8 seconds.",
+  "retry_after": 8
+}
+```
+
+And HTTP header:
+
+```text
+Retry-After: 8
+```
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose
