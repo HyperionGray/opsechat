@@ -165,3 +165,20 @@ class TestEmailTransportManager:
         manager.smtp_transport = Mock()
         status = manager.is_configured()
         assert status['smtp'] is True
+
+    def test_get_config_masks_passwords(self):
+        """get_config should return masked credentials."""
+        manager = EmailTransportManager()
+        manager.smtp_transport = SMTPTransport(
+            "smtp.test.com", 587, "user@test.com", "supersecret", True
+        )
+        manager.imap_transport = IMAPTransport(
+            "imap.test.com", 993, "user@test.com", "anothersecret", True
+        )
+
+        config = manager.get_config()
+        assert config["smtp"]["configured"] is True
+        assert config["smtp"]["password"].endswith("cret")
+        assert "*" in config["smtp"]["password"]
+        assert config["imap"]["configured"] is True
+        assert config["imap"]["password"].endswith("cret")

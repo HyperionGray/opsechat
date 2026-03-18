@@ -16,6 +16,15 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
+def _mask_credential(secret: Optional[str]) -> str:
+    """Mask credentials for safe display in templates/logs."""
+    if not secret:
+        return ""
+    if len(secret) <= 4:
+        return "*" * len(secret)
+    return f"{'*' * (len(secret) - 4)}{secret[-4:]}"
+
+
 class SMTPTransport:
     """
     Handle SMTP email sending
@@ -338,6 +347,30 @@ class EmailTransportManager:
         return {
             'smtp': self.smtp_transport is not None,
             'imap': self.imap_transport is not None
+        }
+
+    def get_config(self) -> Dict[str, Dict]:
+        """Return safe-to-display configuration details."""
+        smtp = self.smtp_transport
+        imap = self.imap_transport
+
+        return {
+            "smtp": {
+                "configured": smtp is not None,
+                "server": smtp.smtp_server if smtp else "",
+                "port": smtp.smtp_port if smtp else None,
+                "username": smtp.username if smtp else "",
+                "password": _mask_credential(smtp.password) if smtp else "",
+                "use_tls": smtp.use_tls if smtp else True,
+            },
+            "imap": {
+                "configured": imap is not None,
+                "server": imap.imap_server if imap else "",
+                "port": imap.imap_port if imap else None,
+                "username": imap.username if imap else "",
+                "password": _mask_credential(imap.password) if imap else "",
+                "use_ssl": imap.use_ssl if imap else True,
+            },
         }
 
 

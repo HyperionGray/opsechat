@@ -6,10 +6,31 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
+
+
+def _mask_secret(secret: Optional[str]) -> str:
+    """Mask a credential value for safe display in logs/UI."""
+    if not secret:
+        return ""
+    if len(secret) <= 4:
+        return "*" * len(secret)
+    return f"{'*' * (len(secret) - 4)}{secret[-4:]}"
+
+
+def _coerce_datetime(value: Any) -> Optional[datetime]:
+    """Convert datetime-ish values to datetime objects."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
 
 
 class DomainAPIClient:
@@ -134,10 +155,121 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+        self._api_key: Optional[str] = None
+        self._api_secret: Optional[str] = None
+        self._provider: Optional[str] = None
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+
+    def configure(
+        self,
+        api_key: str,
+        api_secret: Optional[str] = None,
+        monthly_budget: Optional[float] = None,
+        provider: str = "porkbun",
+        secret_key: Optional[str] = None,
+    ) -> Dict:
+        """
+        Configure domain manager credentials and provider.
+
+        `secret_key` is accepted as an alias for compatibility with existing forms.
+        """
+        resolved_secret = api_secret or secret_key
+        if not api_key or not resolved_secret:
+            raise ValueError("Both api_key and api_secret are required")
+
+        normalized_provider = (provider or "porkbun").strip().lower()
+        if normalized_provider != "porkbun":
+            raise ValueError(f"Unsupported provider: {provider}")
+
+        self._api_key = api_key
+        self._api_secret = resolved_secret
+        self._provider = normalized_provider
+        self.api_client = PorkbunAPIClient(api_key, resolved_secret)
+
+        if monthly_budget is not None:
+            budget = float(monthly_budget)
+            if budget <= 0:
+                raise ValueError("monthly_budget must be greater than 0")
+            self.monthly_budget = budget
+
+        return self.get_config()
+
+    def get_config(self) -> Dict:
+        """Return safe, display-oriented domain configuration details."""
+        return {
+            "configured": self.api_client is not None,
+            "provider": self._provider or "porkbun",
+            "api_key": _mask_secret(self._api_key),
+            "api_secret": _mask_secret(self._api_secret),
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "active_domain": self.active_domain,
+            "domains_owned": len(self.owned_domains),
+        }
+
+    @staticmethod
+    def _normalize_price(raw_price: Any) -> Optional[float]:
+        """Convert API price values to a numeric amount."""
+        if raw_price is None:
+            return None
+        if isinstance(raw_price, (int, float)):
+            return float(raw_price)
+        if isinstance(raw_price, str):
+            cleaned = raw_price.replace("$", "").replace("€", "").strip()
+            try:
+                return float(cleaned)
+            except ValueError:
+                return None
+        return None
+
+    def export_state(self) -> Dict:
+        """Export mutable runtime state in JSON-serializable format."""
+        serialized_domains: List[Dict] = []
+        for record in self.owned_domains:
+            serialized = dict(record)
+            purchased_at = _coerce_datetime(serialized.get("purchased_at"))
+            expires_at = _coerce_datetime(serialized.get("expires_at"))
+            if purchased_at:
+                serialized["purchased_at"] = purchased_at.isoformat()
+            if expires_at:
+                serialized["expires_at"] = expires_at.isoformat()
+            serialized_domains.append(serialized)
+
+        return {
+            "current_spending": self.current_spending,
+            "owned_domains": serialized_domains,
+            "active_domain": self.active_domain,
+        }
+
+    def load_state(self, state: Optional[Dict]) -> None:
+        """Load persisted state and normalize datetime values."""
+        if not state:
+            return
+
+        spending = state.get("current_spending", 0.0)
+        try:
+            self.current_spending = float(spending)
+        except (TypeError, ValueError):
+            self.current_spending = 0.0
+
+        loaded_domains: List[Dict] = []
+        for raw_domain in state.get("owned_domains", []):
+            if not isinstance(raw_domain, dict):
+                continue
+            record = dict(raw_domain)
+            purchased_at = _coerce_datetime(record.get("purchased_at"))
+            expires_at = _coerce_datetime(record.get("expires_at"))
+            if purchased_at:
+                record["purchased_at"] = purchased_at
+            if expires_at:
+                record["expires_at"] = expires_at
+            loaded_domains.append(record)
+
+        self.owned_domains = loaded_domains
+        self.active_domain = state.get("active_domain")
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -168,13 +300,8 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
-                
-                if price <= max_price:
+                price = self._normalize_price(result.get("price", 999))
+                if price is not None and price <= max_price:
                     return {
                         "domain": domain,
                         "price": price,

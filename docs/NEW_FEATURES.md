@@ -177,6 +177,25 @@ When limit exceeded:
 ### Purpose
 Easy domain rotation for burner email service to avoid domain bans and maintain service availability.
 
+### Web Configuration and Rotation (Completed)
+
+The `/email/config` page now has a complete backend implementation:
+
+- SMTP and IMAP forms now apply real configuration through `EmailTransportManager`
+- Domain API form now configures `DomainRotationManager` directly
+- "Rotate to New Domain" button now calls `/email/domain/rotate` and updates active domain state
+- "Fetch Latest Emails" and "Fetch Unread Only" actions now call `/email/receive`
+
+All actions return JSON for API clients and redirect with status messages for browser form usage.
+
+### State Persistence Reliability Improvements
+
+Domain ownership records are now normalized when loading/saving state:
+
+- Datetime fields are serialized to ISO-8601 strings for JSON storage
+- Stored ISO strings are parsed back into `datetime` objects when restored
+- CLI domain listing now handles restored state safely without datetime formatting errors
+
 ### Installation
 ```bash
 # The CLI is included in the main repository

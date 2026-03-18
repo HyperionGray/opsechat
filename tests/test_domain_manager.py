@@ -3,6 +3,7 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -174,3 +175,54 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    @patch('domain_manager.PorkbunAPIClient')
+    def test_configure_and_get_config_masks_secrets(self, mock_client_class):
+        """Manager configure/get_config should expose only masked credentials."""
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        manager = DomainRotationManager()
+
+        manager.configure(
+            api_key="pk_test_123456",
+            secret_key="sk_secret_abcdef",
+            monthly_budget=25.0,
+        )
+        config = manager.get_config()
+
+        assert manager.api_client is mock_client
+        assert config["configured"] is True
+        assert config["monthly_budget"] == 25.0
+        assert config["api_key"].endswith("3456")
+        assert config["api_secret"].endswith("cdef")
+        assert "*" in config["api_key"]
+        assert "*" in config["api_secret"]
+
+    def test_load_state_and_export_state_datetime_normalization(self):
+        """Persisted state should round-trip between strings and datetimes."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        state = {
+            "current_spending": "3.5",
+            "active_domain": "alpha.xyz",
+            "owned_domains": [
+                {
+                    "domain": "alpha.xyz",
+                    "price": 1.99,
+                    "purchased_at": "2026-03-10T12:30:00",
+                    "expires_at": "2027-03-10T12:30:00",
+                }
+            ],
+        }
+
+        manager.load_state(state)
+        domains = manager.get_owned_domains()
+
+        assert manager.current_spending == 3.5
+        assert len(domains) == 1
+        assert isinstance(domains[0]["purchased_at"], datetime)
+        assert isinstance(domains[0]["expires_at"], datetime)
+        assert manager.get_active_domain() == "alpha.xyz"
+
+        exported = manager.export_state()
+        assert exported["owned_domains"][0]["purchased_at"] == "2026-03-10T12:30:00"
+        assert exported["owned_domains"][0]["expires_at"] == "2027-03-10T12:30:00"
