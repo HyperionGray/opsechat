@@ -276,3 +276,16 @@ class TestBurnerEmailManager:
         
         assert len(burners) == 1
         assert burners[0]['email'] == active_email
+
+    def test_cleanup_expired_removes_user_mapping(self):
+        """Expired burners should be removed from both indexes."""
+        manager = BurnerEmailManager()
+        expired_email = manager.generate_burner_email("user1")
+        manager.burner_addresses[expired_email]['expires_at'] = (
+            datetime.datetime.now() - datetime.timedelta(minutes=1)
+        )
+
+        manager.cleanup_expired()
+
+        assert expired_email not in manager.burner_addresses
+        assert "user1" not in manager.user_burners
