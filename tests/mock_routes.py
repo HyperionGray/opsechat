@@ -12,7 +12,16 @@ from utils import sanitize_emojis, filter_to_ascii
 import secrets
 
 
-def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_random_color):
+def create_mock_routes(
+    app,
+    chatters,
+    chatlines,
+    reviews,
+    id_generator,
+    get_random_color,
+    email_storage=None,
+    burner_manager=None,
+):
     """Create and register mock route handlers"""
     chat_rooms = {}
     adjectives = ['Swift', 'Silent', 'Dark', 'Ghost', 'Shadow', 'Phantom', 
@@ -233,28 +242,46 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         
         return jsonify(json_chatlines)
 
+    def ensure_user_session():
+        """Ensure a stable mock user session for stateful endpoints."""
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
+        return session["_id"]
+
     # Email routes
     @app.route('/<string:url_addition>/email', methods=["GET"])
     def email_inbox(url_addition):
         if url_addition != app.config["path"]:
             return ('', 404)
         
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
+        user_id = ensure_user_session()
+        if email_storage:
+            email_storage.create_user_inbox(user_id)
+            email_count = len(email_storage.get_emails(user_id))
+        else:
+            email_count = 0
         
-        return '<html><body><h1>Email Inbox</h1></body></html>', 200
+        return f'<html><body><h1>Email Inbox</h1><p>Total emails: {email_count}</p></body></html>', 200
 
     @app.route('/<string:url_addition>/email/compose', methods=["GET", "POST"])
     def email_compose(url_addition):
         if url_addition != app.config["path"]:
             return ('', 404)
         
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
+        user_id = ensure_user_session()
         
         if request.method == "POST":
+            if email_storage:
+                email_storage.add_email(
+                    user_id,
+                    {
+                        "from": "sender@example.com",
+                        "to": f"{user_id}@example.com",
+                        "subject": request.form.get("subject", "Mock Email"),
+                        "body": request.form.get("body", ""),
+                    },
+                )
             return redirect(f'/{app.config["path"]}/email')
         
         return '<html><body><h1>Compose Email</h1></body></html>', 200
@@ -264,39 +291,114 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         if url_addition != app.config["path"]:
             return ('', 404)
         
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
+        ensure_user_session()
         
         if request.method == "POST":
             return redirect(f'/{app.config["path"]}/email/config')
         
         return '<html><body><h1>Email Configuration</h1></body></html>', 200
 
-    @app.route('/<string:url_addition>/email/burner', methods=["GET"])
+    @app.route('/<string:url_addition>/email/burner', methods=["GET", "POST"])
     def email_burner(url_addition):
         if url_addition != app.config["path"]:
             return ('', 404)
         
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
+        user_id = ensure_user_session()
+
+        if burner_manager:
+            burner_manager.cleanup_expired()
+
+        if request.method == "POST":
+            action = request.form.get("action", "").strip().lower()
+            if action == "generate":
+                if burner_manager:
+                    burner_manager.generate_burner_email(user_id)
+                else:
+                    return jsonify({"error": "Burner manager unavailable"}), 503
+            elif action == "rotate":
+                if burner_manager:
+                    burner_manager.rotate_burner(user_id, request.form.get("old_email"))
+                else:
+                    return jsonify({"error": "Burner manager unavailable"}), 503
+            return redirect(f'/{app.config["path"]}/email/burner', code=302)
+
+        active_burners = burner_manager.get_user_burners(user_id) if burner_manager else []
+        burners_html = "".join(
+            f"<li>{item['email']}</li>"
+            for item in active_burners
+        ) or "<li>No active burners</li>"
         
-        return '<html><body><h1>Burner Email</h1></body></html>', 200
+        return (
+            "<html><body>"
+            "<h1>Burner Email</h1>"
+            "<p>Generate, rotate, and expire burner addresses.</p>"
+            f"<ul>{burners_html}</ul>"
+            "</body></html>",
+            200,
+        )
+
+    @app.route('/<string:url_addition>/email/burner/yesscript', methods=["GET"])
+    def email_burner_script(url_addition):
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        user_id = ensure_user_session()
+        if burner_manager:
+            burner_manager.cleanup_expired()
+            active_burners = burner_manager.get_user_burners(user_id)
+        else:
+            active_burners = []
+
+        return (
+            "<html><body>"
+            "<h1>Burner Email (Script Enabled)</h1>"
+            f"<p>Active burners: {len(active_burners)}</p>"
+            "</body></html>",
+            200,
+        )
 
     @app.route('/<string:url_addition>/email/burner/generate', methods=["POST"])
     def email_burner_generate(url_addition):
         if url_addition != app.config["path"]:
             return ('', 404)
         
-        if "_id" not in session:
-            return jsonify({"error": "No session"}), 401
+        user_id = ensure_user_session()
+        if not burner_manager:
+            return jsonify({"error": "Burner manager unavailable"}), 503
         
-        burner_email = f"burner_{id_generator(8)}@example.com"
+        burner_email = burner_manager.generate_burner_email(user_id)
         return jsonify({
             "success": True,
-            "email": burner_email
+            "email": burner_email,
+            "active_burners": burner_manager.get_user_burners(user_id),
         })
+
+    @app.route('/<string:url_addition>/email/burner/list', methods=["GET"])
+    def email_burner_list(url_addition):
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        user_id = ensure_user_session()
+        if not burner_manager:
+            return jsonify([])
+        burner_manager.cleanup_expired()
+        return jsonify(burner_manager.get_user_burners(user_id))
+
+    @app.route('/<string:url_addition>/email/burner/expire/<path:email>', methods=["POST"])
+    def email_burner_expire(url_addition, email):
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        user_id = ensure_user_session()
+        if not burner_manager:
+            return jsonify({"success": False, "error": "Burner manager unavailable"}), 503
+
+        burner_user = burner_manager.get_user_for_burner(email)
+        if burner_user == user_id:
+            burner_manager.expire_burner(email)
+            return jsonify({"success": True})
+
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
 
     # Simple chat routes
     @app.route('/chat', methods=["GET"])

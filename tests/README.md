@@ -44,6 +44,13 @@ python3 tests/mock_server.py
 
 The server will run on http://localhost:5001 and can be used for manual testing or as a target for automated tests.
 
+Burner email routes available in the mock server:
+- `POST /<path>/email/burner` with `action=generate|rotate`
+- `POST /<path>/email/burner/generate`
+- `GET /<path>/email/burner/list`
+- `POST /<path>/email/burner/expire/<email>`
+- `GET /<path>/email/burner/yesscript`
+
 ## Test Coverage
 
 Current tests validate:

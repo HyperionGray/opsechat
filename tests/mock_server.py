@@ -13,6 +13,7 @@ import os
 import datetime
 import string
 import random
+from typing import Dict, List
 
 # Add parent directory to Python path for imports
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -69,14 +70,98 @@ except ImportError as e:
     print(f"Warning: Could not import email_system: {e}")
     # Create mock objects for testing
     class MockEmailStorage:
-        def create_user_inbox(self, user_id): pass
+        def __init__(self):
+            self.emails: Dict[str, List[dict]] = {}
+
+        def create_user_inbox(self, user_id):
+            self.emails.setdefault(user_id, [])
+
+        def get_emails(self, user_id, limit=None):
+            self.create_user_inbox(user_id)
+            if limit:
+                return self.emails[user_id][-limit:]
+            return list(self.emails[user_id])
+
+        def add_email(self, user_id, email):
+            self.create_user_inbox(user_id)
+            record = dict(email)
+            record["id"] = id_generator(16)
+            record["timestamp"] = datetime.datetime.now()
+            self.emails[user_id].append(record)
+
     class MockBurnerManager:
-        def cleanup_expired(self): pass
-        def generate_burner_email(self, user_id): return f"test{user_id}@example.com"
-        def rotate_burner(self, user_id, old_email): return f"test{user_id}@example.com"
-        def get_user_burners(self, user_id): return []
-        def get_user_for_burner(self, email): return None
-        def expire_burner(self, email): pass
+        def __init__(self):
+            self.burner_addresses: Dict[str, dict] = {}
+            self.user_burners: Dict[str, List[str]] = {}
+
+        def _create_email(self, user_id):
+            local = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(12))
+            return f"{local}@example.com"
+
+        def cleanup_expired(self):
+            now = datetime.datetime.now()
+            expired = [
+                email
+                for email, info in self.burner_addresses.items()
+                if info["expires_at"] <= now
+            ]
+            for email in expired:
+                self.expire_burner(email)
+
+        def generate_burner_email(self, user_id):
+            self.cleanup_expired()
+            email = self._create_email(user_id)
+            now = datetime.datetime.now()
+            self.burner_addresses[email] = {
+                "user_id": user_id,
+                "created_at": now,
+                "expires_at": now + datetime.timedelta(hours=24),
+            }
+            self.user_burners.setdefault(user_id, []).append(email)
+            return email
+
+        def rotate_burner(self, user_id, old_email=None):
+            if old_email:
+                self.expire_burner(old_email)
+            return self.generate_burner_email(user_id)
+
+        def get_user_burners(self, user_id):
+            self.cleanup_expired()
+            burners = []
+            now = datetime.datetime.now()
+            for email in self.user_burners.get(user_id, []):
+                info = self.burner_addresses.get(email)
+                if info is None:
+                    continue
+                seconds_left = max(0, int((info["expires_at"] - now).total_seconds()))
+                burners.append({
+                    "email": email,
+                    "created_at": info["created_at"],
+                    "expires_at": info["expires_at"],
+                    "time_remaining_seconds": seconds_left,
+                    "time_remaining_str": f"{seconds_left // 60}m",
+                })
+            return burners
+
+        def get_user_for_burner(self, email):
+            info = self.burner_addresses.get(email)
+            if not info:
+                return None
+            if info["expires_at"] <= datetime.datetime.now():
+                self.expire_burner(email)
+                return None
+            return info["user_id"]
+
+        def expire_burner(self, email):
+            info = self.burner_addresses.pop(email, None)
+            if info is None:
+                return False
+            user_id = info["user_id"]
+            if user_id in self.user_burners and email in self.user_burners[user_id]:
+                self.user_burners[user_id].remove(email)
+                if not self.user_burners[user_id]:
+                    del self.user_burners[user_id]
+            return True
     
     email_storage = MockEmailStorage()
     burner_manager = MockBurnerManager()
@@ -119,7 +204,16 @@ def main():
     app.config["path"] = "test-path-12345"
     
     # Register mock routes
-    create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_random_color)
+    create_mock_routes(
+        app,
+        chatters,
+        chatlines,
+        reviews,
+        id_generator,
+        get_random_color,
+        email_storage=email_storage,
+        burner_manager=burner_manager,
+    )
     
     # Register review routes if available
     try:
