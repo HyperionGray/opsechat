@@ -172,6 +172,60 @@ When limit exceeded:
 
 ---
 
+## 🚦 Chat API Rate Limiting with Backoff Metadata
+
+### What Changed
+Chat write endpoints now use a single configurable policy source with both minute and hour windows. Responses include machine-readable retry metadata so clients can back off automatically.
+
+### Endpoint Policies (Defaults)
+- `POST /chat/create`: **3/minute**, **10/hour**
+- `POST /chat/room/<room_id>/messages`: **30/minute**, **300/hour**
+- `POST /chat/dm/send`: **5/minute**, **20/hour**
+
+### 429 Response Behavior
+When a limit is exceeded, the API now returns:
+- `Retry-After` header
+- `X-RateLimit-*` headers (minute/hour remaining + policy)
+- JSON payload with retry timing and active window details
+
+Example:
+```json
+{
+  "error": "Rate limit exceeded for chat_create. Policy: 10 per hour; 3 per minute. Retry in 27 seconds.",
+  "rate_limit": {
+    "endpoint": "chat_create",
+    "policy": "10 per hour; 3 per minute",
+    "retry_after_seconds": 27,
+    "limits": {
+      "minute": {
+        "limit": 3,
+        "used": 3,
+        "remaining": 0,
+        "window_seconds": 60
+      },
+      "hour": {
+        "limit": 10,
+        "used": 3,
+        "remaining": 7,
+        "window_seconds": 3600
+      }
+    }
+  }
+}
+```
+
+### Client Integration
+- `/chat` room creation and room send flows now automatically read `Retry-After` and apply temporary cooldowns.
+- New read endpoint: `GET /chat/rate-limits` for current policy introspection.
+
+### Configuration
+All values can be overridden with environment variables:
+- `OPSECHAT_CHAT_CREATE_PER_MINUTE`, `OPSECHAT_CHAT_CREATE_PER_HOUR`
+- `OPSECHAT_CHAT_MESSAGE_PER_MINUTE`, `OPSECHAT_CHAT_MESSAGE_PER_HOUR`
+- `OPSECHAT_DM_SEND_PER_MINUTE`, `OPSECHAT_DM_SEND_PER_HOUR`
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

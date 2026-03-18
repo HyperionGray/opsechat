@@ -10,7 +10,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    get_rate_limit_snapshot,
+    _rate_limit_store,
+    _rate_limit_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -87,6 +92,35 @@ def test_rate_limit_chat_message_limit():
     assert retry_after >= 1
 
 
+def test_rate_limit_blocks_when_hour_limit_exceeded():
+    _clear_store()
+    sid = "session-hour-cap"
+    now = datetime.datetime.now()
+
+    # chat_create hourly limit is 10. Seed 10 requests inside hour but outside minute.
+    seeded = [now - datetime.timedelta(seconds=120 + i) for i in range(10)]
+    with _rate_limit_lock:
+        _rate_limit_store[sid] = {"chat_create": seeded}
+
+    allowed, retry_after = check_rate_limit(sid, "chat_create")
+    assert allowed is False
+    assert retry_after >= 1
+
+
+def test_rate_limit_snapshot_includes_minute_and_hour_windows():
+    _clear_store()
+    sid = "session-snapshot"
+    check_rate_limit(sid, "dm_send")
+
+    snapshot = get_rate_limit_snapshot(sid, "dm_send")
+    assert snapshot is not None
+    assert snapshot["policy"] == "20 per hour; 5 per minute"
+    assert "minute" in snapshot["limits"]
+    assert "hour" in snapshot["limits"]
+    assert snapshot["limits"]["minute"]["used"] == 1
+    assert snapshot["limits"]["minute"]["remaining"] == 4
+
+
 # ---------------------------------------------------------------------------
 # Health endpoint integration tests
 # ---------------------------------------------------------------------------
@@ -113,3 +147,37 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_chat_create_returns_retry_metadata_on_429():
+    _clear_store()
+    client = _test_app.test_client()
+
+    for _ in range(3):
+        response = client.post("/chat/create", content_type="application/json")
+        assert response.status_code == 200
+
+    blocked = client.post("/chat/create", content_type="application/json")
+    assert blocked.status_code == 429
+    assert int(blocked.headers.get("Retry-After", "0")) >= 1
+    assert blocked.headers.get("X-RateLimit-Policy") == "10 per hour; 3 per minute"
+
+    data = blocked.get_json()
+    assert data is not None
+    assert "rate_limit" in data
+    assert data["rate_limit"]["endpoint"] == "chat_create"
+    assert data["rate_limit"]["retry_after_seconds"] >= 1
+    assert "minute" in data["rate_limit"]["limits"]
+
+
+def test_rate_limits_endpoint_returns_config():
+    client = _test_app.test_client()
+    response = client.get("/chat/rate-limits")
+    assert response.status_code == 200
+
+    data = response.get_json()
+    assert data is not None
+    assert "limits" in data
+    assert "chat_create" in data["limits"]
+    assert "chat_message" in data["limits"]
+    assert "dm_send" in data["limits"]

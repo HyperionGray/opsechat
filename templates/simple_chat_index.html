@@ -161,11 +161,49 @@
     </div>
     
     <script>
-        // Simple room creation with no external dependencies
-        document.getElementById('createRoomBtn').addEventListener('click', async function() {
-            const statusDiv = document.getElementById('status');
+        const createButton = document.getElementById('createRoomBtn');
+        const statusDiv = document.getElementById('status');
+
+        function setCreateCooldown(seconds) {
+            if (!Number.isFinite(seconds) || seconds <= 0) {
+                return;
+            }
+
+            createButton.disabled = true;
+            const until = Date.now() + (seconds * 1000);
+
+            const tick = () => {
+                const remaining = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+                if (remaining > 0) {
+                    createButton.textContent = `Create New Chat Room (${remaining}s)`;
+                    setTimeout(tick, 250);
+                } else {
+                    createButton.disabled = false;
+                    createButton.textContent = 'Create New Chat Room';
+                }
+            };
+            tick();
+        }
+
+        async function getErrorMessage(response) {
+            let payload = null;
+            try {
+                payload = await response.json();
+            } catch (error) {
+                // Non-JSON response, keep fallback message below.
+            }
+            return {
+                message: payload && payload.error ? payload.error : `Request failed (${response.status})`,
+                retryAfter: payload && payload.rate_limit && payload.rate_limit.retry_after_seconds
+                    ? payload.rate_limit.retry_after_seconds
+                    : Number(response.headers.get('Retry-After') || 0)
+            };
+        }
+
+        // Simple room creation with built-in retry/backoff awareness
+        createButton.addEventListener('click', async function() {
             statusDiv.textContent = 'Creating room...';
-            
+
             try {
                 const response = await fetch('/chat/create', {
                     method: 'POST',
@@ -173,13 +211,17 @@
                         'Content-Type': 'application/json'
                     }
                 });
-                
+
                 if (!response.ok) {
-                    throw new Error('Failed to create room');
+                    const errorInfo = await getErrorMessage(response);
+                    statusDiv.textContent = errorInfo.message;
+                    if (response.status === 429 && errorInfo.retryAfter > 0) {
+                        setCreateCooldown(errorInfo.retryAfter);
+                    }
+                    return;
                 }
-                
+
                 const data = await response.json();
-                
                 if (data.success) {
                     statusDiv.innerHTML = `Room created! Redirecting...<br><a href="${data.room_url}">${window.location.origin}${data.room_url}</a>`;
                     setTimeout(() => {
