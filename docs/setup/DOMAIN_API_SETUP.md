@@ -2,6 +2,26 @@
 
 This guide explains how to set up domain registrar API access for automated burner email domain rotation in opsechat.
 
+## Fast Path: Domain Rotation CLI
+
+If you prefer terminal-only setup, use the bundled CLI:
+
+```bash
+python domain_rotation_cli.py config   # save API key/secret and monthly budget
+python domain_rotation_cli.py status   # current budget + active domain
+python domain_rotation_cli.py search   # probe cheap available domains
+python domain_rotation_cli.py rotate   # buy and activate a new domain
+python domain_rotation_cli.py list     # list purchased domains
+```
+
+Configuration/state file:
+
+- Path: `~/.opsechat/domain_config.json`
+- Permissions: `0600` (owner read/write only)
+- State is persisted in JSON-safe format, including ISO-8601 timestamps for
+  `purchased_at` and `expires_at`.
+- Legacy state keys are still supported for backward compatibility.
+
 ## Supported Registrars
 
 ### Porkbun (Recommended)
@@ -112,9 +132,10 @@ Enterprise-focused with comprehensive API.
 ### API Key Security
 
 **Storage:**
-- API keys are stored in memory only
-- Never written to disk or logs
-- Cleared when application restarts
+- Web app flow: API keys are stored in memory only and cleared on restart.
+- CLI flow: credentials are stored in `~/.opsechat/domain_config.json` with
+  restrictive file permissions (`0600`).
+- Never commit credentials to git or write them to logs.
 
 **Access:**
 - Keys only accessible to authenticated users

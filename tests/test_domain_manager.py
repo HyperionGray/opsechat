@@ -1,6 +1,8 @@
 """
 Tests for domain management module
 """
+import json
+from datetime import datetime
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
@@ -78,6 +80,19 @@ class TestPorkbunAPIClient:
 
 class TestDomainRotationManager:
     """Test domain rotation manager"""
+
+    def test_configure_sets_client_and_budget(self):
+        """Test manager API credential configuration helper."""
+        manager = DomainRotationManager()
+        manager.configure(
+            api_key="pk1_test",
+            secret_key="sk1_test",
+            monthly_budget=25.0,
+        )
+
+        assert isinstance(manager.api_client, PorkbunAPIClient)
+        assert manager.monthly_budget == 25.0
+        assert manager.get_config()["configured"] is True
     
     def test_generate_random_domain(self):
         """Test random domain generation"""
@@ -155,6 +170,42 @@ class TestDomainRotationManager:
         assert status["current_spending"] == 10.0
         assert status["remaining"] == 40.0
         assert status["domains_owned"] == 1
+
+    def test_export_state_is_json_safe(self):
+        """Test export state serializes datetime fields."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.owned_domains = [{
+            "domain": "test.xyz",
+            "price": 2.99,
+            "purchased_at": datetime(2026, 3, 1, 12, 0, 0),
+            "expires_at": datetime(2027, 3, 1, 12, 0, 0),
+        }]
+
+        state = manager.export_state()
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(state["owned_domains"][0]["expires_at"], str)
+        json.dumps(state)
+
+    def test_load_state_parses_iso_timestamps(self):
+        """Test load_state restores datetime fields from persisted data."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.load_state({
+            "monthly_budget": 75.0,
+            "current_spending": 4.5,
+            "active_domain": "loaded.xyz",
+            "owned_domains": [{
+                "domain": "loaded.xyz",
+                "price": 2.99,
+                "purchased_at": "2026-03-01T12:00:00",
+                "expires_at": "2027-03-01T12:00:00",
+            }]
+        })
+
+        assert manager.monthly_budget == 75.0
+        assert manager.current_spending == 4.5
+        assert manager.active_domain == "loaded.xyz"
+        assert isinstance(manager.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(manager.owned_domains[0]["expires_at"], datetime)
     
     def test_rotate_domain(self):
         """Test domain rotation"""
@@ -174,3 +225,11 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_rotate_domain_with_details_without_client(self):
+        """Test structured rotate response when API client missing."""
+        manager = DomainRotationManager()
+        result = manager.rotate_domain_with_details()
+
+        assert result["success"] is False
+        assert "error" in result
