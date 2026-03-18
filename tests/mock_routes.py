@@ -7,12 +7,20 @@ extracted from mock_server.py for better organization and maintainability.
 
 import datetime
 import re
+import secrets
 from flask import render_template, session, request, jsonify, redirect
 from utils import sanitize_emojis, filter_to_ascii
-import secrets
 
 
-def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_random_color):
+def create_mock_routes(
+    app,
+    chatters,
+    chatlines,
+    reviews,
+    id_generator,
+    get_random_color,
+    burner_manager=None
+):
     """Create and register mock route handlers"""
     chat_rooms = {}
     adjectives = ['Swift', 'Silent', 'Dark', 'Ghost', 'Shadow', 'Phantom', 
@@ -31,6 +39,39 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         diff = now - timestamp
         secs = diff.total_seconds()
         return secs >= secs_to_live
+
+    def ensure_session_user():
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
+        return session["_id"]
+
+    def serialize_burner(burner):
+        serialized = dict(burner)
+        for key in ("created_at", "expires_at"):
+            value = serialized.get(key)
+            if isinstance(value, datetime.datetime):
+                serialized[key] = value.isoformat()
+        return serialized
+
+    def list_user_burners(user_id):
+        if burner_manager is None:
+            return []
+        burners = burner_manager.get_user_burners(user_id)
+        if not isinstance(burners, list):
+            return []
+        normalized = []
+        for burner in burners:
+            if isinstance(burner, dict):
+                normalized.append(serialize_burner(burner))
+            elif isinstance(burner, str):
+                normalized.append({"email": burner})
+        return normalized
+
+    def generate_burner(user_id):
+        if burner_manager is None:
+            return f"burner_{id_generator(8)}@example.com"
+        return burner_manager.generate_burner_email(user_id)
     
     @app.route('/<string:url_addition>', methods=["GET"])
     def drop_landing(url_addition):
@@ -238,61 +279,85 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     def email_inbox(url_addition):
         if url_addition != app.config["path"]:
             return ('', 404)
-        
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
-        
+
+        ensure_session_user()
         return '<html><body><h1>Email Inbox</h1></body></html>', 200
 
     @app.route('/<string:url_addition>/email/compose', methods=["GET", "POST"])
     def email_compose(url_addition):
         if url_addition != app.config["path"]:
             return ('', 404)
-        
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
-        
+
+        ensure_session_user()
         if request.method == "POST":
             return redirect(f'/{app.config["path"]}/email')
-        
+
         return '<html><body><h1>Compose Email</h1></body></html>', 200
 
     @app.route('/<string:url_addition>/email/config', methods=["GET", "POST"])
     def email_config(url_addition):
         if url_addition != app.config["path"]:
             return ('', 404)
-        
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
-        
+
+        ensure_session_user()
         if request.method == "POST":
             return redirect(f'/{app.config["path"]}/email/config')
-        
+
         return '<html><body><h1>Email Configuration</h1></body></html>', 200
 
-    @app.route('/<string:url_addition>/email/burner', methods=["GET"])
+    @app.route('/<string:url_addition>/email/burner', methods=["GET", "POST"])
     def email_burner(url_addition):
         if url_addition != app.config["path"]:
             return ('', 404)
-        
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
-        
-        return '<html><body><h1>Burner Email</h1></body></html>', 200
+
+        user_id = ensure_session_user()
+        if request.method == "POST":
+            action = (request.form.get("action") or "generate").strip().lower()
+            if action == "generate":
+                email = generate_burner(user_id)
+                return jsonify({"success": True, "email": email})
+            if action == "rotate":
+                old_email = request.form.get("old_email", "").strip() or None
+                if burner_manager is None:
+                    email = generate_burner(user_id)
+                else:
+                    email = burner_manager.rotate_burner(user_id, old_email)
+                return jsonify({"success": True, "email": email, "rotated_from": old_email})
+            if action == "expire":
+                target_email = request.form.get("email", "").strip()
+                if not target_email:
+                    return jsonify({"success": False, "error": "Missing email"}), 400
+                if burner_manager is None:
+                    return jsonify({"success": False, "error": "No burner manager configured"}), 400
+                return jsonify({"success": burner_manager.expire_burner(target_email)})
+            return jsonify({"success": False, "error": "Unsupported action"}), 400
+
+        active_burners = list_user_burners(user_id)
+        return (
+            "<html><body><h1>Burner Email</h1>"
+            f"<p>Active burners: {len(active_burners)}</p>"
+            "</body></html>",
+            200
+        )
+
+    @app.route('/<string:url_addition>/email/burner/yesscript', methods=["GET"])
+    def email_burner_yesscript(url_addition):
+        return email_burner(url_addition)
+
+    @app.route('/<string:url_addition>/email/burner/list', methods=["GET"])
+    def email_burner_list(url_addition):
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        user_id = ensure_session_user()
+        return jsonify(list_user_burners(user_id))
 
     @app.route('/<string:url_addition>/email/burner/generate', methods=["POST"])
     def email_burner_generate(url_addition):
         if url_addition != app.config["path"]:
             return ('', 404)
-        
-        if "_id" not in session:
-            return jsonify({"error": "No session"}), 401
-        
-        burner_email = f"burner_{id_generator(8)}@example.com"
+
+        user_id = ensure_session_user()
+        burner_email = generate_burner(user_id)
         return jsonify({
             "success": True,
             "email": burner_email
@@ -408,18 +473,18 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         if request.method == "POST":
             data = request.get_json()
             if data and "message" in data:
-                    message_text = data["message"].strip()
-                    if message_text:
-                        message_text = filter_to_ascii(message_text)
-                        message_text = sanitize_emojis(message_text)
-                        message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
-                        message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
-                        message_text = re.sub(r"[<>&\"']", '', message_text)
-                        chat = {
-                            "msg": message_text,
-                            "timestamp": datetime.datetime.now(),
-                            "username": session["_id"],
-                            "color": session["color"]
+                message_text = data["message"].strip()
+                if message_text:
+                    message_text = filter_to_ascii(message_text)
+                    message_text = sanitize_emojis(message_text)
+                    message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
+                    message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
+                    message_text = re.sub(r"[<>&\"']", '', message_text)
+                    chat = {
+                        "msg": message_text,
+                        "timestamp": datetime.datetime.now(),
+                        "username": session["_id"],
+                        "color": session["color"]
                     }
                     chatlines.append(chat)
         

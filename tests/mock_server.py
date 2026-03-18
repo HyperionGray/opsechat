@@ -19,7 +19,7 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from flask import Flask, session
+from flask import Flask
 from mock_routes import create_mock_routes
 
 # Create Flask app with absolute paths for better CI compatibility
@@ -67,17 +67,8 @@ try:
     from email_system import email_storage, burner_manager
 except ImportError as e:
     print(f"Warning: Could not import email_system: {e}")
-    # Create mock objects for testing
-    class MockEmailStorage:
-        def create_user_inbox(self, user_id): pass
-    class MockBurnerManager:
-        def cleanup_expired(self): pass
-        def generate_burner_email(self, user_id): return f"test{user_id}@example.com"
-        def rotate_burner(self, user_id, old_email): return f"test{user_id}@example.com"
-        def get_user_burners(self, user_id): return []
-        def get_user_for_burner(self, email): return None
-        def expire_burner(self, email): pass
-    
+    from mock_email_backend import MockEmailStorage, MockBurnerManager
+
     email_storage = MockEmailStorage()
     burner_manager = MockBurnerManager()
 
@@ -119,7 +110,15 @@ def main():
     app.config["path"] = "test-path-12345"
     
     # Register mock routes
-    create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_random_color)
+    create_mock_routes(
+        app,
+        chatters,
+        chatlines,
+        reviews,
+        id_generator,
+        get_random_color,
+        burner_manager=burner_manager
+    )
     
     # Register review routes if available
     try:
