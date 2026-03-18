@@ -18,11 +18,66 @@ import json
 import os
 import sys
 from pathlib import Path
+from datetime import datetime
 from getpass import getpass
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _parse_datetime(value):
+    """Parse saved datetime values from config into datetime objects."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _serialize_domain_records(domains):
+    """Convert in-memory domain records to JSON-serializable dictionaries."""
+    serialized = []
+    for entry in domains:
+        if not isinstance(entry, dict):
+            continue
+
+        record = dict(entry)
+        purchased_at = record.get("purchased_at")
+        expires_at = record.get("expires_at")
+
+        if isinstance(purchased_at, datetime):
+            record["purchased_at"] = purchased_at.isoformat()
+        if isinstance(expires_at, datetime):
+            record["expires_at"] = expires_at.isoformat()
+
+        serialized.append(record)
+    return serialized
+
+
+def _deserialize_domain_records(domains):
+    """Convert persisted domain records back to runtime-friendly dictionaries."""
+    deserialized = []
+    for entry in domains:
+        if not isinstance(entry, dict):
+            continue
+
+        record = dict(entry)
+        record["purchased_at"] = _parse_datetime(record.get("purchased_at"))
+        record["expires_at"] = _parse_datetime(record.get("expires_at"))
+        deserialized.append(record)
+    return deserialized
+
+
+def _format_datetime(value, fallback="Unknown"):
+    """Human readable datetime formatting for CLI output."""
+    parsed = _parse_datetime(value)
+    if not parsed:
+        return fallback
+    return parsed.strftime('%Y-%m-%d %H:%M')
 
 
 def load_config():
@@ -69,6 +124,9 @@ def configure_api():
         print(f"  Monthly Budget: ${config['monthly_budget']}")
     else:
         print("  Monthly Budget: Not configured")
+
+    print(f"  Retry Attempts: {config.get('retry_attempts', 3)}")
+    print(f"  Backoff Base Seconds: {config.get('backoff_base_seconds', 0.5)}")
     
     print("\nEnter new values (or press Enter to keep current):\n")
     
@@ -88,6 +146,26 @@ def configure_api():
             print("Invalid budget amount, keeping previous value")
     elif 'monthly_budget' not in config:
         config['monthly_budget'] = 50.0
+
+    retry_attempts = input(f"Retry Attempts [default: {config.get('retry_attempts', 3)}]: ").strip()
+    if retry_attempts:
+        try:
+            config['retry_attempts'] = max(1, int(retry_attempts))
+        except ValueError:
+            print("Invalid retry attempts, keeping previous value")
+    elif 'retry_attempts' not in config:
+        config['retry_attempts'] = 3
+
+    backoff_seconds = input(
+        f"Backoff Base Seconds [default: {config.get('backoff_base_seconds', 0.5)}]: "
+    ).strip()
+    if backoff_seconds:
+        try:
+            config['backoff_base_seconds'] = max(0.0, float(backoff_seconds))
+        except ValueError:
+            print("Invalid backoff value, keeping previous value")
+    elif 'backoff_base_seconds' not in config:
+        config['backoff_base_seconds'] = 0.5
     
     save_config(config)
     print("\n✅ Configuration updated successfully!")
@@ -102,17 +180,26 @@ def get_manager():
         print("Run: python domain_rotation_cli.py config")
         sys.exit(1)
     
-    client = PorkbunAPIClient(config['api_key'], config['api_secret'])
+    client = PorkbunAPIClient(
+        config['api_key'],
+        config['api_secret'],
+        max_retries=config.get('retry_attempts', 3),
+        backoff_base_seconds=config.get('backoff_base_seconds', 0.5)
+    )
     manager = DomainRotationManager(
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
     )
+    manager.retry_attempts = max(1, int(config.get('retry_attempts', 3)))
+    manager.backoff_base_seconds = max(0.0, float(config.get('backoff_base_seconds', 0.5)))
+    manager.registrar = "porkbun"
+    manager.api_key_masked = DomainRotationManager._mask_secret(config['api_key'])
     
     # Load saved state
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = _deserialize_domain_records(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +209,7 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = _serialize_domain_records(manager.owned_domains)
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -144,8 +231,9 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_datetime(domain.get('purchased_at'))}")
+        expires_at = _parse_datetime(domain.get('expires_at'))
+        print(f"   Expires: {expires_at.strftime('%Y-%m-%d') if expires_at else 'Unknown'}")
         print()
 
 
@@ -208,6 +296,7 @@ def rotate_domain():
     
     if success:
         print(f"\n✅ Successfully purchased and activated: {domain_info['domain']}")
+        print(f"Remaining budget: ${manager.get_budget_status()['remaining']}")
         save_manager_state(manager, config)
     else:
         print("\n❌ Failed to purchase domain. Check API credentials and budget.")

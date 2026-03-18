@@ -3,6 +3,7 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+import requests
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -74,6 +75,51 @@ class TestPorkbunAPIClient:
         
         assert result["tld"] == "com"
         assert result["registration"] == "9.99"
+
+    @patch('domain_manager.time.sleep')
+    @patch('domain_manager.requests.Session')
+    def test_make_request_retries_then_succeeds(self, mock_session_class, mock_sleep):
+        """Retry transient network failures before succeeding."""
+        mock_session = Mock()
+        success_response = Mock()
+        success_response.status_code = 200
+        success_response.json.return_value = {
+            "status": "SUCCESS",
+            "isAvailable": True,
+            "price": "2.99"
+        }
+        success_response.raise_for_status.return_value = None
+
+        mock_session.post.side_effect = [
+            requests.ConnectionError("temporary network issue"),
+            success_response,
+        ]
+        mock_session_class.return_value = mock_session
+
+        client = PorkbunAPIClient("test_key", "test_secret", max_retries=2, backoff_base_seconds=0)
+        result = client.search_domain("retryable-test.xyz")
+
+        assert mock_session.post.call_count == 2
+        assert result["available"] is True
+        assert result["price"] == "2.99"
+
+    @patch('domain_manager.time.sleep')
+    @patch('domain_manager.requests.Session')
+    def test_make_request_exhausts_retryable_status(self, mock_session_class, mock_sleep):
+        """Return error after exhausting retries on retryable HTTP status."""
+        mock_session = Mock()
+        throttled_response = Mock()
+        throttled_response.status_code = 429
+        throttled_response.raise_for_status.return_value = None
+
+        mock_session.post.side_effect = [throttled_response, throttled_response, throttled_response]
+        mock_session_class.return_value = mock_session
+
+        client = PorkbunAPIClient("test_key", "test_secret", max_retries=3, backoff_base_seconds=0)
+        result = client._make_request("domain/check", {"domain": "throttled.xyz"})
+
+        assert mock_session.post.call_count == 3
+        assert result["status"] == "ERROR"
 
 
 class TestDomainRotationManager:
@@ -174,3 +220,59 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    @patch('domain_manager.requests.Session')
+    def test_configure_and_get_config(self, mock_session_class):
+        """Manager exposes route-safe configuration metadata."""
+        manager = DomainRotationManager()
+        config = manager.configure(
+            api_key="pk_test_123456",
+            secret_key="sk_test_654321",
+            monthly_budget=25.0,
+            retry_attempts=4,
+            backoff_base_seconds=1.0,
+        )
+
+        assert config["configured"] is True
+        assert config["registrar"] == "porkbun"
+        assert config["monthly_budget"] == 25.0
+        assert config["retry_attempts"] == 4
+        assert config["backoff_base_seconds"] == 1.0
+        assert config["api_key_masked"].endswith("3456")
+        assert isinstance(manager.api_client, PorkbunAPIClient)
+
+    def test_search_cheap_domains_returns_limited_results(self):
+        """Search API returns a bounded list of cheap domains."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": "$2.49",
+            "currency": "USD",
+        }
+        manager = DomainRotationManager(mock_client)
+        manager.generate_random_domain = Mock(side_effect=["a1.xyz", "b2.xyz", "c3.xyz"])
+
+        results = manager.search_cheap_domains(tlds=["xyz"], max_price=3.0, limit=2)
+
+        assert len(results) == 2
+        assert results[0]["domain"] == "a1.xyz"
+        assert results[1]["domain"] == "b2.xyz"
+        assert all(item["price"] <= 3.0 for item in results)
+
+    def test_rotate_to_new_domain_returns_structured_success(self):
+        """Structured rotate result includes price and remaining budget."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": "1.99",
+            "currency": "USD",
+        }
+        mock_client.purchase_domain.return_value = {"success": True, "domain": "newdomain.xyz"}
+
+        manager = DomainRotationManager(mock_client, monthly_budget=10.0)
+        result = manager.rotate_to_new_domain(max_price=2.5)
+
+        assert result["success"] is True
+        assert result["domain"] == manager.active_domain
+        assert result["price"] == 1.99
+        assert result["remaining_budget"] == pytest.approx(8.01, 0.001)
