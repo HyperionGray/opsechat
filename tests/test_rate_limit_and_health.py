@@ -87,6 +87,22 @@ def test_rate_limit_chat_message_limit():
     assert retry_after >= 1
 
 
+def test_rate_limit_honors_long_window_for_chat_create():
+    _clear_store()
+    sid = "session-hour-window"
+    now = datetime.datetime.now()
+
+    # Fill the hourly window with 10 requests, all outside the 1-minute window.
+    with _rate_limit_lock:
+        _rate_limit_store[sid] = {
+            "chat_create": [now - datetime.timedelta(minutes=5) for _ in range(10)]
+        }
+
+    allowed, retry_after = check_rate_limit(sid, "chat_create")
+    assert allowed is False
+    assert retry_after >= 1
+
+
 # ---------------------------------------------------------------------------
 # Health endpoint integration tests
 # ---------------------------------------------------------------------------

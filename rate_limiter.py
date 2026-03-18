@@ -6,9 +6,11 @@ Limits are applied per client session (falling back to client IP).
 """
 
 from flask import session
+from flask import jsonify
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import secrets
+import time
 
 def _get_client_identifier():
     """
@@ -27,10 +29,39 @@ def _get_client_identifier():
 
 
 # Global limiter instance - configured per-app in init_limiter()
+def _on_rate_limit_breach(request_limit):
+    """
+    Return JSON metadata for throttled requests.
+
+    This gives clients a stable `retry_after` value they can use for
+    backoff logic and keeps API behavior consistent across endpoints.
+    """
+    retry_after = 1
+    reset_at = getattr(request_limit, "reset_at", None)
+    if reset_at is not None:
+        try:
+            if hasattr(reset_at, "timestamp"):
+                reset_at = reset_at.timestamp()
+            retry_after = max(int(float(reset_at) - time.time()), 1)
+        except (TypeError, ValueError):
+            retry_after = 1
+
+    response = jsonify({
+        "error": "Rate limit exceeded",
+        "error_code": "rate_limited",
+        "retry_after": retry_after,
+    })
+    response.status_code = 429
+    response.headers["Retry-After"] = str(retry_after)
+    return response
+
+
 limiter = Limiter(
     key_func=_get_client_identifier,
     default_limits=["200 per hour", "50 per minute"],
     storage_uri="memory://",
+    on_breach=_on_rate_limit_breach,
+    headers_enabled=True,
 )
 
 

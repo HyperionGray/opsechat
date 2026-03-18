@@ -7,7 +7,6 @@ Tests:
 2. Two different client sessions do not share rate-limit counters.
 """
 
-import json
 import sys
 
 
@@ -40,6 +39,14 @@ def test_post_is_rate_limited_get_is_not():
 
         r = client.post("/chat/create", content_type="application/json")
         assert r.status_code == 429, f"4th POST should be rate-limited (429), got {r.status_code}"
+        retry_after = r.headers.get("Retry-After")
+        assert retry_after is not None, "429 responses should include Retry-After header"
+        assert int(retry_after) >= 1, "Retry-After should be a positive integer"
+
+        body = r.get_json(silent=True)
+        assert body is not None, "429 response should include JSON body"
+        assert body.get("error_code") == "rate_limited", "Expected structured rate-limit error"
+        assert int(body.get("retry_after", 0)) >= 1, "JSON retry_after should be present"
 
     print("✅ POST /chat/create is rate-limited after 3 requests; GET / is never throttled")
     return True

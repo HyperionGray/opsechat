@@ -217,6 +217,8 @@
         let encryptionKey = null;
         let pollInterval = null;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+        let sendBackoffTimer = null;
+        let sendBackoffRemaining = 0;
         
         // Show security warning on first load
         function showSecurityWarning() {
@@ -343,6 +345,41 @@
                 statusMsg.textContent = '';
             }, duration);
         }
+
+        function getRetryAfterSeconds(response, body) {
+            if (body && Number.isInteger(body.retry_after) && body.retry_after > 0) {
+                return body.retry_after;
+            }
+            const headerValue = response.headers.get('Retry-After');
+            const parsed = parseInt(headerValue, 10);
+            return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+        }
+
+        function startSendBackoff(seconds) {
+            const sendBtn = document.getElementById('sendBtn');
+            sendBackoffRemaining = Math.max(1, seconds);
+            sendBtn.disabled = true;
+            sendBtn.textContent = `Wait ${sendBackoffRemaining}s`;
+            showStatus(`Rate limit reached. Retry in ${sendBackoffRemaining} second(s).`, 1200);
+
+            if (sendBackoffTimer) {
+                clearInterval(sendBackoffTimer);
+            }
+
+            sendBackoffTimer = setInterval(() => {
+                sendBackoffRemaining -= 1;
+                if (sendBackoffRemaining <= 0) {
+                    clearInterval(sendBackoffTimer);
+                    sendBackoffTimer = null;
+                    sendBtn.disabled = false;
+                    sendBtn.textContent = 'Send';
+                    showStatus('Ready to send.', 1500);
+                    return;
+                }
+                sendBtn.textContent = `Wait ${sendBackoffRemaining}s`;
+                showStatus(`Rate limit reached. Retry in ${sendBackoffRemaining} second(s).`, 1200);
+            }, 1000);
+        }
         
         function scrollToBottom() {
             const container = document.getElementById('messagesContainer');
@@ -393,6 +430,10 @@
         }
         
         async function sendMessage() {
+            if (sendBackoffRemaining > 0) {
+                return;
+            }
+
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
             
@@ -413,12 +454,23 @@
                     },
                     body: JSON.stringify({ message: messageToSend })
                 });
+
+                let data = null;
+                try {
+                    data = await response.json();
+                } catch (_err) {
+                    data = null;
+                }
                 
                 if (response.ok) {
                     input.value = '';
                     await pollMessages();
+                } else if (response.status === 429) {
+                    const retryAfter = getRetryAfterSeconds(response, data);
+                    startSendBackoff(retryAfter);
                 } else {
-                    showStatus('Error sending message');
+                    const errorMessage = data && data.error ? data.error : 'Error sending message';
+                    showStatus(errorMessage);
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);

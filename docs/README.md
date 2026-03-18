@@ -5,7 +5,7 @@ Welcome to the OpSecChat documentation. All documentation has been organized int
 ## Quick Links
 
 - **[Main README](../README.md)** - Start here for project overview
-- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes (TODO)
+- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes
 - **[Security](../SECURITY.md)** - Security information and best practices
 - **[License](../LICENSE.md)** - MIT License
 
@@ -33,6 +33,7 @@ Installation and deployment guides for different environments.
 - [Amazon Q Setup](setup/AMAZON_Q_SETUP_GUIDE.md) - Amazon Q integration
 - [Domain API Setup](setup/DOMAIN_API_SETUP.md) - Domain registrar API configuration
 - [Domain Registrar API](setup/DOMAIN_REGISTRAR_API.md) - Registrar API documentation
+- [Rate Limiting](setup/RATE_LIMITING.md) - Endpoint throttling and environment overrides
 
 ### 📖 User Guide
 Documentation for end users and operators.
