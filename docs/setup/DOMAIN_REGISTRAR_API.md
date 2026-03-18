@@ -59,14 +59,28 @@ Key endpoints used by opsechat:
 - `pricing/get` - Get TLD pricing
 - `domain/listAll` - List owned domains
 
+### Namecheap (Now Supported)
+
+Namecheap is supported as a secondary registrar for teams that prefer its account model.
+
+- API docs: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
+- API requirements: enabled API access + approved client IP
+- Cheap TLDs: .xyz, .club, .online (pricing varies by promotion)
+- Pricing behavior: Namecheap availability responses do not always include price, so opsechat now falls back to `namecheap.users.getPricing`
+- Purchase behavior: Namecheap requires full contact profile fields for registration commands
+
+CLI configuration now supports both registrars:
+
+```bash
+python domain_rotation_cli.py config
+# Choose registrar: porkbun or namecheap
+```
+
+For Namecheap purchases, provide a JSON contact profile file when prompted by the CLI.
+
 ## Other Registrars (Future Support)
 
-The opsechat domain manager is designed to be extensible. Future registrar support may include:
-
-### Namecheap
-- API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
-- Cheap TLDs: .xyz, .club, .online
+The opsechat domain manager remains extensible. Additional registrars may include:
 
 ### Namesilo
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)
@@ -92,8 +106,8 @@ The opsechat domain manager is designed to be extensible. Future registrar suppo
    ```
 
 2. Under "Domain API Configuration":
-   - Enter your API Key
-   - Enter your API Secret
+   - Select registrar
+   - Enter API credentials
    - Set monthly budget limit (recommended: start with $20-50)
 
 3. Click "Configure"
@@ -103,7 +117,7 @@ The opsechat domain manager is designed to be extensible. Future registrar suppo
 For container deployments, you can set:
 
 ```bash
-# In docker-compose.yml or quadlet
+# In docker-compose.yml or quadlet (Porkbun)
 Environment=PORKBUN_API_KEY=pk1_xxxxx
 Environment=PORKBUN_API_SECRET=sk1_xxxxx
 Environment=DOMAIN_MONTHLY_BUDGET=50.0

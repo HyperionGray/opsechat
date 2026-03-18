@@ -4,7 +4,7 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, NamecheapAPIClient, DomainRotationManager
 )
 
 
@@ -76,6 +76,85 @@ class TestPorkbunAPIClient:
         assert result["registration"] == "9.99"
 
 
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch('domain_manager.requests.Session')
+    def test_search_domain_available(self, mock_session_class):
+        """Test Namecheap domain availability parsing"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """<?xml version="1.0" encoding="utf-8"?>
+<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+  <CommandResponse Type="namecheap.domains.check">
+    <DomainCheckResult Domain="test123.xyz" Available="true" IsPremiumName="false" />
+  </CommandResponse>
+</ApiResponse>"""
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_user="api_user",
+            api_key="api_key",
+            username="username",
+            client_ip="127.0.0.1",
+        )
+
+        result = client.search_domain("test123.xyz")
+
+        assert result["available"] is True
+        assert result["domain"] == "test123.xyz"
+        assert result["premium"] is False
+
+    @patch('domain_manager.requests.Session')
+    def test_get_pricing(self, mock_session_class):
+        """Test Namecheap pricing parsing"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """<?xml version="1.0" encoding="utf-8"?>
+<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+  <CommandResponse Type="namecheap.users.getPricing">
+    <UserGetPricingResult>
+      <ProductType Name="DOMAIN">
+        <ProductCategory Name="register">
+          <Product Name="example.xyz">
+            <Price Duration="1" YourPrice="3.98" />
+          </Product>
+        </ProductCategory>
+      </ProductType>
+    </UserGetPricingResult>
+  </CommandResponse>
+</ApiResponse>"""
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_user="api_user",
+            api_key="api_key",
+            username="username",
+            client_ip="127.0.0.1",
+        )
+
+        result = client.get_pricing("xyz")
+
+        assert result["tld"] == "xyz"
+        assert result["registration"] == "3.98"
+
+    def test_purchase_domain_missing_contact_profile(self):
+        """Namecheap purchase should fail without contact profile."""
+        client = NamecheapAPIClient(
+            api_user="api_user",
+            api_key="api_key",
+            username="username",
+            client_ip="127.0.0.1",
+        )
+
+        result = client.purchase_domain("example.xyz")
+
+        assert result["success"] is False
+        assert "Missing required Namecheap contact fields" in result["message"]
+
+
 class TestDomainRotationManager:
     """Test domain rotation manager"""
     
@@ -112,6 +191,24 @@ class TestDomainRotationManager:
         assert result is not None
         assert result["domain"].endswith((".xyz", ".club", ".online", ".site", ".website"))
         assert result["price"] <= 5.0
+
+    def test_find_cheap_available_domain_uses_pricing_fallback(self):
+        """Use get_pricing when search response has no price."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test123.xyz",
+            "price": None,
+        }
+        mock_client.get_pricing.return_value = {"registration": "3.25"}
+
+        manager = DomainRotationManager(mock_client)
+        with patch.object(manager, "generate_random_domain", return_value="test123.xyz"):
+            result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["domain"] == "test123.xyz"
+        assert result["price"] == 3.25
     
     def test_purchase_domain_if_budget_allows_success(self):
         """Test domain purchase within budget"""
@@ -174,3 +271,46 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_rotate_domain_with_details(self):
+        """Optional detailed rotate response should include metadata."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "detailtest.xyz",
+            "price": 2.49
+        }
+        mock_client.purchase_domain.return_value = {"success": True}
+
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        result = manager.rotate_domain(return_details=True)
+
+        assert result["success"] is True
+        assert result["domain"] == "detailtest.xyz"
+        assert result["price"] == 2.49
+
+    def test_configure_porkbun(self):
+        """Manager configure() should initialize Porkbun client."""
+        manager = DomainRotationManager()
+        config = manager.configure(
+            registrar="porkbun",
+            api_key="pk_test",
+            secret_key="sk_test",
+            monthly_budget=25.0,
+        )
+
+        assert config["configured"] is True
+        assert config["registrar"] == "porkbun"
+        assert config["monthly_budget"] == 25.0
+        assert manager.api_client is not None
+
+    def test_configure_namecheap_missing_fields(self):
+        """Namecheap configure() should validate required fields."""
+        manager = DomainRotationManager()
+
+        with pytest.raises(ValueError):
+            manager.configure(
+                registrar="namecheap",
+                api_key="nc_api_key",
+                monthly_budget=25.0,
+            )
