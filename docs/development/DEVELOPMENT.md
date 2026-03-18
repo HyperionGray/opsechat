@@ -223,6 +223,26 @@ npm run lint
 - `PORT` - Flask server port (default: 5000)
 - `FLASK_ENV` - Development/production mode
 
+## Operational Endpoints
+
+The Flask app exposes lightweight operational endpoints useful for local checks,
+container probes, and observability integrations:
+
+- `GET /health` - Service health status, uptime, version, and basic checks
+- `GET /version` - Minimal version/status payload
+- `GET /metrics` - Aggregated request/latency/error metrics
+  - Optional query params:
+    - `detailed=1` to include endpoint-level breakdown
+    - `limit=<n>` to cap number of endpoint rows (1-200)
+
+Example:
+
+```bash
+curl http://localhost:5000/health
+curl http://localhost:5000/version
+curl "http://localhost:5000/metrics?detailed=1&limit=20"
+```
+
 ## Troubleshooting
 
 ### Common Issues

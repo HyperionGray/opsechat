@@ -8,10 +8,48 @@ import json
 import time
 import sys
 import os
+import re
+import threading
 from datetime import datetime
 from typing import Dict, Any, Optional
 from functools import wraps
 import traceback
+
+_UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-"
+    r"[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{12}$"
+)
+_LONG_HEX_RE = re.compile(r"^[0-9a-fA-F]{16,}$")
+_LONG_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{20,}$")
+
+
+def normalize_endpoint(path: str) -> str:
+    """
+    Normalize dynamic URL path segments for safe metrics aggregation.
+
+    This prevents high-cardinality metrics and avoids storing sensitive
+    room/message IDs in endpoint labels.
+    """
+    if not path:
+        return "/"
+
+    normalized_segments = []
+    for segment in path.strip("/").split("/"):
+        if not segment:
+            continue
+        if segment.isdigit():
+            normalized_segments.append(":int")
+        elif _UUID_RE.match(segment) or _LONG_HEX_RE.match(segment) or _LONG_TOKEN_RE.match(segment):
+            normalized_segments.append(":id")
+        else:
+            normalized_segments.append(segment)
+
+    if not normalized_segments:
+        return "/"
+    return "/" + "/".join(normalized_segments)
 
 class StructuredLogger:
     """
@@ -105,6 +143,7 @@ class ApplicationPerformanceMonitor:
     """
     
     def __init__(self):
+        self._lock = threading.RLock()
         self.metrics = {
             'requests': {
                 'total': 0,
@@ -139,28 +178,29 @@ class ApplicationPerformanceMonitor:
     
     def record_request(self, endpoint: str, method: str, response_time: float, status_code: int):
         """Record HTTP request metrics"""
-        self.metrics['requests']['total'] += 1
-        
-        endpoint_key = f"{method} {endpoint}"
-        if endpoint_key not in self.metrics['requests']['by_endpoint']:
-            self.metrics['requests']['by_endpoint'][endpoint_key] = {
-                'count': 0,
-                'total_time': 0.0,
-                'errors': 0
-            }
-        
-        endpoint_metrics = self.metrics['requests']['by_endpoint'][endpoint_key]
-        endpoint_metrics['count'] += 1
-        endpoint_metrics['total_time'] += response_time
-        
-        if status_code >= 400:
-            endpoint_metrics['errors'] += 1
-            self.metrics['requests']['errors'] += 1
-        
-        # Keep only last 1000 response times for memory efficiency
-        self.metrics['requests']['response_times'].append(response_time)
-        if len(self.metrics['requests']['response_times']) > 1000:
-            self.metrics['requests']['response_times'] = self.metrics['requests']['response_times'][-1000:]
+        with self._lock:
+            self.metrics['requests']['total'] += 1
+
+            endpoint_key = f"{method} {endpoint}"
+            if endpoint_key not in self.metrics['requests']['by_endpoint']:
+                self.metrics['requests']['by_endpoint'][endpoint_key] = {
+                    'count': 0,
+                    'total_time': 0.0,
+                    'errors': 0
+                }
+
+            endpoint_metrics = self.metrics['requests']['by_endpoint'][endpoint_key]
+            endpoint_metrics['count'] += 1
+            endpoint_metrics['total_time'] += response_time
+
+            if status_code >= 400:
+                endpoint_metrics['errors'] += 1
+                self.metrics['requests']['errors'] += 1
+
+            # Keep only last 1000 response times for memory efficiency
+            self.metrics['requests']['response_times'].append(response_time)
+            if len(self.metrics['requests']['response_times']) > 1000:
+                self.metrics['requests']['response_times'] = self.metrics['requests']['response_times'][-1000:]
         
         # Log slow requests
         if response_time > 2.0:
@@ -172,14 +212,15 @@ class ApplicationPerformanceMonitor:
     
     def record_tor_event(self, event_type: str, success: bool = True, details: Optional[Dict] = None):
         """Record Tor-related events"""
-        if event_type == 'connection':
-            self.metrics['tor']['connection_attempts'] += 1
-            if not success:
-                self.metrics['tor']['connection_failures'] += 1
-        elif event_type == 'hidden_service':
-            self.metrics['tor']['hidden_service_creations'] += 1
-            if not success:
-                self.metrics['tor']['hidden_service_failures'] += 1
+        with self._lock:
+            if event_type == 'connection':
+                self.metrics['tor']['connection_attempts'] += 1
+                if not success:
+                    self.metrics['tor']['connection_failures'] += 1
+            elif event_type == 'hidden_service':
+                self.metrics['tor']['hidden_service_creations'] += 1
+                if not success:
+                    self.metrics['tor']['hidden_service_failures'] += 1
         
         self.logger.log_event('info' if success else 'error', 
                             f'tor_{event_type}', 
@@ -188,23 +229,25 @@ class ApplicationPerformanceMonitor:
     
     def record_chat_event(self, event_type: str, details: Optional[Dict] = None):
         """Record chat-related events"""
-        if event_type == 'message_sent':
-            self.metrics['chat']['messages_sent'] += 1
-        elif event_type == 'cleanup':
-            self.metrics['chat']['cleanup_operations'] += 1
+        with self._lock:
+            if event_type == 'message_sent':
+                self.metrics['chat']['messages_sent'] += 1
+            elif event_type == 'cleanup':
+                self.metrics['chat']['cleanup_operations'] += 1
         
         self.logger.log_event('info', f'chat_{event_type}', **(details or {}))
     
     def record_email_event(self, event_type: str, details: Optional[Dict] = None):
         """Record email-related events"""
-        if event_type == 'composed':
-            self.metrics['email']['emails_composed'] += 1
-        elif event_type == 'sent':
-            self.metrics['email']['emails_sent'] += 1
-        elif event_type == 'burner_created':
-            self.metrics['email']['burner_emails_created'] += 1
-        elif event_type == 'security_scan':
-            self.metrics['email']['security_scans_performed'] += 1
+        with self._lock:
+            if event_type == 'composed':
+                self.metrics['email']['emails_composed'] += 1
+            elif event_type == 'sent':
+                self.metrics['email']['emails_sent'] += 1
+            elif event_type == 'burner_created':
+                self.metrics['email']['burner_emails_created'] += 1
+            elif event_type == 'security_scan':
+                self.metrics['email']['security_scans_performed'] += 1
         
         self.logger.log_event('info', f'email_{event_type}', **(details or {}))
     
@@ -213,62 +256,116 @@ class ApplicationPerformanceMonitor:
         try:
             import psutil
             process = psutil.Process()
-            self.metrics['system']['memory_usage_mb'] = process.memory_info().rss / 1024 / 1024
+            with self._lock:
+                self.metrics['system']['memory_usage_mb'] = process.memory_info().rss / 1024 / 1024
         except ImportError:
             # psutil not available, skip memory monitoring
             pass
-        
-        self.metrics['system']['uptime_seconds'] = time.time() - self.metrics['system']['start_time']
-    
-    def get_metrics_summary(self) -> Dict[str, Any]:
+
+        with self._lock:
+            self.metrics['system']['uptime_seconds'] = time.time() - self.metrics['system']['start_time']
+
+    def get_metrics_summary(self, include_endpoint_breakdown: bool = False, max_endpoints: int = 50) -> Dict[str, Any]:
         """Get summarized metrics for reporting"""
         self.update_system_metrics()
-        
-        summary = {
-            'timestamp': datetime.utcnow().isoformat(),
-            'uptime_seconds': self.metrics['system']['uptime_seconds'],
-            'requests': {
-                'total': self.metrics['requests']['total'],
-                'error_rate': 0.0,
-                'avg_response_time': 0.0
-            },
-            'tor': {
-                'connection_success_rate': 0.0,
-                'hidden_service_success_rate': 0.0
-            },
-            'activity': {
-                'chat_messages': self.metrics['chat']['messages_sent'],
-                'emails_composed': self.metrics['email']['emails_composed'],
-                'burner_emails': self.metrics['email']['burner_emails_created']
+
+        with self._lock:
+            summary = {
+                'timestamp': datetime.utcnow().isoformat(),
+                'uptime_seconds': self.metrics['system']['uptime_seconds'],
+                'requests': {
+                    'total': self.metrics['requests']['total'],
+                    'error_rate': 0.0,
+                    'avg_response_time': 0.0
+                },
+                'tor': {
+                    'connection_success_rate': 0.0,
+                    'hidden_service_success_rate': 0.0
+                },
+                'activity': {
+                    'chat_messages': self.metrics['chat']['messages_sent'],
+                    'emails_composed': self.metrics['email']['emails_composed'],
+                    'burner_emails': self.metrics['email']['burner_emails_created']
+                }
             }
-        }
-        
-        # Calculate request metrics
-        if self.metrics['requests']['total'] > 0:
-            summary['requests']['error_rate'] = (
-                self.metrics['requests']['errors'] / self.metrics['requests']['total']
-            ) * 100
-        
-        if self.metrics['requests']['response_times']:
-            summary['requests']['avg_response_time'] = (
-                sum(self.metrics['requests']['response_times']) / 
-                len(self.metrics['requests']['response_times'])
-            )
-        
-        # Calculate Tor success rates
-        if self.metrics['tor']['connection_attempts'] > 0:
-            summary['tor']['connection_success_rate'] = (
-                (self.metrics['tor']['connection_attempts'] - self.metrics['tor']['connection_failures']) /
-                self.metrics['tor']['connection_attempts']
-            ) * 100
-        
-        if self.metrics['tor']['hidden_service_creations'] > 0:
-            summary['tor']['hidden_service_success_rate'] = (
-                (self.metrics['tor']['hidden_service_creations'] - self.metrics['tor']['hidden_service_failures']) /
-                self.metrics['tor']['hidden_service_creations']
-            ) * 100
-        
-        return summary
+
+            # Calculate request metrics
+            if self.metrics['requests']['total'] > 0:
+                summary['requests']['error_rate'] = (
+                    self.metrics['requests']['errors'] / self.metrics['requests']['total']
+                ) * 100
+
+            if self.metrics['requests']['response_times']:
+                summary['requests']['avg_response_time'] = (
+                    sum(self.metrics['requests']['response_times']) /
+                    len(self.metrics['requests']['response_times'])
+                )
+
+            if include_endpoint_breakdown:
+                endpoint_rows = sorted(
+                    self.metrics['requests']['by_endpoint'].items(),
+                    key=lambda item: item[1]['count'],
+                    reverse=True
+                )[:max_endpoints]
+
+                summary['requests']['by_endpoint'] = {
+                    endpoint: {
+                        'count': row['count'],
+                        'avg_response_time': (row['total_time'] / row['count']) if row['count'] else 0.0,
+                        'error_rate': (row['errors'] / row['count'] * 100.0) if row['count'] else 0.0
+                    }
+                    for endpoint, row in endpoint_rows
+                }
+
+            # Calculate Tor success rates
+            if self.metrics['tor']['connection_attempts'] > 0:
+                summary['tor']['connection_success_rate'] = (
+                    (self.metrics['tor']['connection_attempts'] - self.metrics['tor']['connection_failures']) /
+                    self.metrics['tor']['connection_attempts']
+                ) * 100
+
+            if self.metrics['tor']['hidden_service_creations'] > 0:
+                summary['tor']['hidden_service_success_rate'] = (
+                    (self.metrics['tor']['hidden_service_creations'] - self.metrics['tor']['hidden_service_failures']) /
+                    self.metrics['tor']['hidden_service_creations']
+                ) * 100
+
+            return summary
+
+    def reset_metrics(self):
+        """Reset metrics state (primarily for tests)."""
+        with self._lock:
+            start_time = time.time()
+            self.metrics = {
+                'requests': {
+                    'total': 0,
+                    'by_endpoint': {},
+                    'response_times': [],
+                    'errors': 0
+                },
+                'tor': {
+                    'connection_attempts': 0,
+                    'connection_failures': 0,
+                    'hidden_service_creations': 0,
+                    'hidden_service_failures': 0
+                },
+                'chat': {
+                    'messages_sent': 0,
+                    'active_sessions': 0,
+                    'cleanup_operations': 0
+                },
+                'email': {
+                    'emails_composed': 0,
+                    'emails_sent': 0,
+                    'burner_emails_created': 0,
+                    'security_scans_performed': 0
+                },
+                'system': {
+                    'memory_usage_mb': 0,
+                    'uptime_seconds': 0,
+                    'start_time': start_time
+                }
+            }
     
     def log_metrics_summary(self):
         """Log current metrics summary"""
@@ -311,8 +408,8 @@ def monitor_performance(operation_name: str):
 apm = ApplicationPerformanceMonitor()
 
 # Health check endpoint data
-def _read_version() -> str:
-    """Read version from VERSION file, falling back to 'unknown'"""
+def read_version() -> str:
+    """Read version from VERSION file, falling back to 'unknown'."""
     version_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'VERSION')
     try:
         with open(version_file) as f:
@@ -323,11 +420,15 @@ def _read_version() -> str:
 
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
+    apm.update_system_metrics()
+    with apm._lock:
+        uptime_seconds = apm.metrics['system']['uptime_seconds']
+
     return {
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
-        'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
-        'version': _read_version(),
+        'uptime_seconds': uptime_seconds,
+        'version': read_version(),
         # active_rooms: this app uses a single global chat room. The field is
         # included for API consistency; it always reports 1 when the service is up.
         'active_rooms': 1,
@@ -337,6 +438,10 @@ def get_health_status() -> Dict[str, Any]:
             'disk_space': 'ok'
         }
     }
+
+
+# Backward-compatible alias for older imports/tests.
+_read_version = read_version
 
 # Security event logging
 class SecurityEventLogger:

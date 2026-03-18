@@ -8,6 +8,8 @@
 - 🔑 **Automated Key Exchange** - No manual key sharing needed
 - 💬 **Direct Messages** - Ephemeral DM feature for sharing room IDs (1-min expiry)
 - 🔒 **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
+- 📈 **Operational Metrics Endpoint** - `/metrics` with request/error/latency summary
+- ℹ️ **Version Endpoint** - `/version` for lightweight version checks
 - 🌐 **Domain Rotation CLI** - Easy burner email domain management
 - 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
 - ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use
@@ -45,6 +47,22 @@ python chat-room.py --tor
 ```
 
 Access the chat at `/chat` to create rooms and share with your contacts.
+
+### Operational Endpoints
+
+```bash
+# Basic service health
+curl http://localhost:5000/health
+
+# Current app version
+curl http://localhost:5000/version
+
+# Request metrics summary
+curl http://localhost:5000/metrics
+
+# Include endpoint-level breakdown (normalized paths)
+curl "http://localhost:5000/metrics?detailed=1&limit=20"
+```
 
 ### Terminal UI (TUI)
 - ✅ **TUI Only** - No web browser required

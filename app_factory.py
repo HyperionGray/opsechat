@@ -6,7 +6,8 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+import time
+from flask import Flask, jsonify, request, g
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -66,6 +67,13 @@ def create_app():
     
     def add_review_wrapper(user_id, rating, review_text):
         return add_review(reviews, user_id, rating, review_text)
+
+    # Monitoring integration (request timing + health/metrics metadata)
+    from monitoring import apm, get_health_status, normalize_endpoint, read_version
+
+    @app.before_request
+    def track_request_start():
+        g._request_start_time = time.perf_counter()
     
     # Add security headers after every response
     @app.after_request
@@ -87,6 +95,19 @@ def create_app():
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
+
+        # Record request metrics for observability. Exclude /metrics to avoid
+        # self-referential noise in the endpoint data.
+        if request.path != "/metrics":
+            start_time = getattr(g, "_request_start_time", None)
+            if start_time is not None:
+                apm.record_request(
+                    endpoint=normalize_endpoint(request.path),
+                    method=request.method,
+                    response_time=time.perf_counter() - start_time,
+                    status_code=response.status_code,
+                )
+
         return response
     
     # Register chat routes
@@ -105,12 +126,30 @@ def create_app():
     register_review_routes(app, id_generator, get_random_color, 
                           add_review_wrapper, get_reviews, get_review_stats)
     
-    # Health check endpoint
-    from monitoring import get_health_status
-
+    # Health and monitoring endpoints
     @app.route('/health', methods=["GET"])
     def health():
         return jsonify(get_health_status())
+
+    @app.route('/version', methods=["GET"])
+    def version():
+        return jsonify({
+            "version": read_version(),
+            "status": "ok",
+        })
+
+    @app.route('/metrics', methods=["GET"])
+    def metrics():
+        detailed = request.args.get("detailed", "0").lower() in {"1", "true", "yes", "on"}
+        try:
+            limit = int(request.args.get("limit", "50"))
+        except ValueError:
+            limit = 50
+        limit = max(1, min(limit, 200))
+        return jsonify(apm.get_metrics_summary(
+            include_endpoint_breakdown=detailed,
+            max_endpoints=limit,
+        ))
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
