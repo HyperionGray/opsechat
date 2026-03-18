@@ -1,7 +1,6 @@
 """
 Tests for domain management module
 """
-import pytest
 from datetime import datetime
 from unittest.mock import Mock, patch
 from domain_manager import (
