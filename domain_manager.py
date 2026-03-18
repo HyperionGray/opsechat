@@ -6,7 +6,7 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -130,14 +130,165 @@ class DomainRotationManager:
     def __init__(self, api_client: Optional[DomainAPIClient] = None, 
                  monthly_budget: float = 50.0):
         self.api_client = api_client
+        self.api_provider = "porkbun" if isinstance(api_client, PorkbunAPIClient) else None
         self.monthly_budget = monthly_budget
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+        self.last_budget_reset_month = self._current_month_key()
+        self._api_key: Optional[str] = None
+        self._secret_key: Optional[str] = None
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+        self.api_provider = "porkbun" if isinstance(api_client, PorkbunAPIClient) else "custom"
+
+    @staticmethod
+    def _current_month_key() -> str:
+        """Return current month key for budget tracking (UTC)."""
+        return datetime.utcnow().strftime("%Y-%m")
+
+    @staticmethod
+    def _mask_secret(value: Optional[str]) -> Optional[str]:
+        """Mask secrets for safe display in UI responses."""
+        if not value:
+            return None
+        if len(value) <= 4:
+            return "*" * len(value)
+        return f"{'*' * (len(value) - 4)}{value[-4:]}"
+
+    def _reset_budget_if_new_month(self):
+        """Reset spending when the calendar month changes."""
+        current_month = self._current_month_key()
+        if self.last_budget_reset_month != current_month:
+            logger.info(
+                "Resetting domain budget spending from %s to %s",
+                self.last_budget_reset_month,
+                current_month,
+            )
+            self.current_spending = 0.0
+            self.last_budget_reset_month = current_month
+
+    @staticmethod
+    def _parse_price(value: Any) -> Optional[float]:
+        """Parse registrar price values that may include currency symbols."""
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            cleaned = (
+                value.strip()
+                .replace("$", "")
+                .replace("€", "")
+                .replace(",", "")
+            )
+            try:
+                return float(cleaned)
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _serialize_domain_record(record: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert datetime values to ISO strings for JSON storage."""
+        serialized = dict(record)
+        for field in ("purchased_at", "expires_at"):
+            value = serialized.get(field)
+            if isinstance(value, datetime):
+                serialized[field] = value.isoformat()
+        return serialized
+
+    @staticmethod
+    def _deserialize_domain_record(record: Dict[str, Any]) -> Dict[str, Any]:
+        """Parse stored ISO datetime values back into datetime objects."""
+        parsed = dict(record)
+        for field in ("purchased_at", "expires_at"):
+            value = parsed.get(field)
+            if isinstance(value, str):
+                try:
+                    parsed[field] = datetime.fromisoformat(value)
+                except ValueError:
+                    # Keep original value if format is unknown/corrupt.
+                    pass
+        return parsed
+
+    def configure(
+        self,
+        api_key: str,
+        secret_key: str,
+        monthly_budget: float = 10.0,
+        provider: str = "porkbun",
+    ) -> Dict[str, Any]:
+        """
+        Configure domain rotation API and budget.
+        Returns a UI-safe configuration summary.
+        """
+        provider_normalized = provider.lower().strip()
+        if provider_normalized != "porkbun":
+            raise ValueError(f"Unsupported domain provider: {provider}")
+
+        self.api_client = PorkbunAPIClient(api_key, secret_key)
+        self.api_provider = provider_normalized
+        self._api_key = api_key
+        self._secret_key = secret_key
+        self.monthly_budget = float(monthly_budget)
+        self._reset_budget_if_new_month()
+        return self.get_config()
+
+    def get_config(self, include_secrets: bool = False) -> Dict[str, Any]:
+        """
+        Return current manager configuration.
+        Secrets are masked unless include_secrets=True.
+        """
+        config = {
+            "provider": self.api_provider,
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "active_domain": self.active_domain,
+            "last_budget_reset_month": self.last_budget_reset_month,
+            "has_api_client": self.api_client is not None,
+            "api_key": self._api_key if include_secrets else self._mask_secret(self._api_key),
+            "secret_key": self._secret_key if include_secrets else self._mask_secret(self._secret_key),
+        }
+        return config
+
+    def export_state(self) -> Dict[str, Any]:
+        """Export JSON-safe manager state."""
+        return {
+            "current_spending": self.current_spending,
+            "monthly_budget": self.monthly_budget,
+            "active_domain": self.active_domain,
+            "last_budget_reset_month": self.last_budget_reset_month,
+            "api_provider": self.api_provider,
+            "owned_domains": [
+                self._serialize_domain_record(domain)
+                for domain in self.owned_domains
+            ],
+        }
+
+    def import_state(self, state: Dict[str, Any]):
+        """Import manager state previously created by export_state()."""
+        if not state:
+            return
+
+        self.current_spending = float(state.get("current_spending", self.current_spending))
+        self.monthly_budget = float(state.get("monthly_budget", self.monthly_budget))
+        self.active_domain = state.get("active_domain", self.active_domain)
+        self.last_budget_reset_month = state.get(
+            "last_budget_reset_month",
+            self.last_budget_reset_month,
+        )
+        self.api_provider = state.get("api_provider", self.api_provider)
+
+        owned_domains = state.get("owned_domains", [])
+        if isinstance(owned_domains, list):
+            self.owned_domains = [
+                self._deserialize_domain_record(domain)
+                for domain in owned_domains
+                if isinstance(domain, dict)
+            ]
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -168,12 +319,11 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
-                
+                price = self._parse_price(result.get("price", 999))
+                if price is None:
+                    logger.warning("Could not parse price for domain %s", domain)
+                    continue
+
                 if price <= max_price:
                     return {
                         "domain": domain,
@@ -192,6 +342,8 @@ class DomainRotationManager:
             logger.error("No API client configured")
             return False
         
+        self._reset_budget_if_new_month()
+
         # Check budget
         if self.current_spending + price > self.monthly_budget:
             logger.warning(f"Budget exceeded. Current: ${self.current_spending}, "
@@ -254,11 +406,13 @@ class DomainRotationManager:
     
     def get_budget_status(self) -> Dict:
         """Get budget information"""
+        self._reset_budget_if_new_month()
         return {
             "monthly_budget": self.monthly_budget,
             "current_spending": self.current_spending,
             "remaining": self.monthly_budget - self.current_spending,
-            "domains_owned": len(self.owned_domains)
+            "domains_owned": len(self.owned_domains),
+            "budget_month": self.last_budget_reset_month,
         }
 
 

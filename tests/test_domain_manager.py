@@ -2,6 +2,7 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +175,58 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    @patch('domain_manager.requests.Session')
+    def test_configure_sets_api_client_and_masks_keys(self, mock_session_class):
+        """Test configure() initializes provider and masks secrets."""
+        mock_session_class.return_value = Mock()
+        manager = DomainRotationManager()
+
+        config = manager.configure(
+            api_key="pk_live_test_1234",
+            secret_key="sk_live_test_5678",
+            monthly_budget=25.0
+        )
+
+        assert isinstance(manager.api_client, PorkbunAPIClient)
+        assert config["provider"] == "porkbun"
+        assert config["monthly_budget"] == 25.0
+        assert config["api_key"].endswith("1234")
+        assert config["secret_key"].endswith("5678")
+        assert "*" in config["api_key"]
+        assert "*" in config["secret_key"]
+
+    def test_export_import_state_roundtrip_datetimes(self):
+        """Test manager state roundtrip keeps datetime fields usable."""
+        manager = DomainRotationManager(monthly_budget=40.0)
+        manager.current_spending = 7.5
+        manager.active_domain = "abc123.xyz"
+        manager.owned_domains = [{
+            "domain": "abc123.xyz",
+            "price": 2.99,
+            "purchased_at": datetime.now(),
+            "expires_at": datetime.now() + timedelta(days=365)
+        }]
+
+        exported = manager.export_state()
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(exported["owned_domains"][0]["expires_at"], str)
+
+        restored = DomainRotationManager(monthly_budget=1.0)
+        restored.import_state(exported)
+
+        assert restored.current_spending == 7.5
+        assert restored.active_domain == "abc123.xyz"
+        assert isinstance(restored.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(restored.owned_domains[0]["expires_at"], datetime)
+
+    def test_budget_resets_when_month_changes(self):
+        """Test monthly spending resets automatically on month rollover."""
+        manager = DomainRotationManager(monthly_budget=30.0)
+        manager.current_spending = 12.0
+        manager.last_budget_reset_month = (datetime.utcnow() - timedelta(days=35)).strftime("%Y-%m")
+
+        status = manager.get_budget_status()
+
+        assert status["current_spending"] == 0.0
+        assert status["remaining"] == 30.0

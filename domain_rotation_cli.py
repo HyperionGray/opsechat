@@ -107,24 +107,44 @@ def get_manager():
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+
+    # Load saved state (new nested format + backwards-compatible fallback)
+    state = config.get('manager_state', {})
+    if not state:
+        state = {
+            'current_spending': config.get('current_spending', 0.0),
+            'owned_domains': config.get('owned_domains', []),
+            'active_domain': config.get('active_domain'),
+            'monthly_budget': config.get('monthly_budget', 50.0),
+            'last_budget_reset_month': config.get('last_budget_reset_month'),
+            'api_provider': config.get('api_provider', 'porkbun'),
+        }
+    manager.import_state(state)
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    state = manager.export_state()
+    config['manager_state'] = state
+    # Keep legacy top-level keys for compatibility with old versions.
+    config['current_spending'] = state['current_spending']
+    config['owned_domains'] = state['owned_domains']
+    config['active_domain'] = state['active_domain']
+    config['last_budget_reset_month'] = state['last_budget_reset_month']
+    config['api_provider'] = state['api_provider']
+    config['monthly_budget'] = state['monthly_budget']
     save_config(config)
+
+
+def _format_date(value, include_time=False):
+    """Format a date value that may be datetime or ISO string."""
+    if hasattr(value, 'strftime'):
+        return value.strftime('%Y-%m-%d %H:%M' if include_time else '%Y-%m-%d')
+    if isinstance(value, str):
+        return value
+    return "unknown"
 
 
 def list_domains():
@@ -144,8 +164,8 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_date(domain.get('purchased_at'), include_time=True)}")
+        print(f"   Expires: {_format_date(domain.get('expires_at'))}")
         print()
 
 
