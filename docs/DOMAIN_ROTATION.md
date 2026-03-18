@@ -8,6 +8,7 @@ OpSecChat supports automated domain rotation for burner email systems. This allo
 
 Currently supported:
 - **Porkbun** (Recommended - cheap .xyz, .club domains)
+- **Namecheap** (Supported via XML API; requires approved client IP)
 - Additional registrars can be added by extending `DomainAPIClient`
 
 ## Setup
@@ -22,6 +23,16 @@ Currently supported:
 4. Save your:
    - API Key
    - API Secret Key
+
+#### Namecheap Setup
+
+1. Sign up at [namecheap.com](https://www.namecheap.com)
+2. Go to Profile → Tools → Namecheap API Access
+3. Enable API access and whitelist your client IP
+4. Save your:
+   - API Key
+   - Username
+   - Approved Client IP
 
 ### 2. Configure OpSecChat
 
@@ -82,6 +93,12 @@ python -c "from domain_manager import domain_rotation_manager; \
 python -c "from domain_manager import domain_rotation_manager; \
     result = domain_rotation_manager.rotate_to_new_domain(); \
     print(result)"
+
+# Configure Namecheap as primary provider
+python -c "from domain_manager import domain_rotation_manager; \
+    domain_rotation_manager.configure(api_key='nc_key', provider='namecheap', \
+    username='your_username', client_ip='203.0.113.10'); \
+    print(domain_rotation_manager.get_config())"
 ```
 
 ### Automated Rotation
@@ -332,22 +349,22 @@ dig @8.8.8.8 yourdomain.xyz MX
 Add support for additional registrars:
 
 ```python
-from domain_manager import DomainAPIClient
+from domain_manager import domain_rotation_manager
 
-class NamecheapAPIClient(DomainAPIClient):
-    def __init__(self, api_key: str):
-        super().__init__(api_key)
-    
-    def search_domain(self, domain: str):
-        # Implementation here
-        pass
-    
-    def purchase_domain(self, domain: str, years: int = 1):
-        # Implementation here
-        pass
-
-# Register new client
-domain_rotation_manager.add_api_client('namecheap', NamecheapAPIClient(api_key))
+# Register providers and switch defaults at runtime
+domain_rotation_manager.configure(
+    api_key="pk_live_xxx",
+    secret_key="sk_live_xxx",
+    provider="porkbun",
+    monthly_budget=20.0
+)
+domain_rotation_manager.configure(
+    api_key="nc_live_xxx",
+    provider="namecheap",
+    username="mynamecheapuser",
+    client_ip="203.0.113.10"
+)
+domain_rotation_manager.set_primary_provider("namecheap")
 ```
 
 ### Custom Domain Patterns

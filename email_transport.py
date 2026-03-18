@@ -288,6 +288,8 @@ class EmailTransportManager:
     def __init__(self):
         self.smtp_transport: Optional[SMTPTransport] = None
         self.imap_transport: Optional[IMAPTransport] = None
+        self.smtp_config: Dict = {}
+        self.imap_config: Dict = {}
     
     def configure_smtp(self, smtp_server: str, smtp_port: int, username: str, 
                       password: str, use_tls: bool = True) -> bool:
@@ -296,7 +298,15 @@ class EmailTransportManager:
             self.smtp_transport = SMTPTransport(
                 smtp_server, smtp_port, username, password, use_tls
             )
-            return self.smtp_transport.test_connection()
+            success = self.smtp_transport.test_connection()
+            if success:
+                self.smtp_config = {
+                    "smtp_server": smtp_server,
+                    "smtp_port": smtp_port,
+                    "username": username,
+                    "use_tls": use_tls
+                }
+            return success
         except Exception as e:
             logger.error(f"Failed to configure SMTP: {e}")
             return False
@@ -308,7 +318,15 @@ class EmailTransportManager:
             self.imap_transport = IMAPTransport(
                 imap_server, imap_port, username, password, use_ssl
             )
-            return self.imap_transport.test_connection()
+            success = self.imap_transport.test_connection()
+            if success:
+                self.imap_config = {
+                    "imap_server": imap_server,
+                    "imap_port": imap_port,
+                    "username": username,
+                    "use_ssl": use_ssl
+                }
+            return success
         except Exception as e:
             logger.error(f"Failed to configure IMAP: {e}")
             return False
@@ -338,6 +356,14 @@ class EmailTransportManager:
         return {
             'smtp': self.smtp_transport is not None,
             'imap': self.imap_transport is not None
+        }
+
+    def get_config(self) -> Dict:
+        """Get sanitized transport configuration and status."""
+        return {
+            "status": self.is_configured(),
+            "smtp": self.smtp_config,
+            "imap": self.imap_config
         }
 
 

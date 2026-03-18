@@ -17,12 +17,37 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from getpass import getpass
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _serialize_domain_entry(entry):
+    """Convert datetime fields to JSON-safe strings."""
+    serialized = dict(entry)
+    for key in ("purchased_at", "expires_at"):
+        value = serialized.get(key)
+        if isinstance(value, datetime):
+            serialized[key] = value.isoformat()
+    return serialized
+
+
+def _deserialize_domain_entry(entry):
+    """Parse persisted datetime strings back into datetime objects."""
+    parsed = dict(entry)
+    for key in ("purchased_at", "expires_at"):
+        value = parsed.get(key)
+        if isinstance(value, str):
+            try:
+                parsed[key] = datetime.fromisoformat(value)
+            except ValueError:
+                # Keep original string if it doesn't parse cleanly.
+                pass
+    return parsed
 
 
 def load_config():
@@ -112,7 +137,9 @@ def get_manager():
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = [
+            _deserialize_domain_entry(entry) for entry in config['owned_domains']
+        ]
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +149,9 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = [
+        _serialize_domain_entry(entry) for entry in manager.owned_domains
+    ]
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -142,10 +171,16 @@ def list_domains():
     
     for i, domain in enumerate(domains, 1):
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
+        provider = domain.get('provider', 'unknown')
+        purchased = domain.get('purchased_at')
+        expires = domain.get('expires_at')
+        purchased_display = purchased.strftime('%Y-%m-%d %H:%M') if isinstance(purchased, datetime) else str(purchased or "unknown")
+        expires_display = expires.strftime('%Y-%m-%d') if isinstance(expires, datetime) else str(expires or "unknown")
         print(f"{i}. {domain['domain']}{active}")
+        print(f"   Provider: {provider}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {purchased_display}")
+        print(f"   Expires: {expires_display}")
         print()
 
 
