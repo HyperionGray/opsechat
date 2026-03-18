@@ -1,5 +1,10 @@
 # Domain Rotation Guide
 
+This document is legacy reference material and may describe older experimental APIs.
+For current, implementation-backed CLI usage, see:
+
+- [docs/user-guide/DOMAIN_ROTATION_CLI.md](user-guide/DOMAIN_ROTATION_CLI.md)
+
 ## Overview
 
 OpSecChat supports automated domain rotation for burner email systems. This allows you to quickly purchase and rotate domains to enhance privacy and avoid domain-based blocking.

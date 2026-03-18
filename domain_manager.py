@@ -6,7 +6,7 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -138,6 +138,109 @@ class DomainRotationManager:
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+
+    @staticmethod
+    def _parse_price(value: Any) -> Optional[float]:
+        """Parse price values from API/config into float dollars."""
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            normalized = (
+                value.strip()
+                .replace("$", "")
+                .replace("€", "")
+                .replace(",", "")
+            )
+            if not normalized:
+                return None
+            try:
+                return float(normalized)
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _parse_datetime(value: Any) -> Any:
+        """Parse ISO datetime strings while preserving unknown values."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return value
+        return value
+
+    @staticmethod
+    def _serialize_datetime(value: Any) -> Any:
+        """Convert datetime values to ISO strings for JSON persistence."""
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+
+    def _serialize_domain_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare a domain record for safe JSON serialization."""
+        serialized = {
+            key: self._serialize_datetime(value)
+            for key, value in record.items()
+        }
+        if "price" in serialized:
+            parsed_price = self._parse_price(serialized["price"])
+            if parsed_price is not None:
+                serialized["price"] = parsed_price
+        return serialized
+
+    def _deserialize_domain_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        """Load persisted domain records back into runtime objects."""
+        loaded = dict(record)
+        for field in ("purchased_at", "expires_at"):
+            if field in loaded:
+                loaded[field] = self._parse_datetime(loaded[field])
+        if "price" in loaded:
+            parsed_price = self._parse_price(loaded["price"])
+            if parsed_price is not None:
+                loaded["price"] = parsed_price
+        return loaded
+
+    def export_state(self) -> Dict[str, Any]:
+        """Export manager state in a JSON-serializable structure."""
+        return {
+            "monthly_budget": float(self.monthly_budget),
+            "current_spending": float(self.current_spending),
+            "active_domain": self.active_domain,
+            "owned_domains": [
+                self._serialize_domain_record(record)
+                for record in self.owned_domains
+                if isinstance(record, dict)
+            ]
+        }
+
+    def import_state(self, state: Optional[Dict[str, Any]]) -> None:
+        """Import manager state from persisted config safely."""
+        if not isinstance(state, dict):
+            return
+
+        budget = self._parse_price(state.get("monthly_budget"))
+        if budget is not None:
+            self.monthly_budget = budget
+
+        spending = self._parse_price(state.get("current_spending"))
+        self.current_spending = spending if spending is not None else 0.0
+
+        active_domain = state.get("active_domain")
+        self.active_domain = active_domain if isinstance(active_domain, str) else None
+
+        owned_domains = state.get("owned_domains", [])
+        if isinstance(owned_domains, list):
+            self.owned_domains = [
+                self._deserialize_domain_record(record)
+                for record in owned_domains
+                if isinstance(record, dict)
+            ]
+        else:
+            self.owned_domains = []
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -168,12 +271,9 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
-                
+                price = self._parse_price(result.get("price"))
+                if price is None:
+                    continue
                 if price <= max_price:
                     return {
                         "domain": domain,

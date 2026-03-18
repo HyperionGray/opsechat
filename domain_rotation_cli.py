@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from getpass import getpass
 from domain_manager import PorkbunAPIClient, DomainRotationManager
@@ -31,7 +32,7 @@ def load_config():
         return {}
     
     try:
-        with open(CONFIG_FILE, 'r') as f:
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
         print(f"Error loading config: {e}")
@@ -43,7 +44,7 @@ def save_config(config):
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     
     try:
-        with open(CONFIG_FILE, 'w') as f:
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2)
         os.chmod(CONFIG_FILE, 0o600)  # Secure permissions
         print(f"Configuration saved to {CONFIG_FILE}")
@@ -90,7 +91,19 @@ def configure_api():
         config['monthly_budget'] = 50.0
     
     save_config(config)
-    print("\n✅ Configuration updated successfully!")
+    print("\nConfiguration updated successfully.")
+
+
+def _format_datetime(value, fmt):
+    """Format datetime values from either datetime objects or ISO strings."""
+    if isinstance(value, datetime):
+        return value.strftime(fmt)
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value).strftime(fmt)
+        except ValueError:
+            return value
+    return "unknown"
 
 
 def get_manager():
@@ -98,7 +111,7 @@ def get_manager():
     config = load_config()
     
     if not config.get('api_key') or not config.get('api_secret'):
-        print("❌ Error: API credentials not configured.")
+        print("Error: API credentials not configured.")
         print("Run: python domain_rotation_cli.py config")
         sys.exit(1)
     
@@ -107,29 +120,20 @@ def get_manager():
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+    manager.import_state(config)
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    config.update(manager.export_state())
     save_config(config)
 
 
 def list_domains():
     """List owned domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Owned Domains ===\n")
     
@@ -141,34 +145,35 @@ def list_domains():
         return
     
     for i, domain in enumerate(domains, 1):
-        active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
-        print(f"{i}. {domain['domain']}{active}")
-        print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        domain_name = domain.get("domain", "<unknown>")
+        active = " [ACTIVE]" if domain_name == manager.active_domain else ""
+        print(f"{i}. {domain_name}{active}")
+        print(f"   Price: ${domain.get('price', 'unknown')}")
+        print(f"   Purchased: {_format_datetime(domain.get('purchased_at'), '%Y-%m-%d %H:%M')}")
+        print(f"   Expires: {_format_datetime(domain.get('expires_at'), '%Y-%m-%d')}")
         print()
 
 
-def search_domains():
+def search_domains(max_price=5.0, attempts=5):
     """Search for available cheap domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
-    print("Searching for domains under $5...\n")
+    print(f"Searching for domains under ${max_price}...\n")
     
-    for i in range(5):
-        print(f"Attempt {i+1}/5...")
-        domain_info = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+    for i in range(attempts):
+        print(f"Attempt {i+1}/{attempts}...")
+        domain_info = manager.find_cheap_available_domain(max_price=max_price, max_attempts=1)
         
         if domain_info:
-            print(f"  ✅ Found: {domain_info['domain']} - ${domain_info['price']}")
+            print(f"  Found: {domain_info['domain']} - ${domain_info['price']}")
         else:
-            print(f"  ❌ No cheap domain found in this attempt")
+            print("  No cheap domain found in this attempt")
     
     print("\nTo purchase a domain, run: python domain_rotation_cli.py rotate")
 
 
-def rotate_domain():
+def rotate_domain(max_price=5.0, auto_confirm=False):
     """Rotate to a new domain"""
     manager, config = get_manager()
     
@@ -181,24 +186,28 @@ def rotate_domain():
     print(f"Domains Owned: {budget_status['domains_owned']}\n")
     
     if budget_status['remaining'] < 1:
-        print("❌ Insufficient budget remaining this month.")
+        print("Insufficient budget remaining this month.")
         return
     
     print("Searching for available cheap domain...")
     
-    domain_info = manager.find_cheap_available_domain(max_price=min(5.0, budget_status['remaining']))
+    domain_info = manager.find_cheap_available_domain(
+        max_price=min(max_price, budget_status['remaining'])
+    )
     
     if not domain_info:
-        print("❌ Could not find an available cheap domain within budget.")
+        print("Could not find an available cheap domain within budget.")
         return
     
     print(f"\nFound: {domain_info['domain']} for ${domain_info['price']}")
-    
-    confirm = input("\nProceed with purchase? (yes/no): ").strip().lower()
-    
-    if confirm != 'yes':
-        print("Purchase cancelled.")
-        return
+
+    if not auto_confirm:
+        confirm = input("\nProceed with purchase? (yes/no): ").strip().lower()
+        if confirm != 'yes':
+            print("Purchase cancelled.")
+            return
+    else:
+        print("Auto-confirm enabled; proceeding with purchase.")
     
     print("\nPurchasing domain...")
     success = manager.purchase_domain_if_budget_allows(
@@ -207,15 +216,15 @@ def rotate_domain():
     )
     
     if success:
-        print(f"\n✅ Successfully purchased and activated: {domain_info['domain']}")
+        print(f"\nSuccessfully purchased and activated: {domain_info['domain']}")
         save_manager_state(manager, config)
     else:
-        print("\n❌ Failed to purchase domain. Check API credentials and budget.")
+        print("\nFailed to purchase domain. Check API credentials and budget.")
 
 
 def show_status():
     """Show current status"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Domain Rotation Status ===\n")
     
@@ -229,7 +238,7 @@ def show_status():
     print(f"\nDomains Owned: {budget_status['domains_owned']}")
     
     if manager.active_domain:
-        print(f"\n✅ Current burner email domain: {manager.active_domain}")
+        print(f"\nCurrent burner email domain: {manager.active_domain}")
         print(f"   Configure your email system to use: user@{manager.active_domain}")
 
 
@@ -253,6 +262,23 @@ Examples:
         choices=['config', 'status', 'search', 'rotate', 'list'],
         help='Command to execute'
     )
+    parser.add_argument(
+        '--max-price',
+        type=float,
+        default=5.0,
+        help='Maximum price in USD for search/rotate (default: 5.0)'
+    )
+    parser.add_argument(
+        '--attempts',
+        type=int,
+        default=5,
+        help='Number of search attempts for the search command (default: 5)'
+    )
+    parser.add_argument(
+        '--yes',
+        action='store_true',
+        help='Skip rotate purchase prompt (automation-friendly)'
+    )
     
     args = parser.parse_args()
     
@@ -261,9 +287,12 @@ Examples:
     elif args.command == 'status':
         show_status()
     elif args.command == 'search':
-        search_domains()
+        attempts = max(1, args.attempts)
+        max_price = max(0.01, args.max_price)
+        search_domains(max_price=max_price, attempts=attempts)
     elif args.command == 'rotate':
-        rotate_domain()
+        max_price = max(0.01, args.max_price)
+        rotate_domain(max_price=max_price, auto_confirm=args.yes)
     elif args.command == 'list':
         list_domains()
 

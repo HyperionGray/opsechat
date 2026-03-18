@@ -2,6 +2,7 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +175,43 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_find_cheap_available_domain_parses_currency_price(self):
+        """Test price parsing from string with currency symbols."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "price-test.xyz",
+            "price": "$2.49"
+        }
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["price"] == 2.49
+
+    def test_export_import_state_serializes_datetimes(self):
+        """Test state export/import roundtrip with datetime fields."""
+        manager = DomainRotationManager(monthly_budget=25.0)
+        now = datetime(2026, 1, 2, 3, 4, 5)
+        manager.current_spending = 7.25
+        manager.active_domain = "active.xyz"
+        manager.owned_domains = [{
+            "domain": "active.xyz",
+            "price": 1.99,
+            "purchased_at": now,
+            "expires_at": now
+        }]
+
+        exported = manager.export_state()
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+
+        new_manager = DomainRotationManager()
+        new_manager.import_state(exported)
+
+        assert new_manager.monthly_budget == 25.0
+        assert new_manager.current_spending == 7.25
+        assert new_manager.active_domain == "active.xyz"
+        assert isinstance(new_manager.owned_domains[0]["purchased_at"], datetime)
+        assert new_manager.owned_domains[0]["price"] == 1.99
