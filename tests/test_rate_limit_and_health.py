@@ -10,6 +10,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
+from monitoring import apm
 from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
 
 # Shared test Flask app (avoids importing all of runserver.py)
@@ -113,3 +114,32 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_metrics_endpoint_returns_summary():
+    apm.reset_metrics()
+    client = _test_app.test_client()
+    client.get("/")
+    response = client.get("/health/metrics")
+    assert response.status_code == 200
+
+    data = response.get_json()
+    assert data is not None
+    assert "requests" in data
+    assert "system" in data
+    assert "total" in data["requests"]
+    assert "by_endpoint" in data["requests"]
+    assert isinstance(data["requests"]["by_endpoint"], dict)
+
+
+def test_health_metrics_tracks_endpoint_counts():
+    apm.reset_metrics()
+    client = _test_app.test_client()
+    client.get("/")
+    client.get("/health")
+    response = client.get("/health/metrics")
+    data = response.get_json()
+
+    endpoint_metrics = data["requests"]["by_endpoint"]
+    assert endpoint_metrics.get("GET /", {}).get("count", 0) >= 1
+    assert endpoint_metrics.get("GET /health", {}).get("count", 0) >= 1

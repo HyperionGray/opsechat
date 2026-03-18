@@ -5,8 +5,8 @@ This module handles Flask application creation and configuration,
 extracted from runserver.py to improve code organization.
 """
 
-import os
-from flask import Flask, jsonify
+import time
+from flask import Flask, jsonify, request, g
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -36,6 +36,7 @@ def create_app():
     # Register function-based routes
     from chat_routes import register_chat_routes
     from review_routes import register_review_routes
+    from monitoring import get_health_status, apm
     from utils import add_review
     
     # Helper functions for reviews
@@ -67,6 +68,11 @@ def create_app():
     def add_review_wrapper(user_id, rating, review_text):
         return add_review(reviews, user_id, rating, review_text)
     
+    # Request timing hook for APM
+    @app.before_request
+    def start_request_timer():
+        g.request_start_time = time.perf_counter()
+
     # Add security headers after every response
     @app.after_request
     def add_security_headers(response):
@@ -82,11 +88,25 @@ def create_app():
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
+
+        # Record request metrics without affecting response delivery.
+        try:
+            start_time = getattr(g, "request_start_time", None)
+            if start_time is not None:
+                response_time = max(0.0, time.perf_counter() - start_time)
+                apm.record_request(
+                    endpoint=request.path,
+                    method=request.method,
+                    response_time=response_time,
+                    status_code=response.status_code
+                )
+        except Exception:
+            # Monitoring failures must not impact request handling.
+            pass
+
         return response
     
     # Register chat routes
@@ -106,25 +126,17 @@ def create_app():
                           add_review_wrapper, get_reviews, get_review_stats)
     
     # Health check endpoint
-    from monitoring import get_health_status
-
     @app.route('/health', methods=["GET"])
     def health():
         return jsonify(get_health_status())
+
+    @app.route('/health/metrics', methods=["GET"])
+    def health_metrics():
+        return jsonify(apm.get_metrics_summary())
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # CHANGELOG (AI assistant):
-    # - Made rate_limiter import optional with a no-op fallback to prevent
-    #   ModuleNotFoundError in containerized installs that omit rate_limiter.py.
-    #
-    # Remaining checklist (non-blocking for runtime):
-    # - Update container/Podman build configuration to ensure rate_limiter.py
-    #   is included in the image (e.g., COPY list or packaging config).
-    # - Once packaging reliably includes rate_limiter.py, consider removing
-    #   the fallback or turning it into an explicit configuration option.
     
     return app

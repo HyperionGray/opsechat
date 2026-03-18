@@ -119,13 +119,40 @@ If you've exposed port 5000 for testing:
 
 # Test health endpoint
 curl http://localhost:5000/health
+
+# Test operational metrics endpoint
+curl http://localhost:5000/health/metrics
 ```
 
 **Expected Result:**
 ```json
 {
-  "status": "ok",
-  "timestamp": "2026-03-02T..."
+  "status": "healthy",
+  "timestamp": "2026-03-02T...",
+  "version": "...",
+  "active_rooms": 1
+}
+```
+
+Metrics endpoint should return:
+```json
+{
+  "timestamp": "2026-03-02T...",
+  "requests": {
+    "total": 3,
+    "avg_response_time": 0.01,
+    "by_endpoint": {
+      "GET /health": {
+        "count": 1,
+        "avg_response_time": 0.005,
+        "error_rate": 0.0
+      }
+    }
+  },
+  "system": {
+    "memory_usage_mb": 42.0,
+    "tracked_response_samples": 3
+  }
 }
 ```
 
