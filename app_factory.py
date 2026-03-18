@@ -6,7 +6,8 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+import time
+from flask import Flask, jsonify, request, g
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -66,6 +67,10 @@ def create_app():
     
     def add_review_wrapper(user_id, rating, review_text):
         return add_review(reviews, user_id, rating, review_text)
+
+    @app.before_request
+    def _record_request_start_time():
+        g._request_start_time = time.perf_counter()
     
     # Add security headers after every response
     @app.after_request
@@ -87,6 +92,20 @@ def create_app():
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
+
+        start_time = getattr(g, "_request_start_time", None)
+        if start_time is not None:
+            try:
+                from monitoring import apm
+                apm.record_request(
+                    endpoint=request.path,
+                    method=request.method,
+                    response_time=time.perf_counter() - start_time,
+                    status_code=response.status_code,
+                )
+            except Exception:
+                # Request telemetry must never break request handling.
+                pass
         return response
     
     # Register chat routes
@@ -106,11 +125,20 @@ def create_app():
                           add_review_wrapper, get_reviews, get_review_stats)
     
     # Health check endpoint
-    from monitoring import get_health_status
+    from monitoring import get_health_status, get_metrics_status
 
     @app.route('/health', methods=["GET"])
     def health():
         return jsonify(get_health_status())
+
+    @app.route('/metrics', methods=["GET"])
+    def metrics():
+        include_endpoints_raw = request.args.get("include_endpoints", "1").strip().lower()
+        include_endpoints = include_endpoints_raw not in {"0", "false", "no"}
+        top_n = request.args.get("top_n", default=20, type=int)
+        if top_n is None:
+            top_n = 20
+        return jsonify(get_metrics_status(include_endpoints=include_endpoints, top_n=max(top_n, 0)))
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])

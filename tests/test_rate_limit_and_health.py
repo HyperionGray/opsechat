@@ -113,3 +113,44 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+# ---------------------------------------------------------------------------
+# Metrics endpoint integration tests
+# ---------------------------------------------------------------------------
+
+def test_metrics_endpoint_returns_200_with_summary():
+    client = _test_app.test_client()
+    response = client.get("/metrics")
+    assert response.status_code == 200
+
+    data = response.get_json()
+    assert data is not None
+    assert data.get("status") == "ok"
+    assert "summary" in data
+    assert "requests" in data["summary"]
+    assert "total" in data["summary"]["requests"]
+
+
+def test_metrics_endpoint_can_disable_endpoint_breakdown():
+    client = _test_app.test_client()
+    response = client.get("/metrics?include_endpoints=false")
+    assert response.status_code == 200
+
+    data = response.get_json()
+    assert data is not None
+    assert "requests_by_endpoint" not in data
+
+
+def test_metrics_endpoint_tracks_requests_and_health_endpoint():
+    client = _test_app.test_client()
+
+    baseline = client.get("/metrics").get_json()["summary"]["requests"]["total"]
+    client.get("/health")
+    client.get("/health")
+    data = client.get("/metrics?top_n=50").get_json()
+
+    assert data["summary"]["requests"]["total"] >= baseline + 2
+    assert "requests_by_endpoint" in data
+    assert "GET /health" in data["requests_by_endpoint"]
+    assert data["requests_by_endpoint"]["GET /health"]["count"] >= 2

@@ -14,6 +14,8 @@
 - 🚀 **Production Deployment** - Robust systemd units with auto-restart
 
 📖 **Full Details:** [New Features Guide](docs/NEW_FEATURES.md)
+  
+Operational observability: [Monitoring Guide](docs/user-guide/MONITORING.md) (`/health`, `/metrics`)
 
 ---
 
@@ -320,6 +322,7 @@ This project includes comprehensive Amazon Q Code Review integration with automa
 - **Memory Management**: Automatic cleanup with bounded storage (3-minute chat expiry)
 - **Algorithm Efficiency**: Critical bug fixes applied for index deletion operations
 - **Resource Optimization**: Container limits and health checks for reliability
+- **Runtime Metrics API**: In-memory request and activity metrics at `/metrics`
 - **Monitoring**: CloudWatch integration with appropriate retention policies
 
 For detailed information, see:

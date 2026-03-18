@@ -219,6 +219,32 @@ class ApplicationPerformanceMonitor:
             pass
         
         self.metrics['system']['uptime_seconds'] = time.time() - self.metrics['system']['start_time']
+
+    def get_request_breakdown(self, top_n: int = 20) -> Dict[str, Any]:
+        """Return per-endpoint request metrics sorted by request volume."""
+        by_endpoint = self.metrics['requests']['by_endpoint']
+        sorted_endpoints = sorted(
+            by_endpoint.items(),
+            key=lambda item: item[1]['count'],
+            reverse=True
+        )
+
+        if top_n > 0:
+            sorted_endpoints = sorted_endpoints[:top_n]
+
+        endpoint_summary = {}
+        for endpoint_key, metrics in sorted_endpoints:
+            count = metrics['count']
+            avg_response_time = (metrics['total_time'] / count) if count else 0.0
+            error_rate = ((metrics['errors'] / count) * 100) if count else 0.0
+            endpoint_summary[endpoint_key] = {
+                'count': count,
+                'errors': metrics['errors'],
+                'error_rate': round(error_rate, 2),
+                'avg_response_time': round(avg_response_time, 6),
+            }
+
+        return endpoint_summary
     
     def get_metrics_summary(self) -> Dict[str, Any]:
         """Get summarized metrics for reporting"""
@@ -337,6 +363,20 @@ def get_health_status() -> Dict[str, Any]:
             'disk_space': 'ok'
         }
     }
+
+
+def get_metrics_status(include_endpoints: bool = True, top_n: int = 20) -> Dict[str, Any]:
+    """Get application metrics with optional endpoint-level detail."""
+    payload = {
+        'status': 'ok',
+        'timestamp': datetime.utcnow().isoformat(),
+        'summary': apm.get_metrics_summary(),
+    }
+
+    if include_endpoints:
+        payload['requests_by_endpoint'] = apm.get_request_breakdown(top_n=top_n)
+
+    return payload
 
 # Security event logging
 class SecurityEventLogger:
