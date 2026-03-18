@@ -292,12 +292,18 @@ class BurnerEmailManager:
         expired = [email for email, info in self.burner_addresses.items() 
                    if info['expires_at'] <= now]
         for email in expired:
-            del self.burner_addresses[email]
-            # Also remove from user_burners
-            user_id = self.burner_addresses.get(email, {}).get('user_id')
+            info = self.burner_addresses.pop(email, None)
+            if not info:
+                continue
+
+            # Also remove from user_burners index
+            user_id = info.get('user_id')
             if user_id and user_id in self.user_burners:
-                if email in self.user_burners[user_id]:
-                    self.user_burners[user_id].remove(email)
+                self.user_burners[user_id] = [
+                    burner for burner in self.user_burners[user_id] if burner != email
+                ]
+                if not self.user_burners[user_id]:
+                    del self.user_burners[user_id]
     
     def _format_time_remaining(self, time_delta: datetime.timedelta) -> str:
         """Format time remaining in human-readable format"""

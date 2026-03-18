@@ -10,6 +10,8 @@ This directory contains the automated test suite for opsechat.
 - **ui-headless.spec.js** - UI tests that run in headless browser mode (no visible window)
 - **ui-headed.spec.js** - UI tests that run in headed mode (with visible browser window) for visual validation
 - **mock_server.py** - A lightweight Flask server that simulates opsechat without requiring Tor
+- **mock_server_refactored.py** - Compatibility wrapper that forwards to `mock_server.py`
+- **mock_email_backend.py** - In-memory fallback backend used when `email_system` imports are unavailable
 
 ## Running Tests
 
@@ -43,6 +45,11 @@ python3 tests/mock_server.py
 ```
 
 The server will run on http://localhost:5001 and can be used for manual testing or as a target for automated tests.
+
+Diagnostics endpoints:
+
+- `GET /health` - basic server readiness and config
+- `GET /health/email` - email backend diagnostics (backend mode, inbox count, burner count, burners-by-user)
 
 ## Test Coverage
 

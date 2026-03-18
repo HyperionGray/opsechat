@@ -19,7 +19,7 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from flask import Flask, session
+from flask import Flask, jsonify
 from mock_routes import create_mock_routes
 
 # Create Flask app with absolute paths for better CI compatibility
@@ -65,21 +65,13 @@ def get_random_color():
 # Import email system with fallback for testing
 try:
     from email_system import email_storage, burner_manager
+    EMAIL_BACKEND = "production"
 except ImportError as e:
     print(f"Warning: Could not import email_system: {e}")
-    # Create mock objects for testing
-    class MockEmailStorage:
-        def create_user_inbox(self, user_id): pass
-    class MockBurnerManager:
-        def cleanup_expired(self): pass
-        def generate_burner_email(self, user_id): return f"test{user_id}@example.com"
-        def rotate_burner(self, user_id, old_email): return f"test{user_id}@example.com"
-        def get_user_burners(self, user_id): return []
-        def get_user_for_burner(self, email): return None
-        def expire_burner(self, email): pass
-    
+    from mock_email_backend import MockEmailStorage, MockBurnerManager
     email_storage = MockEmailStorage()
     burner_manager = MockBurnerManager()
+    EMAIL_BACKEND = "fallback-mock"
 
 
 # Add security headers
@@ -100,7 +92,6 @@ def index():
 @app.route('/health', methods=["GET"])
 def health_check():
     """Health check endpoint for Playwright webServer"""
-    from flask import jsonify
     return jsonify({
         'status': 'ok',
         'server': 'mock-opsechat',
@@ -110,6 +101,38 @@ def health_check():
             'path': app.config.get('path')
         }
     }), 200
+
+
+@app.route('/health/email', methods=["GET"])
+def health_email_backend():
+    """
+    Email diagnostics endpoint.
+
+    Gives CI and local tests visibility into mock/production email backend state.
+    """
+    inbox_count = len(getattr(email_storage, "emails", {}))
+
+    if hasattr(burner_manager, "snapshot"):
+        burner_snapshot = burner_manager.snapshot()
+    else:
+        burner_snapshot = {
+            "burner_count": len(getattr(burner_manager, "burner_addresses", {})),
+            "user_count": len(getattr(burner_manager, "user_burners", {})),
+            "burners_by_user": {
+                user_id: len(emails)
+                for user_id, emails in getattr(burner_manager, "user_burners", {}).items()
+            },
+        }
+
+    return jsonify(
+        {
+            "status": "ok",
+            "server": "mock-opsechat",
+            "backend": EMAIL_BACKEND,
+            "inbox_count": inbox_count,
+            **burner_snapshot,
+        }
+    ), 200
 
 
 def main():
@@ -183,6 +206,7 @@ if __name__ == '__main__':
         print(f"Static directory exists: {os.path.exists(static_dir)}")
     print(f"Test URL: http://127.0.0.1:5001/test-path-12345")
     print(f"Health check URL: http://127.0.0.1:5001/health")
+    print("Email diagnostics URL: http://127.0.0.1:5001/health/email")
     print("=" * 50)
     
     # Validate critical directories
