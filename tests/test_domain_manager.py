@@ -1,7 +1,9 @@
 """
 Tests for domain management module
 """
+import json
 import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +176,98 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_rotate_to_new_domain_alias(self):
+        """Test backward-compatible rotation alias"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "alias-test.xyz",
+            "price": 1.99
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "alias-test.xyz"
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        new_domain = manager.rotate_to_new_domain()
+
+        assert new_domain == manager.active_domain
+        assert new_domain is not None
+
+    def test_find_cheap_available_domain_parses_currency_price(self):
+        """Test currency price parsing from API responses"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "pricedomain.xyz",
+            "price": "$2.99"
+        }
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=3.0, max_attempts=1)
+
+        assert result is not None
+        assert result["price"] == 2.99
+
+    def test_state_export_and_load_roundtrip(self):
+        """Test export/load state keeps datetime fields usable"""
+        manager = DomainRotationManager(monthly_budget=20.0)
+        manager.current_spending = 3.5
+        manager.active_domain = "roundtrip.xyz"
+        manager.owned_domains = [{
+            "domain": "roundtrip.xyz",
+            "price": 3.5,
+            "purchased_at": datetime(2026, 1, 1, 12, 0, 0),
+            "expires_at": datetime(2027, 1, 1, 12, 0, 0),
+        }]
+
+        exported = manager.export_state()
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(exported["owned_domains"][0]["expires_at"], str)
+
+        loaded = DomainRotationManager(monthly_budget=5.0)
+        loaded.load_state(exported)
+
+        assert loaded.monthly_budget == 20.0
+        assert loaded.current_spending == 3.5
+        assert loaded.active_domain == "roundtrip.xyz"
+        assert isinstance(loaded.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(loaded.owned_domains[0]["expires_at"], datetime)
+
+    def test_cli_budget_set_and_list_with_state_file(self, tmp_path, capsys):
+        """Test module CLI budget and list commands with persisted state"""
+        state_file = tmp_path / "domain-state.json"
+
+        manager = DomainRotationManager(monthly_budget=10.0)
+        manager.current_spending = 1.5
+        manager.active_domain = "existing.xyz"
+        manager.owned_domains = [{
+            "domain": "existing.xyz",
+            "price": 1.5,
+            "purchased_at": datetime(2026, 2, 1, 8, 30, 0),
+            "expires_at": datetime(2027, 2, 1, 8, 30, 0),
+        }]
+        state_file.write_text(
+            json.dumps(manager.export_state(), indent=2),
+            encoding="utf-8"
+        )
+
+        from domain_manager import run_cli
+
+        exit_code = run_cli([
+            "--state-file", str(state_file),
+            "budget", "set", "--amount", "25",
+        ])
+        assert exit_code == 0
+
+        exit_code = run_cli([
+            "--state-file", str(state_file),
+            "list",
+        ])
+        captured = capsys.readouterr()
+
+        assert exit_code == 0
+        assert "existing.xyz" in captured.out
+        assert "[ACTIVE]" in captured.out
