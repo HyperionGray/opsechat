@@ -3,7 +3,7 @@
 
 import datetime
 
-from tests.mock_server import InMemoryMockBurnerManager, InMemoryMockEmailStorage
+from tests.mock_fallback_backends import InMemoryMockBurnerManager, InMemoryMockEmailStorage
 
 
 def test_in_memory_mock_email_storage_round_trip():
