@@ -8,7 +8,7 @@ import json
 import time
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from functools import wraps
 import traceback
@@ -44,7 +44,7 @@ class StructuredLogger:
     def log_event(self, level: str, event: str, **kwargs):
         """Log a structured event"""
         log_data = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'event': event,
             'level': level.upper(),
             **kwargs
@@ -84,7 +84,7 @@ class StructuredFormatter(logging.Formatter):
         except (json.JSONDecodeError, ValueError):
             # Create structured log entry for non-JSON messages
             log_data = {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'level': record.levelname,
                 'logger': record.name,
                 'message': record.getMessage(),
@@ -251,7 +251,7 @@ class ApplicationPerformanceMonitor:
         self.update_system_metrics()
         
         summary = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'uptime_seconds': self.metrics['system']['uptime_seconds'],
             'requests': {
                 'total': self.metrics['requests']['total'],
@@ -351,7 +351,7 @@ def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
     return {
         'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
         # active_rooms: this app uses a single global chat room. The field is
@@ -369,7 +369,7 @@ def get_metrics_status(include_endpoints: bool = True, top_n: int = 20) -> Dict[
     """Get application metrics with optional endpoint-level detail."""
     payload = {
         'status': 'ok',
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'summary': apm.get_metrics_summary(),
     }
 
