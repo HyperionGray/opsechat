@@ -173,12 +173,16 @@
                         'Content-Type': 'application/json'
                     }
                 });
-                
+                const data = await response.json().catch(() => ({}));
+
                 if (!response.ok) {
-                    throw new Error('Failed to create room');
+                    if (response.status === 429) {
+                        const retryAfter = Number(data.retry_after_seconds || response.headers.get('Retry-After') || 1);
+                        statusDiv.textContent = `Rate limit reached. Wait ${retryAfter}s before creating another room.`;
+                        return;
+                    }
+                    throw new Error(data.error || 'Failed to create room');
                 }
-                
-                const data = await response.json();
                 
                 if (data.success) {
                     statusDiv.innerHTML = `Room created! Redirecting...<br><a href="${data.room_url}">${window.location.origin}${data.room_url}</a>`;

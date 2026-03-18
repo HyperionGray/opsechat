@@ -16,9 +16,8 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
-from rate_limiter import limiter
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 
 # Global room storage (in-memory only)
 chat_rooms = {}
@@ -35,7 +34,7 @@ _rate_limit_lock = threading.Lock()
 
 # Rate limit configuration
 RATE_LIMITS = {
-    "chat_create": {"max_requests": 10, "window_seconds": 60},
+    "chat_create": {"max_requests": 3, "window_seconds": 60},
     "chat_message": {"max_requests": 30, "window_seconds": 60},
     "dm_send": {"max_requests": 5, "window_seconds": 60},
 }
@@ -222,6 +221,35 @@ def cleanup_rate_limits():
             del _rate_limit_store[sid]
 
 
+def ensure_simple_chat_session():
+    """Ensure a simple-chat identity exists in session storage."""
+    if "_id" not in session:
+        session["_id"] = generate_secure_dm_id()
+        session["username"] = generate_random_username()
+        session["color"] = get_random_color_rgb()
+
+
+def rate_limited_json_response(endpoint: str, retry_after: int):
+    """
+    Return a standardized JSON 429 response with backoff metadata.
+
+    The Retry-After header lets browser and API clients implement
+    deterministic retry behavior without hardcoded sleeps.
+    """
+    config = RATE_LIMITS[endpoint]
+    response = jsonify({
+        "error": "Rate limit exceeded",
+        "endpoint": endpoint,
+        "max_requests": config["max_requests"],
+        "window_seconds": config["window_seconds"],
+        "retry_after_seconds": retry_after,
+    })
+    response.status_code = 429
+    response.headers["Retry-After"] = str(retry_after)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 # Background cleanup thread
 def cleanup_loop():
     """Continuously clean up old messages and rooms"""
@@ -262,26 +290,27 @@ def register_simple_chat_routes(app):
         try:
             with open('VERSION', 'r') as f:
                 version = f.read().strip()
-        except:
+        except OSError:
             version = '0.8.0-alpha'  # fallback
         
         return render_template("simple_chat_index.html", version=version)
-    
+
+    @app.route('/chat/rate-limits', methods=['GET'])
+    def chat_rate_limits():
+        """Expose simple chat write limits for clients and operators."""
+        return jsonify({
+            "limits": RATE_LIMITS,
+            "notes": "Write endpoints enforce sliding-window limits per session id.",
+        })
+
     @app.route('/chat/create', methods=['POST'])
-    @limiter.limit("10 per hour; 3 per minute")
     def chat_create():
         """Create a new chat room with cryptographically secure ID"""
-        # Ensure session exists for rate limiting
-        if "_id" not in session:
-            session["_id"] = generate_secure_dm_id()
-            session["username"] = generate_random_username()
-            session["color"] = get_random_color_rgb()
+        ensure_simple_chat_session()
 
         allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Try again in {retry_after} seconds."
-            }), 429
+            return rate_limited_json_response("chat_create", retry_after)
 
         room_id = generate_secure_room_id(32)
         
@@ -303,10 +332,7 @@ def register_simple_chat_routes(app):
                                      error="Room not found or expired"), 404
         
         # Initialize user session
-        if "_id" not in session:
-            session["_id"] = generate_secure_dm_id()
-            session["username"] = generate_random_username()
-            session["color"] = get_random_color_rgb()
+        ensure_simple_chat_session()
         
         return render_template("simple_chat_room.html", 
                              room_id=room_id,
@@ -314,7 +340,6 @@ def register_simple_chat_routes(app):
                              color=session["color"])
     
     @app.route('/chat/room/<string:room_id>/messages', methods=['GET', 'POST'])
-    @limiter.limit("60 per minute", methods=["POST"])
     def simple_chat_messages(room_id):
         """Get or post messages to a room"""
         with rooms_lock:
@@ -323,18 +348,12 @@ def register_simple_chat_routes(app):
             room = chat_rooms[room_id]
         
         if request.method == 'POST':
-            # Ensure user has session
-            if "_id" not in session:
-                session["_id"] = generate_secure_dm_id()
-                session["username"] = generate_random_username()
-                session["color"] = get_random_color_rgb()
+            ensure_simple_chat_session()
 
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
             if not allowed:
-                return jsonify({
-                    "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds."
-                }), 429
+                return rate_limited_json_response("chat_message", retry_after)
             
             # Get message from request
             data = request.get_json()
@@ -397,21 +416,14 @@ def register_simple_chat_routes(app):
             })
     
     @app.route('/chat/dm/send', methods=['POST'])
-    @limiter.limit("20 per hour; 5 per minute")
     def send_dm():
         """Send a direct message (for sharing room IDs) - expires in 1 minute"""
-        # Initialize user session if needed
-        if "_id" not in session:
-            session["_id"] = generate_secure_dm_id()
-            session["username"] = generate_random_username()
-            session["color"] = get_random_color_rgb()
+        ensure_simple_chat_session()
 
         # Check rate limit for DMs
         allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds."
-            }), 429
+            return rate_limited_json_response("dm_send", retry_after)
         
         data = request.get_json()
         if not data or "room_id" not in data or "message" not in data:

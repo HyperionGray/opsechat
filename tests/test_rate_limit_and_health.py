@@ -113,3 +113,13 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_chat_rate_limits_endpoint_exposes_current_limits():
+    client = _test_app.test_client()
+    response = client.get("/chat/rate-limits")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "limits" in data
+    assert data["limits"]["chat_create"]["max_requests"] == 3
+    assert data["limits"]["chat_create"]["window_seconds"] == 60

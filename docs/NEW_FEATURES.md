@@ -133,6 +133,42 @@ First-time users see a prominent security warning:
 
 ---
 
+## Chat API Backoff Contract
+
+### What is new
+- Chat write endpoints now return a standardized JSON payload when rate-limited.
+- Responses include `Retry-After` headers and `retry_after_seconds` in the body.
+- `/chat/rate-limits` now exposes active per-endpoint write limits.
+
+### Affected endpoints
+- `POST /chat/create`
+- `POST /chat/room/{room_id}/messages`
+- `POST /chat/dm/send`
+
+### 429 response format
+```json
+{
+  "error": "Rate limit exceeded",
+  "endpoint": "chat_message",
+  "max_requests": 30,
+  "window_seconds": 60,
+  "retry_after_seconds": 12
+}
+```
+
+Headers:
+```text
+Retry-After: 12
+Cache-Control: no-store
+```
+
+### Client behavior
+Clients should delay retries based on `retry_after_seconds` (or `Retry-After`)
+instead of retrying immediately. This prevents burst loops and improves service
+stability under load.
+
+---
+
 ## 📧 Email Rate Limiting
 
 ### Purpose

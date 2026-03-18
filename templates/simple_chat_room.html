@@ -413,12 +413,16 @@
                     },
                     body: JSON.stringify({ message: messageToSend })
                 });
-                
+                const data = await response.json().catch(() => ({}));
+
                 if (response.ok) {
                     input.value = '';
                     await pollMessages();
+                } else if (response.status === 429) {
+                    const retryAfter = Number(data.retry_after_seconds || response.headers.get('Retry-After') || 1);
+                    showStatus(`Rate limit reached. Wait ${retryAfter}s before sending again.`, 3000);
                 } else {
-                    showStatus('Error sending message');
+                    showStatus(data.error || 'Error sending message');
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);
