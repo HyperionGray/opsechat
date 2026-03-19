@@ -6,7 +6,8 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+import secrets
+from flask import Flask, jsonify, g
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -21,6 +22,10 @@ except ModuleNotFoundError:
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
+    csp_mode = os.getenv("OPSECHAT_CSP_MODE", "compat").strip().lower()
+    if csp_mode not in {"compat", "strict"}:
+        csp_mode = "compat"
+    app.config["CSP_MODE"] = csp_mode
     
     # Set secret key for sessions
     app.secret_key = id_generator(size=64)
@@ -68,22 +73,37 @@ def create_app():
         return add_review(reviews, user_id, rating, review_text)
     
     # Add security headers after every response
+    @app.before_request
+    def assign_csp_nonce():
+        g.csp_nonce = secrets.token_urlsafe(16)
+
+    @app.context_processor
+    def inject_csp_nonce():
+        return {"csp_nonce": getattr(g, "csp_nonce", "")}
+
     @app.after_request
     def add_security_headers(response):
+        script_src = "script-src 'self' 'unsafe-inline';"
+        if app.config.get("CSP_MODE") == "strict":
+            script_src = f"script-src 'self' 'nonce-{g.csp_nonce}';"
+
         response.headers["Server"] = ""
         response.headers["Date"] = ""
-        # Content Security Policy: restrict resources to same origin, block inline scripts
+        # CSP is configurable:
+        # - compat (default): allows inline scripts to preserve existing templates
+        # - strict: requires per-request nonce for inline scripts
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self'; "
-            "style-src 'self'; "
+            f"{script_src} "
+            "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data:; "
             "font-src 'self'; "
             "connect-src 'self'; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"

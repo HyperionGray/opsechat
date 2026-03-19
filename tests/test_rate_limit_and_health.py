@@ -3,8 +3,10 @@ Tests for rate limiting (simple_chat_routes) and the /health endpoint (app_facto
 """
 
 import datetime
+import re
 import sys
 import os
+from flask import render_template_string
 
 # Ensure the project root is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -113,3 +115,46 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_default_csp_mode_is_compat():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    csp = response.headers.get("Content-Security-Policy", "")
+    assert "script-src 'self' 'unsafe-inline';" in csp
+    assert "style-src 'self' 'unsafe-inline';" in csp
+
+
+def test_strict_csp_mode_emits_nonce_in_csp_header():
+    app = create_app()
+    app.config["TESTING"] = True
+    app.config["CSP_MODE"] = "strict"
+
+    client = app.test_client()
+    response = client.get("/health")
+    csp = response.headers.get("Content-Security-Policy", "")
+
+    match = re.search(r"script-src 'self' 'nonce-([^']+)';", csp)
+    assert match is not None
+    assert len(match.group(1)) >= 16
+
+
+def test_strict_csp_mode_injects_matching_nonce_into_templates():
+    app = create_app()
+    app.config["TESTING"] = True
+    app.config["CSP_MODE"] = "strict"
+
+    @app.route("/_nonce_probe")
+    def _nonce_probe():
+        return render_template_string(
+            '<script nonce="{{ csp_nonce }}">console.log("nonce-probe")</script>'
+        )
+
+    client = app.test_client()
+    response = client.get("/_nonce_probe")
+    body = response.get_data(as_text=True)
+    csp = response.headers.get("Content-Security-Policy", "")
+
+    match = re.search(r"script-src 'self' 'nonce-([^']+)';", csp)
+    assert match is not None
+    assert f'nonce="{match.group(1)}"' in body
