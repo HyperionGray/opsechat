@@ -84,6 +84,45 @@ class TestEmailStorage:
         assert retrieved['subject'] == 'Updated'
         assert retrieved['body'] == 'New body'
 
+    def test_generate_user_key(self):
+        storage = EmailStorage()
+        key = storage.generate_user_key("user1", label="Ops key")
+
+        assert key["label"] == "Ops key"
+        assert key["source"] == "generated"
+        assert "key_material" in key
+        assert len(key["fingerprint"]) == 16
+
+        listed = storage.get_user_keys("user1")
+        assert len(listed) == 1
+        assert listed[0]["id"] == key["id"]
+        assert "key_material" not in listed[0]
+
+    def test_import_user_key(self):
+        storage = EmailStorage()
+        imported = storage.import_user_key("user1", "abc123abc123abc123", label="Imported")
+
+        assert imported["label"] == "Imported"
+        assert imported["source"] == "imported"
+        assert len(storage.get_user_keys("user1")) == 1
+
+    def test_import_user_key_rejects_empty_or_short_material(self):
+        storage = EmailStorage()
+
+        with pytest.raises(ValueError):
+            storage.import_user_key("user1", "")
+
+        with pytest.raises(ValueError):
+            storage.import_user_key("user1", "short")
+
+    def test_delete_user_key(self):
+        storage = EmailStorage()
+        key = storage.generate_user_key("user1")
+
+        deleted = storage.delete_user_key("user1", key["id"])
+        assert deleted is True
+        assert storage.get_user_key("user1", key["id"]) is None
+
 
 class TestEmailValidator:
     """Test email validation functionality"""
@@ -276,3 +315,13 @@ class TestBurnerEmailManager:
         
         assert len(burners) == 1
         assert burners[0]['email'] == active_email
+
+    def test_cleanup_expired_removes_user_burner_mapping(self):
+        """Expired burners should be removed from per-user index as well"""
+        manager = BurnerEmailManager()
+        expired_email = manager.generate_burner_email("user1")
+        manager.burner_addresses[expired_email]['expires_at'] = datetime.datetime.now() - datetime.timedelta(hours=1)
+
+        manager.cleanup_expired()
+
+        assert expired_email not in manager.user_burners.get("user1", [])

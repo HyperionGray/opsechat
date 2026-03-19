@@ -150,6 +150,120 @@ def register_email_routes(app, id_generator, get_random_color):
                               hostname=app.config["hostname"],
                               path=app.config["path"],
                               config=config)
+
+    @app.route('/<string:url_addition>/keys', methods=["GET"])
+    def key_management(url_addition):
+        """Key management page for per-session key lifecycle"""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
+
+        keys = email_storage.get_user_keys(session["_id"])
+        return render_template(
+            "keys.html",
+            hostname=app.config["hostname"],
+            path=app.config["path"],
+            keys=keys,
+            message=request.args.get("message", ""),
+            message_type=request.args.get("message_type", "info"),
+        )
+
+    @app.route('/<string:url_addition>/keys/generate', methods=["POST"])
+    def key_generate(url_addition):
+        """Generate a new in-memory key for the active user session"""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
+
+        label = request.form.get("label", "Generated key").strip() or "Generated key"
+        email_storage.generate_user_key(session["_id"], label=label)
+        return redirect(url_for(
+            "key_management",
+            url_addition=url_addition,
+            message="Key generated successfully",
+            message_type="success",
+        ))
+
+    @app.route('/<string:url_addition>/keys/import', methods=["POST"])
+    def key_import(url_addition):
+        """Import key material for the active user session"""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
+
+        label = request.form.get("label", "Imported key").strip() or "Imported key"
+        key_material = request.form.get("key_material", "")
+        try:
+            email_storage.import_user_key(session["_id"], key_material, label=label)
+        except ValueError as exc:
+            return redirect(url_for(
+                "key_management",
+                url_addition=url_addition,
+                message=f"Import failed: {exc}",
+                message_type="error",
+            ))
+
+        return redirect(url_for(
+            "key_management",
+            url_addition=url_addition,
+            message="Key imported successfully",
+            message_type="success",
+        ))
+
+    @app.route('/<string:url_addition>/keys/export/<string:key_id>', methods=["GET"])
+    def key_export(url_addition, key_id):
+        """Export key material (JSON response) for explicit user copy"""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        if "_id" not in session:
+            return jsonify({"error": "No session"}), 401
+
+        key = email_storage.get_user_key(session["_id"], key_id, include_material=True)
+        if not key:
+            return jsonify({"error": "Key not found"}), 404
+
+        payload = key.copy()
+        if payload.get("created_at") is not None:
+            payload["created_at"] = payload["created_at"].isoformat()
+
+        response = jsonify(payload)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.route('/<string:url_addition>/keys/delete/<string:key_id>', methods=["POST"])
+    def key_delete(url_addition, key_id):
+        """Delete a key from the active user session"""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        if "_id" not in session:
+            return jsonify({"error": "No session"}), 401
+
+        deleted = email_storage.delete_user_key(session["_id"], key_id)
+        if not deleted:
+            return redirect(url_for(
+                "key_management",
+                url_addition=url_addition,
+                message="Key not found",
+                message_type="error",
+            ))
+
+        return redirect(url_for(
+            "key_management",
+            url_addition=url_addition,
+            message="Key deleted successfully",
+            message_type="success",
+        ))
     
     @app.route('/<string:url_addition>/email/compose', methods=["GET", "POST"])
     def email_compose(url_addition):

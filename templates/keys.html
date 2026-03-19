@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Key Management - OpSecChat</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: #000;
+      color: #0f0;
+      font-family: "Courier New", monospace;
+      line-height: 1.5;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    h1, h2 {
+      margin-bottom: 12px;
+    }
+
+    .nav {
+      margin-bottom: 20px;
+    }
+
+    .nav a {
+      color: #0f0;
+      text-decoration: none;
+      border: 1px solid #0f0;
+      padding: 6px 10px;
+      margin-right: 10px;
+      display: inline-block;
+    }
+
+    .nav a:hover {
+      background: #0f0;
+      color: #000;
+    }
+
+    .panel {
+      border: 1px solid #0f0;
+      padding: 16px;
+      margin-bottom: 20px;
+      background: #001100;
+    }
+
+    .message {
+      border: 1px solid;
+      padding: 10px;
+      margin-bottom: 20px;
+      font-weight: bold;
+    }
+
+    .message.info {
+      border-color: #0ff;
+      color: #0ff;
+      background: #001a1a;
+    }
+
+    .message.success {
+      border-color: #0f0;
+      color: #0f0;
+      background: #002200;
+    }
+
+    .message.error {
+      border-color: #f00;
+      color: #f66;
+      background: #220000;
+    }
+
+    .row {
+      margin-bottom: 10px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    input[type="text"], textarea {
+      width: 100%;
+      background: #000;
+      color: #0f0;
+      border: 1px solid #0f0;
+      padding: 8px;
+      font-family: "Courier New", monospace;
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    button {
+      background: #000;
+      color: #0f0;
+      border: 1px solid #0f0;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-family: "Courier New", monospace;
+    }
+
+    button:hover {
+      background: #0f0;
+      color: #000;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      border: 1px solid #0f0;
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .inline-form {
+      display: inline-block;
+      margin-right: 8px;
+    }
+
+    .no-keys {
+      color: #8f8;
+      font-style: italic;
+    }
+
+    .notes li {
+      margin-left: 18px;
+      margin-bottom: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="/{{ path }}/email">Back to Email Inbox</a>
+      <a href="/{{ path }}/email/compose">Compose Email</a>
+    </div>
+
+    <h1>Key Management</h1>
+
+    {% if message %}
+    <div class="message {{ message_type|default('info') }}">
+      {{ message }}
+    </div>
+    {% endif %}
+
+    <div class="panel">
+      <h2>Generate New Key</h2>
+      <form method="POST" action="/{{ path }}/keys/generate">
+        <div class="row">
+          <label for="generate-label">Key label</label>
+          <input id="generate-label" type="text" name="label" value="Generated key" maxlength="80">
+        </div>
+        <button type="submit">Generate Key</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2>Import Existing Key</h2>
+      <form method="POST" action="/{{ path }}/keys/import">
+        <div class="row">
+          <label for="import-label">Key label</label>
+          <input id="import-label" type="text" name="label" value="Imported key" maxlength="80">
+        </div>
+        <div class="row">
+          <label for="key-material">Key material</label>
+          <textarea id="key-material" name="key_material" required></textarea>
+        </div>
+        <button type="submit">Import Key</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2>Stored Keys ({{ keys|length }})</h2>
+      {% if keys|length == 0 %}
+      <p class="no-keys">No keys stored in this session yet.</p>
+      {% else %}
+      <table>
+        <thead>
+          <tr>
+            <th>Label</th>
+            <th>Source</th>
+            <th>Fingerprint</th>
+            <th>Preview</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for key in keys %}
+          <tr>
+            <td>{{ key.label }}</td>
+            <td>{{ key.source }}</td>
+            <td><code>{{ key.fingerprint }}</code></td>
+            <td><code>{{ key.preview }}</code></td>
+            <td>{{ key.created_at.strftime('%Y-%m-%d %H:%M:%S') if key.created_at else 'Unknown' }}</td>
+            <td>
+              <a href="/{{ path }}/keys/export/{{ key.id }}" target="_blank" rel="noopener">Export</a>
+              <form class="inline-form" method="POST" action="/{{ path }}/keys/delete/{{ key.id }}">
+                <button type="submit" onclick="return confirm('Delete this key?')">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <h2>Security Notes</h2>
+      <ul class="notes">
+        <li>Keys are generated in your browser session context and stored in-memory only.</li>
+        <li>This service cannot recover deleted key material.</li>
+        <li>Export and back up keys before you rotate sessions.</li>
+        <li>Treat every exported key as sensitive secret material.</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

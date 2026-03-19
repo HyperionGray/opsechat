@@ -6,6 +6,7 @@ import datetime
 import string
 import random
 import re
+import secrets
 from hashlib import sha256
 from typing import Dict, List, Optional
 
@@ -18,12 +19,110 @@ class EmailStorage:
     
     def __init__(self):
         self.emails: Dict[str, List[Dict]] = {}  # user_id -> list of emails
-        self.user_keys: Dict[str, Dict] = {}  # user_id -> {master_key, email_key}
+        self.user_keys: Dict[str, List[Dict]] = {}  # user_id -> list of key records
         
     def create_user_inbox(self, user_id: str) -> None:
         """Initialize inbox for a user"""
         if user_id not in self.emails:
             self.emails[user_id] = []
+
+    def _ensure_user_key_store(self, user_id: str) -> None:
+        """Ensure a user has a key store initialized"""
+        if user_id not in self.user_keys:
+            self.user_keys[user_id] = []
+
+    @staticmethod
+    def _normalize_key_material(key_material: str) -> str:
+        """Normalize key material for storage/fingerprinting"""
+        return key_material.replace('\r\n', '\n').strip()
+
+    @staticmethod
+    def _fingerprint_for_key(key_material: str) -> str:
+        """Generate a compact, deterministic fingerprint for key material"""
+        return sha256(key_material.encode('utf-8')).hexdigest()[:16]
+
+    @staticmethod
+    def _mask_key_material(key_material: str) -> str:
+        """Return a non-sensitive preview for UI display"""
+        if len(key_material) <= 12:
+            return key_material
+        return f"{key_material[:8]}...{key_material[-4:]}"
+
+    def _public_key_record(self, record: Dict, include_material: bool = False) -> Dict:
+        """Return a serialized key record safe for templates/APIs"""
+        payload = {
+            "id": record["id"],
+            "label": record["label"],
+            "fingerprint": record["fingerprint"],
+            "source": record["source"],
+            "created_at": record["created_at"],
+            "preview": self._mask_key_material(record["key_material"]),
+        }
+        if include_material:
+            payload["key_material"] = record["key_material"]
+        return payload
+
+    def generate_user_key(self, user_id: str, label: str = "Generated key") -> Dict:
+        """Generate and store a new per-user encryption key"""
+        self._ensure_user_key_store(user_id)
+
+        key_material = secrets.token_urlsafe(32)
+        record = {
+            "id": self._generate_email_id(),
+            "label": (label or "Generated key").strip()[:80],
+            "fingerprint": self._fingerprint_for_key(key_material),
+            "source": "generated",
+            "created_at": datetime.datetime.now(),
+            "key_material": key_material,
+        }
+        self.user_keys[user_id].append(record)
+        return self._public_key_record(record, include_material=True)
+
+    def import_user_key(self, user_id: str, key_material: str, label: str = "Imported key") -> Dict:
+        """Import externally provided key material for a user"""
+        self._ensure_user_key_store(user_id)
+
+        normalized_key = self._normalize_key_material(key_material)
+        if not normalized_key:
+            raise ValueError("Key material cannot be empty")
+        if len(normalized_key) < 16:
+            raise ValueError("Key material is too short")
+
+        record = {
+            "id": self._generate_email_id(),
+            "label": (label or "Imported key").strip()[:80],
+            "fingerprint": self._fingerprint_for_key(normalized_key),
+            "source": "imported",
+            "created_at": datetime.datetime.now(),
+            "key_material": normalized_key,
+        }
+        self.user_keys[user_id].append(record)
+        return self._public_key_record(record, include_material=False)
+
+    def get_user_keys(self, user_id: str) -> List[Dict]:
+        """List non-sensitive key metadata for a user"""
+        self._ensure_user_key_store(user_id)
+        return [self._public_key_record(record) for record in self.user_keys[user_id]]
+
+    def get_user_key(self, user_id: str, key_id: str, include_material: bool = False) -> Optional[Dict]:
+        """Get a specific key record by ID"""
+        self._ensure_user_key_store(user_id)
+        for record in self.user_keys[user_id]:
+            if record["id"] == key_id:
+                return self._public_key_record(record, include_material=include_material)
+        return None
+
+    def delete_user_key(self, user_id: str, key_id: str) -> bool:
+        """Delete a key for a user with in-memory overwrite before removal"""
+        self._ensure_user_key_store(user_id)
+        for i, record in enumerate(self.user_keys[user_id]):
+            if record["id"] == key_id:
+                key_len = len(record.get("key_material", ""))
+                # Overwrite sensitive material before releasing list slot.
+                record["key_material"] = "0" * key_len
+                self.user_keys[user_id].pop(i)
+                return True
+        return False
             
     def add_email(self, user_id: str, email: Dict) -> None:
         """Add email to user's inbox"""
@@ -289,12 +388,13 @@ class BurnerEmailManager:
     def cleanup_expired(self) -> None:
         """Remove expired burner addresses"""
         now = datetime.datetime.now()
-        expired = [email for email, info in self.burner_addresses.items() 
-                   if info['expires_at'] <= now]
-        for email in expired:
+        expired = [
+            (email, info['user_id']) for email, info in self.burner_addresses.items()
+            if info['expires_at'] <= now
+        ]
+        for email, user_id in expired:
             del self.burner_addresses[email]
             # Also remove from user_burners
-            user_id = self.burner_addresses.get(email, {}).get('user_id')
             if user_id and user_id in self.user_burners:
                 if email in self.user_burners[user_id]:
                     self.user_burners[user_id].remove(email)
