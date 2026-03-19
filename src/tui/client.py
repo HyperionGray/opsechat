@@ -9,7 +9,7 @@ Features:
 - Real-time message updates
 - Randomized username (server-assigned)
 - Text-only interface (no images/video)
-- Messages auto-burn after 4 minutes
+- Messages auto-burn after 3 minutes
 - Tor/SOCKS proxy support for .onion addresses
 """
 
@@ -57,6 +57,8 @@ class ChatClient:
         self.socket = None
         self.username = "Unknown"
         self.running = False
+        self.connected = False
+        self.online_count = 0
         self.message_buffer = ""
         
         # UI components
@@ -74,7 +76,7 @@ class ChatClient:
             urwid.Text([
                 ('title', 'OpSecChat TUI - Privacy First'),
                 ' | ',
-                ('info', 'Messages burn in 4 min'),
+                ('info', 'Messages burn in 3 min'),
                 ' | ',
                 ('warn', 'Text only - No images/video')
             ], align='center'),
@@ -82,15 +84,7 @@ class ChatClient:
         )
         
         # Footer with instructions
-        footer_text = [
-            ('info', 'Enter'),
-            ': Send | ',
-            ('info', 'Ctrl+C'),
-            ': Quit | ',
-            ('warn', 'Your username: '),
-            ('username', self.username)
-        ]
-        footer = urwid.AttrMap(urwid.Text(footer_text), 'footer')
+        footer = urwid.AttrMap(urwid.Text(self._build_footer_text()), 'footer')
         
         # Messages area
         messages_frame = urwid.LineBox(
@@ -124,11 +118,30 @@ class ChatClient:
             ('info', 'light cyan', 'dark blue'),
             ('warn', 'light red', 'dark blue'),
             ('username', 'light green,bold', 'dark gray'),
+            ('status_ok', 'light green,bold', 'dark gray'),
+            ('status_bad', 'light red,bold', 'dark gray'),
             ('input', 'white', 'black'),
             ('my_message', 'light green', 'black'),
             ('other_message', 'light cyan', 'black'),
             ('system_message', 'yellow', 'black'),
             ('timestamp', 'dark gray', 'black'),
+        ]
+
+    def _build_footer_text(self):
+        """Build footer text with live status indicators."""
+        status_attr = 'status_ok' if self.connected else 'status_bad'
+        status_text = 'Connected' if self.connected else 'Disconnected'
+        return [
+            ('info', 'Enter'),
+            ': Send | ',
+            ('info', 'Ctrl+C'),
+            ': Quit | ',
+            ('warn', 'Status: '),
+            (status_attr, status_text),
+            ('warn', ' | Online: '),
+            ('username', str(self.online_count)),
+            ('warn', ' | Your username: '),
+            ('username', self.username)
         ]
     
     def add_message(self, username, message, is_system=False):
@@ -162,6 +175,8 @@ class ChatClient:
             
             self.socket = create_socket_connection(self.host, self.port, self.use_tor, self.tor_port)
             self.running = True
+            self.connected = True
+            self.update_footer()
             
             # Start receive thread
             receive_thread = threading.Thread(target=self.receive_messages, daemon=True)
@@ -185,6 +200,9 @@ class ChatClient:
                 if not data:
                     self.add_message("System", "Disconnected from server", is_system=True)
                     self.running = False
+                    self.connected = False
+                    self.online_count = 0
+                    self.update_footer()
                     break
                 
                 buffer += data
@@ -195,12 +213,15 @@ class ChatClient:
                             msg = json.loads(line)
                             self.handle_server_message(msg)
                         except json.JSONDecodeError:
-                            pass
+                            self.add_message("System", "Received malformed server payload", is_system=True)
             
             except Exception as e:
                 if self.running:
                     self.add_message("System", f"Connection error: {e}", is_system=True)
                 self.running = False
+                self.connected = False
+                self.online_count = 0
+                self.update_footer()
                 break
     
     def handle_server_message(self, msg):
@@ -209,6 +230,8 @@ class ChatClient:
         
         if msg_type == 'welcome':
             self.username = msg.get('username', 'Unknown')
+            self.online_count = msg.get('online', self.online_count)
+            self.connected = True
             self.update_footer()
             welcome_msg = msg.get('message', 'Welcome!')
             self.add_message("System", welcome_msg, is_system=True)
@@ -217,17 +240,22 @@ class ChatClient:
             username = msg.get('username', 'Unknown')
             message = msg.get('message', '')
             self.add_message(username, message)
+
+        elif msg_type == 'system':
+            self.add_message("System", msg.get('message', ''), is_system=True)
+
+        elif msg_type == 'presence':
+            online = msg.get('online')
+            if isinstance(online, int) and online >= 0:
+                self.online_count = online
+                self.update_footer()
+
+        elif msg_type == 'error':
+            self.add_message("System", f"Server rejected input: {msg.get('message', '')}", is_system=True)
     
     def update_footer(self):
         """Update the footer with current username"""
-        footer_text = [
-            ('info', 'Enter'),
-            ': Send | ',
-            ('info', 'Ctrl+C'),
-            ': Quit | ',
-            ('warn', 'Your username: '),
-            ('username', self.username)
-        ]
+        footer_text = self._build_footer_text()
         footer = urwid.AttrMap(urwid.Text(footer_text), 'footer')
         self.frame.footer = footer
     
@@ -284,6 +312,9 @@ class ChatClient:
     def cleanup(self):
         """Clean up resources"""
         self.running = False
+        self.connected = False
+        self.online_count = 0
+        self.update_footer()
         if self.socket:
             try:
                 self.socket.close()

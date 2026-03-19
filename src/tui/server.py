@@ -2,15 +2,16 @@
 OpSecChat TUI Server
 
 A privacy-focused chat server that runs over Tor with a Terminal UI.
-All messages are stored in-memory only and burn after 4 minutes.
+All messages are stored in-memory only and burn after 3 minutes.
 
 Features:
 - In-memory only (zero disk writes)
-- Messages auto-delete after 4 minutes with overwriting
+- Messages auto-delete after 3 minutes with overwriting
 - Randomized usernames (no user choice)
 - Text-only (no images, videos, or b64 encoded data)
 - Tor hidden service integration
 - Optional PGP encryption
+- Presence/status protocol events (join/leave + online count)
 """
 
 import sys
@@ -35,6 +36,7 @@ class ChatServer:
         self.lock = threading.Lock()
         self.server_socket = None
         self.running = False
+        self.shutdown_event = threading.Event()
         
         # Start cleanup thread
         self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
@@ -49,9 +51,11 @@ class ChatServer:
     
     def _cleanup_loop(self):
         """Continuously clean up old messages"""
-        while True:
-            time.sleep(10)  # Check every 10 seconds
-            self._cleanup_old_messages()
+        while not self.shutdown_event.is_set():
+            # Run cleanup only while server is active, but keep the thread ready.
+            if self.running:
+                self._cleanup_old_messages()
+            self.shutdown_event.wait(10)  # Check every 10 seconds
     
     def _cleanup_old_messages(self):
         """Remove and overwrite messages older than MESSAGE_LIFETIME"""
@@ -92,6 +96,58 @@ class ChatServer:
             })
         
         return True
+
+    def _send_json(self, client_socket: socket.socket, payload: Dict[str, Any]) -> bool:
+        """Send one JSON payload to a client socket."""
+        try:
+            client_socket.send((json.dumps(payload) + '\n').encode())
+            return True
+        except (OSError, socket.error):
+            return False
+
+    def _broadcast_json(self, payload: Dict[str, Any], exclude: Optional[socket.socket] = None):
+        """Broadcast a JSON payload to all connected clients."""
+        with self.lock:
+            dead_clients = []
+            for client_socket in list(self.clients.keys()):
+                if exclude is not None and client_socket is exclude:
+                    continue
+                if not self._send_json(client_socket, payload):
+                    dead_clients.append(client_socket)
+
+            for client in dead_clients:
+                if client in self.clients:
+                    del self.clients[client]
+                try:
+                    client.close()
+                except (OSError, socket.error):
+                    pass
+
+    def _broadcast_system_message(self, message: str, exclude: Optional[socket.socket] = None):
+        """Broadcast a server-side system message."""
+        self._broadcast_json({
+            'type': 'system',
+            'message': message,
+            'timestamp': datetime.datetime.now().isoformat()
+        }, exclude=exclude)
+
+    def _broadcast_presence_update(self):
+        """Broadcast current online user count to all clients."""
+        with self.lock:
+            online_count = len(self.clients)
+        self._broadcast_json({
+            'type': 'presence',
+            'online': online_count,
+            'timestamp': datetime.datetime.now().isoformat()
+        })
+
+    def _send_protocol_error(self, client_socket: socket.socket, message: str):
+        """Send a protocol-level validation error to one client."""
+        self._send_json(client_socket, {
+            'type': 'error',
+            'message': message,
+            'timestamp': datetime.datetime.now().isoformat()
+        })
     
     def get_messages(self, since: datetime.datetime = None) -> List[Dict[str, Any]]:
         """Get messages (optionally since a specific time)"""
@@ -107,15 +163,18 @@ class ChatServer:
         
         with self.lock:
             self.clients[client_socket] = username
+            online_count = len(self.clients)
         
         try:
             # Send welcome message
             welcome = {
                 'type': 'welcome',
                 'username': username,
-                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
+                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.',
+                'online': online_count
             }
-            client_socket.send((json.dumps(welcome) + '\n').encode())
+            if not self._send_json(client_socket, welcome):
+                return
             
             # Send existing messages
             messages = self.get_messages()
@@ -126,7 +185,11 @@ class ChatServer:
                     'message': msg['message'],
                     'timestamp': msg['timestamp'].isoformat()
                 }
-                client_socket.send((json.dumps(msg_data) + '\n').encode())
+                if not self._send_json(client_socket, msg_data):
+                    return
+
+            self._broadcast_system_message(f"{username} joined the room", exclude=client_socket)
+            self._broadcast_presence_update()
             
             # Handle incoming messages
             buffer = ""
@@ -147,47 +210,43 @@ class ChatServer:
                                     if self.add_message(username, message):
                                         # Broadcast to all clients
                                         self.broadcast_message(username, message)
+                                else:
+                                    self._send_protocol_error(
+                                        client_socket,
+                                        "Unsupported message type. Expected 'message'."
+                                    )
                             except json.JSONDecodeError:
-                                pass
+                                self._send_protocol_error(
+                                    client_socket,
+                                    "Malformed JSON payload ignored."
+                                )
                 
                 except (OSError, socket.error) as e:
                     break
         
         finally:
+            removed = False
             with self.lock:
                 if client_socket in self.clients:
                     del self.clients[client_socket]
+                    removed = True
             try:
                 client_socket.close()
             except (OSError, socket.error):
                 pass
+
+            if removed:
+                self._broadcast_system_message(f"{username} left the room")
+                self._broadcast_presence_update()
     
     def broadcast_message(self, username: str, message: str):
         """Broadcast a message to all connected clients"""
-        msg_data = {
+        self._broadcast_json({
             'type': 'message',
             'username': username,
             'message': message,
             'timestamp': datetime.datetime.now().isoformat()
-        }
-        msg_json = json.dumps(msg_data) + '\n'
-        
-        with self.lock:
-            dead_clients = []
-            for client_socket in list(self.clients.keys()):
-                try:
-                    client_socket.send(msg_json.encode())
-                except (OSError, socket.error):
-                    dead_clients.append(client_socket)
-            
-            # Remove dead clients
-            for client in dead_clients:
-                if client in self.clients:
-                    del self.clients[client]
-                try:
-                    client.close()
-                except (OSError, socket.error):
-                    pass
+        })
     
     def start(self):
         """Start the chat server"""
@@ -222,6 +281,7 @@ class ChatServer:
     def stop(self):
         """Stop the chat server"""
         self.running = False
+        self.shutdown_event.set()
         
         # Close all client connections
         with self.lock:
@@ -238,6 +298,9 @@ class ChatServer:
                 self.server_socket.close()
             except (OSError, socket.error):
                 pass
+
+        if self.cleanup_thread.is_alive():
+            self.cleanup_thread.join(timeout=1)
         
         # Overwrite and clear messages (security)
         with self.lock:
