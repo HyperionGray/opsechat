@@ -190,6 +190,18 @@ Tests cover:
 
 For full testing documentation, see [Testing Guide](docs/user-guide/TESTING.md).
 
+CI and Automation Workflows
+===========================
+
+Primary CI checks run through `.github/workflows/ci.yml`:
+- `python-tests` (Python matrix)
+- `playwright-e2e`
+- `security-baseline`
+
+Additional automation workflows are intentionally scoped to label, schedule, or
+manual triggers to reduce PR noise. Manual runs are available from the GitHub
+Actions tab using "Run workflow".
+
 
 How it works
 ============
@@ -264,6 +276,7 @@ Features
   - **Instant Copy** - Copy burner emails to clipboard with one click
   - **Smart Stats Dashboard** - Track active burners and total time remaining
 - **Automated Domain Purchasing** - Porkbun API integration for cheap domain rotation (.xyz, .club, etc.) - see [Domain Registrar API](docs/setup/DOMAIN_REGISTRAR_API.md)
+- **Domain Rotation CLI Cleanup** - `python domain_rotation_cli.py cleanup` prunes expired and malformed local domain records
 - **Budget Management** - Configurable monthly spending limits for domain purchases
 - **Spoofing Detection** - Test emails for spoofing attempts (unicode lookalikes, typosquatting, homographs)
 - **Phishing Simulation** - Gamified training with scoring and achievements

@@ -111,6 +111,38 @@ Environment=DOMAIN_MONTHLY_BUDGET=50.0
 
 Then modify the runserver.py to read these on startup.
 
+### Via Domain Rotation CLI
+
+The repository includes a CLI helper for direct registrar operations and local
+state management:
+
+```bash
+python domain_rotation_cli.py config   # Configure API key, secret, budget
+python domain_rotation_cli.py search   # Find cheap available domains
+python domain_rotation_cli.py rotate   # Purchase and activate a domain
+python domain_rotation_cli.py list     # List locally tracked domains
+python domain_rotation_cli.py cleanup  # Remove expired/malformed local records
+```
+
+`cleanup` is useful after long-running usage or manual config edits because it
+prunes stale domain entries and keeps active-domain state consistent.
+
+### Via Domain Rotation CLI
+
+The repository includes a CLI helper for direct registrar operations and local
+state management:
+
+```bash
+python domain_rotation_cli.py config   # Configure API key, secret, budget
+python domain_rotation_cli.py search   # Find cheap available domains
+python domain_rotation_cli.py rotate   # Purchase and activate a domain
+python domain_rotation_cli.py list     # List locally tracked domains
+python domain_rotation_cli.py cleanup  # Remove expired/malformed local records
+```
+
+`cleanup` is useful after long-running usage or manual config edits because it
+prunes stale domain entries and keeps active-domain state consistent.
+
 ## Budget Management
 
 Opsechat includes budget controls to prevent accidental overspending:

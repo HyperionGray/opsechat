@@ -273,6 +273,21 @@ Output:
    Expires: 2027-03-02
 ```
 
+#### Clean Up Expired Local Domain Records
+```bash
+python domain_rotation_cli.py cleanup
+
+Output:
+=== Domain Record Cleanup ===
+
+Malformed records removed: 0
+Expired domains removed: 1
+Removed domains:
+  - oldburner.xyz
+Remaining domain records: 2
+Active domain: n5x8q2k7.xyz
+```
+
 ### Integration with Burner Email
 After rotating domains, update your email configuration:
 1. Run `python domain_rotation_cli.py status` to get active domain
