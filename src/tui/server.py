@@ -25,20 +25,25 @@ from typing import Dict, List, Any, Optional
 # Message storage (in-memory only)
 class ChatServer:
     MAX_MESSAGE_LENGTH = 1000  # Prevent b64 encoded images
-    MESSAGE_LIFETIME = 180  # 3 minutes in seconds
+    MESSAGE_LIFETIME = 240  # 4 minutes in seconds
+    RATE_LIMIT_MAX_MESSAGES = 8
+    RATE_LIMIT_WINDOW_SECONDS = 30
     
-    def __init__(self, host='127.0.0.1', port=5555):
+    def __init__(self, host='127.0.0.1', port=5555, start_cleanup_thread: bool = True):
         self.host = host
         self.port = port
         self.messages: List[Dict[str, Any]] = []
         self.clients: Dict[socket.socket, str] = {}
+        self.user_message_times: Dict[str, List[datetime.datetime]] = {}
         self.lock = threading.Lock()
         self.server_socket = None
         self.running = False
         
-        # Start cleanup thread
-        self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
-        self.cleanup_thread.start()
+        self.cleanup_thread = None
+        if start_cleanup_thread:
+            # Start cleanup thread
+            self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
+            self.cleanup_thread.start()
     
     def generate_username(self) -> str:
         """Generate a random username - no user choice allowed"""
@@ -71,27 +76,61 @@ class ChatServer:
             
             self.messages = new_messages
     
-    def add_message(self, username: str, message: str) -> bool:
-        """Add a message to the chat (with validation)"""
+    def _record_and_check_rate_limit(self, username: str) -> Dict[str, Any]:
+        """Track per-user message rate and return rate-limit status."""
+        now = datetime.datetime.now()
+        window_start = now - datetime.timedelta(seconds=self.RATE_LIMIT_WINDOW_SECONDS)
+        timestamps = self.user_message_times.get(username, [])
+        timestamps = [ts for ts in timestamps if ts >= window_start]
+        self.user_message_times[username] = timestamps
+
+        if len(timestamps) >= self.RATE_LIMIT_MAX_MESSAGES:
+            retry_after = max(
+                0.1,
+                self.RATE_LIMIT_WINDOW_SECONDS - (now - timestamps[0]).total_seconds()
+            )
+            return {"limited": True, "retry_after": retry_after}
+
+        timestamps.append(now)
+        self.user_message_times[username] = timestamps
+        return {"limited": False, "retry_after": 0.0}
+
+    def add_message_with_result(self, username: str, message: str) -> Dict[str, Any]:
+        """Add a message and return a structured result."""
         # Validate message
         if not message or len(message) > self.MAX_MESSAGE_LENGTH:
-            return False
-        
+            return {"ok": False, "error": "invalid_message"}
+
         # Check for potential b64 encoded data (rough heuristic)
         if len(message) > 500 and message.replace('=', '').isalnum():
-            return False  # Likely b64 encoded image/video
-        
+            return {"ok": False, "error": "invalid_message"}  # Likely b64 encoded image/video
+
         # Strip any HTML/special chars
-        message = message.replace('<', '').replace('>', '').replace('&', '')
-        
+        sanitized_message = message.replace('<', '').replace('>', '').replace('&', '')
+
         with self.lock:
+            rate_limit_status = self._record_and_check_rate_limit(username)
+            if rate_limit_status["limited"]:
+                return {
+                    "ok": False,
+                    "error": "rate_limited",
+                    "retry_after": rate_limit_status["retry_after"],
+                    "limit": self.RATE_LIMIT_MAX_MESSAGES,
+                    "window_seconds": self.RATE_LIMIT_WINDOW_SECONDS
+                }
+
             self.messages.append({
                 'username': username,
-                'message': message,
+                'message': sanitized_message,
                 'timestamp': datetime.datetime.now()
             })
-        
-        return True
+
+        return {"ok": True, "message": sanitized_message}
+
+    def add_message(self, username: str, message: str) -> bool:
+        """Backward-compatible bool API for adding a message."""
+        result = self.add_message_with_result(username, message)
+        return result.get("ok", False)
     
     def get_messages(self, since: datetime.datetime = None) -> List[Dict[str, Any]]:
         """Get messages (optionally since a specific time)"""
@@ -113,7 +152,7 @@ class ChatServer:
             welcome = {
                 'type': 'welcome',
                 'username': username,
-                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
+                'message': f'Welcome! You are {username}. Messages burn in 4 minutes.'
             }
             client_socket.send((json.dumps(welcome) + '\n').encode())
             
@@ -144,9 +183,22 @@ class ChatServer:
                                 msg_obj = json.loads(line)
                                 if msg_obj.get('type') == 'message':
                                     message = msg_obj.get('message', '')
-                                    if self.add_message(username, message):
+                                    add_result = self.add_message_with_result(username, message)
+                                    if add_result.get("ok"):
                                         # Broadcast to all clients
-                                        self.broadcast_message(username, message)
+                                        self.broadcast_message(username, add_result["message"])
+                                    elif add_result.get("error") == "rate_limited":
+                                        warning = {
+                                            "type": "rate_limit",
+                                            "message": "Rate limit reached. Slow down to avoid flooding.",
+                                            "retry_after": round(add_result.get("retry_after", 1.0), 1),
+                                            "limit": add_result.get("limit", self.RATE_LIMIT_MAX_MESSAGES),
+                                            "window_seconds": add_result.get(
+                                                "window_seconds",
+                                                self.RATE_LIMIT_WINDOW_SECONDS
+                                            )
+                                        }
+                                        client_socket.send((json.dumps(warning) + '\n').encode())
                             except json.JSONDecodeError:
                                 pass
                 
@@ -157,6 +209,7 @@ class ChatServer:
             with self.lock:
                 if client_socket in self.clients:
                     del self.clients[client_socket]
+                self.user_message_times.pop(username, None)
             try:
                 client_socket.close()
             except (OSError, socket.error):
@@ -200,6 +253,10 @@ class ChatServer:
         print(f"[*] OpSecChat TUI Server running on {self.host}:{self.port}")
         print(f"[*] Messages burn after {self.MESSAGE_LIFETIME} seconds")
         print(f"[*] Max message length: {self.MAX_MESSAGE_LENGTH} chars")
+        print(
+            f"[*] Rate limit: {self.RATE_LIMIT_MAX_MESSAGES} messages/"
+            f"{self.RATE_LIMIT_WINDOW_SECONDS}s per user"
+        )
         print(f"[*] Press Ctrl+C to stop")
         
         try:
@@ -245,6 +302,7 @@ class ChatServer:
                 msg['message'] = 'X' * len(msg['message'])
                 msg['username'] = 'X' * len(msg['username'])
             self.messages.clear()
+            self.user_message_times.clear()
         
         print("\n[*] Server stopped. All messages overwritten and cleared.")
 

@@ -217,6 +217,19 @@ class ChatClient:
             username = msg.get('username', 'Unknown')
             message = msg.get('message', '')
             self.add_message(username, message)
+        
+        elif msg_type == 'rate_limit':
+            retry_after = msg.get('retry_after', 1.0)
+            limit = msg.get('limit', 0)
+            window_seconds = msg.get('window_seconds', 0)
+            self.add_message(
+                "System",
+                (
+                    f"Rate limit hit: {limit} messages/{window_seconds}s. "
+                    f"Wait {retry_after:.1f}s before sending again."
+                ),
+                is_system=True
+            )
     
     def update_footer(self):
         """Update the footer with current username"""

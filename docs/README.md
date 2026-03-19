@@ -67,6 +67,7 @@ Implementation details and summaries of major features.
 - [CI/CD Implementation](implementation/CI_CD_IMPLEMENTATION_SUMMARY.md) - CI/CD setup
 - [Containerization Summary](implementation/CONTAINERIZATION_SUMMARY.md) - Container implementation
 - [jQuery Security Update](implementation/JQUERY_SECURITY_UPDATE.md) - jQuery 3.7.1 update
+- [TUI Rate Limiting](implementation/TUI_RATE_LIMITING.md) - Per-user anti-flood controls for TUI chat
 - [Changelog](implementation/CHANGELOG.md) - Version history
 - [PR Summaries](implementation/PR_SUMMARY.md) - Pull request summaries
 
