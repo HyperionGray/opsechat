@@ -6,7 +6,8 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+import time
+from typing import Callable, Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -42,12 +43,27 @@ class PorkbunAPIClient(DomainAPIClient):
     
     BASE_URL = "https://porkbun.com/api/json/v3"
     
-    def __init__(self, api_key: str, api_secret: str):
+    def __init__(
+        self,
+        api_key: str,
+        api_secret: str,
+        max_retries: int = 2,
+        backoff_base_seconds: float = 0.5,
+        backoff_max_seconds: float = 8.0,
+        sleep_func: Optional[Callable[[float], None]] = None,
+    ):
         super().__init__(api_key, api_secret)
         self.session = requests.Session()
+        self.max_retries = max(0, max_retries)
+        self.backoff_base_seconds = max(0.0, backoff_base_seconds)
+        self.backoff_max_seconds = max(self.backoff_base_seconds, backoff_max_seconds)
+        self.sleep_func = sleep_func or time.sleep
     
     def _make_request(self, endpoint: str, data: Optional[Dict] = None) -> Dict:
-        """Make API request"""
+        """
+        Make API request with retry + exponential backoff.
+        Retries are only applied to transient errors (5xx, 429, request exceptions).
+        """
         url = f"{self.BASE_URL}/{endpoint}"
         
         payload = {
@@ -58,13 +74,50 @@ class PorkbunAPIClient(DomainAPIClient):
         if data:
             payload.update(data)
         
-        try:
-            response = self.session.post(url, json=payload, timeout=30)
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            logger.error(f"Porkbun API request failed: {e}")
-            return {"status": "ERROR", "message": str(e)}
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = self.session.post(url, json=payload, timeout=30)
+                status_code = getattr(response, "status_code", 200)
+                if not isinstance(status_code, int):
+                    status_code = 200
+
+                # Retry transient HTTP conditions before raising.
+                if status_code == 429 or status_code >= 500:
+                    raise requests.exceptions.HTTPError(
+                        f"Transient HTTP {status_code}", response=response
+                    )
+
+                response.raise_for_status()
+                return response.json()
+            except requests.exceptions.HTTPError as e:
+                status_code = (
+                    e.response.status_code
+                    if getattr(e, "response", None) is not None
+                    else None
+                )
+                retryable = status_code == 429 or (status_code is not None and status_code >= 500)
+                if not retryable or attempt >= self.max_retries:
+                    logger.error("Porkbun API request failed (status=%s): %s", status_code, e)
+                    return {"status": "ERROR", "message": str(e)}
+            except requests.exceptions.RequestException as e:
+                if attempt >= self.max_retries:
+                    logger.error("Porkbun API request failed: %s", e)
+                    return {"status": "ERROR", "message": str(e)}
+            except ValueError as e:
+                # Invalid JSON payload from API response.
+                logger.error("Porkbun API response parsing failed: %s", e)
+                return {"status": "ERROR", "message": str(e)}
+
+            delay = min(self.backoff_base_seconds * (2 ** attempt), self.backoff_max_seconds)
+            logger.warning(
+                "Retrying Porkbun API request endpoint=%s attempt=%s delay=%.2fs",
+                endpoint,
+                attempt + 1,
+                delay,
+            )
+            self.sleep_func(delay)
+
+        return {"status": "ERROR", "message": "Request failed after retries"}
     
     def search_domain(self, domain: str) -> Dict:
         """Check if domain is available"""

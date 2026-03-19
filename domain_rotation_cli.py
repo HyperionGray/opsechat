@@ -17,12 +17,61 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from getpass import getpass
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _parse_datetime(value):
+    """Parse ISO datetime strings; return None on invalid values."""
+    if isinstance(value, datetime):
+        return value
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _serialize_owned_domains(domains):
+    """Convert datetime fields to ISO strings for JSON persistence."""
+    serialized = []
+    for domain in domains or []:
+        if not isinstance(domain, dict):
+            continue
+        item = dict(domain)
+        for field in ("purchased_at", "expires_at"):
+            if isinstance(item.get(field), datetime):
+                item[field] = item[field].isoformat()
+        serialized.append(item)
+    return serialized
+
+
+def _deserialize_owned_domains(domains):
+    """Convert persisted ISO strings back to datetime objects when possible."""
+    deserialized = []
+    for domain in domains or []:
+        if not isinstance(domain, dict):
+            continue
+        item = dict(domain)
+        for field in ("purchased_at", "expires_at"):
+            parsed = _parse_datetime(item.get(field))
+            if parsed is not None:
+                item[field] = parsed
+        deserialized.append(item)
+    return deserialized
+
+
+def _format_datetime(value, fmt):
+    parsed = _parse_datetime(value)
+    if parsed is not None:
+        return parsed.strftime(fmt)
+    return "Unknown"
 
 
 def load_config():
@@ -109,11 +158,11 @@ def get_manager():
     )
     
     # Load saved state
-    if config.get('current_spending'):
+    if 'current_spending' in config:
         manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
+    if 'owned_domains' in config:
+        manager.owned_domains = _deserialize_owned_domains(config['owned_domains'])
+    if 'active_domain' in config:
         manager.active_domain = config['active_domain']
     
     return manager, config
@@ -122,7 +171,7 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = _serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -144,8 +193,8 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_datetime(domain.get('purchased_at'), '%Y-%m-%d %H:%M')}")
+        print(f"   Expires: {_format_datetime(domain.get('expires_at'), '%Y-%m-%d')}")
         print()
 
 
@@ -236,7 +285,7 @@ def show_status():
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
-        description='OpSecHat Domain Rotation CLI',
+        description='OpSecChat Domain Rotation CLI',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

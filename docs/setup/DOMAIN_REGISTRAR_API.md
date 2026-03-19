@@ -124,6 +124,25 @@ View budget status:
 http://yourservice.onion/{path}/email/config
 ```
 
+## API Resilience (Retry + Backoff)
+
+The Porkbun client now retries transient failures automatically to reduce failed
+domain checks and purchases during temporary network/API issues.
+
+- Retries on transient conditions: HTTP `429` and HTTP `5xx`
+- Retries on request-level network errors (timeouts/connection failures)
+- Uses exponential backoff between attempts
+- Does **not** retry permanent client errors (HTTP `4xx` other than `429`)
+
+This behavior improves reliability for both the web flow and `domain_rotation_cli.py`
+without changing user-facing commands.
+
+## CLI State Persistence
+
+`domain_rotation_cli.py` now serializes domain purchase timestamps as ISO-8601
+strings when saving state and restores them when loading. This avoids JSON
+serialization failures and keeps `list` output stable across CLI runs.
+
 ## Domain Rotation Workflow
 
 1. **Initial Setup**: Configure API and budget

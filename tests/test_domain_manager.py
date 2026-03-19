@@ -3,6 +3,7 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+import requests
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -74,6 +75,67 @@ class TestPorkbunAPIClient:
         
         assert result["tld"] == "com"
         assert result["registration"] == "9.99"
+
+    @patch('domain_manager.requests.Session')
+    def test_search_domain_retries_transient_errors(self, mock_session_class):
+        """Retry 5xx responses and eventually succeed"""
+        mock_session = Mock()
+
+        retry_response = Mock()
+        retry_response.status_code = 503
+        retry_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
+            "503 Service Unavailable", response=retry_response
+        )
+
+        success_response = Mock()
+        success_response.status_code = 200
+        success_response.raise_for_status.return_value = None
+        success_response.json.return_value = {
+            "status": "SUCCESS",
+            "isAvailable": True,
+            "price": "2.99",
+            "currency": "USD",
+        }
+
+        mock_session.post.side_effect = [retry_response, success_response]
+        mock_session_class.return_value = mock_session
+
+        client = PorkbunAPIClient(
+            "test_key",
+            "test_secret",
+            max_retries=2,
+            backoff_base_seconds=0.0,
+            sleep_func=lambda _seconds: None,
+        )
+        result = client.search_domain("retry-test.xyz")
+
+        assert result["available"] is True
+        assert mock_session.post.call_count == 2
+
+    @patch('domain_manager.requests.Session')
+    def test_search_domain_no_retry_for_4xx(self, mock_session_class):
+        """Do not retry non-transient 4xx responses"""
+        mock_session = Mock()
+
+        bad_request_response = Mock()
+        bad_request_response.status_code = 400
+        bad_request_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
+            "400 Bad Request", response=bad_request_response
+        )
+        mock_session.post.return_value = bad_request_response
+        mock_session_class.return_value = mock_session
+
+        client = PorkbunAPIClient(
+            "test_key",
+            "test_secret",
+            max_retries=3,
+            backoff_base_seconds=0.0,
+            sleep_func=lambda _seconds: None,
+        )
+        result = client.search_domain("bad-request.xyz")
+
+        assert result["available"] is False
+        assert mock_session.post.call_count == 1
 
 
 class TestDomainRotationManager:
