@@ -4,6 +4,21 @@
 
 OpSecChat supports automated domain rotation for burner email systems. This allows you to quickly purchase and rotate domains to enhance privacy and avoid domain-based blocking.
 
+## Current CLI Capabilities
+
+The supported CLI entrypoint is `domain_rotation_cli.py` and includes:
+
+```bash
+python domain_rotation_cli.py config    # Save API credentials + monthly budget
+python domain_rotation_cli.py search    # Find low-cost available domains
+python domain_rotation_cli.py rotate    # Purchase and activate a new domain
+python domain_rotation_cli.py list      # List locally tracked domains
+python domain_rotation_cli.py status    # Show budget and active domain state
+python domain_rotation_cli.py cleanup   # Remove expired local domain records
+```
+
+State is persisted at `~/.opsechat/domain_config.json`. Domain timestamps are stored in ISO-8601 format and automatically restored on load.
+
 ## Supported Registrars
 
 Currently supported:
