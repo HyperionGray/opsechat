@@ -225,7 +225,7 @@ def build_report(
     max_items: int,
 ) -> str:
     direction, top_terms = infer_direction(commit_messages)
-    now = dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
     lines: list[str] = []
     lines.append("# Repository Hygiene Report")

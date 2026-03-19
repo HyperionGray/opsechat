@@ -1,4 +1,5 @@
 import importlib.util
+import sys
 from pathlib import Path
 
 
@@ -7,6 +8,7 @@ def load_report_module():
     spec = importlib.util.spec_from_file_location("repo_hygiene_report", module_path)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
