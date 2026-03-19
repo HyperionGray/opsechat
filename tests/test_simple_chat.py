@@ -407,10 +407,10 @@ class TestChatMessagesEndpoint:
             f"/chat/room/{self.room_id}/messages",
             json={"message": "safe text"},
         )
-        # Directly inject an XSS payload through the route
+        # Directly inject an XSS payload through the route, including actual <script> tags
         self.client.post(
             f"/chat/room/{self.room_id}/messages",
-            json={"message": "alert xss attempt"},
+            json={"message": "<script>alert('xss attempt')</script>"},
         )
         resp = self.client.get(f"/chat/room/{self.room_id}/messages")
         data = resp.get_json()
