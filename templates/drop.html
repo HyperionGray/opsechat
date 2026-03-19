@@ -4,9 +4,9 @@
 <title>Your Drop</title>
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 {% if script_enabled %}
-  <script src="{{ url_for('static', filename='jquery.js') }}"></script>
-  <script src="{{ url_for('static', filename='openpgp.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='pgp-manager.js') }}"></script>
+  <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='jquery.js') }}"></script>
+  <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='openpgp.min.js') }}"></script>
+  <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='pgp-manager.js') }}"></script>
 {% endif %}
 </head>
 
@@ -111,7 +111,7 @@
 </style>
 
 {% if script_enabled %}
-<script>
+<script nonce="{{ csp_nonce }}">
 async function processMessage(msg) {
   // Attempt to decrypt if it's a PGP message
   if (PGPManager.isPGPMessage(msg)) {
@@ -205,7 +205,7 @@ $( document ).ready(function() {
 
 <input type="text" id="messagearea" style="width:90vw; height:30px; position: fixed;  bottom: 0;" autofocus required></input>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 $( document ).ready(function() {
 
     $(document).keypress(async function(e){

@@ -3,6 +3,7 @@ Tests for rate limiting (simple_chat_routes) and the /health endpoint (app_facto
 """
 
 import datetime
+import re
 import sys
 import os
 
@@ -113,3 +114,27 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_csp_header_contains_per_request_nonce():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    csp = response.headers.get("Content-Security-Policy", "")
+
+    match = re.search(r"script-src 'self' 'nonce-([^']+)'", csp)
+    assert match is not None
+    assert len(match.group(1)) >= 16
+
+
+def test_chat_page_scripts_use_csp_nonce():
+    client = _test_app.test_client()
+    response = client.get("/chat")
+
+    assert response.status_code == 200
+    csp = response.headers.get("Content-Security-Policy", "")
+    match = re.search(r"script-src 'self' 'nonce-([^']+)'", csp)
+    assert match is not None
+
+    nonce = match.group(1)
+    html = response.get_data(as_text=True)
+    assert f'nonce="{nonce}"' in html

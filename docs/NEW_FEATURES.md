@@ -99,6 +99,25 @@ GET /chat/dm/xyz789
 
 ## 🔒 Enhanced Security Features
 
+### CSP Nonce Enforcement for Inline Scripts
+
+The Flask app now generates a unique nonce for every HTTP request and includes it in:
+
+- The `Content-Security-Policy` response header (`script-src 'self' 'nonce-...'`)
+- Template `<script>` tags (via `{{ csp_nonce }}`)
+
+This closes a gap where strict CSP settings could block legitimate inline scripts, while
+still preventing unauthorized script execution.
+
+**Implementation details:**
+- `app_factory.py` now creates a per-request nonce using cryptographic randomness
+- The nonce is injected into Jinja template context automatically
+- Security headers now include `object-src 'none'` and `base-uri 'self'` hardening
+
+**Verification:**
+- Added tests to validate nonce presence in CSP headers
+- Added tests to validate rendered chat pages carry the same nonce in script tags
+
 ### Message Length Caps
 - **Chat messages**: 500 characters maximum
 - **DM messages**: 200 characters maximum
@@ -469,6 +488,6 @@ curl http://localhost:5001/chat/dm/{dm_id}
 
 ---
 
-**Last Updated**: March 2, 2026
+**Last Updated**: March 19, 2026
 **Version**: 0.8.0-alpha
 **Author**: OpSecHat Development Team

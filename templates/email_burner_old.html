@@ -195,7 +195,7 @@
     {% endif %}
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     function copyToClipboard(text) {
       navigator.clipboard.writeText(text).then(function() {
         alert('Email address copied to clipboard!');

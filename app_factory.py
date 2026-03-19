@@ -5,8 +5,9 @@ This module handles Flask application creation and configuration,
 extracted from runserver.py to improve code organization.
 """
 
-import os
-from flask import Flask, jsonify
+import base64
+import secrets
+from flask import Flask, g, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -16,6 +17,11 @@ except ModuleNotFoundError:
         # This keeps containerized installs working even if rate_limiter.py
         # was not included in the image build.
         return app
+
+
+def _generate_csp_nonce():
+    """Generate a CSP-compliant nonce value for inline scripts."""
+    return base64.b64encode(secrets.token_bytes(16)).decode("ascii")
 
 
 def create_app():
@@ -67,23 +73,37 @@ def create_app():
     def add_review_wrapper(user_id, rating, review_text):
         return add_review(reviews, user_id, rating, review_text)
     
+    @app.before_request
+    def set_csp_nonce():
+        # Generate a new nonce for each request to allow only trusted inline scripts.
+        g.csp_nonce = _generate_csp_nonce()
+
+    @app.context_processor
+    def inject_csp_nonce():
+        return {"csp_nonce": getattr(g, "csp_nonce", "")}
+
     # Add security headers after every response
     @app.after_request
     def add_security_headers(response):
         response.headers["Server"] = ""
         response.headers["Date"] = ""
-        # Content Security Policy: restrict resources to same origin, block inline scripts
+        nonce = getattr(g, "csp_nonce", "")
+        script_src = "script-src 'self'"
+        if nonce:
+            script_src += f" 'nonce-{nonce}'"
+
+        # Content Security Policy: restrict resources to same origin and nonce-gated scripts
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self'; "
+            f"{script_src}; "
             "style-src 'self'; "
             "img-src 'self' data:; "
             "font-src 'self'; "
             "connect-src 'self'; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
