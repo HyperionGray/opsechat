@@ -16,6 +16,12 @@ from simple_chat_routes import (
     check_rate_limit,
     RATE_LIMITS,
     MAX_MESSAGE_LENGTH,
+    chat_rooms,
+    direct_messages,
+    _rate_limit_store,
+    rooms_lock,
+    dm_lock,
+    _rate_limit_lock,
 )
 
 
@@ -38,6 +44,24 @@ def client(app):
     with app.test_client() as c:
         with app.app_context():
             yield c
+
+
+@pytest.fixture(autouse=True)
+def reset_simple_chat_state():
+    """Ensure in-memory chat/DM/rate-limit state is isolated per test."""
+    with rooms_lock:
+        chat_rooms.clear()
+    with dm_lock:
+        direct_messages.clear()
+    with _rate_limit_lock:
+        _rate_limit_store.clear()
+    yield
+    with rooms_lock:
+        chat_rooms.clear()
+    with dm_lock:
+        direct_messages.clear()
+    with _rate_limit_lock:
+        _rate_limit_store.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -305,3 +329,61 @@ class TestDMRoutes:
 
         response = client.get(f"/chat/dm/{dm_id}")
         assert response.status_code == 404
+
+
+class TestRateLimitResponseMetadata:
+    def test_chat_create_returns_retry_metadata_on_rate_limit(self, client, monkeypatch):
+        monkeypatch.setitem(RATE_LIMITS["chat_create"], "max_requests", 1)
+
+        first = client.post("/chat/create")
+        assert first.status_code == 200
+
+        second = client.post("/chat/create")
+        assert second.status_code == 429
+
+        data = second.get_json()
+        assert isinstance(data.get("retry_after"), int)
+        assert data["retry_after"] >= 1
+        assert second.headers.get("Retry-After") == str(data["retry_after"])
+
+    def test_chat_message_returns_retry_metadata_on_rate_limit(self, client, monkeypatch):
+        monkeypatch.setitem(RATE_LIMITS["chat_message"], "max_requests", 1)
+
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        first = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "hello one"},
+            content_type="application/json",
+        )
+        assert first.status_code == 200
+
+        second = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "hello two"},
+            content_type="application/json",
+        )
+        assert second.status_code == 429
+        data = second.get_json()
+        assert isinstance(data.get("retry_after"), int)
+        assert second.headers.get("Retry-After") == str(data["retry_after"])
+
+    def test_dm_send_returns_retry_metadata_on_rate_limit(self, client, monkeypatch):
+        monkeypatch.setitem(RATE_LIMITS["dm_send"], "max_requests", 1)
+
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        first = client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "dm one"},
+            content_type="application/json",
+        )
+        assert first.status_code == 200
+
+        second = client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "dm two"},
+            content_type="application/json",
+        )
+        assert second.status_code == 429
+        data = second.get_json()
+        assert isinstance(data.get("retry_after"), int)
+        assert second.headers.get("Retry-After") == str(data["retry_after"])

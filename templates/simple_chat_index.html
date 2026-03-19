@@ -164,6 +164,12 @@
         // Simple room creation with no external dependencies
         document.getElementById('createRoomBtn').addEventListener('click', async function() {
             const statusDiv = document.getElementById('status');
+            const createButton = document.getElementById('createRoomBtn');
+            if (createButton.disabled) {
+                return;
+            }
+
+            createButton.disabled = true;
             statusDiv.textContent = 'Creating room...';
             
             try {
@@ -174,22 +180,37 @@
                     }
                 });
                 
-                if (!response.ok) {
-                    throw new Error('Failed to create room');
+                let data = null;
+                try {
+                    data = await response.json();
+                } catch (e) {
+                    data = null;
                 }
                 
-                const data = await response.json();
-                
-                if (data.success) {
+                if (response.ok && data && data.success) {
                     statusDiv.innerHTML = `Room created! Redirecting...<br><a href="${data.room_url}">${window.location.origin}${data.room_url}</a>`;
                     setTimeout(() => {
                         window.location.href = data.room_url;
                     }, 1000);
+                } else if (response.status === 429) {
+                    const headerRetry = Number.parseInt(response.headers.get('Retry-After'), 10);
+                    const bodyRetry = data && Number.isFinite(data.retry_after) ? data.retry_after : null;
+                    const retryAfter = Number.isFinite(headerRetry) && headerRetry > 0
+                        ? headerRetry
+                        : (Number.isFinite(bodyRetry) && bodyRetry > 0 ? bodyRetry : 5);
+                    statusDiv.textContent = `Rate limited. Please retry in ${retryAfter} seconds.`;
+                    setTimeout(() => {
+                        createButton.disabled = false;
+                        statusDiv.textContent = '';
+                    }, retryAfter * 1000);
                 } else {
-                    statusDiv.textContent = 'Error creating room';
+                    const errorMessage = data && data.error ? data.error : 'Error creating room';
+                    statusDiv.textContent = errorMessage;
+                    createButton.disabled = false;
                 }
             } catch (error) {
                 statusDiv.textContent = 'Error: ' + error.message;
+                createButton.disabled = false;
             }
         });
     </script>

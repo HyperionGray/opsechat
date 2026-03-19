@@ -217,6 +217,7 @@
         let encryptionKey = null;
         let pollInterval = null;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+        let sendCooldownTimer = null;
         
         // Show security warning on first load
         function showSecurityWarning() {
@@ -251,24 +252,6 @@
                 console.error('Failed to fetch room key:', e);
             }
             return false;
-        }
-        
-        // Simple encryption using AES-GCM with Web Crypto API
-        async function generateKey() {
-            const key = await window.crypto.subtle.generateKey(
-                {
-                    name: "AES-GCM",
-                    length: 256
-                },
-                true,
-                ["encrypt", "decrypt"]
-            );
-            return key;
-        }
-        
-        async function exportKey(key) {
-            const exported = await window.crypto.subtle.exportKey("raw", key);
-            return Array.from(new Uint8Array(exported));
         }
         
         async function importKey(keyArray) {
@@ -343,6 +326,55 @@
                 statusMsg.textContent = '';
             }, duration);
         }
+
+        function parseRetryAfterSeconds(response, payload, fallbackSeconds = 5) {
+            const headerValue = response.headers.get('Retry-After');
+            if (headerValue) {
+                const parsedHeader = Number.parseInt(headerValue, 10);
+                if (Number.isFinite(parsedHeader) && parsedHeader > 0) {
+                    return parsedHeader;
+                }
+            }
+
+            if (payload && Number.isFinite(payload.retry_after) && payload.retry_after > 0) {
+                return payload.retry_after;
+            }
+
+            if (payload && typeof payload.error === 'string') {
+                const match = payload.error.match(/(\d+)\s*seconds?/i);
+                if (match) {
+                    const parsedMessage = Number.parseInt(match[1], 10);
+                    if (Number.isFinite(parsedMessage) && parsedMessage > 0) {
+                        return parsedMessage;
+                    }
+                }
+            }
+
+            return fallbackSeconds;
+        }
+
+        function startSendCooldown(seconds) {
+            const cooldown = Math.max(1, Number.parseInt(seconds, 10) || 1);
+            const input = document.getElementById('messageInput');
+            const button = document.getElementById('sendBtn');
+
+            input.disabled = true;
+            button.disabled = true;
+            showStatus(`Rate limited. Retry in ${cooldown} seconds.`, cooldown * 1000);
+
+            if (sendCooldownTimer) {
+                clearTimeout(sendCooldownTimer);
+            }
+
+            sendCooldownTimer = setTimeout(() => {
+                if (securityWarningAccepted) {
+                    input.disabled = false;
+                    button.disabled = false;
+                    input.focus();
+                }
+                sendCooldownTimer = null;
+            }, cooldown * 1000);
+        }
         
         function scrollToBottom() {
             const container = document.getElementById('messagesContainer');
@@ -394,9 +426,10 @@
         
         async function sendMessage() {
             const input = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendBtn');
             const message = input.value.trim();
             
-            if (!message) return;
+            if (!message || input.disabled || sendBtn.disabled) return;
             
             let messageToSend = message;
             
@@ -413,12 +446,22 @@
                     },
                     body: JSON.stringify({ message: messageToSend })
                 });
-                
+                let payload = null;
+                try {
+                    payload = await response.json();
+                } catch (error) {
+                    payload = null;
+                }
+
                 if (response.ok) {
                     input.value = '';
                     await pollMessages();
+                } else if (response.status === 429) {
+                    const retryAfter = parseRetryAfterSeconds(response, payload, 5);
+                    startSendCooldown(retryAfter);
                 } else {
-                    showStatus('Error sending message');
+                    const errorMessage = payload && payload.error ? payload.error : 'Error sending message';
+                    showStatus(errorMessage);
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);

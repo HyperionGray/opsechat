@@ -78,17 +78,17 @@ python chat-room.py --port 8080
 
 ### Enabling E2E Encryption
 
-1. In the chat room, toggle the "Encryption" switch
-2. All your messages will be encrypted using AES-GCM
-3. Other users must also enable encryption to read your messages
-4. The encryption key is stored in your browser's sessionStorage
-5. Keys are NOT shared - this is for protection against server compromise
+1. Encryption is enabled automatically when a room key is available.
+2. The room key is fetched from `GET /chat/room/<room_id>/key`.
+3. Messages are encrypted client-side with AES-GCM before sending.
+4. Each encrypted message is prefixed with `LOCK_EMOJI + base64(ciphertext)`.
+5. If key fetch fails, users can retry by toggling encryption.
 
-**Important**: E2E encryption is per-user. If you want to chat with encrypted messages:
-- All participants should enable encryption
-- The encryption protects against server compromise
-- Messages are still deleted after 3 minutes
-- Encryption keys are session-only (lost when you close the tab)
+**Important**: Encryption uses a room-shared key.
+- Participants in the same room use the same key material.
+- The goal is transport/message confidentiality in normal operation.
+- Messages are still deleted after 3 minutes.
+- Keys are ephemeral and tied to active room lifecycle.
 
 ## Security Features
 
@@ -120,10 +120,19 @@ This prevents memory forensics from recovering deleted messages.
 
 ### E2E Encryption (Optional)
 - Uses Web Crypto API (AES-GCM with 256-bit keys)
+- Uses room-shared key exchange via `/chat/room/<room_id>/key`
 - Simple, reviewable JavaScript implementation
 - No external dependencies beyond native browser APIs
-- Encrypted messages are prefixed with 🔒 emoji
-- Keys stored in sessionStorage (lost when tab closes)
+- Encrypted messages are prefixed with a lock marker (`LOCK_EMOJI`)
+
+### Rate Limiting and Client Backoff
+- Write endpoints enforce per-session limits in a sliding window.
+- On limit hit, server returns:
+  - HTTP `429`
+  - JSON body containing `retry_after` seconds
+  - `Retry-After` response header
+- Browser UI honors `Retry-After` and temporarily disables send/create actions
+  to avoid request storms and improve UX under throttling.
 
 ## Technical Details
 
@@ -140,6 +149,12 @@ Response: {"success": true, "room_id": "...", "room_url": "/chat/room/..."}
 GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
+```
+
+#### Get Room Encryption Key
+```
+GET /chat/room/<room_id>/key
+Response: {"room_id": "...", "encryption_key": "..."}
 ```
 
 ### Encryption Implementation
