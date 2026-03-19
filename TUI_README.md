@@ -11,6 +11,7 @@ This is a serious privacy and opsec tool for serious privacy and opsec people. I
 ✅ **Randomized Usernames** - Server-assigned, no "Jerry Here" problem  
 ✅ **Text Only** - No images, no video, no b64 encoded garbage  
 ✅ **Message Validation** - Max 1000 chars, prevents b64 image encoding  
+✅ **Per-User Rate Limiting** - Anti-spam protection with configurable thresholds  
 ✅ **Secure Deletion** - Messages overwritten before removal  
 ✅ **Zero Disk** - Nothing touches disk except the application code  
 ✅ **Tor Integration** - Full support for Tor hidden services (.onion)  
@@ -52,6 +53,9 @@ python tui-server.py
 
 # Bind to all interfaces
 python tui-server.py --host 0.0.0.0 --port 5555
+
+# Tune per-user anti-spam limits (default: 10 messages per 30 seconds)
+python tui-server.py --rate-limit-max-messages 8 --rate-limit-window-seconds 20
 ```
 
 ### 3. Connect with Client
@@ -139,6 +143,7 @@ sudo systemctl start tor
 - **No images**: Text only, no exceptions
 - **No video**: Text only, no exceptions
 - **No b64 encoding**: Large base64-like strings are rejected
+- **Per-user rate limit**: 10 messages per 30 seconds (configurable via CLI)
 
 ## Architecture
 
@@ -243,7 +248,6 @@ Messages are:
 
 ## Coming Soon
 
-- [ ] Full Tor hidden service integration
 - [ ] PGP encryption support (optional)
 - [ ] Multi-room support
 - [ ] Message signing/verification
