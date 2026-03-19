@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from tests.mock_email_fallback import create_fallback_email_services
 
@@ -34,7 +34,7 @@ def test_cleanup_expired_removes_outdated_burners():
 
     active_email = burner_manager.generate_burner_email("bob")
     expired_email = burner_manager.generate_burner_email("bob")
-    burner_manager._burners[expired_email]["expires_at"] = datetime.utcnow() - timedelta(seconds=1)
+    burner_manager._burners[expired_email]["expires_at"] = datetime.now(timezone.utc) - timedelta(seconds=1)
 
     removed_count = burner_manager.cleanup_expired()
 

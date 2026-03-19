@@ -8,7 +8,7 @@ without requiring external services or persistent storage.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import secrets
 import string
 from typing import Dict, List, Optional, Tuple
@@ -48,12 +48,12 @@ class MockBurnerManager:
         expires_at = metadata.get("expires_at")
         if not isinstance(expires_at, datetime):
             return True
-        now = now or datetime.utcnow()
+        now = now or datetime.now(timezone.utc)
         return expires_at <= now
 
     def cleanup_expired(self) -> int:
         """Remove expired burners and return number removed."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         expired_emails = [
             email
             for email, metadata in self._burners.items()
@@ -75,7 +75,7 @@ class MockBurnerManager:
         while burner_email in self._burners:
             burner_email = f"{self._random_local_part()}@{chosen_domain}"
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         self._burners[burner_email] = {
             "user_id": normalized_user_id,
             "created_at": now,
