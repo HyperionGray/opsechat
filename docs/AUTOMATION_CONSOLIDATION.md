@@ -13,6 +13,7 @@ This document summarizes the automation consolidation changes made to reduce noi
 
 #### New CI Workflow
 - **`.github/workflows/ci.yml`**: Single required CI workflow that runs:
+  - Repository hygiene checks (`scripts/repo_hygiene.py`)
   - Python tests (3.10, 3.11, 3.12)
   - Playwright E2E tests
   - Security baseline checks (pip-audit, npm audit)
@@ -110,6 +111,28 @@ The following 13 workflows were removed as they created noise by running on ever
 3. Check that caches are being hit for pip, npm, and Playwright browsers
 4. Ensure label-triggered workflows still activate correctly
 5. Update branch protection rules to require `ci.yml` checks
+
+## Label-Based Workflow Triggering
+
+Workflows below intentionally run only when labels/events are applied:
+
+- `auto-llm-pr-review.yml`: add label `copilot:review` to a pull request
+- `auto-llm-issue-review.yml`: add label `copilot:review` to an issue
+- `auto-assign-copilot.yml`: issue label-driven assignment flow
+- `auto-assign-pr.yml`: runs automatically when a pull request is opened
+
+This keeps default CI signal clean while still allowing targeted automation.
+
+## Manually Triggering Scheduled Workflows
+
+Scheduled workflows can be run on demand from GitHub Actions:
+
+1. Open the repository Actions tab
+2. Select the workflow (for example `security-scan.yml`)
+3. Use the **Run workflow** button
+4. Choose branch (`master`/`main`) and run
+
+Use this when validating schedule changes or troubleshooting cron timing.
 
 ## Next Steps
 

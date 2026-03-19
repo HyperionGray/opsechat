@@ -178,6 +178,9 @@ npm run test:headed
 
 # Run all tests
 npm test
+
+# Run repository hygiene checks (unfinished markers/stale artifacts)
+python scripts/repo_hygiene.py
 ```
 
 Tests cover:

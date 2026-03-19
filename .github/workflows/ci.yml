@@ -11,6 +11,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  repo-hygiene:
+    name: Repository Hygiene
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python Environment
+        uses: ./.github/actions/setup-python
+
+      - name: Run repository hygiene checks
+        run: python scripts/repo_hygiene.py
+
   python-tests:
     name: Python Tests
     runs-on: ubuntu-24.04
