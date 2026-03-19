@@ -8,6 +8,14 @@ Main exports:
     - AmazonQReviewer: Main reviewer class
 """
 
-from .reviewer import AmazonQReviewer
+def __getattr__(name):
+    """
+    Lazily import heavy modules so local heuristic analyzers can be used
+    without requiring optional AWS dependencies at import time.
+    """
+    if name == 'AmazonQReviewer':
+        from .reviewer import AmazonQReviewer
+        return AmazonQReviewer
+    raise AttributeError(f"module 'amazon_q' has no attribute {name!r}")
 
 __all__ = ['AmazonQReviewer']
