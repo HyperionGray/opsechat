@@ -59,14 +59,24 @@ Key endpoints used by opsechat:
 - `pricing/get` - Get TLD pricing
 - `domain/listAll` - List owned domains
 
-## Other Registrars (Future Support)
+### Namecheap (Supported)
 
-The opsechat domain manager is designed to be extensible. Future registrar support may include:
+Namecheap support is available for registrar configuration and domain availability/pricing checks, with optional purchase support when contact profile data is provided.
 
-### Namecheap
+Requirements:
 - API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
-- Cheap TLDs: .xyz, .club, .online
+- API access enabled in account settings
+- Source IP added to Namecheap API whitelist (`ClientIp`)
+- Account with qualifying spend/balance per Namecheap policy
+
+Notes:
+- Namecheap API responses are XML.
+- Premium names may include premium pricing in the availability response.
+- Domain purchase via API requires full contact profile fields.
+
+## Other Registrars (Planned)
+
+The domain manager remains extensible for additional registrars:
 
 ### Namesilo
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)
@@ -92,8 +102,10 @@ The opsechat domain manager is designed to be extensible. Future registrar suppo
    ```
 
 2. Under "Domain API Configuration":
+   - Select registrar (`porkbun` or `namecheap`)
    - Enter your API Key
-   - Enter your API Secret
+   - For Porkbun: enter API Secret
+   - For Namecheap: enter Username and whitelisted Client IP
    - Set monthly budget limit (recommended: start with $20-50)
 
 3. Click "Configure"
@@ -104,9 +116,16 @@ For container deployments, you can set:
 
 ```bash
 # In docker-compose.yml or quadlet
+Environment=DOMAIN_REGISTRAR=porkbun
 Environment=PORKBUN_API_KEY=pk1_xxxxx
 Environment=PORKBUN_API_SECRET=sk1_xxxxx
 Environment=DOMAIN_MONTHLY_BUDGET=50.0
+
+# Namecheap alternative
+Environment=DOMAIN_REGISTRAR=namecheap
+Environment=NAMECHEAP_API_KEY=xxxxxxxx
+Environment=NAMECHEAP_USERNAME=your_api_username
+Environment=NAMECHEAP_CLIENT_IP=203.0.113.10
 ```
 
 Then modify the runserver.py to read these on startup.
@@ -183,6 +202,21 @@ Possible causes:
 - Account suspended
 
 Solution: Verify credentials in registrar dashboard
+
+### Namecheap "Client IP not authorized"
+
+Cause: the request IP is not whitelisted in Namecheap API settings.
+
+Solution:
+1. Open Namecheap API settings
+2. Add your server egress IP
+3. Retry the request
+
+### Namecheap purchase returns missing contact details
+
+Cause: Namecheap API purchase requires full registrant/admin/tech/billing contact fields.
+
+Solution: configure contact profile fields before API purchase, or use registrar checkout flow manually.
 
 ## Example: Complete Setup
 

@@ -4,7 +4,7 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, NamecheapAPIClient, DomainRotationManager
 )
 
 
@@ -174,3 +174,128 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    @patch('domain_manager.PorkbunAPIClient')
+    def test_configure_porkbun(self, mock_porkbun_client):
+        """Configure manager for Porkbun registrar"""
+        manager = DomainRotationManager()
+        manager.configure(
+            registrar="porkbun",
+            api_key="pk_test",
+            secret_key="sk_test",
+            monthly_budget=25.0,
+        )
+
+        mock_porkbun_client.assert_called_once_with("pk_test", "sk_test")
+        assert manager.registrar == "porkbun"
+        assert manager.monthly_budget == 25.0
+
+    @patch('domain_manager.NamecheapAPIClient')
+    def test_configure_namecheap(self, mock_namecheap_client):
+        """Configure manager for Namecheap registrar"""
+        manager = DomainRotationManager()
+        manager.configure(
+            registrar="namecheap",
+            api_key="nc_test",
+            username="nc-user",
+            client_ip="10.10.10.10",
+            monthly_budget=35.0,
+        )
+
+        mock_namecheap_client.assert_called_once_with(
+            api_key="nc_test",
+            username="nc-user",
+            client_ip="10.10.10.10",
+            contact_details=None,
+        )
+        assert manager.registrar == "namecheap"
+        assert manager.monthly_budget == 35.0
+
+    def test_configure_invalid_budget_raises(self):
+        """Budget must be greater than zero"""
+        manager = DomainRotationManager()
+
+        with pytest.raises(ValueError):
+            manager.configure(
+                registrar="porkbun",
+                api_key="pk_test",
+                secret_key="sk_test",
+                monthly_budget=0,
+            )
+
+    def test_get_config_returns_non_sensitive_summary(self):
+        """get_config should provide summary without exposing secrets"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.api_key = "key123"
+        mock_client.api_secret = "secret123"
+        manager = DomainRotationManager(api_client=mock_client, monthly_budget=20.0)
+        manager.current_spending = 5.0
+        manager.active_domain = "active.xyz"
+        manager.owned_domains = [{"domain": "active.xyz"}]
+        manager.registrar = "custom"
+
+        config = manager.get_config()
+
+        assert config["registrar"] == "custom"
+        assert config["monthly_budget"] == 20.0
+        assert config["current_spending"] == 5.0
+        assert config["remaining_budget"] == 15.0
+        assert config["active_domain"] == "active.xyz"
+        assert config["domains_owned"] == 1
+        assert config["has_api_key"] is True
+        assert config["has_secret_key"] is True
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch('domain_manager.requests.Session')
+    def test_search_domain_available(self, mock_session_class):
+        """Namecheap check should parse available domains"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """
+            <ApiResponse Status="OK">
+                <CommandResponse>
+                    <DomainCheckResult Domain="example.xyz" Available="true" />
+                </CommandResponse>
+            </ApiResponse>
+        """
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient("test_key", "test_user", "127.0.0.1")
+        result = client.search_domain("example.xyz")
+
+        assert result["domain"] == "example.xyz"
+        assert result["available"] is True
+
+    @patch('domain_manager.requests.Session')
+    def test_get_pricing(self, mock_session_class):
+        """Namecheap pricing response parsing"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """
+            <ApiResponse Status="OK">
+                <CommandResponse>
+                    <UserGetPricingResult>
+                        <ProductType Name="DOMAIN">
+                            <ProductCategory Name="register">
+                                <Product Name="xyz">
+                                    <Price Duration="1" DurationType="YEAR" Price="2.98" Currency="USD" />
+                                </Product>
+                            </ProductCategory>
+                        </ProductType>
+                    </UserGetPricingResult>
+                </CommandResponse>
+            </ApiResponse>
+        """
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient("test_key", "test_user", "127.0.0.1")
+        result = client.get_pricing("xyz")
+
+        assert result["tld"] == "xyz"
+        assert result["registration"] == "2.98"
+        assert result["currency"] == "USD"
