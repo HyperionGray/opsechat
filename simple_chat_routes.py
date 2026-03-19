@@ -16,6 +16,7 @@ import datetime
 import secrets
 import threading
 import base64
+import os
 from flask import render_template, request, session, jsonify, Blueprint
 from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
@@ -33,12 +34,40 @@ dm_lock = threading.Lock()
 _rate_limit_store = {}
 _rate_limit_lock = threading.Lock()
 
-# Rate limit configuration
+def _env_int(name, default, minimum=1):
+    """
+    Read a positive integer from environment variables.
+
+    Invalid values fall back to the provided default.
+    """
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    if parsed < minimum:
+        return default
+    return parsed
+
+
+# Rate limit configuration (custom per-endpoint sliding windows)
+CHAT_CREATE_PER_MINUTE = _env_int("OPSECHAT_CHAT_CREATE_PER_MINUTE", 3)
+CHAT_CREATE_PER_HOUR = _env_int("OPSECHAT_CHAT_CREATE_PER_HOUR", 10)
+CHAT_MESSAGE_PER_MINUTE = _env_int("OPSECHAT_CHAT_MESSAGE_PER_MINUTE", 30)
+DM_SEND_PER_MINUTE = _env_int("OPSECHAT_DM_SEND_PER_MINUTE", 5)
+DM_SEND_PER_HOUR = _env_int("OPSECHAT_DM_SEND_PER_HOUR", 20)
+
 RATE_LIMITS = {
-    "chat_create": {"max_requests": 10, "window_seconds": 60},
-    "chat_message": {"max_requests": 30, "window_seconds": 60},
-    "dm_send": {"max_requests": 5, "window_seconds": 60},
+    "chat_create": {"max_requests": CHAT_CREATE_PER_MINUTE, "window_seconds": 60},
+    "chat_message": {"max_requests": CHAT_MESSAGE_PER_MINUTE, "window_seconds": 60},
+    "dm_send": {"max_requests": DM_SEND_PER_MINUTE, "window_seconds": 60},
 }
+
+CHAT_CREATE_DECORATOR_LIMIT = f"{CHAT_CREATE_PER_HOUR} per hour; {CHAT_CREATE_PER_MINUTE} per minute"
+CHAT_MESSAGE_DECORATOR_LIMIT = f"{CHAT_MESSAGE_PER_MINUTE * 2} per minute"
+DM_SEND_DECORATOR_LIMIT = f"{DM_SEND_PER_HOUR} per hour; {DM_SEND_PER_MINUTE} per minute"
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
@@ -222,6 +251,32 @@ def cleanup_rate_limits():
             del _rate_limit_store[sid]
 
 
+def _rate_limit_response(endpoint: str, retry_after: int):
+    """
+    Build a structured 429 response with retry metadata for client backoff.
+    """
+    config = RATE_LIMITS.get(endpoint, {"max_requests": 0, "window_seconds": 0})
+    retry_after = max(int(retry_after), 1)
+
+    response = jsonify({
+        "error": "rate_limit_exceeded",
+        "endpoint": endpoint,
+        "message": (
+            f"Rate limit exceeded for {endpoint}. "
+            f"Maximum {config['max_requests']} requests per {config['window_seconds']} seconds."
+        ),
+        "retry_after_seconds": retry_after,
+        "limit": {
+            "max_requests": config["max_requests"],
+            "window_seconds": config["window_seconds"],
+        },
+    })
+    response.status_code = 429
+    response.headers["Retry-After"] = str(retry_after)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 # Background cleanup thread
 def cleanup_loop():
     """Continuously clean up old messages and rooms"""
@@ -268,7 +323,7 @@ def register_simple_chat_routes(app):
         return render_template("simple_chat_index.html", version=version)
     
     @app.route('/chat/create', methods=['POST'])
-    @limiter.limit("10 per hour; 3 per minute")
+    @limiter.limit(CHAT_CREATE_DECORATOR_LIMIT)
     def chat_create():
         """Create a new chat room with cryptographically secure ID"""
         # Ensure session exists for rate limiting
@@ -279,9 +334,7 @@ def register_simple_chat_routes(app):
 
         allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Try again in {retry_after} seconds."
-            }), 429
+            return _rate_limit_response("chat_create", retry_after)
 
         room_id = generate_secure_room_id(32)
         
@@ -314,7 +367,7 @@ def register_simple_chat_routes(app):
                              color=session["color"])
     
     @app.route('/chat/room/<string:room_id>/messages', methods=['GET', 'POST'])
-    @limiter.limit("60 per minute", methods=["POST"])
+    @limiter.limit(CHAT_MESSAGE_DECORATOR_LIMIT, methods=["POST"])
     def simple_chat_messages(room_id):
         """Get or post messages to a room"""
         with rooms_lock:
@@ -332,9 +385,7 @@ def register_simple_chat_routes(app):
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
             if not allowed:
-                return jsonify({
-                    "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds."
-                }), 429
+                return _rate_limit_response("chat_message", retry_after)
             
             # Get message from request
             data = request.get_json()
@@ -397,7 +448,7 @@ def register_simple_chat_routes(app):
             })
     
     @app.route('/chat/dm/send', methods=['POST'])
-    @limiter.limit("20 per hour; 5 per minute")
+    @limiter.limit(DM_SEND_DECORATOR_LIMIT)
     def send_dm():
         """Send a direct message (for sharing room IDs) - expires in 1 minute"""
         # Initialize user session if needed
@@ -409,9 +460,7 @@ def register_simple_chat_routes(app):
         # Check rate limit for DMs
         allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds."
-            }), 429
+            return _rate_limit_response("dm_send", retry_after)
         
         data = request.get_json()
         if not data or "room_id" not in data or "message" not in data:

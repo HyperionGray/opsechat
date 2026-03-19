@@ -77,8 +77,7 @@ These are development and testing utilities that help during development:
 - **`comprehensive_functionality_test.py`** - Full functional test suite
 
 ### Main Application Files
-- **`runserver.py`** - Main entry point (legacy monolithic)
-- **`runserver_refactored.py`** - Refactored version (blueprint-based)
+- **`runserver.py`** - Main entry point (app-factory based, blueprint-driven)
 - **`app_factory.py`** - Flask app factory pattern
 - **`chat-room.py`** - Standalone chat room creator
 - **`tui-server.py`** - Terminal UI server
@@ -222,6 +221,14 @@ npm run lint
 - `TOR_CONTROL_PORT` - Tor control port (default: 9051)
 - `PORT` - Flask server port (default: 5000)
 - `FLASK_ENV` - Development/production mode
+- `OPSECHAT_RATE_LIMIT_DEFAULT_PER_HOUR` - Default Flask-Limiter hourly cap (default: 200)
+- `OPSECHAT_RATE_LIMIT_DEFAULT_PER_MINUTE` - Default Flask-Limiter per-minute cap (default: 50)
+- `OPSECHAT_RATE_LIMIT_STORAGE_URI` - Flask-Limiter backend URI (default: `memory://`)
+- `OPSECHAT_CHAT_CREATE_PER_HOUR` - Chat room creation hourly cap (default: 10)
+- `OPSECHAT_CHAT_CREATE_PER_MINUTE` - Chat room creation per-minute cap (default: 3)
+- `OPSECHAT_CHAT_MESSAGE_PER_MINUTE` - Chat message per-minute cap (default: 30)
+- `OPSECHAT_DM_SEND_PER_HOUR` - DM send hourly cap (default: 20)
+- `OPSECHAT_DM_SEND_PER_MINUTE` - DM send per-minute cap (default: 5)
 
 ## Troubleshooting
 

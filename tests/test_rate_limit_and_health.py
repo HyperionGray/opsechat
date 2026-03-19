@@ -10,7 +10,14 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    RATE_LIMITS,
+    chat_rooms,
+    check_rate_limit,
+    rooms_lock,
+    _rate_limit_store,
+    _rate_limit_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -85,6 +92,41 @@ def test_rate_limit_chat_message_limit():
     allowed, retry_after = check_rate_limit("session-msg", "chat_message")
     assert allowed is False
     assert retry_after >= 1
+
+
+def test_chat_message_rate_limit_response_has_retry_metadata():
+    _clear_store()
+    client = _test_app.test_client()
+
+    create_response = client.post("/chat/create", content_type="application/json")
+    assert create_response.status_code == 200
+    room_id = create_response.get_json()["room_id"]
+
+    try:
+        max_requests = RATE_LIMITS["chat_message"]["max_requests"]
+        for i in range(max_requests):
+            post_response = client.post(
+                f"/chat/room/{room_id}/messages",
+                json={"message": f"msg-{i}"},
+            )
+            assert post_response.status_code == 200
+
+        blocked = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "overflow"},
+        )
+        assert blocked.status_code == 429
+
+        data = blocked.get_json()
+        assert data is not None
+        assert data.get("error") == "rate_limit_exceeded"
+        assert data.get("endpoint") == "chat_message"
+        assert data.get("retry_after_seconds", 0) >= 1
+        assert data["limit"]["max_requests"] == max_requests
+        assert blocked.headers.get("Retry-After") == str(data["retry_after_seconds"])
+    finally:
+        with rooms_lock:
+            chat_rooms.pop(room_id, None)
 
 
 # ---------------------------------------------------------------------------

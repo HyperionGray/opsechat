@@ -172,6 +172,49 @@ When limit exceeded:
 
 ---
 
+## ⏱️ API Rate-Limit Backoff Metadata (NEW)
+
+Chat write endpoints now return a structured JSON payload when throttled and include standard retry headers.
+
+### What Changed
+- `429 Too Many Requests` responses are normalized to JSON.
+- Responses now include `retry_after_seconds` and a `Retry-After` header.
+- Chat rate limits are configurable through environment variables.
+
+### 429 Response Shape
+```json
+{
+  "error": "rate_limit_exceeded",
+  "message": "Rate limit exceeded for chat_message. Maximum 30 requests per 60 seconds.",
+  "retry_after_seconds": 12
+}
+```
+
+For simple chat sliding-window limits, responses also include endpoint metadata:
+```json
+{
+  "endpoint": "chat_message",
+  "limit": {
+    "max_requests": 30,
+    "window_seconds": 60
+  }
+}
+```
+
+### New Environment Variables
+- `OPSECHAT_RATE_LIMIT_DEFAULT_PER_HOUR` (default: `200`)
+- `OPSECHAT_RATE_LIMIT_DEFAULT_PER_MINUTE` (default: `50`)
+- `OPSECHAT_RATE_LIMIT_STORAGE_URI` (default: `memory://`)
+- `OPSECHAT_CHAT_CREATE_PER_HOUR` (default: `10`)
+- `OPSECHAT_CHAT_CREATE_PER_MINUTE` (default: `3`)
+- `OPSECHAT_CHAT_MESSAGE_PER_MINUTE` (default: `30`)
+- `OPSECHAT_DM_SEND_PER_HOUR` (default: `20`)
+- `OPSECHAT_DM_SEND_PER_MINUTE` (default: `5`)
+
+These values can be tuned per deployment without code changes.
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

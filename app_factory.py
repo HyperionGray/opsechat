@@ -88,6 +88,29 @@ def create_app():
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
         return response
+
+    @app.errorhandler(429)
+    def handle_rate_limit_exceeded(error):
+        """
+        Return a consistent JSON response for rate-limit violations.
+        """
+        retry_after = 1
+        raw_retry_after = getattr(error, "retry_after", None)
+        if raw_retry_after is not None:
+            try:
+                retry_after = max(int(raw_retry_after), 1)
+            except (TypeError, ValueError):
+                retry_after = 1
+
+        response = jsonify({
+            "error": "rate_limit_exceeded",
+            "message": str(getattr(error, "description", "Rate limit exceeded.")),
+            "retry_after_seconds": retry_after,
+        })
+        response.status_code = 429
+        response.headers["Retry-After"] = str(retry_after)
+        response.headers["Cache-Control"] = "no-store"
+        return response
     
     # Register chat routes
     register_chat_routes(app, chatlines, chatters, id_generator, get_random_color,
