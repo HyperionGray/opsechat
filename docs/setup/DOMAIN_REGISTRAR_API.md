@@ -59,14 +59,43 @@ Key endpoints used by opsechat:
 - `pricing/get` - Get TLD pricing
 - `domain/listAll` - List owned domains
 
+### Namecheap (Supported)
+
+Namecheap support is available in both the Python API client and `domain_rotation_cli.py`.
+
+**Requirements and notes:**
+- API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
+- Requires approved API access on your Namecheap account
+- Requires approved API client IP address in Namecheap settings
+- Purchases require contact profile fields (registrant/admin/tech/billing details)
+- Optional sandbox mode is supported for testing
+
+**API methods used by opsechat:**
+- `namecheap.domains.check` - Check domain availability
+- `namecheap.users.getPricing` - Get TLD pricing
+- `namecheap.domains.create` - Purchase domain (when contact profile is configured)
+
+### CLI configuration examples
+
+```bash
+# Configure registrar credentials interactively
+python domain_rotation_cli.py config
+
+# Show pricing for a TLD on current registrar
+python domain_rotation_cli.py pricing --tld xyz
+```
+
+When `namecheap` is selected, the CLI prompts for:
+- `api_user`
+- `api_key`
+- `username` (optional, defaults to `api_user`)
+- `client_ip`
+- sandbox mode
+- optional contact profile for domain purchases
+
 ## Other Registrars (Future Support)
 
 The opsechat domain manager is designed to be extensible. Future registrar support may include:
-
-### Namecheap
-- API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
-- Cheap TLDs: .xyz, .club, .online
 
 ### Namesilo
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)

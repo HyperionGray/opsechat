@@ -189,10 +189,19 @@ chmod +x domain_rotation_cli.py
 python domain_rotation_cli.py config
 
 # You'll be prompted for:
-# - Porkbun API Key
-# - Porkbun API Secret
+# - Registrar (porkbun or namecheap)
+# - Registrar-specific API credentials
 # - Monthly Budget (default: $50)
 ```
+
+### Multi-Registrar Support
+- Porkbun support remains the default path for low-cost domain rotation.
+- Namecheap support has been added for domain availability checks, pricing, and purchases (when contact profile is configured).
+- New command:
+```bash
+python domain_rotation_cli.py pricing --tld xyz
+```
+This prints current registration, renewal, and transfer pricing for the configured registrar.
 
 ### Usage
 

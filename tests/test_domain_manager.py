@@ -4,7 +4,7 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, NamecheapAPIClient, DomainRotationManager
 )
 
 
@@ -74,6 +74,67 @@ class TestPorkbunAPIClient:
         
         assert result["tld"] == "com"
         assert result["registration"] == "9.99"
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch('domain_manager.requests.Session')
+    def test_search_domain_available(self, mock_session_class):
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """
+<ApiResponse Status="OK">
+  <CommandResponse>
+    <DomainCheckResult Domain="test123xyz.com" Available="true" RegularPrice="8.88" Currency="USD" />
+  </CommandResponse>
+</ApiResponse>
+"""
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(api_user="user", api_key="key", client_ip="127.0.0.1")
+        result = client.search_domain("test123xyz.com")
+
+        assert result["available"] is True
+        assert result["price"] == "8.88"
+        assert result["currency"] == "USD"
+
+    @patch('domain_manager.requests.Session')
+    def test_get_pricing(self, mock_session_class):
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """
+<ApiResponse Status="OK">
+  <CommandResponse>
+    <UserGetPricingResult>
+      <ProductType Name="DOMAIN">
+        <ProductCategory Name="register">
+          <Product Name="xyz">
+            <Price Duration="1" YourPrice="1.99" RegularPrice="12.98" Currency="USD" />
+          </Product>
+        </ProductCategory>
+      </ProductType>
+    </UserGetPricingResult>
+  </CommandResponse>
+</ApiResponse>
+"""
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(api_user="user", api_key="key", client_ip="127.0.0.1")
+        result = client.get_pricing("xyz")
+
+        assert result["tld"] == "xyz"
+        assert result["registration"] == "1.99"
+        assert result["renewal"] == "12.98"
+
+    def test_purchase_requires_contact_profile(self):
+        client = NamecheapAPIClient(api_user="user", api_key="key", client_ip="127.0.0.1")
+        result = client.purchase_domain("need-contact-profile.xyz")
+
+        assert result["success"] is False
+        assert "Missing Namecheap contact profile fields" in result["message"]
 
 
 class TestDomainRotationManager:
@@ -174,3 +235,21 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_namecheap_client(self):
+        """Test manager can configure Namecheap client"""
+        manager = DomainRotationManager(monthly_budget=25.0)
+
+        manager.configure(
+            registrar="namecheap",
+            api_user="user",
+            api_key="key",
+            client_ip="127.0.0.1",
+            monthly_budget=25.0
+        )
+
+        assert isinstance(manager.api_client, NamecheapAPIClient)
+        config = manager.get_config()
+        assert config["configured"] is True
+        assert config["registrar"] == "namecheap"
+        assert config["monthly_budget"] == 25.0
