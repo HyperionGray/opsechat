@@ -42,12 +42,13 @@ python tui-server.py
 You should see:
 ```
 ============================================================
-📡 Local Server: 127.0.0.1:5555
+[*] Local Server: 127.0.0.1:5555
 ============================================================
 
 [*] OpSecChat TUI Server running on 127.0.0.1:5555
 [*] Messages burn after 240 seconds
 [*] Max message length: 1000 chars
+[*] Rate limit: 30 messages / 60 seconds per user
 [*] Press Ctrl+C to stop
 ```
 
@@ -112,8 +113,8 @@ Output:
 [*] Hidden service created: abc123def456ghi789.onion
 
 ============================================================
-🧅 Tor Hidden Service: abc123def456ghi789.onion
-📡 Local Server: 127.0.0.1:5555
+[*] Tor Hidden Service: abc123def456ghi789.onion
+[*] Local Server: 127.0.0.1:5555
 ============================================================
 ```
 
@@ -140,6 +141,7 @@ The client automatically detects `.onion` and uses Tor SOCKS proxy.
 
 ### ✅ Security Features
 - **Message Validation** - Max 1000 chars
+- **Rate Limiting** - Per-user anti-spam protection
 - **Secure Deletion** - Overwrite before delete
 - **No Configuration Files** - Ephemeral by design
 - **No Logs** - Zero persistence
@@ -210,6 +212,13 @@ python tui-server.py --port 6666
 
 # Client
 python tui-client.py --port 6666
+```
+
+### Tune Rate Limiting
+
+```bash
+# Allow 20 messages per user every 30 seconds
+python tui-server.py --rate-limit-count 20 --rate-limit-window 30
 ```
 
 ### Bind to All Interfaces

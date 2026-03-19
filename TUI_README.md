@@ -15,6 +15,7 @@ This is a serious privacy and opsec tool for serious privacy and opsec people. I
 ✅ **Zero Disk** - Nothing touches disk except the application code  
 ✅ **Tor Integration** - Full support for Tor hidden services (.onion)  
 ✅ **SOCKS Proxy** - Client supports connecting via Tor SOCKS proxy  
+✅ **Per-User Rate Limiting** - Default 30 messages/60 seconds (configurable)  
 
 ## Quick Start
 
@@ -40,8 +41,8 @@ python tui-server.py --tor
 # Output will show:
 # [*] Creating ephemeral hidden service...
 # [*] Hidden service created: abc123...xyz.onion
-# 🧅 Tor Hidden Service: abc123...xyz.onion
-# 📡 Local Server: 127.0.0.1:5555
+# [*] Tor Hidden Service: abc123...xyz.onion
+# [*] Local Server: 127.0.0.1:5555
 ```
 
 ### 2. Start the Server (without Tor - testing)
@@ -135,10 +136,17 @@ sudo systemctl start tor
 
 - **Max message length**: 1000 characters
 - **Message lifetime**: 4 minutes (240 seconds)
+- **Rate limit**: 30 messages per 60 seconds per user (default)
 - **Max chat history**: 200 messages in client (memory management)
 - **No images**: Text only, no exceptions
 - **No video**: Text only, no exceptions
 - **No b64 encoding**: Large base64-like strings are rejected
+
+You can tune throttling on server startup:
+
+```bash
+python tui-server.py --rate-limit-count 20 --rate-limit-window 30
+```
 
 ## Architecture
 
@@ -243,7 +251,6 @@ Messages are:
 
 ## Coming Soon
 
-- [ ] Full Tor hidden service integration
 - [ ] PGP encryption support (optional)
 - [ ] Multi-room support
 - [ ] Message signing/verification
