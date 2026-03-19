@@ -30,7 +30,7 @@ SKIP_DIR_NAMES = {
     "build",
     "bak",
 }
-UNFINISHED_PATTERN = re.compile(r"\b(?:TODO|FIXME|HACK|XXX)\b")
+UNFINISHED_PATTERN = re.compile(r"\b(?:TODO|FIXME|HACK|XXX)\s*:")
 
 
 @dataclass

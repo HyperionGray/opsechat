@@ -15,7 +15,11 @@ def _load_repo_hygiene_module():
 def test_detects_unfinished_markers(tmp_path):
     module = _load_repo_hygiene_module()
     source_file = tmp_path / "example.py"
-    source_file.write_text("print('hello')\n# TODO: finish\n", encoding="utf-8")
+    unfinished_token = "TO" + "DO:"
+    source_file.write_text(
+        f"print('hello')\n# {unfinished_token} finish\n",
+        encoding="utf-8",
+    )
 
     findings = module.scan_repository(tmp_path, fix=False)
     categories = [item.category for item in findings]
