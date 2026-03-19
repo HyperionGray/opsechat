@@ -53,7 +53,7 @@ def test_build_report_has_expected_sections():
     report = mod.build_report(
         markers=[],
         stubs=[],
-        cleanup_candidates=["tests/mock_server_refactored.py (duplicate pattern)"],
+        cleanup_candidates=["legacy_helper.py (duplicate pattern)"],
         commit_messages=["Sync workflow templates", "Add ci status report"],
         max_items=10,
     )
