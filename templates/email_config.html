@@ -151,17 +151,17 @@
             
             <div class="form-group">
                 <label>SMTP Server:</label>
-                <input type="text" name="smtp_server" placeholder="smtp.gmail.com" required>
+                <input type="text" name="smtp_server" placeholder="smtp.gmail.com" value="{{ config.smtp_server or '' }}" required>
             </div>
             
             <div class="form-group">
                 <label>SMTP Port:</label>
-                <input type="number" name="smtp_port" value="587" required>
+                <input type="number" name="smtp_port" value="{{ config.smtp_port or 587 }}" required>
             </div>
             
             <div class="form-group">
                 <label>Username (Email Address):</label>
-                <input type="text" name="smtp_username" placeholder="your@email.com" required>
+                <input type="text" name="smtp_username" placeholder="your@email.com" value="{{ config.smtp_username or '' }}" required>
             </div>
             
             <div class="form-group">
@@ -171,9 +171,19 @@
             
             <div class="form-group">
                 <label>
-                    <input type="checkbox" name="use_tls" value="true" checked>
+                    <input type="checkbox" name="use_tls" value="true" {% if config.smtp_use_tls is not defined or config.smtp_use_tls %}checked{% endif %}>
                     Use TLS (recommended)
                 </label>
+            </div>
+
+            <div class="form-group">
+                <label>SMTP Retry Attempts (1-5):</label>
+                <input type="number" name="smtp_retries" value="{{ config.smtp_retries or 3 }}" min="1" max="5" required>
+            </div>
+
+            <div class="form-group">
+                <label>SMTP Retry Backoff Base (seconds):</label>
+                <input type="number" name="smtp_backoff_seconds" value="{{ config.smtp_backoff_seconds or 1.0 }}" step="0.1" min="0" max="30" required>
             </div>
             
             <button type="submit">Configure SMTP</button>
@@ -197,17 +207,17 @@
             
             <div class="form-group">
                 <label>IMAP Server:</label>
-                <input type="text" name="imap_server" placeholder="imap.gmail.com" required>
+                <input type="text" name="imap_server" placeholder="imap.gmail.com" value="{{ config.imap_server or '' }}" required>
             </div>
             
             <div class="form-group">
                 <label>IMAP Port:</label>
-                <input type="number" name="imap_port" value="993" required>
+                <input type="number" name="imap_port" value="{{ config.imap_port or 993 }}" required>
             </div>
             
             <div class="form-group">
                 <label>Username (Email Address):</label>
-                <input type="text" name="imap_username" placeholder="your@email.com" required>
+                <input type="text" name="imap_username" placeholder="your@email.com" value="{{ config.imap_username or '' }}" required>
             </div>
             
             <div class="form-group">
@@ -217,7 +227,7 @@
             
             <div class="form-group">
                 <label>
-                    <input type="checkbox" name="use_ssl" value="true" checked>
+                    <input type="checkbox" name="use_ssl" value="true" {% if config.imap_use_ssl is not defined or config.imap_use_ssl %}checked{% endif %}>
                     Use SSL (recommended)
                 </label>
             </div>
@@ -269,7 +279,7 @@
             
             <div class="form-group">
                 <label>Monthly Budget (USD):</label>
-                <input type="number" name="monthly_budget" value="50" step="0.01" min="1" required>
+                <input type="number" name="monthly_budget" value="{{ budget_status.monthly_budget }}" step="0.01" min="1" required>
             </div>
             
             <button type="submit">Configure Domain API</button>

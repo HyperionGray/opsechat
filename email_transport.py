@@ -22,13 +22,16 @@ class SMTPTransport:
     Supports plain text emails with PGP encryption
     """
     
-    def __init__(self, smtp_server: str, smtp_port: int, username: str, 
-                 password: str, use_tls: bool = True):
+    def __init__(self, smtp_server: str, smtp_port: int, username: str,
+                 password: str, use_tls: bool = True,
+                 max_retries: int = 1, retry_backoff_seconds: float = 1.0):
         self.smtp_server = smtp_server
         self.smtp_port = smtp_port
         self.username = username
         self.password = password
         self.use_tls = use_tls
+        self.max_retries = max(1, int(max_retries))
+        self.retry_backoff_seconds = max(0.0, float(retry_backoff_seconds))
     
     def send_email(self, from_addr: str, to_addr: str, subject: str, 
                    body: str, headers: Optional[Dict] = None) -> bool:
@@ -36,39 +39,53 @@ class SMTPTransport:
         Send email via SMTP
         Returns True on success, False on failure
         """
-        try:
-            # Create message
-            msg = MIMEMultipart()
-            msg['From'] = from_addr
-            msg['To'] = to_addr
-            msg['Subject'] = Header(subject, 'utf-8')
-            
-            # Add custom headers if provided
-            if headers:
-                for key, value in headers.items():
-                    if key.lower() not in ['from', 'to', 'subject']:
-                        msg[key] = value
-            
-            # Add body as plain text
-            msg.attach(MIMEText(body, 'plain', 'utf-8'))
-            
-            # Connect and send
-            if self.use_tls:
+        # Create message once and retry only the network send path.
+        msg = MIMEMultipart()
+        msg['From'] = from_addr
+        msg['To'] = to_addr
+        msg['Subject'] = Header(subject, 'utf-8')
+
+        if headers:
+            for key, value in headers.items():
+                if key.lower() not in ['from', 'to', 'subject']:
+                    msg[key] = value
+
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+
+        for attempt in range(1, self.max_retries + 1):
+            server = None
+            try:
                 server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-                server.starttls()
-            else:
-                server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-            
-            server.login(self.username, self.password)
-            server.send_message(msg)
-            server.quit()
-            
-            logger.info(f"Email sent successfully to {to_addr}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to send email: {e}")
-            return False
+                if self.use_tls:
+                    server.starttls()
+
+                server.login(self.username, self.password)
+                server.send_message(msg)
+                logger.info(
+                    "Email sent successfully to %s on attempt %d/%d",
+                    to_addr, attempt, self.max_retries
+                )
+                return True
+            except Exception as exc:
+                logger.warning(
+                    "SMTP send attempt %d/%d failed: %s",
+                    attempt, self.max_retries, exc
+                )
+                if attempt < self.max_retries and self.retry_backoff_seconds > 0:
+                    backoff_seconds = self.retry_backoff_seconds * (2 ** (attempt - 1))
+                    time.sleep(backoff_seconds)
+            finally:
+                if server is not None:
+                    try:
+                        server.quit()
+                    except Exception:
+                        logger.debug("SMTP connection close failed during cleanup")
+
+        logger.error(
+            "Failed to send email to %s after %d attempts",
+            to_addr, self.max_retries
+        )
+        return False
     
     def test_connection(self) -> bool:
         """Test SMTP connection"""

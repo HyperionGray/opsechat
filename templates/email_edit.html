@@ -132,6 +132,12 @@
     Reply-To, and custom X- headers.
   </div>
 
+  {% if error %}
+  <div class="warning">
+    {{ error }}
+  </div>
+  {% endif %}
+
   <div class="form-container">
     <form method="POST" action="/{{ path }}/email/edit/{{ email.id }}">
       <div class="form-group">

@@ -73,6 +73,61 @@ class TestSMTPTransport:
         mock_server.login.assert_called_once()
         mock_server.quit.assert_called_once()
 
+    @patch('email_transport.smtplib.SMTP')
+    def test_send_email_retries_then_succeeds(self, mock_smtp):
+        """Transient SMTP failure should retry and then succeed"""
+        mock_server = Mock()
+        mock_server.send_message.side_effect = [Exception("temporary"), None]
+        mock_smtp.return_value = mock_server
+
+        transport = SMTPTransport(
+            "smtp.test.com",
+            587,
+            "test@test.com",
+            "password",
+            True,
+            max_retries=2,
+            retry_backoff_seconds=0,
+        )
+
+        result = transport.send_email(
+            "from@test.com",
+            "to@test.com",
+            "Test Subject",
+            "Test Body",
+        )
+
+        assert result is True
+        assert mock_smtp.call_count == 2
+        assert mock_server.send_message.call_count == 2
+
+    @patch('email_transport.smtplib.SMTP')
+    def test_send_email_retries_exhausted(self, mock_smtp):
+        """SMTP retry budget should eventually fail"""
+        mock_server = Mock()
+        mock_server.send_message.side_effect = Exception("still failing")
+        mock_smtp.return_value = mock_server
+
+        transport = SMTPTransport(
+            "smtp.test.com",
+            587,
+            "test@test.com",
+            "password",
+            True,
+            max_retries=3,
+            retry_backoff_seconds=0,
+        )
+
+        result = transport.send_email(
+            "from@test.com",
+            "to@test.com",
+            "Test Subject",
+            "Test Body",
+        )
+
+        assert result is False
+        assert mock_smtp.call_count == 3
+
 
 class TestIMAPTransport:
     """Test IMAP email receiving"""

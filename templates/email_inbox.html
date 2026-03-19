@@ -148,6 +148,18 @@
     For research and security testing purposes only.
   </div>
 
+  {% if message %}
+  <div class="info">
+    {{ message }}
+  </div>
+  {% endif %}
+
+  {% if error %}
+  <div class="warning">
+    {{ error }}
+  </div>
+  {% endif %}
+
   <div class="nav">
     <a href="/{{ path }}">Back to Chat</a>
     <a href="/{{ path }}/email/compose">Compose Email</a>

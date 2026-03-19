@@ -271,6 +271,18 @@
   </div>
 
   <div class="content">
+    {% if message %}
+    <div class="success">
+      {{ message }}
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="warning">
+      {{ error }}
+    </div>
+    {% endif %}
+
     <!-- Stats Section -->
     {% if active_burners %}
     <div class="stats">
@@ -460,7 +472,8 @@
     function refreshBurnerList() {
       fetch('/{{ path }}/email/burner/list')
         .then(response => response.json())
-        .then(burners => {
+        .then(payload => {
+          const burners = payload.burners || payload;
           // Update the list (simple reload for now)
           // In a more advanced implementation, we'd update the DOM directly
           console.log('Burners refreshed:', burners.length);

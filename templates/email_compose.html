@@ -145,6 +145,18 @@
     <a href="/{{ path }}">Back to Chat</a>
   </div>
 
+  {% if error %}
+  <div class="warning">
+    <strong>Error:</strong> {{ error }}
+  </div>
+  {% endif %}
+
+  {% if success %}
+  <div class="info">
+    <strong>Success:</strong> {{ success }}
+  </div>
+  {% endif %}
+
   <div class="warning">
     ⚠️ <strong>Security Research Tool:</strong> This email system is for security research and 
     penetration testing purposes only. Use responsibly and ethically. Spoofing emails without 
@@ -169,7 +181,7 @@
       
       <div class="form-group">
         <label for="from">From:</label>
-        <input type="email" id="from" name="from" placeholder="your-email@opsecmail.onion" required>
+        <input type="email" id="from" name="from" placeholder="your-email@opsecmail.onion" value="{{ default_from }}" required>
       </div>
 
       <div class="form-group">
@@ -241,6 +253,13 @@ Email body goes here..."></textarea>
       <button type="submit">Send Email</button>
     </form>
   </div>
+
+  {% if send_limit_status %}
+  <div class="info">
+    Send quota: {{ send_limit_status.sends_used }}/{{ send_limit_status.max_sends_per_hour }}
+    used this hour.
+  </div>
+  {% endif %}
 
   <div class="info">
     ℹ️ <strong>Features in Raw Mode:</strong>

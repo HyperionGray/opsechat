@@ -25,11 +25,18 @@ Misuse of these features may be illegal in your jurisdiction. Always obtain prop
 #### SMTP Email Sending
 - Send real emails to external addresses
 - TLS/SSL encryption support
+- Configurable retry/backoff for transient SMTP failures
 - Custom header support for security testing
 - PGP encrypted message support
 - Plain text only (no HTML rendering)
 
 **Configuration:** Configure SMTP settings at `/{path}/email/config`
+
+Retry controls are available in the SMTP configuration panel:
+- **SMTP Retry Attempts**: Number of delivery attempts (1-5)
+- **SMTP Retry Backoff Base**: Base delay in seconds (exponential backoff)
+
+When enabled, compose sends can use the `Send via SMTP (real email)` option. If disabled, messages are kept in-memory only.
 
 Supported providers:
 - Gmail (smtp.gmail.com:587)
@@ -265,40 +272,34 @@ Test coverage includes:
 ### Planned Features
 The following features are planned for future releases:
 
-#### 1. SMTP/IMAP Integration
-- Custom SMTP server settings
-- Send emails to external addresses
-- Receive emails from external sources
-- Multiple protocol support (SMTP, IMAP, POP3)
-
-#### 2. Database Backend
+#### 1. Database Backend
 - HBase integration for scalability
 - Persistent email storage with encryption
 - Query optimization for large inboxes
 - Backup and recovery features
 
-#### 3. Spoofing Detection & Testing
+#### 2. Spoofing Detection & Testing
 - Test email domains for spoofing vulnerabilities
 - Automated spoofing attempts
 - SPF/DKIM/DMARC validation testing
 - Subdomain spoofing detection
 - Unicode spoofing attempts (lookalike domains)
 
-#### 4. Phishing Simulation
+#### 3. Phishing Simulation
 - Persistent attack mode for training
 - "YOU JUST GOT OWNED" warnings
 - Gamification features
 - Phishing awareness metrics
 - Custom phishing templates
 
-#### 5. Automated Detection
+#### 4. Automated Detection
 - Spam/scam email detection
 - Automated OSINT on suspicious emails
 - Geo-location detection for scammers
 - Threat intelligence integration
 - Malicious link detection
 
-#### 6. Penetration Testing Tools
+#### 5. Penetration Testing Tools
 - Website cloning for phishing tests
 - Lookalike domain suggestions
 - Payload encryption/encoding tools
@@ -308,7 +309,7 @@ The following features are planned for future releases:
 - Image-based tracking pixels
 - Custom header injection testing
 
-#### 7. Domain Management
+#### 6. Domain Management
 - API integration (Porkbun, etc.)
 - Automatic domain purchasing
 - Budget management (monthly limits)
@@ -316,7 +317,7 @@ The following features are planned for future releases:
 - Blacklist testing against popular sites
 - Automatic domain switching
 
-#### 8. Advanced Features
+#### 7. Advanced Features
 - Email templates library
 - Bulk email operations
 - Email search and filtering
