@@ -22,24 +22,30 @@ def run_mock_server_check():
             cwd=os.path.dirname(os.path.abspath(__file__))
         )
         
-        # Wait a bit for server to start
-        time.sleep(3)
-        
-        # Test health check endpoint
-        try:
-            response = requests.get('http://127.0.0.1:5001/health', timeout=10)
-            print(f"Health check status: {response.status_code}")
-            if response.status_code == 200:
-                data = response.json()
-                print(f"Health check response: {data}")
-                print("✅ Mock server is working correctly!")
-                return True
-            else:
-                print(f"❌ Health check failed with status {response.status_code}")
-                return False
-        except requests.RequestException as e:
-            print(f"❌ Could not connect to mock server: {e}")
-            return False
+        # Poll health check while the process boots.
+        last_error = None
+        for _ in range(15):
+            if server_process.poll() is not None:
+                break
+
+            try:
+                response = requests.get('http://127.0.0.1:5001/health', timeout=2)
+                print(f"Health check status: {response.status_code}")
+                if response.status_code == 200:
+                    data = response.json()
+                    print(f"Health check response: {data}")
+                    print("✅ Mock server is working correctly!")
+                    return True
+            except requests.RequestException as e:
+                last_error = e
+
+            time.sleep(1)
+
+        if last_error is not None:
+            print(f"❌ Could not connect to mock server: {last_error}")
+        else:
+            print("❌ Mock server exited before health check succeeded")
+        return False
             
     except Exception as e:
         print(f"❌ Error starting mock server: {e}")
