@@ -208,6 +208,17 @@ class TestBurnerEmailManager:
         
         manager.cleanup_expired()
         assert email not in manager.burner_addresses
+
+    def test_cleanup_expired_removes_user_tracking(self):
+        manager = BurnerEmailManager()
+        email = manager.generate_burner_email("user1")
+        manager.burner_addresses[email]["expires_at"] = (
+            datetime.datetime.now() - datetime.timedelta(minutes=1)
+        )
+
+        manager.cleanup_expired()
+
+        assert "user1" not in manager.user_burners
     
     def test_get_user_burners(self):
         """Test retrieving all active burners for a user"""
@@ -276,3 +287,18 @@ class TestBurnerEmailManager:
         
         assert len(burners) == 1
         assert burners[0]['email'] == active_email
+
+    def test_send_rate_limit_configurable(self):
+        manager = BurnerEmailManager(max_sends_per_hour=2)
+        user_id = "rate-limit-user"
+
+        allowed, msg = manager.check_send_rate_limit(user_id)
+        assert allowed is True
+        assert msg is None
+
+        manager.record_sent_email(user_id)
+        manager.record_sent_email(user_id)
+
+        allowed, msg = manager.check_send_rate_limit(user_id)
+        assert allowed is False
+        assert "2 emails per hour" in msg

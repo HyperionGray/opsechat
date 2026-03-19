@@ -8,6 +8,7 @@ import random
 import re
 from hashlib import sha256
 from typing import Dict, List, Optional
+from rate_limit_config import get_email_max_sends_per_hour
 
 
 class EmailStorage:
@@ -182,13 +183,17 @@ class EmailComposer:
 class BurnerEmailManager:
     """Manage temporary burner email addresses"""
     
-    def __init__(self):
+    def __init__(self, max_sends_per_hour: Optional[int] = None):
         self.burner_addresses: Dict[str, Dict] = {}  # email -> {user_id, expires_at}
         self.custom_domain: Optional[str] = None  # Custom domain from domain manager
         self.user_burners: Dict[str, List[str]] = {}  # user_id -> list of burner emails
         # Rate limiting for sending emails
         self.send_limits: Dict[str, Dict] = {}  # user_id -> {count, reset_time}
-        self.max_sends_per_hour = 10  # Maximum emails per hour
+        if max_sends_per_hour is None:
+            max_sends_per_hour = get_email_max_sends_per_hour()
+        if max_sends_per_hour <= 0:
+            raise ValueError("max_sends_per_hour must be > 0")
+        self.max_sends_per_hour = max_sends_per_hour
         self.max_receives_unlimited = True  # Receiving is unlimited (main use case)
     
     def set_custom_domain(self, domain: str) -> None:
@@ -289,15 +294,17 @@ class BurnerEmailManager:
     def cleanup_expired(self) -> None:
         """Remove expired burner addresses"""
         now = datetime.datetime.now()
-        expired = [email for email, info in self.burner_addresses.items() 
-                   if info['expires_at'] <= now]
-        for email in expired:
+        expired = [
+            (email, info["user_id"])
+            for email, info in self.burner_addresses.items()
+            if info["expires_at"] <= now
+        ]
+        for email, user_id in expired:
             del self.burner_addresses[email]
-            # Also remove from user_burners
-            user_id = self.burner_addresses.get(email, {}).get('user_id')
-            if user_id and user_id in self.user_burners:
-                if email in self.user_burners[user_id]:
-                    self.user_burners[user_id].remove(email)
+            if user_id in self.user_burners and email in self.user_burners[user_id]:
+                self.user_burners[user_id].remove(email)
+                if not self.user_burners[user_id]:
+                    del self.user_burners[user_id]
     
     def _format_time_remaining(self, time_delta: datetime.timedelta) -> str:
         """Format time remaining in human-readable format"""
@@ -368,9 +375,10 @@ class BurnerEmailManager:
             }
         
         limit_info = self.send_limits[user_id]
+        sends_used = limit_info['count']
         return {
-            'sends_used': limit_info['count'],
-            'sends_remaining': self.max_sends_per_hour - limit_info['count'],
+            'sends_used': sends_used,
+            'sends_remaining': max(self.max_sends_per_hour - sends_used, 0),
             'max_sends_per_hour': self.max_sends_per_hour,
             'reset_time': limit_info['reset_time']
         }

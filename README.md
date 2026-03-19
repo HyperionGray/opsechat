@@ -190,6 +190,33 @@ Tests cover:
 
 For full testing documentation, see [Testing Guide](docs/user-guide/TESTING.md).
 
+Rate limit configuration
+========================
+
+Rate limits are now configurable through environment variables:
+
+- `OPSECHAT_EMAIL_MAX_SENDS_PER_HOUR` (default: `10`)
+- `OPSECHAT_CHAT_CREATE_MAX_REQUESTS` (default: `10`)
+- `OPSECHAT_CHAT_CREATE_WINDOW_SECONDS` (default: `60`)
+- `OPSECHAT_CHAT_MESSAGE_MAX_REQUESTS` (default: `30`)
+- `OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS` (default: `60`)
+- `OPSECHAT_DM_SEND_MAX_REQUESTS` (default: `5`)
+- `OPSECHAT_DM_SEND_WINDOW_SECONDS` (default: `60`)
+- `OPSECHAT_CHAT_CREATE_DECORATOR_LIMIT` (default: `10 per hour; 3 per minute`)
+- `OPSECHAT_CHAT_MESSAGE_DECORATOR_LIMIT` (default: `60 per minute`)
+- `OPSECHAT_DM_SEND_DECORATOR_LIMIT` (default: `20 per hour; 5 per minute`)
+- `OPSECHAT_FLASK_DEFAULT_LIMITS` (default: `200 per hour; 50 per minute`)
+- `OPSECHAT_RATE_LIMIT_STORAGE_URI` (default: `memory://`)
+
+Example:
+
+```bash
+export OPSECHAT_EMAIL_MAX_SENDS_PER_HOUR=20
+export OPSECHAT_CHAT_MESSAGE_MAX_REQUESTS=45
+export OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS=60
+export OPSECHAT_FLASK_DEFAULT_LIMITS="500 per hour; 100 per minute"
+```
+
 
 How it works
 ============

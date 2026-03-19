@@ -371,7 +371,7 @@ npm run test:headed
 2. ✅ **DONE**: Add ASCII-only input validation
 3. ✅ **DONE**: Test XSS protection
 4. ✅ **DONE**: Test injection attacks
-5. ⏳ **TODO**: Add rate limiting configuration
+5. ✅ **DONE**: Add rate limiting configuration via environment variables
 6. ⏳ **TODO**: Implement CAPTCHA for account creation
 
 ### Short-term (Medium Priority)

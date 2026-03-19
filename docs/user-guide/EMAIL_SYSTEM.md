@@ -31,6 +31,9 @@ Misuse of these features may be illegal in your jurisdiction. Always obtain prop
 
 **Configuration:** Configure SMTP settings at `/{path}/email/config`
 
+Email sending rate limits are configurable with:
+- `OPSECHAT_EMAIL_MAX_SENDS_PER_HOUR` (default: `10`)
+
 Supported providers:
 - Gmail (smtp.gmail.com:587)
 - ProtonMail (smtp.protonmail.com:587)

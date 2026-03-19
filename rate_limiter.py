@@ -9,6 +9,7 @@ from flask import session
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import secrets
+from rate_limit_config import get_flask_default_limits, get_rate_limit_storage_uri
 
 def _get_client_identifier():
     """
@@ -29,8 +30,8 @@ def _get_client_identifier():
 # Global limiter instance - configured per-app in init_limiter()
 limiter = Limiter(
     key_func=_get_client_identifier,
-    default_limits=["200 per hour", "50 per minute"],
-    storage_uri="memory://",
+    default_limits=get_flask_default_limits(),
+    storage_uri=get_rate_limit_storage_uri(),
 )
 
 
