@@ -273,6 +273,27 @@ Output:
    Expires: 2027-03-02
 ```
 
+#### Sync Domains From Registrar
+```bash
+python domain_rotation_cli.py sync
+```
+
+Sync pulls domains currently owned in the registrar account and merges them into
+local CLI state without duplicates.
+
+#### Cleanup Expired Local Domains
+```bash
+python domain_rotation_cli.py cleanup
+```
+
+Cleanup removes locally tracked domains whose expiration date has passed and
+reassigns the active domain if needed.
+
+#### Reliable State Persistence
+
+Domain CLI state now serializes datetime fields as ISO 8601 values and restores
+them on load, preventing JSON serialization errors when saving purchased domains.
+
 ### Integration with Burner Email
 After rotating domains, update your email configuration:
 1. Run `python domain_rotation_cli.py status` to get active domain

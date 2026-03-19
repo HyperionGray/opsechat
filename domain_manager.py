@@ -6,7 +6,7 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -32,6 +32,10 @@ class DomainAPIClient:
     def get_pricing(self, tld: str) -> Dict:
         """Get pricing for TLD"""
         raise NotImplementedError
+
+    def list_domains(self) -> List[str]:
+        """List owned domains if the registrar supports it"""
+        return []
 
 
 class PorkbunAPIClient(DomainAPIClient):
@@ -259,6 +263,207 @@ class DomainRotationManager:
             "current_spending": self.current_spending,
             "remaining": self.monthly_budget - self.current_spending,
             "domains_owned": len(self.owned_domains)
+        }
+
+    @staticmethod
+    def _parse_datetime(value: Any) -> Optional[datetime]:
+        """Parse datetime values from runtime objects or ISO strings."""
+        if isinstance(value, datetime):
+            return value
+        if not isinstance(value, str):
+            return None
+
+        candidate = value.strip()
+        if not candidate:
+            return None
+
+        # Accept both explicit offsets and trailing "Z" UTC notation.
+        if candidate.endswith("Z"):
+            candidate = f"{candidate[:-1]}+00:00"
+
+        try:
+            return datetime.fromisoformat(candidate)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _serialize_datetime(value: Any) -> Optional[str]:
+        """Convert datetime-like values to ISO strings for JSON storage."""
+        parsed = DomainRotationManager._parse_datetime(value)
+        return parsed.isoformat() if parsed else None
+
+    def export_state(self) -> Dict[str, Any]:
+        """
+        Export manager state as JSON-serializable data.
+        Datetime values are normalized to ISO 8601 strings.
+        """
+        serialized_domains: List[Dict[str, Any]] = []
+        for domain_info in self.owned_domains:
+            if not isinstance(domain_info, dict):
+                continue
+            record = dict(domain_info)
+            record["purchased_at"] = self._serialize_datetime(record.get("purchased_at"))
+            record["expires_at"] = self._serialize_datetime(record.get("expires_at"))
+            serialized_domains.append(record)
+
+        return {
+            "current_spending": self.current_spending,
+            "owned_domains": serialized_domains,
+            "active_domain": self.active_domain
+        }
+
+    def load_state(self, state: Optional[Dict[str, Any]]) -> None:
+        """
+        Load persisted manager state.
+        Handles both ISO datetime strings and in-memory datetime objects.
+        """
+        if not isinstance(state, dict):
+            return
+
+        current_spending = state.get("current_spending", 0.0)
+        try:
+            self.current_spending = float(current_spending)
+        except (TypeError, ValueError):
+            self.current_spending = 0.0
+
+        loaded_domains: List[Dict[str, Any]] = []
+        for item in state.get("owned_domains", []) or []:
+            if not isinstance(item, dict):
+                continue
+            domain_name = item.get("domain")
+            if not domain_name:
+                continue
+
+            record = dict(item)
+            record["purchased_at"] = self._parse_datetime(record.get("purchased_at"))
+            record["expires_at"] = self._parse_datetime(record.get("expires_at"))
+
+            price = record.get("price")
+            if isinstance(price, str):
+                try:
+                    record["price"] = float(price.replace("$", "").replace("€", "").strip())
+                except ValueError:
+                    pass
+
+            loaded_domains.append(record)
+
+        self.owned_domains = loaded_domains
+
+        active_domain = state.get("active_domain")
+        self.active_domain = active_domain if isinstance(active_domain, str) else None
+
+        domain_names = {d.get("domain") for d in self.owned_domains if isinstance(d, dict)}
+        if self.active_domain and self.active_domain not in domain_names:
+            self.active_domain = None
+        if not self.active_domain and self.owned_domains:
+            self.active_domain = self.owned_domains[0].get("domain")
+
+    def cleanup_expired_domains(self, reference_time: Optional[datetime] = None) -> Dict[str, Any]:
+        """
+        Remove locally tracked domains that have expired.
+        Returns a summary with removed domain names and remaining totals.
+        """
+        now = reference_time or datetime.now()
+        kept_domains: List[Dict[str, Any]] = []
+        removed_domains: List[str] = []
+
+        for domain_info in self.owned_domains:
+            if not isinstance(domain_info, dict):
+                continue
+
+            expires_at = self._parse_datetime(domain_info.get("expires_at"))
+            expired = False
+            if expires_at:
+                # Handle mixed tz-aware / tz-naive values safely.
+                if (expires_at.tzinfo is None) == (now.tzinfo is None):
+                    expired = expires_at <= now
+                else:
+                    expired = expires_at.timestamp() <= now.timestamp()
+
+            if expired:
+                name = domain_info.get("domain")
+                if name:
+                    removed_domains.append(name)
+                continue
+
+            normalized = dict(domain_info)
+            normalized["purchased_at"] = self._parse_datetime(normalized.get("purchased_at"))
+            normalized["expires_at"] = expires_at
+            kept_domains.append(normalized)
+
+        self.owned_domains = kept_domains
+
+        if self.active_domain in removed_domains:
+            self.active_domain = kept_domains[0]["domain"] if kept_domains else None
+
+        return {
+            "removed_count": len(removed_domains),
+            "removed_domains": removed_domains,
+            "remaining_count": len(self.owned_domains),
+            "active_domain": self.active_domain
+        }
+
+    def sync_owned_domains(self) -> Dict[str, Any]:
+        """
+        Sync local owned-domain state with the registrar account.
+        Adds newly discovered remote domains to local state.
+        """
+        if not self.api_client:
+            return {"success": False, "message": "No API client configured", "added_domains": []}
+
+        if not hasattr(self.api_client, "list_domains"):
+            return {
+                "success": False,
+                "message": "Configured API client does not support domain listing",
+                "added_domains": []
+            }
+
+        try:
+            remote_domains = self.api_client.list_domains()
+        except Exception as exc:
+            logger.error(f"Failed to sync domains: {exc}")
+            return {"success": False, "message": str(exc), "added_domains": []}
+
+        if not isinstance(remote_domains, list):
+            return {
+                "success": False,
+                "message": "Registrar returned an invalid domain list",
+                "added_domains": []
+            }
+
+        existing_domains = {
+            item.get("domain")
+            for item in self.owned_domains
+            if isinstance(item, dict) and item.get("domain")
+        }
+        added_domains: List[str] = []
+
+        for domain in remote_domains:
+            if not isinstance(domain, str) or not domain.strip():
+                continue
+            normalized_domain = domain.strip()
+            if normalized_domain in existing_domains:
+                continue
+            self.owned_domains.append({
+                "domain": normalized_domain,
+                "price": None,
+                "purchased_at": None,
+                "expires_at": None,
+                "source": "remote_sync"
+            })
+            existing_domains.add(normalized_domain)
+            added_domains.append(normalized_domain)
+
+        if not self.active_domain and self.owned_domains:
+            self.active_domain = self.owned_domains[0].get("domain")
+
+        return {
+            "success": True,
+            "remote_total": len(remote_domains),
+            "added_count": len(added_domains),
+            "added_domains": added_domains,
+            "local_total": len(self.owned_domains),
+            "active_domain": self.active_domain
         }
 
 

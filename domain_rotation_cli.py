@@ -10,6 +10,8 @@ Usage:
     python domain_rotation_cli.py search        # Search for available cheap domains
     python domain_rotation_cli.py rotate        # Rotate to a new domain
     python domain_rotation_cli.py status        # Show budget status
+    python domain_rotation_cli.py sync          # Sync local domains from registrar
+    python domain_rotation_cli.py cleanup       # Remove expired local domains
     python domain_rotation_cli.py config        # Configure API credentials
 """
 
@@ -18,11 +20,22 @@ import json
 import os
 import sys
 from pathlib import Path
+from datetime import datetime
 from getpass import getpass
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def format_datetime(value, include_time=True):
+    """Format datetime-like values for terminal output."""
+    parsed = DomainRotationManager._parse_datetime(value)
+    if not parsed:
+        return "Unknown"
+    if include_time:
+        return parsed.strftime('%Y-%m-%d %H:%M')
+    return parsed.strftime('%Y-%m-%d')
 
 
 def load_config():
@@ -107,29 +120,22 @@ def get_manager():
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+
+    # Load persisted state (handles datetime normalization)
+    manager.load_state(config)
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    config.update(manager.export_state())
     save_config(config)
 
 
 def list_domains():
     """List owned domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Owned Domains ===\n")
     
@@ -143,15 +149,16 @@ def list_domains():
     for i, domain in enumerate(domains, 1):
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
-        print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        price = domain.get('price')
+        print(f"   Price: ${price}" if price is not None else "   Price: Unknown")
+        print(f"   Purchased: {format_datetime(domain.get('purchased_at'), include_time=True)}")
+        print(f"   Expires: {format_datetime(domain.get('expires_at'), include_time=False)}")
         print()
 
 
 def search_domains():
     """Search for available cheap domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
     print("Searching for domains under $5...\n")
@@ -215,7 +222,7 @@ def rotate_domain():
 
 def show_status():
     """Show current status"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Domain Rotation Status ===\n")
     
@@ -233,6 +240,45 @@ def show_status():
         print(f"   Configure your email system to use: user@{manager.active_domain}")
 
 
+def sync_domains():
+    """Sync local domain state from registrar"""
+    manager, config = get_manager()
+    print("\n=== Sync Domains ===\n")
+
+    result = manager.sync_owned_domains()
+    if not result.get('success'):
+        print(f"❌ {result.get('message', 'Sync failed')}")
+        return
+
+    print(f"Registrar domains discovered: {result.get('remote_total', 0)}")
+    print(f"New domains added locally: {result.get('added_count', 0)}")
+
+    added_domains = result.get('added_domains', [])
+    if added_domains:
+        print("\nAdded domains:")
+        for domain in added_domains:
+            print(f"  - {domain}")
+
+    print(f"\nLocal total domains: {result.get('local_total', 0)}")
+    print(f"Active domain: {result.get('active_domain') or 'None'}")
+    save_manager_state(manager, config)
+
+
+def cleanup_domains():
+    """Remove expired local domains and persist updated state"""
+    manager, config = get_manager()
+    print("\n=== Cleanup Expired Domains ===\n")
+
+    summary = manager.cleanup_expired_domains(reference_time=datetime.now())
+    print(f"Removed domains: {summary.get('removed_count', 0)}")
+    for domain in summary.get('removed_domains', []):
+        print(f"  - {domain}")
+
+    print(f"\nRemaining domains: {summary.get('remaining_count', 0)}")
+    print(f"Active domain: {summary.get('active_domain') or 'None'}")
+    save_manager_state(manager, config)
+
+
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
@@ -244,13 +290,15 @@ Examples:
   python domain_rotation_cli.py status     # Show current status
   python domain_rotation_cli.py search     # Search for available domains
   python domain_rotation_cli.py rotate     # Rotate to a new domain
+  python domain_rotation_cli.py sync       # Sync from registrar
+  python domain_rotation_cli.py cleanup    # Remove expired domains
   python domain_rotation_cli.py list       # List owned domains
         """
     )
     
     parser.add_argument(
         'command',
-        choices=['config', 'status', 'search', 'rotate', 'list'],
+        choices=['config', 'status', 'search', 'rotate', 'sync', 'cleanup', 'list'],
         help='Command to execute'
     )
     
@@ -264,6 +312,10 @@ Examples:
         search_domains()
     elif args.command == 'rotate':
         rotate_domain()
+    elif args.command == 'sync':
+        sync_domains()
+    elif args.command == 'cleanup':
+        cleanup_domains()
     elif args.command == 'list':
         list_domains()
 

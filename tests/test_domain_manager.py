@@ -3,6 +3,7 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime, timedelta
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -174,3 +175,67 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_state_export_and_load_round_trip(self):
+        """State export/load should preserve values and normalize datetimes."""
+        now = datetime(2026, 3, 1, 10, 30, 0)
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 2.99
+        manager.owned_domains = [{
+            "domain": "test123.xyz",
+            "price": "2.99",
+            "purchased_at": now,
+            "expires_at": now + timedelta(days=365)
+        }]
+        manager.active_domain = "test123.xyz"
+
+        state = manager.export_state()
+
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(state["owned_domains"][0]["expires_at"], str)
+
+        reloaded = DomainRotationManager(monthly_budget=50.0)
+        reloaded.load_state(state)
+
+        assert reloaded.current_spending == 2.99
+        assert reloaded.active_domain == "test123.xyz"
+        assert len(reloaded.owned_domains) == 1
+        assert isinstance(reloaded.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(reloaded.owned_domains[0]["expires_at"], datetime)
+        assert reloaded.owned_domains[0]["price"] == 2.99
+
+    def test_cleanup_expired_domains_updates_active_domain(self):
+        """Expired domains should be removed and active domain reassigned."""
+        now = datetime(2026, 3, 10, 12, 0, 0)
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.owned_domains = [
+            {"domain": "old.xyz", "expires_at": now - timedelta(days=1)},
+            {"domain": "current.xyz", "expires_at": now + timedelta(days=30)}
+        ]
+        manager.active_domain = "old.xyz"
+
+        summary = manager.cleanup_expired_domains(reference_time=now)
+
+        assert summary["removed_count"] == 1
+        assert summary["removed_domains"] == ["old.xyz"]
+        assert summary["remaining_count"] == 1
+        assert summary["active_domain"] == "current.xyz"
+        assert manager.active_domain == "current.xyz"
+
+    def test_sync_owned_domains_adds_new_domains_without_duplicates(self):
+        """Sync should add missing domains and ignore duplicates."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.list_domains.return_value = [
+            "existing.xyz", "newdomain.xyz", "newdomain.xyz", ""
+        ]
+
+        manager = DomainRotationManager(api_client=mock_client, monthly_budget=50.0)
+        manager.owned_domains = [{"domain": "existing.xyz"}]
+        manager.active_domain = "existing.xyz"
+
+        result = manager.sync_owned_domains()
+
+        assert result["success"] is True
+        assert result["added_count"] == 1
+        assert result["added_domains"] == ["newdomain.xyz"]
+        assert result["local_total"] == 2
