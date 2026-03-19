@@ -1,7 +1,8 @@
 # Acceptable Use Policy (AUP)
 
-**Effective Date:** [To Be Determined]  
-**Last Updated:** January 6, 2026  
+**Version:** 0.1.0  
+**Effective Date:** March 19, 2026  
+**Last Updated:** March 19, 2026  
 **Service:** opsechat  
 **Provider:** Hyperion Gray LLC
 

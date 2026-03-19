@@ -302,10 +302,9 @@
 
 ### Merge Blockers (From rules.json)
 ⚠️ **CRITICAL:** Repository currently violates merge requirements:
-- Missing `docs/` directory - all documentation in root
-- Missing `VERSION` file
-- Missing unified build system
-- Python files not organized in `src/`
+- Unified build/task system still needs standardization
+- Python modules are still mostly in repository root and need organization under `src/`
+- `bin/` remains incomplete for executable entry points
 
 **These MUST be fixed before merge per rules.json rule 07kwRDfGEGxIqlUsk3232**
 

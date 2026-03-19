@@ -5,7 +5,7 @@ Welcome to the OpSecChat documentation. All documentation has been organized int
 ## Quick Links
 
 - **[Main README](../README.md)** - Start here for project overview
-- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes (TODO)
+- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes
 - **[Security](../SECURITY.md)** - Security information and best practices
 - **[License](../LICENSE.md)** - MIT License
 
@@ -57,6 +57,7 @@ Legal documents and policies.
 
 - [Acceptable Use Policy](legal/ACCEPTABLE_USE_POLICY.md) - AUP (requires legal review)
 - [Terms of Service](legal/TERMS_OF_SERVICE.md) - ToS (requires legal review)
+- [Privacy Policy](legal/PRIVACY_POLICY.md) - Privacy terms and data handling practices
 
 ### 🔧 Implementation
 Implementation details and summaries of major features.
@@ -67,6 +68,7 @@ Implementation details and summaries of major features.
 - [CI/CD Implementation](implementation/CI_CD_IMPLEMENTATION_SUMMARY.md) - CI/CD setup
 - [Containerization Summary](implementation/CONTAINERIZATION_SUMMARY.md) - Container implementation
 - [jQuery Security Update](implementation/JQUERY_SECURITY_UPDATE.md) - jQuery 3.7.1 update
+- [Legal Policy Pages](implementation/LEGAL_POLICY_PAGES.md) - Web routes for terms/privacy/AUP
 - [Changelog](implementation/CHANGELOG.md) - Version history
 - [PR Summaries](implementation/PR_SUMMARY.md) - Pull request summaries
 
@@ -97,5 +99,5 @@ When adding new documentation:
 
 ---
 
-**Last Updated:** February 23, 2026  
+**Last Updated:** March 19, 2026  
 **Maintained by:** OpSecChat Team

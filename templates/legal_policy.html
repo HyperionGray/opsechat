@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpSecChat - {{ title }}</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            color: #0f0;
+            font-family: "Courier New", monospace;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .header {
+            border: 1px solid #0f0;
+            background-color: #001100;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 1.7em;
+        }
+
+        .meta {
+            font-size: 0.95em;
+            color: #9f9;
+        }
+
+        .meta span {
+            display: inline-block;
+            margin-right: 12px;
+            margin-top: 4px;
+        }
+
+        .nav {
+            margin: 14px 0 0 0;
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .nav a {
+            color: #0ff;
+            text-decoration: none;
+        }
+
+        .nav a.active {
+            color: #0f0;
+            text-decoration: underline;
+            font-weight: bold;
+        }
+
+        .nav a:hover {
+            text-decoration: underline;
+        }
+
+        .content {
+            border: 1px solid #0f0;
+            background-color: #000800;
+            padding: 16px;
+            overflow-x: auto;
+        }
+
+        .content pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: #d7ffd7;
+            font-family: "Courier New", monospace;
+        }
+
+        .footer {
+            margin-top: 16px;
+            color: #7fbf7f;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <section class="header" aria-label="Policy metadata">
+            <h1>{{ title }}</h1>
+            <div class="meta">
+                <span><strong>Version:</strong> {{ version }}</span>
+                <span><strong>Effective Date:</strong> {{ effective_date }}</span>
+                <span><strong>Last Updated:</strong> {{ last_updated }}</span>
+            </div>
+            <nav class="nav" aria-label="Legal policy navigation">
+                {% for link in links %}
+                <a href="{{ link.href }}" class="{% if link.slug == slug %}active{% endif %}">
+                    {{ link.label }}
+                </a>
+                {% endfor %}
+            </nav>
+        </section>
+
+        <section class="content" aria-label="{{ title }} content">
+            <pre>{{ markdown }}</pre>
+        </section>
+
+        <div class="footer">
+            Policy pages are displayed from docs/legal and should be reviewed by legal counsel before production launch.
+        </div>
+    </main>
+</body>
+</html>

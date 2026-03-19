@@ -127,6 +127,22 @@
             font-size: 0.8em;
             color: #ff0;
             margin-top: 5px;
+            padding-left: 20px;
+        }
+
+        .legal-links {
+            font-size: 0.8em;
+            color: #7fbf7f;
+            padding: 0 20px 10px 20px;
+        }
+
+        .legal-links a {
+            color: #0ff;
+            text-decoration: none;
+        }
+
+        .legal-links a:hover {
+            text-decoration: underline;
         }
         
         .encryption-status {
@@ -182,6 +198,11 @@
         <button id="sendBtn" aria-label="Send message">Send</button>
     </div>
     <div class="status" id="statusMsg" role="status" aria-live="polite"></div>
+    <div class="legal-links" aria-label="Legal links">
+        <a href="/terms">Terms</a> |
+        <a href="/privacy">Privacy</a> |
+        <a href="/aup">AUP</a>
+    </div>
     
     <!-- Security Warning Modal -->
     <div id="securityWarning" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 1000; padding: 20px;"
