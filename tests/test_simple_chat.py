@@ -10,7 +10,7 @@ Covers the features recently pushed in issues #109, #112, #114, #116, #118:
   - Room cleanup (inactive > 1 hour)
   - Flask API endpoints (create room, post/get messages, key endpoint, DM send/view)
   - Security headers (CSP, X-Frame-Options, etc.)
-  - Message sanitization (XSS, length limits, base64 detection)
+  - Message sanitization (XSS, length limits)
   - Per-session rate limiting is tested separately in test_rate_limit_and_health.py
 """
 
