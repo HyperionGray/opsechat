@@ -184,6 +184,13 @@ def clean_build_artifacts():
         if test_path.exists():
             print(f"[*] Removing {test_path}")
             shutil.rmtree(test_path, ignore_errors=True)
+
+    # Remove BISH index artifacts that can accumulate in subdirectories
+    for artifact_name in ['.bish-index', '.bish.sqlite']:
+        for artifact_file in project_root.rglob(artifact_name):
+            if artifact_file.is_file():
+                print(f"[*] Removing {artifact_file}")
+                artifact_file.unlink(missing_ok=True)
     
     return True
 

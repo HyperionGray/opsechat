@@ -98,6 +98,7 @@ python pf-tasks/clean.py --artifacts
 - Removes networks and volumes
 - Optionally removes container images
 - Cleans build artifacts and cache
+- Removes residual `.bish-index` and `.bish.sqlite` files across the repository
 
 ## Usage Patterns
 
