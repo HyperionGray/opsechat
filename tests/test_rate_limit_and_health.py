@@ -10,7 +10,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    calculate_exponential_backoff,
+    RATE_LIMITS,
+    _rate_limit_store,
+    _rate_limit_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -24,6 +30,17 @@ def _clear_store():
     """Helper: wipe the rate limit store between tests."""
     with _rate_limit_lock:
         _rate_limit_store.clear()
+
+
+def _seed_exhausted_session_limit(session_id, endpoint):
+    """Populate in-memory store so the next call is definitely rate-limited."""
+    cfg = RATE_LIMITS[endpoint]
+    with _rate_limit_lock:
+        _rate_limit_store.setdefault(session_id, {})
+        _rate_limit_store[session_id][endpoint] = [
+            datetime.datetime.now() - datetime.timedelta(seconds=1)
+            for _ in range(cfg["max_requests"])
+        ]
 
 
 def test_rate_limit_allows_requests_within_window():
@@ -87,6 +104,13 @@ def test_rate_limit_chat_message_limit():
     assert retry_after >= 1
 
 
+def test_exponential_backoff_calculation_and_cap():
+    assert calculate_exponential_backoff(2, attempt=0, cap_seconds=30) == 2
+    assert calculate_exponential_backoff(2, attempt=1, cap_seconds=30) == 4
+    assert calculate_exponential_backoff(2, attempt=2, cap_seconds=30) == 8
+    assert calculate_exponential_backoff(2, attempt=10, cap_seconds=30) == 30
+
+
 # ---------------------------------------------------------------------------
 # Health endpoint integration tests
 # ---------------------------------------------------------------------------
@@ -113,3 +137,29 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_dm_rate_limit_response_contains_retry_headers_and_payload():
+    _clear_store()
+    client = _test_app.test_client()
+    sid = "session-dm-429"
+
+    with client.session_transaction() as sess:
+        sess["_id"] = sid
+        sess["username"] = "TestUser"
+        sess["color"] = [1, 2, 3]
+
+    _seed_exhausted_session_limit(sid, "dm_send")
+    response = client.post(
+        "/chat/dm/send",
+        json={"room_id": "room-abc", "message": "hello"},
+    )
+
+    assert response.status_code == 429
+    data = response.get_json()
+    assert data is not None
+    assert "error" in data
+    assert data["retry_after"] >= 1
+    assert data["backoff_seconds"] >= data["retry_after"]
+    assert response.headers.get("Retry-After") == str(data["retry_after"])
+    assert response.headers.get("X-Backoff-Seconds") == str(data["backoff_seconds"])

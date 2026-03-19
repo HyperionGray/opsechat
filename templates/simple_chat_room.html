@@ -217,6 +217,9 @@
         let encryptionKey = null;
         let pollInterval = null;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+        let sendInFlight = false;
+        const MAX_SEND_RETRIES = 3;
+        const MAX_BACKOFF_SECONDS = 30;
         
         // Show security warning on first load
         function showSecurityWarning() {
@@ -251,24 +254,6 @@
                 console.error('Failed to fetch room key:', e);
             }
             return false;
-        }
-        
-        // Simple encryption using AES-GCM with Web Crypto API
-        async function generateKey() {
-            const key = await window.crypto.subtle.generateKey(
-                {
-                    name: "AES-GCM",
-                    length: 256
-                },
-                true,
-                ["encrypt", "decrypt"]
-            );
-            return key;
-        }
-        
-        async function exportKey(key) {
-            const exported = await window.crypto.subtle.exportKey("raw", key);
-            return Array.from(new Uint8Array(exported));
         }
         
         async function importKey(keyArray) {
@@ -343,6 +328,45 @@
                 statusMsg.textContent = '';
             }, duration);
         }
+
+        function sleep(ms) {
+            return new Promise((resolve) => setTimeout(resolve, ms));
+        }
+
+        function calculateBackoffSeconds(baseDelaySeconds, attempt) {
+            const base = Math.max(1, Number(baseDelaySeconds) || 1);
+            const safeAttempt = Math.max(0, Number(attempt) || 0);
+            return Math.min(base * (2 ** safeAttempt), MAX_BACKOFF_SECONDS);
+        }
+
+        function getRetryAfterSeconds(response, payload) {
+            const bodyRetry = Number(payload?.retry_after);
+            if (Number.isFinite(bodyRetry) && bodyRetry > 0) {
+                return Math.ceil(bodyRetry);
+            }
+
+            const headerRetry = Number(response.headers.get('Retry-After'));
+            if (Number.isFinite(headerRetry) && headerRetry > 0) {
+                return Math.ceil(headerRetry);
+            }
+
+            return 1;
+        }
+
+        function getBackoffSeconds(response, payload, attempt) {
+            const bodyBackoff = Number(payload?.backoff_seconds);
+            if (Number.isFinite(bodyBackoff) && bodyBackoff > 0) {
+                return Math.ceil(bodyBackoff);
+            }
+
+            const headerBackoff = Number(response.headers.get('X-Backoff-Seconds'));
+            if (Number.isFinite(headerBackoff) && headerBackoff > 0) {
+                return Math.ceil(headerBackoff);
+            }
+
+            const retryAfter = getRetryAfterSeconds(response, payload);
+            return calculateBackoffSeconds(retryAfter, attempt);
+        }
         
         function scrollToBottom() {
             const container = document.getElementById('messagesContainer');
@@ -392,20 +416,8 @@
             scrollToBottom();
         }
         
-        async function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const message = input.value.trim();
-            
-            if (!message) return;
-            
-            let messageToSend = message;
-            
-            // Encrypt if enabled
-            if (encryptionEnabled && encryptionKey) {
-                messageToSend = '🔒' + await encryptMessage(message, encryptionKey);
-            }
-            
-            try {
+        async function postMessageWithBackoff(messageToSend) {
+            for (let attempt = 0; attempt <= MAX_SEND_RETRIES; attempt++) {
                 const response = await fetch(`/chat/room/${roomId}/messages`, {
                     method: 'POST',
                     headers: {
@@ -413,15 +425,79 @@
                     },
                     body: JSON.stringify({ message: messageToSend })
                 });
-                
+
+                let payload = null;
+                try {
+                    payload = await response.json();
+                } catch (_) {
+                    payload = null;
+                }
+
                 if (response.ok) {
+                    return { success: true };
+                }
+
+                if (response.status !== 429) {
+                    return {
+                        success: false,
+                        errorMessage: payload?.error || 'Error sending message'
+                    };
+                }
+
+                const retryAfter = getRetryAfterSeconds(response, payload);
+                const backoffSeconds = getBackoffSeconds(response, payload, attempt);
+                const waitSeconds = Math.max(retryAfter, backoffSeconds);
+
+                if (attempt >= MAX_SEND_RETRIES) {
+                    return {
+                        success: false,
+                        errorMessage: payload?.error || `Rate limit exceeded. Try again in ${waitSeconds} seconds.`
+                    };
+                }
+
+                showStatus(`Rate limited. Retrying in ${waitSeconds}s (${attempt + 1}/${MAX_SEND_RETRIES})`, waitSeconds * 1000);
+                await sleep(waitSeconds * 1000);
+            }
+
+            return { success: false, errorMessage: 'Error sending message' };
+        }
+
+        async function sendMessage() {
+            if (sendInFlight) {
+                return;
+            }
+
+            const input = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendBtn');
+            const message = input.value.trim();
+
+            if (!message) return;
+
+            sendInFlight = true;
+            sendBtn.disabled = true;
+
+            try {
+                let messageToSend = message;
+
+                // Encrypt if enabled
+                if (encryptionEnabled && encryptionKey) {
+                    messageToSend = '🔒' + await encryptMessage(message, encryptionKey);
+                }
+
+                const result = await postMessageWithBackoff(messageToSend);
+                if (result.success) {
                     input.value = '';
                     await pollMessages();
                 } else {
-                    showStatus('Error sending message');
+                    showStatus(result.errorMessage || 'Error sending message');
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);
+            } finally {
+                sendInFlight = false;
+                if (securityWarningAccepted) {
+                    sendBtn.disabled = false;
+                }
             }
         }
         
