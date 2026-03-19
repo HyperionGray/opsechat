@@ -33,6 +33,7 @@ Installation and deployment guides for different environments.
 - [Amazon Q Setup](setup/AMAZON_Q_SETUP_GUIDE.md) - Amazon Q integration
 - [Domain API Setup](setup/DOMAIN_API_SETUP.md) - Domain registrar API configuration
 - [Domain Registrar API](setup/DOMAIN_REGISTRAR_API.md) - Registrar API documentation
+- [Health Checks](setup/HEALTH_CHECKS.md) - Liveness/readiness endpoints for operations
 
 ### 📖 User Guide
 Documentation for end users and operators.

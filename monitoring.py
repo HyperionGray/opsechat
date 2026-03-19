@@ -13,6 +13,8 @@ from typing import Dict, Any, Optional
 from functools import wraps
 import traceback
 
+DEFAULT_MEMORY_WARNING_MB = 1024
+
 class StructuredLogger:
     """
     Structured logging implementation that maintains security while providing operational insights
@@ -321,21 +323,181 @@ def _read_version() -> str:
         return 'unknown'
 
 
+def _get_active_rooms_count() -> int:
+    """
+    Return active simple chat room count.
+
+    Falls back to 0 when simple chat routes are unavailable.
+    """
+    try:
+        from simple_chat_routes import chat_rooms, rooms_lock
+        with rooms_lock:
+            return len(chat_rooms)
+    except Exception:
+        return 0
+
+
+def _check_version() -> Dict[str, Any]:
+    """Version check is required for release traceability."""
+    version = _read_version()
+    if version == 'unknown':
+        return {
+            "status": "fail",
+            "required": True,
+            "details": "VERSION file missing or unreadable"
+        }
+    return {
+        "status": "ok",
+        "required": True,
+        "details": f"version={version}"
+    }
+
+
+def _check_chat_storage() -> Dict[str, Any]:
+    """Check that in-memory chat room storage is reachable."""
+    try:
+        from simple_chat_routes import chat_rooms, rooms_lock
+        with rooms_lock:
+            count = len(chat_rooms)
+        return {
+            "status": "ok",
+            "required": True,
+            "details": f"active_rooms={count}"
+        }
+    except Exception as exc:
+        return {
+            "status": "fail",
+            "required": True,
+            "details": f"chat storage unavailable: {exc}"
+        }
+
+
+def _check_rate_limiter_store() -> Dict[str, Any]:
+    """Check that the in-memory rate limit store is accessible."""
+    try:
+        from simple_chat_routes import _rate_limit_store, _rate_limit_lock
+        with _rate_limit_lock:
+            session_count = len(_rate_limit_store)
+        return {
+            "status": "ok",
+            "required": True,
+            "details": f"tracked_sessions={session_count}"
+        }
+    except Exception as exc:
+        return {
+            "status": "fail",
+            "required": True,
+            "details": f"rate limiter unavailable: {exc}"
+        }
+
+
+def _check_memory_usage() -> Dict[str, Any]:
+    """
+    Optional memory pressure check.
+
+    Returns unknown when psutil is not installed.
+    """
+    threshold_raw = os.environ.get("OPSECHAT_HEALTH_MEMORY_WARN_MB", str(DEFAULT_MEMORY_WARNING_MB))
+    try:
+        threshold_mb = int(threshold_raw)
+    except ValueError:
+        threshold_mb = DEFAULT_MEMORY_WARNING_MB
+    try:
+        import psutil
+        process = psutil.Process()
+        memory_mb = round(process.memory_info().rss / 1024 / 1024, 2)
+        if memory_mb > threshold_mb:
+            return {
+                "status": "warn",
+                "required": False,
+                "details": f"rss_mb={memory_mb} above threshold_mb={threshold_mb}"
+            }
+        return {
+            "status": "ok",
+            "required": False,
+            "details": f"rss_mb={memory_mb}"
+        }
+    except ImportError:
+        return {
+            "status": "unknown",
+            "required": False,
+            "details": "psutil not installed"
+        }
+    except Exception as exc:
+        return {
+            "status": "warn",
+            "required": False,
+            "details": f"memory check error: {exc}"
+        }
+
+
+def _evaluate_readiness(checks: Dict[str, Dict[str, Any]]) -> bool:
+    """Application is ready only when all required checks are ok."""
+    for check in checks.values():
+        if check.get("required") and check.get("status") != "ok":
+            return False
+    return True
+
+
+def _health_status_from_checks(checks: Dict[str, Dict[str, Any]]) -> str:
+    """
+    Map checks to health status:
+    - unhealthy: any required check failed
+    - degraded: readiness is true but an optional warning exists
+    - healthy: all required checks are ok and no optional warnings
+    """
+    if not _evaluate_readiness(checks):
+        return "unhealthy"
+
+    has_optional_warn = any(
+        (not check.get("required")) and check.get("status") == "warn"
+        for check in checks.values()
+    )
+    if has_optional_warn:
+        return "degraded"
+    return "healthy"
+
+
+def get_liveness_status() -> Dict[str, Any]:
+    """Liveness probe: process is running and responsive."""
+    return {
+        "status": "alive",
+        "timestamp": datetime.utcnow().isoformat(),
+        "uptime_seconds": time.time() - apm.metrics['system']['start_time'],
+        "version": _read_version(),
+    }
+
+
+def get_readiness_status() -> Dict[str, Any]:
+    """Readiness probe: required in-memory subsystems are available."""
+    checks = {
+        "version": _check_version(),
+        "chat_storage": _check_chat_storage(),
+        "rate_limiter_store": _check_rate_limiter_store(),
+        "memory_usage": _check_memory_usage(),
+    }
+    ready = _evaluate_readiness(checks)
+    return {
+        "status": "ready" if ready else "not_ready",
+        "ready": ready,
+        "timestamp": datetime.utcnow().isoformat(),
+        "checks": checks,
+    }
+
+
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
+    readiness = get_readiness_status()
+    checks = readiness["checks"]
+
     return {
-        'status': 'healthy',
+        'status': _health_status_from_checks(checks),
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
-        # active_rooms: this app uses a single global chat room. The field is
-        # included for API consistency; it always reports 1 when the service is up.
-        'active_rooms': 1,
-        'checks': {
-            'tor_connection': 'unknown',  # Would need to check actual Tor status
-            'memory_usage': 'ok',
-            'disk_space': 'ok'
-        }
+        'active_rooms': _get_active_rooms_count(),
+        'ready': readiness["ready"],
+        'checks': checks
     }
 
 # Security event logging

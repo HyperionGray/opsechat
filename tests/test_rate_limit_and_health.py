@@ -102,9 +102,11 @@ def test_health_endpoint_returns_json_with_required_fields():
     response = client.get("/health")
     data = response.get_json()
     assert data is not None
-    assert data.get("status") == "healthy"
+    assert data.get("status") in {"healthy", "degraded", "unhealthy"}
     assert "version" in data
     assert "active_rooms" in data
+    assert "ready" in data
+    assert isinstance(data.get("checks"), dict)
 
 
 def test_health_endpoint_active_rooms_is_integer():
@@ -113,3 +115,26 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_liveness_endpoint_returns_200_and_alive():
+    client = _test_app.test_client()
+    response = client.get("/health/live")
+    data = response.get_json()
+    assert response.status_code == 200
+    assert data["status"] == "alive"
+    assert "uptime_seconds" in data
+    assert "version" in data
+
+
+def test_health_readiness_endpoint_status_matches_ready_flag():
+    client = _test_app.test_client()
+    response = client.get("/health/ready")
+    data = response.get_json()
+    assert data is not None
+    assert isinstance(data.get("ready"), bool)
+    assert data.get("status") in {"ready", "not_ready"}
+    assert isinstance(data.get("checks"), dict)
+
+    expected_code = 200 if data["ready"] else 503
+    assert response.status_code == expected_code

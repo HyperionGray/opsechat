@@ -148,6 +148,16 @@ See [Quadlets Guide](docs/setup/QUADLETS.md) for full documentation.
 
 Native installers (`install.sh`, `uninstall.sh`) are deprecated in favor of container/quadlet deployment. They now require `ALLOW_DEPRECATED_INSTALL=1` to run and are no longer maintained. Use quadlets or compose unless you have a specific legacy need.
 
+## Runtime Health Checks
+
+For production monitoring and orchestration probes:
+
+- `GET /health/live` - process liveness (`200` when running)
+- `GET /health/ready` - service readiness (`200` ready, `503` not ready)
+- `GET /health` - composite health status with readiness and subsystem checks
+
+See [Health Check Endpoints](docs/setup/HEALTH_CHECKS.md) for response schema and configuration.
+
 ## Uninstall
 
 To remove opsechat:
