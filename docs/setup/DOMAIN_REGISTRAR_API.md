@@ -59,14 +59,29 @@ Key endpoints used by opsechat:
 - `pricing/get` - Get TLD pricing
 - `domain/listAll` - List owned domains
 
+### Namecheap (Now Supported)
+
+Namecheap support is available through `NamecheapAPIClient` in `domain_manager.py`.
+
+**Notes before use:**
+- Namecheap API requires your **whitelisted client IP**
+- Namecheap purchases require complete contact profile data
+- Availability checks and pricing fallback are supported out of the box
+
+#### Getting Namecheap API Access
+
+1. Enable API access in your Namecheap account
+2. Add your public client IP to the Namecheap API allowlist
+3. Record:
+   - API key
+   - Username
+   - Client IP
+
+Reference: [Namecheap API Intro](https://www.namecheap.com/support/api/intro/)
+
 ## Other Registrars (Future Support)
 
 The opsechat domain manager is designed to be extensible. Future registrar support may include:
-
-### Namecheap
-- API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
-- Cheap TLDs: .xyz, .club, .online
 
 ### Namesilo
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)
@@ -106,10 +121,16 @@ For container deployments, you can set:
 # In docker-compose.yml or quadlet
 Environment=PORKBUN_API_KEY=pk1_xxxxx
 Environment=PORKBUN_API_SECRET=sk1_xxxxx
+Environment=DOMAIN_REGISTRAR=porkbun
+
+# Namecheap (alternative)
+Environment=NAMECHEAP_API_KEY=xxxxxxxx
+Environment=NAMECHEAP_USERNAME=your-namecheap-user
+Environment=NAMECHEAP_CLIENT_IP=203.0.113.10
 Environment=DOMAIN_MONTHLY_BUDGET=50.0
 ```
 
-Then modify the runserver.py to read these on startup.
+Then configure the active registrar (`porkbun` or `namecheap`) at startup.
 
 ## Budget Management
 
@@ -128,7 +149,7 @@ http://yourservice.onion/{path}/email/config
 
 1. **Initial Setup**: Configure API and budget
 2. **Generate Burner**: Creates email with current domain
-3. **Auto-Rotate**: When domain is flagged/old, rotate to new domain
+3. **Auto-Rotate**: Try preferred registrar first, then fallback registrars
 4. **Manual Rotate**: Force rotation via email config page
 
 ## Security Considerations
