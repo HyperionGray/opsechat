@@ -8,10 +8,8 @@ import os
 import time
 import subprocess
 import requests
-from threading import Thread
-
-def test_mock_server():
-    """Test that the mock server can start and respond to health checks"""
+def run_mock_server_check():
+    """Run a health-check flow against the mock server process."""
     print("Testing mock server startup...")
     
     # Start the mock server in a subprocess
@@ -53,6 +51,12 @@ def test_mock_server():
     
     return False
 
+
+def test_mock_server():
+    """Test that the mock server can start and respond to health checks."""
+    assert run_mock_server_check() is True
+
+
 if __name__ == '__main__':
-    success = test_mock_server()
+    success = run_mock_server_check()
     sys.exit(0 if success else 1)
