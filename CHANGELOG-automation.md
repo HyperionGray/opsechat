@@ -1,5 +1,35 @@
 # Changelog - Automation Consolidation
 
+## 2026-03-19 - Continuous Progress Hygiene Reporting
+
+### Added
+1. **Repository Hygiene Report Script**:
+   - `scripts/repo_hygiene_report.py`
+   - Detects unfinished code markers and Python stubs
+   - Highlights cleanup candidates and recent commit direction
+   - Produces markdown output suitable for automation issue updates
+
+2. **Automated Tests**:
+   - `tests/test_repo_hygiene_report.py`
+   - Validates marker detection, stub detection, and report structure
+
+3. **Documentation**:
+   - `docs/development/REPO_HYGIENE_REPORT.md`
+   - `docs/README.md` updated with link to new automation feature
+
+### Changed
+1. **Daily Continuous Progress Workflow**:
+   - `.github/workflows/daily-continuous-progress.yml`
+   - Replaced static issue prompt with generated repository hygiene report
+   - Existing daily issue now receives appended analysis comment
+   - New daily issue includes checklist plus generated report body
+
+### Cleanup
+1. Removed stale duplicate file:
+   - `tests/mock_server_refactored.py`
+2. Replaced no-op fallback stubs in:
+   - `tests/mock_server.py`
+
 ## 2026-03-01 - Workflow Consolidation
 
 ### Summary
