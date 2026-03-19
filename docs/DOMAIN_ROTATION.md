@@ -52,36 +52,41 @@ export DOMAIN_BUDGET="10"  # Monthly budget in USD
 ```python
 from domain_manager import domain_rotation_manager
 
-# Check available domains
-available_domains = domain_rotation_manager.search_cheap_domains()
-print(available_domains)
+# Check for one available low-cost domain candidate
+candidate = domain_rotation_manager.find_cheap_available_domain(
+    max_price=5.0,
+    max_attempts=10
+)
+print(candidate)
 
-# Purchase a domain
-result = domain_rotation_manager.rotate_to_new_domain()
-if result['success']:
-    print(f"New domain: {result['domain']}")
-    print(f"Cost: ${result['cost']}")
+# Purchase and rotate to a new domain
+new_domain = domain_rotation_manager.rotate_domain()
+if new_domain:
+    print(f"New active domain: {new_domain}")
 else:
-    print(f"Error: {result['error']}")
+    print("Rotation failed (availability/budget/API issue)")
 ```
 
 ### CLI Commands
 
 ```bash
-# Check available cheap domains
-python -c "from domain_manager import domain_rotation_manager; \
-    print(domain_rotation_manager.search_cheap_domains(tlds=['xyz', 'club', 'online']))"
+# Configure API credentials once
+python domain_rotation_cli.py config
 
-# Get current budget status
-python -c "from domain_manager import domain_rotation_manager; \
-    print(f'Budget: ${domain_rotation_manager.budget_manager.monthly_budget}'); \
-    print(f'Spent: ${domain_rotation_manager.budget_manager.get_month_spending()}'); \
-    print(f'Remaining: ${domain_rotation_manager.budget_manager.get_remaining_budget()}')"
+# Check status and currently active domain
+python domain_rotation_cli.py status
 
-# Rotate to new domain
-python -c "from domain_manager import domain_rotation_manager; \
-    result = domain_rotation_manager.rotate_to_new_domain(); \
-    print(result)"
+# Search candidate domains (20 attempts, up to $3 each)
+python domain_rotation_cli.py search --attempts 20 --max-price 3.0
+
+# Rotate with interactive confirmation
+python domain_rotation_cli.py rotate --attempts 25 --max-price 4.0
+
+# Rotate non-interactively (automation/cron safe)
+python domain_rotation_cli.py rotate --yes --attempts 25 --max-price 4.0
+
+# List locally tracked purchased domains
+python domain_rotation_cli.py list
 ```
 
 ### Automated Rotation
@@ -364,26 +369,11 @@ domain = domain_rotation_manager.generate_domain_from_pattern(pattern, tld='xyz'
 All domain rotation commands:
 
 ```bash
-# Check available domains
-python -m domain_manager search --tld xyz --max-price 2.00
-
-# Purchase specific domain
-python -m domain_manager purchase --domain example.xyz
-
-# Rotate to new random domain
-python -m domain_manager rotate
-
-# Check budget status
-python -m domain_manager budget status
-
-# Set monthly budget
-python -m domain_manager budget set --amount 20.00
-
-# List all active domains
-python -m domain_manager list
-
-# Configure DNS
-python -m domain_manager dns --domain example.xyz --mx "mail.example.xyz"
+python domain_rotation_cli.py config
+python domain_rotation_cli.py status
+python domain_rotation_cli.py search [--attempts N] [--max-price USD]
+python domain_rotation_cli.py rotate [--yes] [--attempts N] [--max-price USD]
+python domain_rotation_cli.py list
 ```
 
 ## Summary
