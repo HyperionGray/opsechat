@@ -174,3 +174,18 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_purchase_domain_if_budget_allows_years(self):
+        """Test domain purchase forwards requested years."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "test123.xyz",
+            "order_id": "12345"
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        result = manager.purchase_domain_if_budget_allows("test123.xyz", 2.99, years=3)
+
+        assert result is True
+        mock_client.purchase_domain.assert_called_once_with("test123.xyz", years=3)

@@ -33,7 +33,7 @@ OpSechat has completed a comprehensive product review and is ready for a limited
 | E2E encryption | ⚠️ PARTIAL | PGP works, key exchange is manual |
 | Automatic key exchange | ⚠️ TODO | Manual import required, Signal Protocol recommended |
 | Burner email | ✅ DONE | Multi-burner system with rotation |
-| Domain rotation | ⚠️ PARTIAL | API works, CLI tool needed |
+| Domain rotation | ✅ DONE | API and `rotate-domain.py` CLI are available |
 | API endpoints | ✅ DONE | All endpoints implemented and tested |
 
 **Legend:**

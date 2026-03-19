@@ -194,6 +194,24 @@ python domain_rotation_cli.py config
 # - Monthly Budget (default: $50)
 ```
 
+### Simple Non-Interactive CLI (NEW)
+```bash
+# Search a domain
+python rotate-domain.py --search example.xyz
+
+# Get pricing for a TLD
+python rotate-domain.py --get-pricing xyz
+
+# Buy with confirmation prompt
+python rotate-domain.py --buy example.xyz --years 1
+
+# Buy in automation mode (no prompt)
+python rotate-domain.py --buy example.xyz --years 1 --yes
+
+# List owned domains from registrar
+python rotate-domain.py --list-owned
+```
+
 ### Usage
 
 #### Check Current Status
