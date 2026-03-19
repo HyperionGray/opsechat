@@ -2,6 +2,7 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +175,52 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_cleanup_expired_domains_removes_old_entries(self):
+        """Expired entries should be removed and active domain should be updated."""
+        now = datetime.now()
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.owned_domains = [
+            {
+                "domain": "expired.xyz",
+                "price": 1.99,
+                "purchased_at": now - timedelta(days=30),
+                "expires_at": now - timedelta(days=1),
+            },
+            {
+                "domain": "active.xyz",
+                "price": 2.99,
+                "purchased_at": now - timedelta(days=2),
+                "expires_at": now + timedelta(days=300),
+            },
+        ]
+        manager.active_domain = "expired.xyz"
+
+        summary = manager.cleanup_expired_domains(now=now)
+
+        assert summary["removed_count"] == 1
+        assert summary["removed_domains"] == ["expired.xyz"]
+        assert summary["remaining_count"] == 1
+        assert manager.active_domain == "active.xyz"
+        assert manager.owned_domains[0]["domain"] == "active.xyz"
+
+    def test_cleanup_expired_domains_supports_iso_dates(self):
+        """Cleanup should support persisted ISO datetime strings."""
+        now = datetime.now()
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.owned_domains = [
+            {
+                "domain": "old.example",
+                "expires_at": (now - timedelta(days=1)).isoformat(),
+            },
+            {
+                "domain": "new.example",
+                "expires_at": (now + timedelta(days=1)).isoformat(),
+            },
+        ]
+
+        summary = manager.cleanup_expired_domains(now=now)
+
+        assert summary["removed_count"] == 1
+        assert summary["remaining_count"] == 1
+        assert manager.owned_domains[0]["domain"] == "new.example"

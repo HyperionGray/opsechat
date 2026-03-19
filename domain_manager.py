@@ -6,7 +6,7 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -147,6 +147,33 @@ class DomainRotationManager:
         chars = string.ascii_lowercase + string.digits
         random_name = ''.join(random.choice(chars) for _ in range(length))
         return f"{random_name}.{tld}"
+
+    @staticmethod
+    def _parse_price(raw_price: Any) -> Optional[float]:
+        """Parse price values returned by registrar APIs."""
+        if raw_price is None:
+            return None
+        if isinstance(raw_price, (int, float)):
+            return float(raw_price)
+        if isinstance(raw_price, str):
+            sanitized = raw_price.strip().replace("$", "").replace("€", "")
+            try:
+                return float(sanitized)
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _coerce_datetime(value: Any) -> Optional[datetime]:
+        """Convert supported datetime representations into datetime objects."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return None
+        return None
     
     def find_cheap_available_domain(self, max_price: float = 5.0, 
                                    max_attempts: int = 10) -> Optional[Dict]:
@@ -168,11 +195,10 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
+                price = self._parse_price(result.get("price"))
+
+                if price is None:
+                    continue
                 
                 if price <= max_price:
                     return {
@@ -243,6 +269,45 @@ class DomainRotationManager:
             return self.active_domain
         
         return None
+
+    def cleanup_expired_domains(self, now: Optional[datetime] = None) -> Dict:
+        """
+        Remove expired domain entries from local state.
+
+        Returns a summary dictionary with removed and remaining counts.
+        """
+        if now is None:
+            now = datetime.now()
+
+        kept_domains: List[Dict] = []
+        removed_domains: List[str] = []
+
+        for entry in self.owned_domains:
+            domain_name = entry.get("domain") if isinstance(entry, dict) else None
+            expires_at = self._coerce_datetime(entry.get("expires_at")) if isinstance(entry, dict) else None
+
+            if expires_at and expires_at <= now:
+                if domain_name:
+                    removed_domains.append(domain_name)
+                continue
+
+            kept_domains.append(entry)
+
+        self.owned_domains = kept_domains
+
+        if self.active_domain in removed_domains:
+            self.active_domain = None
+            for entry in reversed(self.owned_domains):
+                if isinstance(entry, dict) and entry.get("domain"):
+                    self.active_domain = entry["domain"]
+                    break
+
+        return {
+            "removed_count": len(removed_domains),
+            "removed_domains": removed_domains,
+            "remaining_count": len(self.owned_domains),
+            "active_domain": self.active_domain,
+        }
     
     def get_active_domain(self) -> Optional[str]:
         """Get currently active domain"""
