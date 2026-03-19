@@ -60,7 +60,7 @@ def register_email_routes(app, id_generator, get_random_color):
                               emails=emails,
                               script_enabled=True)
 
-    @app.route('/<string:url_addition>/email/burner', methods=["GET"])
+    @app.route('/<string:url_addition>/email/burner', methods=["GET", "POST"])
     def email_burner(url_addition):
         """Burner email management page"""
         if url_addition != app.config["path"]:
@@ -69,14 +69,25 @@ def register_email_routes(app, id_generator, get_random_color):
         if "_id" not in session:
             session["_id"] = id_generator()
             session["color"] = get_random_color()
-        
-        # Get active burner emails
-        burner_emails = burner_manager.get_user_burners(session["_id"])
+
+        burner_manager.cleanup_expired()
+
+        if request.method == "POST":
+            action = request.form.get("action", "generate")
+            if action == "rotate":
+                old_email = request.form.get("old_email", "").strip()
+                owner = burner_manager.get_user_for_burner(old_email)
+                if old_email and owner == session["_id"]:
+                    burner_manager.rotate_burner(session["_id"], old_email)
+            elif action == "generate":
+                burner_manager.generate_burner_email(session["_id"])
+
+        active_burners = burner_manager.get_user_burners(session["_id"])
         
         return render_template("email_burner.html",
                               hostname=app.config["hostname"],
                               path=app.config["path"],
-                              burner_emails=burner_emails,
+                              active_burners=active_burners,
                               script_enabled=False)
 
     @app.route('/<string:url_addition>/email/burner/yesscript', methods=["GET"])
@@ -89,13 +100,27 @@ def register_email_routes(app, id_generator, get_random_color):
             session["_id"] = id_generator()
             session["color"] = get_random_color()
         
-        burner_emails = burner_manager.get_user_burners(session["_id"])
+        burner_manager.cleanup_expired()
+        active_burners = burner_manager.get_user_burners(session["_id"])
         
         return render_template("email_burner.html",
                               hostname=app.config["hostname"],
                               path=app.config["path"],
-                              burner_emails=burner_emails,
+                              active_burners=active_burners,
                               script_enabled=True)
+
+    @app.route('/<string:url_addition>/email/burner/list', methods=["GET"])
+    def email_burner_list(url_addition):
+        """JSON API for burner list only (used by JS auto-refresh)."""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        if "_id" not in session:
+            return jsonify([])
+
+        burner_manager.cleanup_expired()
+        active_burners = burner_manager.get_user_burners(session["_id"])
+        return jsonify(active_burners)
 
     @app.route('/<string:url_addition>/email/burner/list.json', methods=["GET"])
     def email_burner_list_json(url_addition):
@@ -105,12 +130,27 @@ def register_email_routes(app, id_generator, get_random_color):
         
         if "_id" not in session:
             return jsonify({"error": "No session"}), 401
-        
+
+        burner_manager.cleanup_expired()
         burner_emails = burner_manager.get_user_burners(session["_id"])
         return jsonify({
             "burners": burner_emails,
             "stats": burner_manager.get_user_stats(session["_id"])
         })
+
+    @app.route('/<string:url_addition>/email/burner/expire/<path:email>', methods=["POST"])
+    def email_burner_expire(url_addition, email):
+        """Expire a burner email that belongs to the current session user."""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        if "_id" not in session:
+            return ('Unauthorized', 401)
+
+        if burner_manager.get_user_for_burner(email) == session["_id"]:
+            burner_manager.expire_burner(email)
+
+        return redirect(url_for('email_burner', url_addition=url_addition))
 
     @app.route('/<string:url_addition>/email/config', methods=["GET", "POST"])
     def email_config(url_addition):

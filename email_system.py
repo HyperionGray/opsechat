@@ -237,11 +237,22 @@ class BurnerEmailManager:
         
         if user_id not in self.user_burners:
             return []
-        
+
+        # Remove stale/duplicate references from the per-user index.
+        tracked_emails = []
+        seen = set()
+        for email in self.user_burners[user_id]:
+            if email in seen:
+                continue
+            if email in self.burner_addresses:
+                tracked_emails.append(email)
+                seen.add(email)
+        self.user_burners[user_id] = tracked_emails
+
         now = datetime.datetime.now()
         active_burners = []
-        
-        for email in self.user_burners[user_id]:
+
+        for email in tracked_emails:
             if email in self.burner_addresses:
                 info = self.burner_addresses[email]
                 time_remaining = info['expires_at'] - now
@@ -274,10 +285,15 @@ class BurnerEmailManager:
     
     def expire_burner(self, email: str) -> bool:
         """Immediately expire a burner email"""
-        if email in self.burner_addresses:
-            del self.burner_addresses[email]
-            return True
-        return False
+        burner_info = self.burner_addresses.pop(email, None)
+        if not burner_info:
+            return False
+
+        user_id = burner_info.get('user_id')
+        if user_id:
+            self._detach_burner_from_user(user_id, email)
+
+        return True
     
     def get_user_for_burner(self, email: str) -> Optional[str]:
         """Get user ID for burner email"""
@@ -289,15 +305,15 @@ class BurnerEmailManager:
     def cleanup_expired(self) -> None:
         """Remove expired burner addresses"""
         now = datetime.datetime.now()
-        expired = [email for email, info in self.burner_addresses.items() 
-                   if info['expires_at'] <= now]
-        for email in expired:
-            del self.burner_addresses[email]
-            # Also remove from user_burners
-            user_id = self.burner_addresses.get(email, {}).get('user_id')
-            if user_id and user_id in self.user_burners:
-                if email in self.user_burners[user_id]:
-                    self.user_burners[user_id].remove(email)
+        expired = [
+            (email, info.get('user_id'))
+            for email, info in self.burner_addresses.items()
+            if info['expires_at'] <= now
+        ]
+        for email, user_id in expired:
+            self.burner_addresses.pop(email, None)
+            if user_id:
+                self._detach_burner_from_user(user_id, email)
     
     def _format_time_remaining(self, time_delta: datetime.timedelta) -> str:
         """Format time remaining in human-readable format"""
@@ -315,6 +331,43 @@ class BurnerEmailManager:
             return f"{minutes}m"
         else:
             return f"{seconds}s"
+
+    def _detach_burner_from_user(self, user_id: str, email: str) -> None:
+        """Remove a burner reference from the per-user index."""
+        if user_id not in self.user_burners:
+            return
+
+        self.user_burners[user_id] = [
+            existing_email for existing_email in self.user_burners[user_id]
+            if existing_email != email
+        ]
+        if not self.user_burners[user_id]:
+            del self.user_burners[user_id]
+
+    def get_user_stats(self, user_id: str) -> Dict:
+        """Return summary stats for a user's active burner inventory."""
+        active_burners = self.get_user_burners(user_id)
+        total_time_remaining_seconds = sum(
+            max(0, burner['time_remaining_seconds']) for burner in active_burners
+        )
+        expiring_soon_count = sum(
+            1 for burner in active_burners if burner['time_remaining_seconds'] <= 3600
+        )
+        next_expiry_seconds = min(
+            (burner['time_remaining_seconds'] for burner in active_burners),
+            default=None
+        )
+
+        return {
+            'active_burners_count': len(active_burners),
+            'expiring_soon_count': expiring_soon_count,
+            'next_expiry_seconds': next_expiry_seconds,
+            'total_time_remaining_seconds': total_time_remaining_seconds,
+            'total_time_remaining_str': self._format_time_remaining(
+                datetime.timedelta(seconds=total_time_remaining_seconds)
+            ),
+            'send_limit': self.get_send_limit_status(user_id)
+        }
     
     def check_send_rate_limit(self, user_id: str) -> tuple[bool, Optional[str]]:
         """

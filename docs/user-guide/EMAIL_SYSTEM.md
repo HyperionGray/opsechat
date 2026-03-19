@@ -236,10 +236,32 @@ class EmailComposer:
 ### Burner Email Manager
 ```python
 class BurnerEmailManager:
-    def generate_burner_email(user_id: str, domain: str) -> str
+    def generate_burner_email(user_id: str, domain: Optional[str], hours_valid: int) -> str
+    def get_user_burners(user_id: str) -> List[Dict]
+    def rotate_burner(user_id: str, old_email: Optional[str]) -> str
+    def expire_burner(email: str) -> bool
     def get_user_for_burner(email: str) -> Optional[str]
     def cleanup_expired() -> None
+    def get_user_stats(user_id: str) -> Dict
 ```
+
+### Burner JSON Endpoints
+- `GET /{path}/email/burner/list`  
+  Returns only the active burner list (used by JavaScript auto-refresh).
+- `GET /{path}/email/burner/list.json`  
+  Returns:
+  - `burners`: active burner objects (email, created/expires timestamps, time remaining)
+  - `stats`: aggregate burner stats for the session user:
+    - `active_burners_count`
+    - `expiring_soon_count`
+    - `next_expiry_seconds`
+    - `total_time_remaining_seconds`
+    - `total_time_remaining_str`
+    - `send_limit` (sends used/remaining and hourly cap)
+- `POST /{path}/email/burner` with form `action=generate|rotate`  
+  Generates a new burner or rotates an existing one.
+- `POST /{path}/email/burner/expire/<email>`  
+  Expires a burner email owned by the current session user.
 
 ## Testing
 
