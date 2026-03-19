@@ -4,28 +4,93 @@ Utility functions for Amazon Q integration.
 
 import logging
 from pathlib import Path
-from typing import List
+from typing import Iterable, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
 
-def get_source_files(repo_path: str) -> List[str]:
-    """Get list of source code files in the repository."""
+DEFAULT_EXTENSIONS: Set[str] = {
+    '.py', '.js', '.ts', '.java', '.go', '.cpp', '.c', '.h', '.hpp'
+}
+DEFAULT_EXCLUDE_PATHS: Set[str] = {
+    'node_modules',
+    '__pycache__',
+    '.venv',
+    'venv',
+    '.git',
+    'dist',
+    'build',
+    'bak',
+}
+DEFAULT_EXCLUDE_SUFFIXES: Set[str] = {
+    '.min.js',
+    '.min.css',
+}
+
+
+def _normalize_extensions(extensions: Optional[Iterable[str]]) -> Set[str]:
+    """Normalize extension input to a lower-cased set like {'.py', '.js'}."""
+    if not extensions:
+        return set(DEFAULT_EXTENSIONS)
+
+    normalized = set()
+    for ext in extensions:
+        ext_value = ext.strip().lower()
+        if not ext_value:
+            continue
+        if not ext_value.startswith('.'):
+            ext_value = f'.{ext_value}'
+        normalized.add(ext_value)
+
+    return normalized or set(DEFAULT_EXTENSIONS)
+
+
+def _should_skip_file(file_path: Path, repo_root: Path, exclude_paths: Set[str]) -> bool:
+    """Apply path and filename exclusion rules."""
+    try:
+        relative_parts = file_path.relative_to(repo_root).parts
+    except ValueError:
+        relative_parts = file_path.parts
+
+    # Skip hidden files/directories and excluded path segments.
+    for part in relative_parts:
+        if part.startswith('.') or part in exclude_paths:
+            return True
+
+    file_name_lower = file_path.name.lower()
+    if any(file_name_lower.endswith(suffix) for suffix in DEFAULT_EXCLUDE_SUFFIXES):
+        return True
+
+    return False
+
+
+def get_source_files(
+    repo_path: str,
+    extensions: Optional[Iterable[str]] = None,
+    exclude_paths: Optional[Iterable[str]] = None,
+    max_files: Optional[int] = None,
+) -> List[str]:
+    """Get source files in a repository with configurable filters."""
     source_files = []
-    extensions = {'.py', '.js', '.ts', '.java', '.go', '.cpp', '.c', '.h', '.hpp'}
+    extension_set = _normalize_extensions(extensions)
+    exclude_path_set = set(exclude_paths or DEFAULT_EXCLUDE_PATHS)
     
     try:
         repo_path_obj = Path(repo_path)
         for file_path in repo_path_obj.rglob('*'):
-            if (file_path.is_file() and 
-                file_path.suffix in extensions and
-                not any(part.startswith('.') for part in file_path.parts) and
-                'node_modules' not in str(file_path) and
-                '__pycache__' not in str(file_path)):
-                source_files.append(str(file_path))
+            if not file_path.is_file():
+                continue
+            if file_path.suffix.lower() not in extension_set:
+                continue
+            if _should_skip_file(file_path, repo_path_obj, exclude_path_set):
+                continue
+            source_files.append(str(file_path))
     except Exception as e:
         logger.error(f"Failed to get source files: {e}")
-    
+
+    source_files.sort()
+    if isinstance(max_files, int) and max_files > 0:
+        return source_files[:max_files]
     return source_files
 
 
