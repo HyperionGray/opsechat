@@ -113,3 +113,45 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_live_endpoint_returns_alive():
+    client = _test_app.test_client()
+    response = client.get("/health/live")
+    data = response.get_json()
+    assert response.status_code == 200
+    assert data == {"status": "alive"}
+
+
+def test_health_ready_endpoint_returns_ready_with_checks():
+    client = _test_app.test_client()
+    response = client.get("/health/ready")
+    data = response.get_json()
+    assert response.status_code == 200
+    assert data.get("status") == "ready"
+    assert isinstance(data.get("checks"), dict)
+
+
+def test_health_metrics_endpoint_returns_summary_fields():
+    client = _test_app.test_client()
+    response = client.get("/health/metrics")
+    data = response.get_json()
+    assert response.status_code == 200
+    assert "timestamp" in data
+    assert "uptime_seconds" in data
+    assert "requests" in data
+    assert "tor" in data
+    assert "activity" in data
+    assert isinstance(data["requests"].get("total"), int)
+
+
+def test_health_metrics_total_requests_increases():
+    client = _test_app.test_client()
+    baseline_response = client.get("/health/metrics")
+    baseline_total = baseline_response.get_json()["requests"]["total"]
+
+    client.get("/health")
+
+    updated_response = client.get("/health/metrics")
+    updated_total = updated_response.get_json()["requests"]["total"]
+    assert updated_total >= baseline_total + 1

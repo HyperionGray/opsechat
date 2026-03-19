@@ -128,6 +128,21 @@ For tests that require a running server, use the mock server:
 
 The mock server simulates the Flask application without requiring Tor, making it suitable for automated testing.
 
+## Health and Monitoring Endpoint Tests
+
+Python tests also validate operational endpoints exposed by the Flask app:
+
+- `/health`
+- `/health/live`
+- `/health/ready`
+- `/health/metrics`
+
+Run the endpoint and rate-limit test suite:
+
+```bash
+python -m pytest tests/test_rate_limit_and_health.py
+```
+
 ## Test Reports
 
 After running tests, view the HTML report:

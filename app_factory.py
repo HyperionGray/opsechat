@@ -6,7 +6,8 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+import time
+from flask import Flask, jsonify, g, request
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -68,6 +69,11 @@ def create_app():
         return add_review(reviews, user_id, rating, review_text)
     
     # Add security headers after every response
+    @app.before_request
+    def start_request_timer():
+        """Track per-request timing for APM metrics."""
+        g.request_start_time = time.perf_counter()
+
     @app.after_request
     def add_security_headers(response):
         response.headers["Server"] = ""
@@ -87,6 +93,21 @@ def create_app():
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
+
+        # Record request metrics without impacting response handling.
+        request_start = getattr(g, "request_start_time", None)
+        if request_start is not None:
+            try:
+                from monitoring import apm
+                apm.record_request(
+                    endpoint=request.path,
+                    method=request.method,
+                    response_time=time.perf_counter() - request_start,
+                    status_code=response.status_code,
+                )
+            except Exception as exc:
+                app.logger.debug("Failed to record APM request metrics: %s", exc)
+
         return response
     
     # Register chat routes
@@ -111,6 +132,24 @@ def create_app():
     @app.route('/health', methods=["GET"])
     def health():
         return jsonify(get_health_status())
+
+    @app.route('/health/live', methods=["GET"])
+    def health_live():
+        return jsonify({'status': 'alive'})
+
+    @app.route('/health/ready', methods=["GET"])
+    def health_ready():
+        health_data = get_health_status()
+        is_ready = health_data.get('status') == 'healthy'
+        return jsonify({
+            'status': 'ready' if is_ready else 'not_ready',
+            'checks': health_data.get('checks', {}),
+        }), 200 if is_ready else 503
+
+    @app.route('/health/metrics', methods=["GET"])
+    def health_metrics():
+        from monitoring import apm
+        return jsonify(apm.get_metrics_summary())
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
