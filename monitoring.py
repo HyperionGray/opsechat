@@ -9,7 +9,7 @@ import time
 import sys
 import os
 import socket
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from functools import wraps
 import traceback
@@ -376,7 +376,7 @@ def get_liveness_status() -> Dict[str, Any]:
     """Get liveness status for orchestrators."""
     return {
         'status': 'alive',
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version()
     }
@@ -402,7 +402,7 @@ def get_readiness_status() -> Dict[str, Any]:
     return {
         'status': 'ready' if ready else 'not_ready',
         'ready': ready,
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': version,
         'checks': checks,
