@@ -217,22 +217,29 @@
         let encryptionKey = null;
         let pollInterval = null;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+        let sendCooldownUntil = 0;
+        let sendCooldownTimer = null;
+
+        function updateSendControls() {
+            const cooldownActive = Date.now() < sendCooldownUntil;
+            const disabled = !securityWarningAccepted || cooldownActive;
+            document.getElementById('messageInput').disabled = disabled;
+            document.getElementById('sendBtn').disabled = disabled;
+        }
         
         // Show security warning on first load
         function showSecurityWarning() {
             if (!securityWarningAccepted) {
                 document.getElementById('securityWarning').style.display = 'block';
-                document.getElementById('messageInput').disabled = true;
-                document.getElementById('sendBtn').disabled = true;
             }
+            updateSendControls();
         }
         
         function acceptSecurityWarning() {
             securityWarningAccepted = true;
             sessionStorage.setItem('securityWarningAccepted', 'true');
             document.getElementById('securityWarning').style.display = 'none';
-            document.getElementById('messageInput').disabled = false;
-            document.getElementById('sendBtn').disabled = false;
+            updateSendControls();
             document.getElementById('messageInput').focus();
         }
         
@@ -348,6 +355,36 @@
             const container = document.getElementById('messagesContainer');
             container.scrollTop = container.scrollHeight;
         }
+
+        function startSendCooldown(seconds) {
+            const retryAfter = Number.isFinite(seconds) ? Math.max(1, Math.floor(seconds)) : 1;
+            sendCooldownUntil = Date.now() + (retryAfter * 1000);
+
+            if (sendCooldownTimer) {
+                clearInterval(sendCooldownTimer);
+                sendCooldownTimer = null;
+            }
+
+            const tick = () => {
+                const remaining = Math.max(0, Math.ceil((sendCooldownUntil - Date.now()) / 1000));
+                if (remaining > 0) {
+                    showStatus(`Rate limit reached. Retry in ${remaining}s.`, 1100);
+                    updateSendControls();
+                    return;
+                }
+
+                sendCooldownUntil = 0;
+                updateSendControls();
+                if (sendCooldownTimer) {
+                    clearInterval(sendCooldownTimer);
+                    sendCooldownTimer = null;
+                }
+                showStatus('Rate limit window cleared. You can send again.', 2000);
+            };
+
+            tick();
+            sendCooldownTimer = setInterval(tick, 1000);
+        }
         
         async function renderMessages(messages) {
             const container = document.getElementById('messagesContainer');
@@ -395,6 +432,12 @@
         async function sendMessage() {
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
+
+            if (Date.now() < sendCooldownUntil) {
+                const remaining = Math.max(1, Math.ceil((sendCooldownUntil - Date.now()) / 1000));
+                showStatus(`Rate limit reached. Retry in ${remaining}s.`, 1500);
+                return;
+            }
             
             if (!message) return;
             
@@ -418,7 +461,15 @@
                     input.value = '';
                     await pollMessages();
                 } else {
-                    showStatus('Error sending message');
+                    const data = await response.json().catch(() => ({}));
+                    if (response.status === 429) {
+                        const retryFromHeader = parseInt(response.headers.get('Retry-After') || '', 10);
+                        const retryFromBody = parseInt(data.retry_after || '', 10);
+                        const retryAfter = Number.isFinite(retryFromHeader) ? retryFromHeader : retryFromBody;
+                        startSendCooldown(retryAfter);
+                        return;
+                    }
+                    showStatus(data.error || 'Error sending message');
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);
@@ -501,6 +552,9 @@
         window.addEventListener('beforeunload', function() {
             if (pollInterval) {
                 clearInterval(pollInterval);
+            }
+            if (sendCooldownTimer) {
+                clearInterval(sendCooldownTimer);
             }
         });
     </script>

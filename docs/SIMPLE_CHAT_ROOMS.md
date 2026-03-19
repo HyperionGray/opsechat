@@ -15,6 +15,7 @@ OpSecChat now includes a simple, security-focused web-based chat room system des
 - **Text-Only**: No media, images, or file sharing
 - **In-Memory Storage**: Zero disk writes
 - **Tor Ready**: Works seamlessly with Tor hidden services
+- **Rate-Limit Backoff**: Standardized 429 responses with `retry_after` guidance
 
 ## Quick Start
 
@@ -81,10 +82,10 @@ python chat-room.py --port 8080
 1. In the chat room, toggle the "Encryption" switch
 2. All your messages will be encrypted using AES-GCM
 3. Other users must also enable encryption to read your messages
-4. The encryption key is stored in your browser's sessionStorage
-5. Keys are NOT shared - this is for protection against server compromise
+4. A room-scoped key is fetched from `/chat/room/<id>/key`
+5. The imported key is kept in browser memory for the active tab/session
 
-**Important**: E2E encryption is per-user. If you want to chat with encrypted messages:
+**Important**: E2E encryption is room-scoped in this mode:
 - All participants should enable encryption
 - The encryption protects against server compromise
 - Messages are still deleted after 3 minutes
@@ -118,6 +119,14 @@ This prevents memory forensics from recovering deleted messages.
 - Examples: `SilentWolf0423`, `GhostRaven7821`
 - Each username is assigned a distinct color for easy identification
 
+### Rate Limiting and Backoff
+- Write endpoints (`/chat/create`, room message POST, DM send) enforce per-session limits
+- When exceeded, the API returns:
+  - HTTP 429
+  - JSON with `retry_after` seconds
+  - `Retry-After` header for standard client handling
+- Repeated bursts in the same window increase cooldown length (progressive backoff)
+
 ### E2E Encryption (Optional)
 - Uses Web Crypto API (AES-GCM with 256-bit keys)
 - Simple, reviewable JavaScript implementation
@@ -140,6 +149,10 @@ Response: {"success": true, "room_id": "...", "room_url": "/chat/room/..."}
 GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
+
+# Rate-limited response shape (HTTP 429)
+Headers: Retry-After: <seconds>
+Body: {"error": "...", "retry_after": <seconds>}
 ```
 
 ### Encryption Implementation

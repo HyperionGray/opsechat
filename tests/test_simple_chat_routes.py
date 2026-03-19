@@ -16,6 +16,13 @@ from simple_chat_routes import (
     check_rate_limit,
     RATE_LIMITS,
     MAX_MESSAGE_LENGTH,
+    chat_rooms,
+    direct_messages,
+    rooms_lock,
+    dm_lock,
+    _rate_limit_lock,
+    _rate_limit_store,
+    _rate_limit_violations,
 )
 
 
@@ -38,6 +45,28 @@ def client(app):
     with app.test_client() as c:
         with app.app_context():
             yield c
+
+
+@pytest.fixture(autouse=True)
+def reset_simple_chat_state():
+    """Ensure in-memory stores are reset between tests."""
+    with rooms_lock:
+        chat_rooms.clear()
+    with dm_lock:
+        direct_messages.clear()
+    with _rate_limit_lock:
+        _rate_limit_store.clear()
+        _rate_limit_violations.clear()
+
+    yield
+
+    with rooms_lock:
+        chat_rooms.clear()
+    with dm_lock:
+        direct_messages.clear()
+    with _rate_limit_lock:
+        _rate_limit_store.clear()
+        _rate_limit_violations.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +253,58 @@ class TestChatRoutes:
             content_type="application/json",
         )
         assert response.status_code == 404
+
+    def test_post_message_rate_limit_includes_retry_metadata(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        limit = RATE_LIMITS["chat_message"]["max_requests"]
+
+        for i in range(limit):
+            response = client.post(
+                f"/chat/room/{room_id}/messages",
+                json={"message": f"msg-{i}"},
+                content_type="application/json",
+            )
+            assert response.status_code == 200
+
+        limited = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "overflow"},
+            content_type="application/json",
+        )
+        assert limited.status_code == 429
+        data = limited.get_json()
+        assert isinstance(data.get("retry_after"), int)
+        assert data["retry_after"] >= 1
+        assert limited.headers.get("Retry-After") == str(data["retry_after"])
+
+    def test_repeated_rate_limit_hits_increase_backoff(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        limit = RATE_LIMITS["chat_message"]["max_requests"]
+
+        for i in range(limit):
+            response = client.post(
+                f"/chat/room/{room_id}/messages",
+                json={"message": f"msg-{i}"},
+                content_type="application/json",
+            )
+            assert response.status_code == 200
+
+        first_limited = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "overflow-1"},
+            content_type="application/json",
+        )
+        second_limited = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "overflow-2"},
+            content_type="application/json",
+        )
+
+        assert first_limited.status_code == 429
+        assert second_limited.status_code == 429
+        first_retry = first_limited.get_json()["retry_after"]
+        second_retry = second_limited.get_json()["retry_after"]
+        assert second_retry >= first_retry
 
     def test_get_room_key_returns_key(self, client):
         room_id = client.post("/chat/create").get_json()["room_id"]
