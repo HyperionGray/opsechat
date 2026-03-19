@@ -81,14 +81,13 @@ python chat-room.py --port 8080
 1. In the chat room, toggle the "Encryption" switch
 2. All your messages will be encrypted using AES-GCM
 3. Other users must also enable encryption to read your messages
-4. The encryption key is stored in your browser's sessionStorage
-5. Keys are NOT shared - this is for protection against server compromise
+4. The room key is fetched from `/chat/room/<room_id>/key`
+5. Your browser keeps the imported key in memory for that tab/session
 
-**Important**: E2E encryption is per-user. If you want to chat with encrypted messages:
-- All participants should enable encryption
-- The encryption protects against server compromise
+**Important**:
+- All participants should enable encryption to read encrypted messages
 - Messages are still deleted after 3 minutes
-- Encryption keys are session-only (lost when you close the tab)
+- Key material is session-local in the browser and re-fetched when needed
 
 ## Security Features
 
@@ -141,6 +140,23 @@ GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
+
+### Rate Limiting, Backoff, and Retry
+
+Write endpoints are rate-limited and now return machine-readable cooldown data:
+
+- HTTP status: `429`
+- Response JSON includes:
+  - `error` (human-readable message)
+  - `retry_after` (seconds)
+  - `rate_limit` details for endpoint-managed limits
+- Response header: `Retry-After: <seconds>`
+
+The web client uses this metadata to:
+
+- disable send/create actions during cooldown
+- show countdown status in the UI
+- automatically retry once after cooldown when safe
 
 ### Encryption Implementation
 

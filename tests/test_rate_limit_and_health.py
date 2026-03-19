@@ -87,6 +87,56 @@ def test_rate_limit_chat_message_limit():
     assert retry_after >= 1
 
 
+def test_chat_message_rate_limit_returns_retry_metadata():
+    app = create_app()
+    app.config["TESTING"] = True
+
+    with app.test_client() as client:
+        create_response = client.post("/chat/create", content_type="application/json")
+        assert create_response.status_code == 200
+        room_id = create_response.get_json()["room_id"]
+
+        for _ in range(30):
+            ok = client.post(
+                f"/chat/room/{room_id}/messages",
+                json={"message": "hello world"},
+            )
+            assert ok.status_code == 200
+
+        blocked = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "should be rate limited"},
+        )
+        assert blocked.status_code == 429
+        assert blocked.headers.get("Retry-After") is not None
+
+        data = blocked.get_json()
+        assert data is not None
+        assert isinstance(data.get("retry_after"), int)
+        assert data["retry_after"] >= 1
+        assert data.get("rate_limit", {}).get("endpoint") == "chat_message"
+
+
+def test_chat_create_flask_limiter_uses_json_rate_limit_response():
+    app = create_app()
+    app.config["TESTING"] = True
+
+    with app.test_client() as client:
+        for _ in range(3):
+            allowed = client.post("/chat/create", content_type="application/json")
+            assert allowed.status_code == 200
+
+        blocked = client.post("/chat/create", content_type="application/json")
+        assert blocked.status_code == 429
+        assert blocked.headers.get("Retry-After") is not None
+
+        data = blocked.get_json()
+        assert data is not None
+        assert isinstance(data.get("retry_after"), int)
+        assert data["retry_after"] >= 1
+        assert "Rate limit exceeded" in data.get("error", "")
+
+
 # ---------------------------------------------------------------------------
 # Health endpoint integration tests
 # ---------------------------------------------------------------------------

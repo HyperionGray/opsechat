@@ -161,11 +161,71 @@
     </div>
     
     <script>
-        // Simple room creation with no external dependencies
-        document.getElementById('createRoomBtn').addEventListener('click', async function() {
-            const statusDiv = document.getElementById('status');
-            statusDiv.textContent = 'Creating room...';
-            
+        const createRoomBtn = document.getElementById('createRoomBtn');
+        const statusDiv = document.getElementById('status');
+        let createCooldownInterval = null;
+        let scheduledRetry = null;
+        let createInFlight = false;
+
+        function setCreateButtonState(disabled, label) {
+            createRoomBtn.disabled = disabled;
+            createRoomBtn.textContent = label;
+        }
+
+        async function parseRateLimitDetails(response, fallbackMessage) {
+            let retryAfter = Number.parseInt(response.headers.get('Retry-After') || '0', 10);
+            let message = fallbackMessage;
+
+            try {
+                const data = await response.json();
+                if (data && typeof data.error === 'string' && data.error) {
+                    message = data.error;
+                }
+                if (data && Number.isInteger(data.retry_after)) {
+                    retryAfter = data.retry_after;
+                }
+            } catch (error) {
+                // If JSON parsing fails, keep fallback values.
+            }
+
+            return {
+                message: message,
+                retryAfter: Math.max(Number.isFinite(retryAfter) ? retryAfter : 0, 1),
+            };
+        }
+
+        function startCreateCooldown(seconds) {
+            if (createCooldownInterval) {
+                clearInterval(createCooldownInterval);
+            }
+
+            let remaining = Math.max(seconds, 1);
+            setCreateButtonState(true, `Cooling down (${remaining}s)`);
+            statusDiv.textContent = `Rate limited. Cooldown active for ${remaining}s.`;
+
+            createCooldownInterval = setInterval(() => {
+                remaining -= 1;
+                if (remaining <= 0) {
+                    clearInterval(createCooldownInterval);
+                    createCooldownInterval = null;
+                    setCreateButtonState(false, 'Create New Chat Room');
+                    statusDiv.textContent = 'Cooldown ended. You can create a room again.';
+                    return;
+                }
+                setCreateButtonState(true, `Cooling down (${remaining}s)`);
+                statusDiv.textContent = `Rate limited. Cooldown active for ${remaining}s.`;
+            }, 1000);
+        }
+
+        async function createRoom(isAutomaticRetry = false) {
+            if (createInFlight) {
+                return;
+            }
+
+            createInFlight = true;
+            setCreateButtonState(true, isAutomaticRetry ? 'Retrying...' : 'Creating room...');
+            statusDiv.textContent = isAutomaticRetry ? 'Retrying room creation...' : 'Creating room...';
+
             try {
                 const response = await fetch('/chat/create', {
                     method: 'POST',
@@ -173,24 +233,57 @@
                         'Content-Type': 'application/json'
                     }
                 });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to create room');
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        statusDiv.innerHTML = `Room created! Redirecting...<br><a href="${data.room_url}">${window.location.origin}${data.room_url}</a>`;
+                        setTimeout(() => {
+                            window.location.href = data.room_url;
+                        }, 1000);
+                        return;
+                    }
+                    statusDiv.textContent = 'Error creating room.';
+                    setCreateButtonState(false, 'Create New Chat Room');
+                    return;
                 }
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    statusDiv.innerHTML = `Room created! Redirecting...<br><a href="${data.room_url}">${window.location.origin}${data.room_url}</a>`;
-                    setTimeout(() => {
-                        window.location.href = data.room_url;
-                    }, 1000);
-                } else {
-                    statusDiv.textContent = 'Error creating room';
+
+                if (response.status === 429) {
+                    const details = await parseRateLimitDetails(
+                        response,
+                        'Rate limit exceeded while creating room.'
+                    );
+                    startCreateCooldown(details.retryAfter);
+
+                    if (!isAutomaticRetry && details.retryAfter <= 30) {
+                        if (scheduledRetry) {
+                            clearTimeout(scheduledRetry);
+                        }
+                        statusDiv.textContent = `${details.message} Auto-retrying once after cooldown.`;
+                        scheduledRetry = setTimeout(() => {
+                            createRoom(true);
+                        }, details.retryAfter * 1000);
+                    } else {
+                        statusDiv.textContent = details.message;
+                    }
+                    return;
                 }
+
+                statusDiv.textContent = `Error creating room (HTTP ${response.status}).`;
+                setCreateButtonState(false, 'Create New Chat Room');
             } catch (error) {
                 statusDiv.textContent = 'Error: ' + error.message;
+                setCreateButtonState(false, 'Create New Chat Room');
+            } finally {
+                createInFlight = false;
             }
+        }
+
+        createRoomBtn.addEventListener('click', function() {
+            if (createRoomBtn.disabled) {
+                return;
+            }
+            createRoom();
         });
     </script>
 </body>

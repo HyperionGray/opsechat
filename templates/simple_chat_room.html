@@ -217,6 +217,9 @@
         let encryptionKey = null;
         let pollInterval = null;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+        let sendCooldownInterval = null;
+        let scheduledSendRetry = null;
+        let sendInFlight = false;
         
         // Show security warning on first load
         function showSecurityWarning() {
@@ -343,6 +346,64 @@
                 statusMsg.textContent = '';
             }, duration);
         }
+
+        function setPersistentStatus(message) {
+            document.getElementById('statusMsg').textContent = message;
+        }
+
+        async function parseRateLimitDetails(response, fallbackMessage) {
+            let retryAfter = Number.parseInt(response.headers.get('Retry-After') || '0', 10);
+            let message = fallbackMessage;
+
+            try {
+                const data = await response.json();
+                if (data && typeof data.error === 'string' && data.error) {
+                    message = data.error;
+                }
+                if (data && Number.isInteger(data.retry_after)) {
+                    retryAfter = data.retry_after;
+                }
+            } catch (error) {
+                // If response body is not JSON, use fallback message/header.
+            }
+
+            return {
+                message: message,
+                retryAfter: Math.max(Number.isFinite(retryAfter) ? retryAfter : 0, 1),
+            };
+        }
+
+        function startSendCooldown(seconds) {
+            const sendBtn = document.getElementById('sendBtn');
+            let remaining = Math.max(seconds, 1);
+
+            if (sendCooldownInterval) {
+                clearInterval(sendCooldownInterval);
+            }
+
+            sendBtn.disabled = true;
+            setPersistentStatus(`Rate limited. Retry available in ${remaining}s.`);
+
+            sendCooldownInterval = setInterval(() => {
+                remaining -= 1;
+                if (remaining <= 0) {
+                    clearInterval(sendCooldownInterval);
+                    sendCooldownInterval = null;
+                    if (securityWarningAccepted) {
+                        sendBtn.disabled = false;
+                    }
+                    setPersistentStatus('Cooldown ended. You can send messages again.');
+                    setTimeout(() => {
+                        if (!scheduledSendRetry) {
+                            setPersistentStatus('');
+                        }
+                    }, 1500);
+                    return;
+                }
+
+                setPersistentStatus(`Rate limited. Retry available in ${remaining}s.`);
+            }, 1000);
+        }
         
         function scrollToBottom() {
             const container = document.getElementById('messagesContainer');
@@ -392,11 +453,15 @@
             scrollToBottom();
         }
         
-        async function sendMessage() {
+        async function sendMessage(isRetryAttempt = false) {
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
             
-            if (!message) return;
+            if (!message || sendInFlight) return;
+            if (sendCooldownInterval && !isRetryAttempt) {
+                showStatus('Cooldown active. Please wait before sending again.', 2000);
+                return;
+            }
             
             let messageToSend = message;
             
@@ -406,6 +471,7 @@
             }
             
             try {
+                sendInFlight = true;
                 const response = await fetch(`/chat/room/${roomId}/messages`, {
                     method: 'POST',
                     headers: {
@@ -415,13 +481,47 @@
                 });
                 
                 if (response.ok) {
+                    if (scheduledSendRetry) {
+                        clearTimeout(scheduledSendRetry);
+                        scheduledSendRetry = null;
+                    }
                     input.value = '';
                     await pollMessages();
-                } else {
-                    showStatus('Error sending message');
+                    return;
                 }
+
+                if (response.status === 429) {
+                    const details = await parseRateLimitDetails(
+                        response,
+                        'Rate limit exceeded while sending message.'
+                    );
+                    startSendCooldown(details.retryAfter);
+
+                    if (!isRetryAttempt) {
+                        if (scheduledSendRetry) {
+                            clearTimeout(scheduledSendRetry);
+                        }
+                        const pendingMessage = message;
+                        setPersistentStatus(`${details.message} Retrying once after cooldown...`);
+                        scheduledSendRetry = setTimeout(() => {
+                            scheduledSendRetry = null;
+                            if (document.getElementById('messageInput').value.trim() === pendingMessage) {
+                                sendMessage(true);
+                            } else {
+                                showStatus('Auto-retry skipped because message changed.', 2500);
+                            }
+                        }, details.retryAfter * 1000);
+                    } else {
+                        showStatus(details.message, 4000);
+                    }
+                    return;
+                }
+
+                showStatus(`Error sending message (HTTP ${response.status})`);
             } catch (error) {
                 showStatus('Error: ' + error.message);
+            } finally {
+                sendInFlight = false;
             }
         }
         
