@@ -19,10 +19,73 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _serialize_timestamp(value):
+    """Convert datetime to an ISO 8601 string for JSON storage."""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
+
+
+def _deserialize_timestamp(value):
+    """Parse serialized timestamps, handling older config formats gracefully."""
+    if isinstance(value, datetime):
+        return value
+    if not isinstance(value, str):
+        return value
+
+    # Preferred format from this CLI.
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        pass
+
+    # Legacy human-readable timestamp format from early versions.
+    for legacy_format in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(value, legacy_format)
+        except ValueError:
+            continue
+
+    return value
+
+
+def _serialize_domain_record(record):
+    """Convert an owned-domain record to a JSON-safe structure."""
+    if not isinstance(record, dict):
+        return record
+
+    serialized = dict(record)
+    for key in ("purchased_at", "expires_at"):
+        serialized[key] = _serialize_timestamp(serialized.get(key))
+    return serialized
+
+
+def _deserialize_domain_record(record):
+    """Convert an owned-domain record from config storage to runtime format."""
+    if not isinstance(record, dict):
+        return record
+
+    deserialized = dict(record)
+    for key in ("purchased_at", "expires_at"):
+        deserialized[key] = _deserialize_timestamp(deserialized.get(key))
+    return deserialized
+
+
+def _format_timestamp(value):
+    """Render timestamps for CLI output while tolerating legacy values."""
+    parsed = _deserialize_timestamp(value)
+    if isinstance(parsed, datetime):
+        return parsed.strftime('%Y-%m-%d %H:%M')
+    if parsed in (None, ""):
+        return "unknown"
+    return str(parsed)
 
 
 def load_config():
@@ -109,10 +172,13 @@ def get_manager():
     )
     
     # Load saved state
-    if config.get('current_spending'):
+    if 'current_spending' in config:
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = [
+            _deserialize_domain_record(domain)
+            for domain in config['owned_domains']
+        ]
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +188,10 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = [
+        _serialize_domain_record(domain)
+        for domain in manager.owned_domains
+    ]
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -144,8 +213,8 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_timestamp(domain.get('purchased_at'))}")
+        print(f"   Expires: {_format_timestamp(domain.get('expires_at'))}")
         print()
 
 
