@@ -7,7 +7,9 @@ import sys
 import os
 import time
 import subprocess
+import importlib.util
 import requests
+import pytest
 def run_mock_server_check():
     """Run a health-check flow against the mock server process."""
     print("Testing mock server startup...")
@@ -60,6 +62,8 @@ def run_mock_server_check():
 
 def test_mock_server():
     """Test that the mock server can start and respond to health checks."""
+    if importlib.util.find_spec("flask") is None:
+        pytest.skip("flask is not installed in this environment")
     assert run_mock_server_check() is True
 
 
