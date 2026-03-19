@@ -83,8 +83,10 @@
   - [x] Add per-endpoint throttling (`/chat/create`, `/chat/*/messages`, `/chat/dm/send`)
   - [ ] Configure reasonable thresholds (review after load testing)
   - [ ] Add backoff/retry logic
-- [ ] Integrate second domain registrar API
-  - [ ] Choose registrar (Namecheap recommended)
+- [x] Integrate second domain registrar API
+  - [x] Choose registrar (Namecheap)
+  - [x] Add `NamecheapAPIClient` with availability/pricing support
+  - [x] Wire CLI provider selection for Porkbun/Namecheap
   - [ ] Implement API client
   - [ ] Update domain rotation logic
   - [ ] Test automated purchasing

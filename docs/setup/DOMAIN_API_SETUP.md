@@ -77,21 +77,33 @@ Porkbun offers cheap domains and a simple API, making it ideal for burner email 
 - Budget: $100+/month
 - Covers: 100+ .xyz domains or 20+ .com domains
 
-## Alternative Registrars
-
 ### Namecheap
 
-While not directly integrated, Namecheap offers competitive pricing and API access.
+Namecheap is now integrated as a second supported provider for domain search and pricing.
+
+#### Why Namecheap?
+- **Mature API** with broad domain operation support
+- **Competitive pricing** on common burner-friendly TLDs
+- **Provider diversity** if one registrar has outages or rate limits
 
 #### Getting Started
-- Website: [namecheap.com](https://namecheap.com)
-- API Documentation: [namecheap.com/support/api](https://www.namecheap.com/support/api/)
-- Pricing: .com domains ~$8.88/year, .xyz ~$1.98/year
+1. Website: [namecheap.com](https://namecheap.com)
+2. API docs: [namecheap.com/support/api](https://www.namecheap.com/support/api/)
+3. Enable API access and allow your client IP address in Namecheap settings
+4. Configure in CLI:
+   ```bash
+   python domain_rotation_cli.py config
+   ```
+   Then choose `namecheap` as provider and enter:
+   - API user
+   - API key
+   - API username
+   - Allowed client IP
 
-#### Integration Notes
-- Requires custom API client implementation
-- More complex API than Porkbun
-- Good for high-volume usage
+#### Notes
+- Namecheap availability checks do not always include final registration price.
+- Opsechat falls back to the pricing endpoint when availability checks omit price data.
+- Domain purchase with Namecheap requires contact fields per registrar rules.
 
 ### GoDaddy
 
@@ -148,7 +160,8 @@ Enterprise-focused with comprehensive API.
 ### Initial Setup
 
 1. **Choose Registrar**
-   - Porkbun recommended for beginners
+   - Porkbun recommended for simple setup
+   - Namecheap supported for provider diversity
    - Consider volume and budget requirements
 
 2. **Create Account and Get API Keys**
@@ -297,6 +310,11 @@ Enterprise-focused with comprehensive API.
 - API Docs: [porkbun.com/api/json/v3/documentation](https://porkbun.com/api/json/v3/documentation)
 - Support: support@porkbun.com
 
+### Namecheap Support
+- API docs: [namecheap.com/support/api](https://www.namecheap.com/support/api/)
+- API intro: [namecheap.com/support/api/intro](https://www.namecheap.com/support/api/intro/)
+- Support portal: [namecheap.com/help-center](https://www.namecheap.com/help-center/)
+
 ### Opsechat Integration
 - Configuration issues: Check application logs
 - API errors: Review registrar account status
@@ -307,4 +325,4 @@ Enterprise-focused with comprehensive API.
 - Registrar review forums
 - API integration examples and tutorials
 
-This guide should provide everything needed to set up automated domain rotation for burner emails in opsechat. Start with Porkbun for the easiest setup and lowest costs.
+This guide should provide everything needed to set up automated domain rotation for burner emails in opsechat. Start with Porkbun for easiest setup, or use Namecheap if you need registrar diversity.
