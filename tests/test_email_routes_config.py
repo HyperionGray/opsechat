@@ -1,6 +1,7 @@
 """
 Tests for email config route integrations.
 """
+from pathlib import Path
 from flask import Flask
 
 import email_routes
@@ -8,7 +9,8 @@ from email_routes import register_email_routes
 
 
 def _create_test_app():
-    app = Flask(__name__)
+    templates = Path(__file__).resolve().parents[1] / "templates"
+    app = Flask(__name__, template_folder=str(templates))
     app.secret_key = "test-secret"
     app.config["path"] = "test-path-12345"
     app.config["hostname"] = "example.onion"
