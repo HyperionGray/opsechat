@@ -8,7 +8,7 @@ import json
 import time
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from functools import wraps
 import traceback
@@ -46,7 +46,7 @@ class StructuredLogger:
     def log_event(self, level: str, event: str, **kwargs):
         """Log a structured event"""
         log_data = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'event': event,
             'level': level.upper(),
             **kwargs
@@ -86,7 +86,7 @@ class StructuredFormatter(logging.Formatter):
         except (json.JSONDecodeError, ValueError):
             # Create structured log entry for non-JSON messages
             log_data = {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'level': record.levelname,
                 'logger': record.name,
                 'message': record.getMessage(),
@@ -227,7 +227,7 @@ class ApplicationPerformanceMonitor:
         self.update_system_metrics()
         
         summary = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'uptime_seconds': self.metrics['system']['uptime_seconds'],
             'requests': {
                 'total': self.metrics['requests']['total'],
@@ -462,7 +462,7 @@ def get_liveness_status() -> Dict[str, Any]:
     """Liveness probe: process is running and responsive."""
     return {
         "status": "alive",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "uptime_seconds": time.time() - apm.metrics['system']['start_time'],
         "version": _read_version(),
     }
@@ -480,7 +480,7 @@ def get_readiness_status() -> Dict[str, Any]:
     return {
         "status": "ready" if ready else "not_ready",
         "ready": ready,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "checks": checks,
     }
 
@@ -492,7 +492,7 @@ def get_health_status() -> Dict[str, Any]:
 
     return {
         'status': _health_status_from_checks(checks),
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
         'active_rooms': _get_active_rooms_count(),
