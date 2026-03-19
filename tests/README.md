@@ -44,6 +44,16 @@ python3 tests/mock_server.py
 
 The server will run on http://localhost:5001 and can be used for manual testing or as a target for automated tests.
 
+### Burner email mock API
+
+The mock server now includes stateful burner-email endpoints for E2E testing:
+
+- `GET /<path>/email/burner` - Burner landing page with active burner count
+- `POST /<path>/email/burner` - Form actions (`generate`, `rotate`, `expire`)
+- `GET /<path>/email/burner/list` - Active burner list as JSON
+- `POST /<path>/email/burner/generate` - JSON generation endpoint
+- `GET /<path>/email/burner/yesscript` - Script-enabled alias route
+
 ## Test Coverage
 
 Current tests validate:
