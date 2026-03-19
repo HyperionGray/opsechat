@@ -11,13 +11,15 @@ This script checks for:
 from __future__ import annotations
 
 import argparse
+import io
 import re
 import sys
+import tokenize
 from pathlib import Path
 from typing import Iterable, List
 
 UNFINISHED_MARKER_PATTERN = re.compile(
-    r"\b(TODO|FIXME|STUB|TBD|XXX|HACK)\b",
+    r"\b(TODO|FIXME|STUB|TBD|XXX|HACK)\b(?:\s*[:(]|$)",
     re.IGNORECASE,
 )
 
@@ -69,6 +71,17 @@ def _extract_comment_text(path: Path, line: str) -> str | None:
     return None
 
 
+def _extract_python_comments(text: str) -> Iterable[tuple[int, str]]:
+    try:
+        tokens = tokenize.generate_tokens(io.StringIO(text).readline)
+        for token in tokens:
+            if token.type == tokenize.COMMENT:
+                comment_text = token.string.lstrip("#").strip()
+                yield token.start[0], comment_text
+    except tokenize.TokenError:
+        return
+
+
 def _iter_candidate_files(root: Path) -> Iterable[Path]:
     for path in root.rglob("*"):
         if not path.is_file():
@@ -98,18 +111,23 @@ def find_unfinished_markers(root: Path) -> List[str]:
             issues.append(f"{rel}: unable to read file ({exc})")
             continue
 
-        for lineno, line in enumerate(lines, start=1):
-            comment_text = _extract_comment_text(path, line)
-            if not comment_text:
-                continue
+        if path.suffix.lower() == ".py":
+            text = "\n".join(lines)
+            comment_entries = _extract_python_comments(text)
+        else:
+            comment_entries = (
+                (lineno, comment_text)
+                for lineno, line in enumerate(lines, start=1)
+                for comment_text in [_extract_comment_text(path, line)]
+                if comment_text
+            )
 
+        for lineno, comment_text in comment_entries:
             match = UNFINISHED_MARKER_PATTERN.search(comment_text)
             if not match:
                 continue
             marker = match.group(1).upper()
-            issues.append(
-                f"{rel}:{lineno}: unfinished marker '{marker}' found in code/config"
-            )
+            issues.append(f"{rel}:{lineno}: unfinished marker '{marker}' found in code/config")
 
     return issues
 

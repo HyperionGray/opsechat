@@ -74,3 +74,12 @@ def test_minified_javascript_files_are_ignored(tmp_path):
 
     issues = repo_hygiene_check.run_hygiene_checks(tmp_path)
     assert issues == []
+
+
+def test_python_string_containing_hash_todo_is_ignored(tmp_path):
+    (tmp_path / "example.py").write_text(
+        'text = "# TODO: this is string data"\n', encoding="utf-8"
+    )
+
+    issues = repo_hygiene_check.run_hygiene_checks(tmp_path)
+    assert issues == []
