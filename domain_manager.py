@@ -243,28 +243,21 @@ class NamecheapAPIClient(DomainAPIClient):
     def purchase_domain(self, domain: str, years: int = 1) -> Dict:
         """
         Purchase domain through Namecheap.
-        Contact details are required; if omitted we return a clear failure response.
+        If contact details are not provided, we attempt to use account defaults.
         """
-        if not self.contact_details or not self.REQUIRED_CONTACT_FIELDS.issubset(self.contact_details.keys()):
-            return {
-                "success": False,
-                "domain": domain,
-                "message": (
-                    "Namecheap purchase requires contact_details with required fields: "
-                    + ", ".join(sorted(self.REQUIRED_CONTACT_FIELDS))
-                ),
-                "order_id": None,
-            }
-
         params: Dict[str, object] = {
             "DomainName": domain,
             "Years": years,
         }
 
-        # Namecheap requires contact data for every role.
-        for role in ("Registrant", "Tech", "Admin", "AuxBilling"):
-            for field, value in self.contact_details.items():
-                params[f"{role}{field}"] = value
+        if self.contact_details and self.REQUIRED_CONTACT_FIELDS.issubset(self.contact_details.keys()):
+            # Namecheap requires contact data for every role.
+            for role in ("Registrant", "Tech", "Admin", "AuxBilling"):
+                for field, value in self.contact_details.items():
+                    params[f"{role}{field}"] = value
+        else:
+            # Best-effort purchase path that relies on registrar account defaults.
+            params["UseGlobalDefaults"] = "true"
 
         root = self._make_request("namecheap.domains.create", params)
         if not self._is_ok(root):

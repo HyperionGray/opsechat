@@ -292,3 +292,26 @@ class TestNamecheapAPIClient:
         assert result["tld"] == "xyz"
         assert result["registration"] == "2.98"
         assert result["currency"] == "USD"
+
+    @patch('domain_manager.requests.Session')
+    def test_purchase_domain_uses_global_defaults_when_no_contacts(self, mock_session_class):
+        """Purchase path should attempt account defaults if contact profile is absent."""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """
+            <ApiResponse Status="OK">
+                <CommandResponse>
+                    <DomainCreateResult Registered="true" Domain="example.xyz" OrderID="12345" />
+                </CommandResponse>
+            </ApiResponse>
+        """
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient("test_key", "test_user", "127.0.0.1")
+        result = client.purchase_domain("example.xyz")
+
+        assert result["success"] is True
+        assert result["order_id"] == "12345"
+        _, kwargs = mock_session.get.call_args
+        assert kwargs["params"]["UseGlobalDefaults"] == "true"

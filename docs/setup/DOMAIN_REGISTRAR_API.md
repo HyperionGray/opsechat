@@ -72,7 +72,7 @@ Requirements:
 Notes:
 - Namecheap API responses are XML.
 - Premium names may include premium pricing in the availability response.
-- Domain purchase via API requires full contact profile fields.
+- Domain purchase attempts account defaults (`UseGlobalDefaults=true`) when full contact profile fields are not provided.
 
 ## Other Registrars (Planned)
 
