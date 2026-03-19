@@ -10,7 +10,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_lock,
+    chat_rooms,
+    rooms_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -113,3 +119,42 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_alias_endpoint_returns_200():
+    client = _test_app.test_client()
+    response = client.get("/healthz")
+    assert response.status_code == 200
+
+
+def test_liveness_endpoint_returns_alive():
+    client = _test_app.test_client()
+    response = client.get("/health/live")
+    data = response.get_json()
+    assert response.status_code == 200
+    assert data["status"] == "alive"
+    assert "version" in data
+
+
+def test_readiness_endpoint_returns_ready():
+    client = _test_app.test_client()
+    response = client.get("/health/ready")
+    data = response.get_json()
+    assert response.status_code == 200
+    assert data["status"] == "ready"
+    assert data["ready"] is True
+    assert "runtime" in data
+    assert "cleanup_thread_alive" in data["runtime"]
+
+
+def test_health_active_rooms_reflects_room_creation():
+    client = _test_app.test_client()
+    with rooms_lock:
+        chat_rooms.clear()
+
+    before = client.get("/health").get_json()["active_rooms"]
+    create_response = client.post("/chat/create")
+    assert create_response.status_code == 200
+    assert create_response.get_json().get("success") is True
+    after = client.get("/health").get_json()["active_rooms"]
+    assert after == before + 1

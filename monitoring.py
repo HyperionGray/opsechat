@@ -321,20 +321,68 @@ def _read_version() -> str:
         return 'unknown'
 
 
+def _get_chat_runtime_stats() -> Dict[str, Any]:
+    """
+    Read chat runtime stats without hard-coupling health checks to chat imports.
+    """
+    try:
+        from simple_chat_routes import get_runtime_stats
+        return get_runtime_stats()
+    except Exception:
+        return {
+            "active_rooms": 0,
+            "active_users": 0,
+            "active_direct_messages": 0,
+            "rate_limited_sessions": 0,
+            "cleanup_thread_alive": False,
+        }
+
+
+def get_liveness_status() -> Dict[str, Any]:
+    """Liveness probe data: process is up and responding."""
+    return {
+        "status": "alive",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": _read_version(),
+    }
+
+
+def get_readiness_status() -> Dict[str, Any]:
+    """
+    Readiness probe data: app is able to serve chat traffic.
+    """
+    stats = _get_chat_runtime_stats()
+    ready = stats.get("cleanup_thread_alive", False)
+    return {
+        "status": "ready" if ready else "not_ready",
+        "ready": ready,
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": _read_version(),
+        "checks": {
+            "cleanup_thread": "ok" if ready else "failed",
+        },
+        "runtime": stats,
+    }
+
+
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
+    stats = _get_chat_runtime_stats()
+    cleanup_alive = stats.get("cleanup_thread_alive", False)
     return {
-        'status': 'healthy',
+        'status': 'healthy' if cleanup_alive else 'degraded',
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
-        # active_rooms: this app uses a single global chat room. The field is
-        # included for API consistency; it always reports 1 when the service is up.
-        'active_rooms': 1,
+        'active_rooms': stats.get("active_rooms", 0),
+        'active_users': stats.get("active_users", 0),
+        'active_direct_messages': stats.get("active_direct_messages", 0),
+        'rate_limited_sessions': stats.get("rate_limited_sessions", 0),
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',
-            'disk_space': 'ok'
+            'disk_space': 'ok',
+            'cleanup_thread': 'ok' if cleanup_alive else 'failed',
         }
     }
 

@@ -242,6 +242,42 @@ cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True)
 cleanup_thread.start()
 
 
+def is_cleanup_thread_alive():
+    """Return whether the background cleanup worker is currently running."""
+    return cleanup_thread.is_alive()
+
+
+def get_runtime_stats():
+    """
+    Return lightweight runtime stats for health/readiness checks.
+
+    Notes:
+    - The cleanup helpers are invoked first so counts reflect active data.
+    - This function is intentionally read-mostly and safe for frequent polling.
+    """
+    cleanup_old_rooms()
+    cleanup_old_dms()
+    cleanup_rate_limits()
+
+    with rooms_lock:
+        active_rooms = len(chat_rooms)
+        active_users = sum(room.get_user_count() for room in chat_rooms.values())
+
+    with dm_lock:
+        active_direct_messages = len(direct_messages)
+
+    with _rate_limit_lock:
+        rate_limited_sessions = len(_rate_limit_store)
+
+    return {
+        "active_rooms": active_rooms,
+        "active_users": active_users,
+        "active_direct_messages": active_direct_messages,
+        "rate_limited_sessions": rate_limited_sessions,
+        "cleanup_thread_alive": is_cleanup_thread_alive(),
+    }
+
+
 def generate_secure_room_id(length=32):
     """Generate cryptographically secure, non-discoverable room ID"""
     return secrets.token_urlsafe(length)
