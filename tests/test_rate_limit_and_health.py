@@ -10,7 +10,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_lock,
+    chat_rooms,
+    rooms_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -24,6 +30,8 @@ def _clear_store():
     """Helper: wipe the rate limit store between tests."""
     with _rate_limit_lock:
         _rate_limit_store.clear()
+    with rooms_lock:
+        chat_rooms.clear()
 
 
 def test_rate_limit_allows_requests_within_window():
@@ -113,3 +121,24 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_active_rooms_matches_chat_runtime_state():
+    _clear_store()
+    client = _test_app.test_client()
+
+    with rooms_lock:
+        expected_before = len(chat_rooms)
+
+    before = client.get("/health").get_json()
+    assert before["active_rooms"] == expected_before
+
+    create_resp = client.post("/chat/create")
+    assert create_resp.status_code == 200
+
+    with rooms_lock:
+        expected_after = len(chat_rooms)
+
+    after = client.get("/health").get_json()
+    assert after["active_rooms"] == expected_after
+    assert after["active_rooms"] >= 1

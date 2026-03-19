@@ -15,6 +15,7 @@ OpSecChat now includes a simple, security-focused web-based chat room system des
 - **Text-Only**: No media, images, or file sharing
 - **In-Memory Storage**: Zero disk writes
 - **Tor Ready**: Works seamlessly with Tor hidden services
+- **Runtime Status API**: Inspect active rooms, message counts, DMs, and rate-limit session usage
 
 ## Quick Start
 
@@ -141,6 +142,22 @@ GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
+
+#### Chat Runtime Status
+```
+GET /chat/status
+Response: {
+  "active_rooms": 1,
+  "total_room_messages": 3,
+  "active_room_users": 2,
+  "active_direct_messages": 1,
+  "tracked_rate_limit_sessions": 1,
+  "tracked_rate_limit_endpoints": 3,
+  "rate_limit_config": { ... }
+}
+```
+
+Use this endpoint for lightweight runtime visibility and operational checks.
 
 ### Encryption Implementation
 

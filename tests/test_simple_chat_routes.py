@@ -5,7 +5,6 @@ Covers: room creation, messaging, direct messages, room key exchange,
         input validation, rate-limit logic, and helper utilities.
 """
 import pytest
-from unittest.mock import patch
 from app_factory import create_app
 from simple_chat_routes import (
     generate_secure_room_id,
@@ -16,6 +15,12 @@ from simple_chat_routes import (
     check_rate_limit,
     RATE_LIMITS,
     MAX_MESSAGE_LENGTH,
+    chat_rooms,
+    rooms_lock,
+    direct_messages,
+    dm_lock,
+    _rate_limit_store,
+    _rate_limit_lock,
 )
 
 
@@ -38,6 +43,26 @@ def client(app):
     with app.test_client() as c:
         with app.app_context():
             yield c
+
+
+@pytest.fixture(autouse=True)
+def reset_simple_chat_state():
+    """Ensure simple chat globals do not leak between tests."""
+    with rooms_lock:
+        chat_rooms.clear()
+    with dm_lock:
+        direct_messages.clear()
+    with _rate_limit_lock:
+        _rate_limit_store.clear()
+
+    yield
+
+    with rooms_lock:
+        chat_rooms.clear()
+    with dm_lock:
+        direct_messages.clear()
+    with _rate_limit_lock:
+        _rate_limit_store.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +180,16 @@ class TestChatRoutes:
         assert "room_id" in data
         assert data["room_url"].startswith("/chat/room/")
 
+    def test_chat_status_empty_state(self, client):
+        response = client.get("/chat/status")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["active_rooms"] == 0
+        assert data["total_room_messages"] == 0
+        assert data["active_direct_messages"] == 0
+        assert data["tracked_rate_limit_sessions"] == 0
+        assert "chat_create" in data["rate_limit_config"]
+
     def test_create_room_id_unique(self, client):
         r1 = client.post("/chat/create").get_json()["room_id"]
         r2 = client.post("/chat/create").get_json()["room_id"]
@@ -236,6 +271,31 @@ class TestChatRoutes:
     def test_get_room_key_nonexistent_room(self, client):
         response = client.get("/chat/room/no-such-room/key")
         assert response.status_code == 404
+
+    def test_chat_status_reflects_room_activity(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        post_msg = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "status check message"},
+            content_type="application/json",
+        )
+        assert post_msg.status_code == 200
+
+        dm_resp = client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "status dm"},
+            content_type="application/json",
+        )
+        assert dm_resp.status_code == 200
+
+        status_resp = client.get("/chat/status")
+        assert status_resp.status_code == 200
+        data = status_resp.get_json()
+        assert data["active_rooms"] == 1
+        assert data["total_room_messages"] == 1
+        assert data["active_direct_messages"] == 1
+        # room create + message + dm should all register under one session.
+        assert data["tracked_rate_limit_sessions"] >= 1
 
 
 # ---------------------------------------------------------------------------

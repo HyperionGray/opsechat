@@ -16,8 +16,8 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Global room storage (in-memory only)
@@ -222,6 +222,49 @@ def cleanup_rate_limits():
             del _rate_limit_store[sid]
 
 
+def get_chat_runtime_stats() -> dict:
+    """
+    Return current in-memory chat runtime statistics.
+
+    This is intentionally lightweight and only reflects in-memory state for the
+    running process.
+    """
+    now = datetime.datetime.now()
+
+    with rooms_lock:
+        active_rooms = len(chat_rooms)
+        total_room_messages = 0
+        total_active_users = 0
+
+        for room in chat_rooms.values():
+            with room.lock:
+                total_room_messages += len(room.messages)
+                total_active_users += sum(
+                    1
+                    for user_data in room.users.values()
+                    if (now - user_data["last_seen"]).total_seconds() < 300
+                )
+
+    with dm_lock:
+        active_direct_messages = len(direct_messages)
+
+    with _rate_limit_lock:
+        tracked_rate_limit_sessions = len(_rate_limit_store)
+        tracked_rate_limit_endpoints = sum(
+            len(endpoints) for endpoints in _rate_limit_store.values()
+        )
+
+    return {
+        "active_rooms": active_rooms,
+        "total_room_messages": total_room_messages,
+        "active_room_users": total_active_users,
+        "active_direct_messages": active_direct_messages,
+        "tracked_rate_limit_sessions": tracked_rate_limit_sessions,
+        "tracked_rate_limit_endpoints": tracked_rate_limit_endpoints,
+        "rate_limit_config": RATE_LIMITS,
+    }
+
+
 # Background cleanup thread
 def cleanup_loop():
     """Continuously clean up old messages and rooms"""
@@ -266,6 +309,11 @@ def register_simple_chat_routes(app):
             version = '0.8.0-alpha'  # fallback
         
         return render_template("simple_chat_index.html", version=version)
+
+    @app.route('/chat/status', methods=['GET'])
+    def chat_status():
+        """Return in-memory chat runtime statistics for operators."""
+        return jsonify(get_chat_runtime_stats())
     
     @app.route('/chat/create', methods=['POST'])
     @limiter.limit("10 per hour; 3 per minute")
