@@ -321,21 +321,106 @@ def _read_version() -> str:
         return 'unknown'
 
 
-def get_health_status() -> Dict[str, Any]:
-    """Get application health status"""
+def _get_runtime_chat_stats() -> Dict[str, Any]:
+    """
+    Best-effort runtime stats from simple_chat_routes.
+
+    This function intentionally tolerates import/runtime failures so health and
+    liveness endpoints do not fail if optional modules are unavailable.
+    """
+    stats = {
+        'active_rooms': 0,
+        'active_direct_messages': 0,
+        'rate_limited_sessions': 0,
+        'chat_store_access': 'unavailable'
+    }
+
+    try:
+        from simple_chat_routes import (
+            chat_rooms,
+            direct_messages,
+            _rate_limit_store,
+            rooms_lock,
+            dm_lock,
+            _rate_limit_lock,
+        )
+
+        with rooms_lock:
+            stats['active_rooms'] = len(chat_rooms)
+        with dm_lock:
+            stats['active_direct_messages'] = len(direct_messages)
+        with _rate_limit_lock:
+            stats['rate_limited_sessions'] = len(_rate_limit_store)
+
+        stats['chat_store_access'] = 'ok'
+    except Exception:
+        # Keep safe defaults above; endpoint should remain available.
+        pass
+
+    return stats
+
+
+def _build_base_health_payload() -> Dict[str, Any]:
+    """Build shared payload fields for health/readiness/liveness endpoints."""
+    version = _read_version()
+    runtime_stats = _get_runtime_chat_stats()
+
     return {
-        'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
-        'version': _read_version(),
-        # active_rooms: this app uses a single global chat room. The field is
-        # included for API consistency; it always reports 1 when the service is up.
-        'active_rooms': 1,
+        'version': version,
+        'active_rooms': runtime_stats['active_rooms'],
+        'active_direct_messages': runtime_stats['active_direct_messages'],
+        'rate_limited_sessions': runtime_stats['rate_limited_sessions'],
         'checks': {
-            'tor_connection': 'unknown',  # Would need to check actual Tor status
+            'version_file': 'ok' if version != 'unknown' else 'degraded',
+            'chat_store_access': runtime_stats['chat_store_access'],
             'memory_usage': 'ok',
-            'disk_space': 'ok'
+            'disk_space': 'ok',
+            'tor_connection': 'unknown'  # Requires probing the real Tor control port.
         }
+    }
+
+
+def get_health_status() -> Dict[str, Any]:
+    """Get application health status"""
+    payload = _build_base_health_payload()
+    check_values = payload['checks'].values()
+
+    payload['status'] = (
+        'healthy'
+        if all(v in ('ok', 'unknown') for v in check_values)
+        else 'degraded'
+    )
+    return payload
+
+
+def get_readiness_status() -> Dict[str, Any]:
+    """
+    Readiness status for orchestrators/load balancers.
+
+    The service is considered ready only when core local checks pass.
+    """
+    payload = _build_base_health_payload()
+    ready_checks = ('version_file', 'chat_store_access')
+    is_ready = all(payload['checks'][check] == 'ok' for check in ready_checks)
+    payload['status'] = 'ready' if is_ready else 'not_ready'
+    return payload
+
+
+def get_liveness_status() -> Dict[str, Any]:
+    """
+    Lightweight liveness signal.
+
+    Liveness avoids heavier dependency checks and confirms the process loop is
+    active by reporting uptime and build version.
+    """
+    uptime = time.time() - apm.metrics['system']['start_time']
+    return {
+        'status': 'alive' if uptime >= 0 else 'unhealthy',
+        'timestamp': datetime.utcnow().isoformat(),
+        'uptime_seconds': uptime,
+        'version': _read_version(),
     }
 
 # Security event logging

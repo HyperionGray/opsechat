@@ -105,12 +105,24 @@ def create_app():
     register_review_routes(app, id_generator, get_random_color, 
                           add_review_wrapper, get_reviews, get_review_stats)
     
-    # Health check endpoint
-    from monitoring import get_health_status
+    # Health/readiness/liveness endpoints
+    from monitoring import get_health_status, get_readiness_status, get_liveness_status
 
     @app.route('/health', methods=["GET"])
     def health():
         return jsonify(get_health_status())
+
+    @app.route('/health/ready', methods=["GET"])
+    def health_ready():
+        readiness = get_readiness_status()
+        status_code = 200 if readiness.get("status") == "ready" else 503
+        return jsonify(readiness), status_code
+
+    @app.route('/health/live', methods=["GET"])
+    def health_live():
+        liveness = get_liveness_status()
+        status_code = 200 if liveness.get("status") == "alive" else 503
+        return jsonify(liveness), status_code
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])

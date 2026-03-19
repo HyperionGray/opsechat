@@ -105,6 +105,9 @@ def test_health_endpoint_returns_json_with_required_fields():
     assert data.get("status") == "healthy"
     assert "version" in data
     assert "active_rooms" in data
+    assert "active_direct_messages" in data
+    assert "rate_limited_sessions" in data
+    assert "checks" in data
 
 
 def test_health_endpoint_active_rooms_is_integer():
@@ -113,3 +116,36 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_includes_runtime_check_states():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    data = response.get_json()
+    checks = data.get("checks", {})
+    assert checks.get("version_file") in {"ok", "degraded"}
+    assert checks.get("chat_store_access") in {"ok", "unavailable"}
+
+
+def test_liveness_endpoint_returns_alive():
+    client = _test_app.test_client()
+    response = client.get("/health/live")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data is not None
+    assert data.get("status") == "alive"
+    assert isinstance(data.get("uptime_seconds"), (int, float))
+    assert data["uptime_seconds"] >= 0
+    assert "version" in data
+
+
+def test_readiness_endpoint_reports_ready_or_not_ready():
+    client = _test_app.test_client()
+    response = client.get("/health/ready")
+    data = response.get_json()
+
+    assert response.status_code in {200, 503}
+    assert data is not None
+    assert data.get("status") in {"ready", "not_ready"}
+    assert "checks" in data
