@@ -16,6 +16,7 @@ from simple_chat_routes import (
     check_rate_limit,
     RATE_LIMITS,
     MAX_MESSAGE_LENGTH,
+    CHAT_MESSAGE_LIFETIME_SECONDS,
 )
 
 
@@ -114,6 +115,20 @@ class TestChatRoom:
         room.cleanup_old_messages()
         assert room.get_messages() == []
 
+    def test_get_status_includes_burn_metadata(self):
+        room = ChatRoom("test-room")
+        empty_status = room.get_status()
+        assert empty_status["message_count"] == 0
+        assert empty_status["next_burn_in_seconds"] is None
+        assert empty_status["message_ttl_seconds"] == CHAT_MESSAGE_LIFETIME_SECONDS
+
+        room.add_message("u1", "Alice", [255, 0, 0], "hello")
+        status = room.get_status()
+        assert status["message_count"] == 1
+        assert status["user_count"] == 1
+        assert isinstance(status["next_burn_in_seconds"], int)
+        assert 0 <= status["next_burn_in_seconds"] <= CHAT_MESSAGE_LIFETIME_SECONDS
+
 
 # ---------------------------------------------------------------------------
 # Rate-limit helper
@@ -176,6 +191,31 @@ class TestChatRoutes:
         data = response.get_json()
         assert data["messages"] == []
         assert isinstance(data["user_count"], int)
+        assert "status" in data
+        assert data["status"]["message_count"] == 0
+        assert data["status"]["next_burn_in_seconds"] is None
+
+    def test_room_status_endpoint_returns_room_metadata(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "hello world"},
+            content_type="application/json",
+        )
+
+        response = client.get(f"/chat/room/{room_id}/status")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["room_id"] == room_id
+        assert data["message_count"] == 1
+        assert data["user_count"] >= 1
+        assert data["message_ttl_seconds"] == CHAT_MESSAGE_LIFETIME_SECONDS
+        assert isinstance(data["next_burn_in_seconds"], int)
+        assert 0 <= data["next_burn_in_seconds"] <= CHAT_MESSAGE_LIFETIME_SECONDS
+
+    def test_room_status_endpoint_missing_room(self, client):
+        response = client.get("/chat/room/no-such-room/status")
+        assert response.status_code == 404
 
     def test_post_message_success(self, client):
         room_id = client.post("/chat/create").get_json()["room_id"]

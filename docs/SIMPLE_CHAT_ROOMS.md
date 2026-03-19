@@ -15,6 +15,7 @@ OpSecChat now includes a simple, security-focused web-based chat room system des
 - **Text-Only**: No media, images, or file sharing
 - **In-Memory Storage**: Zero disk writes
 - **Tor Ready**: Works seamlessly with Tor hidden services
+- **Live Room Status**: User count, message count, and next burn countdown metadata
 
 ## Quick Start
 
@@ -141,6 +142,21 @@ GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
+
+#### Room Status
+```
+GET /chat/room/<room_id>/status
+Response: {
+  "room_id": "...",
+  "user_count": 2,
+  "message_count": 5,
+  "message_ttl_seconds": 180,
+  "next_burn_in_seconds": 97
+}
+```
+
+The message polling endpoint (`GET /chat/room/<room_id>/messages`) also returns
+this metadata under a `status` object for clients that already poll messages.
 
 ### Encryption Implementation
 

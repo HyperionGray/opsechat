@@ -163,6 +163,8 @@
         </div>
         <div class="header-info">
             <span id="userCount" aria-live="polite">Users: 1</span>
+            <span id="messageCount" aria-live="polite"> | Messages: 0</span>
+            <span id="burnCountdown" aria-live="polite"> | Burn: --</span>
             <span class="encryption-toggle">
                 <label>
                     <input type="checkbox" id="encryptionToggle" aria-label="Toggle end-to-end encryption">
@@ -348,6 +350,26 @@
             const container = document.getElementById('messagesContainer');
             container.scrollTop = container.scrollHeight;
         }
+
+        function formatBurnCountdown(seconds) {
+            if (seconds === null || seconds === undefined) {
+                return '--';
+            }
+            const safeSeconds = Math.max(0, Math.floor(seconds));
+            const minutes = Math.floor(safeSeconds / 60);
+            const remainingSeconds = safeSeconds % 60;
+            return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`;
+        }
+
+        function updateRoomStatus(statusData) {
+            const userCount = typeof statusData.user_count === 'number' ? statusData.user_count : 0;
+            const messageCount = typeof statusData.message_count === 'number' ? statusData.message_count : 0;
+            const burnText = formatBurnCountdown(statusData.next_burn_in_seconds);
+
+            document.getElementById('userCount').textContent = `Users: ${userCount}`;
+            document.getElementById('messageCount').textContent = ` | Messages: ${messageCount}`;
+            document.getElementById('burnCountdown').textContent = ` | Burn: ${burnText}`;
+        }
         
         async function renderMessages(messages) {
             const container = document.getElementById('messagesContainer');
@@ -432,7 +454,11 @@
                 if (response.ok) {
                     const data = await response.json();
                     await renderMessages(data.messages);
-                    document.getElementById('userCount').textContent = `Users: ${data.user_count}`;
+                    const statusData = data.status || {};
+                    if (typeof statusData.user_count !== 'number') {
+                        statusData.user_count = data.user_count;
+                    }
+                    updateRoomStatus(statusData);
                 }
             } catch (error) {
                 // Silently fail for polling errors

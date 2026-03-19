@@ -42,6 +42,7 @@ RATE_LIMITS = {
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
+CHAT_MESSAGE_LIFETIME_SECONDS = 180
 
 # Room class to manage chat state
 class ChatRoom:
@@ -90,7 +91,7 @@ class ChatRoom:
             
             for msg in self.messages:
                 age = (now - msg["timestamp"]).total_seconds()
-                if age < 180:  # 3 minutes
+                if age < CHAT_MESSAGE_LIFETIME_SECONDS:  # 3 minutes
                     new_messages.append(msg)
                 else:
                     # Overwrite message data before deletion (security)
@@ -112,6 +113,33 @@ class ChatRoom:
             active_users = sum(1 for u in self.users.values() 
                              if (now - u["last_seen"]).total_seconds() < 300)
             return active_users
+
+    def get_status(self):
+        """Get room metadata for client status indicators."""
+        self.cleanup_old_messages()
+        with self.lock:
+            now = datetime.datetime.now()
+            message_count = len(self.messages)
+            active_users = sum(
+                1
+                for user in self.users.values()
+                if (now - user["last_seen"]).total_seconds() < 300
+            )
+
+            next_burn_in_seconds = None
+            if self.messages:
+                oldest_timestamp = min(msg["timestamp"] for msg in self.messages)
+                oldest_age_seconds = (now - oldest_timestamp).total_seconds()
+                next_burn_in_seconds = max(
+                    0, int(CHAT_MESSAGE_LIFETIME_SECONDS - oldest_age_seconds)
+                )
+
+            return {
+                "user_count": active_users,
+                "message_count": message_count,
+                "message_ttl_seconds": CHAT_MESSAGE_LIFETIME_SECONDS,
+                "next_burn_in_seconds": next_burn_in_seconds,
+            }
 
 
 def cleanup_old_rooms():
@@ -378,7 +406,7 @@ def register_simple_chat_routes(app):
         
         else:  # GET
             messages = room.get_messages()
-            user_count = room.get_user_count()
+            status = room.get_status()
             
             return jsonify({
                 "messages": [
@@ -391,10 +419,25 @@ def register_simple_chat_routes(app):
                     }
                     for msg in messages
                 ],
-                "user_count": user_count,
+                "user_count": status["user_count"],
                 "my_username": session.get("username"),
-                "my_color": session.get("color")
+                "my_color": session.get("color"),
+                "status": status,
             })
+
+    @app.route('/chat/room/<string:room_id>/status', methods=['GET'])
+    def simple_chat_room_status(room_id):
+        """Get room status metadata for lightweight client polling."""
+        with rooms_lock:
+            if room_id not in chat_rooms:
+                return jsonify({"error": "Room not found"}), 404
+            room = chat_rooms[room_id]
+
+        status = room.get_status()
+        return jsonify({
+            "room_id": room_id,
+            **status,
+        })
     
     @app.route('/chat/dm/send', methods=['POST'])
     @limiter.limit("20 per hour; 5 per minute")
