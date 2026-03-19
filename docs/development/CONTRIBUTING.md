@@ -33,6 +33,16 @@ By participating in this project, you agree to maintain a respectful and inclusi
 - Ensure all tests pass before submitting
 - Follow the existing code style
 
+### CI and Label-Triggered Automation
+
+- The main CI workflow (`.github/workflows/ci.yml`) runs:
+  - `repo-hygiene`
+  - `python-tests`
+  - `playwright-e2e`
+  - `security-baseline`
+- Some automation workflows are intentionally label-triggered (for example, `auto-llm-pr-review.yml` and `auto-llm-issue-review.yml`).
+- If you need one of these automated reviews, apply the corresponding label in GitHub and confirm the matching workflow starts.
+
 ## Development Setup
 
 ### Prerequisites

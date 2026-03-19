@@ -36,8 +36,8 @@
 - [ ] Consider adding more comprehensive security checks to the CI baseline if needed
 
 ### 4. Documentation Updates
-- [ ] Update repository README or contributing guide to mention the new CI workflow
-- [ ] Document the label-based triggering system for team members
+- [x] Update repository README or contributing guide to mention the new CI workflow
+- [x] Document the label-based triggering system for team members
 - [ ] Add instructions on how to manually trigger scheduled workflows if needed
 
 ### 5. Monitoring
@@ -50,3 +50,4 @@
 - All workflows now have proper timeouts to prevent runaway jobs
 - Concurrency groups will automatically cancel redundant runs
 - Composite actions enable consistent environment setup across all workflows
+- CI now includes `repo-hygiene` to detect unfinished code markers and workflow placeholder/nested-path artifacts

@@ -178,6 +178,9 @@ npm run test:headed
 
 # Run all tests
 npm test
+
+# Run repository hygiene checks
+python scripts/repo_hygiene_check.py
 ```
 
 Tests cover:
@@ -187,6 +190,8 @@ Tests cover:
 - UI functionality (script and noscript modes)
 - Security headers validation
 - Responsive design
+
+CI (`.github/workflows/ci.yml`) enforces four baseline checks on push/PR: `repo-hygiene`, `python-tests`, `playwright-e2e`, and `security-baseline`.
 
 For full testing documentation, see [Testing Guide](docs/user-guide/TESTING.md).
 

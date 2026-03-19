@@ -109,6 +109,9 @@ These are development and testing utilities that help during development:
 ### Running Tests
 
 ```bash
+# Run repository hygiene checks (unfinished markers, workflow placeholders, nested dirs)
+python scripts/repo_hygiene_check.py
+
 # Run all Playwright tests (requires npm install)
 npm test
 
@@ -124,6 +127,15 @@ python -m pytest
 # Run specific test file
 npx playwright test tests/basic.spec.js
 ```
+
+### CI Jobs
+
+The primary CI workflow (`.github/workflows/ci.yml`) runs these required jobs:
+
+- `repo-hygiene` - ensures no unfinished code markers in source/config and no placeholder/nested workflow artifacts.
+- `python-tests` - runs pytest across supported Python versions.
+- `playwright-e2e` - validates browser behavior with the mock server.
+- `security-baseline` - dependency security auditing for Python and Node.
 
 ### Test Organization
 - **E2E Tests**: `tests/*.e2e.spec.js` - End-to-end browser tests
