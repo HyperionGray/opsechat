@@ -4,7 +4,7 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, NamecheapAPIClient, DomainRotationManager
 )
 
 
@@ -174,3 +174,92 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_find_cheap_available_domain_uses_fallback_registrar(self):
+        """Use a secondary registrar when primary has no availability."""
+        primary = Mock(spec=DomainAPIClient)
+        primary.search_domain.return_value = {
+            "available": False,
+            "domain": "unavailable.xyz",
+            "price": None,
+            "registrar": "porkbun",
+        }
+
+        secondary = Mock(spec=DomainAPIClient)
+        secondary.search_domain.return_value = {
+            "available": True,
+            "domain": "available.xyz",
+            "price": "2.49",
+            "registrar": "namecheap",
+        }
+
+        manager = DomainRotationManager(primary, monthly_budget=50.0)
+        manager.add_api_client("namecheap", secondary)
+
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["registrar"] == "namecheap"
+        assert result["price"] == 2.49
+
+    def test_configure_sets_porkbun_client_and_budget(self):
+        """Configuration API should update budget and registrar state."""
+        manager = DomainRotationManager(monthly_budget=10.0)
+
+        config = manager.configure(
+            api_key="pk_test",
+            secret_key="sk_test",
+            monthly_budget=25.0,
+            registrar="porkbun",
+        )
+
+        assert config["active_registrar"] == "porkbun"
+        assert manager.monthly_budget == 25.0
+        assert "porkbun" in config["configured_registrars"]
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap XML parsing behavior."""
+
+    @patch("domain_manager.requests.Session")
+    def test_search_domain_available_parses_xml(self, mock_session_class):
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """
+        <ApiResponse Status="OK">
+          <CommandResponse Type="namecheap.domains.check">
+            <DomainCheckResult Domain="example.xyz" Available="true" PremiumRegistrationPrice="1.99" />
+          </CommandResponse>
+        </ApiResponse>
+        """
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_key="api_key",
+            username="username",
+            client_ip="127.0.0.1",
+        )
+        result = client.search_domain("example.xyz")
+
+        assert result["available"] is True
+        assert result["price"] == 1.99
+        assert result["registrar"] == "namecheap"
+
+    @patch("domain_manager.requests.Session")
+    def test_search_domain_handles_malformed_xml(self, mock_session_class):
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = "<ApiResponse><Broken>"
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_key="api_key",
+            username="username",
+            client_ip="127.0.0.1",
+        )
+        result = client.search_domain("example.xyz")
+
+        assert result["available"] is False
+        assert result["registrar"] == "namecheap"

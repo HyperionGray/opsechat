@@ -7,7 +7,8 @@ OpSecChat supports automated domain rotation for burner email systems. This allo
 ## Supported Registrars
 
 Currently supported:
-- **Porkbun** (Recommended - cheap .xyz, .club domains)
+- **Porkbun** (recommended for full purchase flow)
+- **Namecheap** (domain availability + pricing lookup; purchase flow requires contact profile extension)
 - Additional registrars can be added by extending `DomainAPIClient`
 
 ## Setup
@@ -43,6 +44,11 @@ Or via environment variables:
 export PORKBUN_API_KEY="pk1_abc123..."
 export PORKBUN_SECRET_KEY="sk1_xyz789..."
 export DOMAIN_BUDGET="10"  # Monthly budget in USD
+
+# Optional secondary registrar (fallback search)
+export NAMECHEAP_USERNAME="your_namecheap_username"
+export NAMECHEAP_API_KEY="your_namecheap_api_key"
+export NAMECHEAP_CLIENT_IP="your_whitelisted_ip"
 ```
 
 ## Domain Rotation
@@ -52,15 +58,35 @@ export DOMAIN_BUDGET="10"  # Monthly budget in USD
 ```python
 from domain_manager import domain_rotation_manager
 
-# Check available domains
-available_domains = domain_rotation_manager.search_cheap_domains()
+# Configure primary purchase registrar
+domain_rotation_manager.configure(
+    api_key="pk1_...",
+    secret_key="sk1_...",
+    monthly_budget=10.0,
+    registrar="porkbun",
+)
+
+# Optionally add Namecheap for fallback availability checks
+domain_rotation_manager.configure(
+    namecheap_username="your_namecheap_username",
+    namecheap_api_key="your_namecheap_api_key",
+    namecheap_client_ip="x.x.x.x",
+)
+
+# Check available domains under your price target
+available_domains = domain_rotation_manager.search_cheap_domains(
+    tlds=["xyz", "club", "online"],
+    max_price=5.00,
+    limit=5,
+)
 print(available_domains)
 
-# Purchase a domain
+# Purchase + rotate active domain
 result = domain_rotation_manager.rotate_to_new_domain()
 if result['success']:
     print(f"New domain: {result['domain']}")
     print(f"Cost: ${result['cost']}")
+    print(f"Registrar: {result['registrar']}")
 else:
     print(f"Error: {result['error']}")
 ```
@@ -74,15 +100,20 @@ python -c "from domain_manager import domain_rotation_manager; \
 
 # Get current budget status
 python -c "from domain_manager import domain_rotation_manager; \
-    print(f'Budget: ${domain_rotation_manager.budget_manager.monthly_budget}'); \
-    print(f'Spent: ${domain_rotation_manager.budget_manager.get_month_spending()}'); \
-    print(f'Remaining: ${domain_rotation_manager.budget_manager.get_remaining_budget()}')"
+    s = domain_rotation_manager.get_budget_status(); \
+    print(f'Budget: ${s[\"monthly_budget\"]}'); \
+    print(f'Spent: ${s[\"current_spending\"]}'); \
+    print(f'Remaining: ${s[\"remaining\"]}')"
 
 # Rotate to new domain
 python -c "from domain_manager import domain_rotation_manager; \
     result = domain_rotation_manager.rotate_to_new_domain(); \
     print(result)"
 ```
+
+### Multi-Registrar Fallback
+
+When multiple registrar clients are configured, `DomainRotationManager` checks the active registrar first and then falls back to other configured registrars when searching for available domains. This improves resilience when one API is unavailable or has no low-cost matches.
 
 ### Automated Rotation
 
