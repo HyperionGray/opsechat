@@ -4,7 +4,7 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, NamecheapAPIClient, DomainRotationManager
 )
 
 
@@ -74,6 +74,52 @@ class TestPorkbunAPIClient:
         
         assert result["tld"] == "com"
         assert result["registration"] == "9.99"
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch('domain_manager.requests.Session')
+    def test_search_domain_available(self, mock_session_class):
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """
+        <ApiResponse Status="OK">
+          <CommandResponse>
+            <DomainCheckResult Domain="test123.xyz" Available="true" PremiumRegistrationPrice="3.88" />
+          </CommandResponse>
+        </ApiResponse>
+        """
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient("test_key", "test_user")
+        result = client.search_domain("test123.xyz")
+
+        assert result["domain"] == "test123.xyz"
+        assert result["available"] is True
+        assert result["price"] == "3.88"
+
+    @patch('domain_manager.requests.Session')
+    def test_purchase_domain_success(self, mock_session_class):
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """
+        <ApiResponse Status="OK">
+          <CommandResponse>
+            <DomainCreateResult Domain="test123.xyz" Registered="true" OrderID="777" />
+          </CommandResponse>
+        </ApiResponse>
+        """
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient("test_key", "test_user")
+        result = client.purchase_domain("test123.xyz", years=1)
+
+        assert result["success"] is True
+        assert result["domain"] == "test123.xyz"
+        assert result["order_id"] == "777"
 
 
 class TestDomainRotationManager:
@@ -174,3 +220,37 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_provider_fallback_on_search(self):
+        """Test fallback to secondary provider when primary fails."""
+        primary = Mock(spec=DomainAPIClient)
+        primary.search_domain.return_value = {"available": False, "price": 2.0}
+
+        backup = Mock(spec=DomainAPIClient)
+        backup.search_domain.return_value = {"available": True, "price": 1.5}
+
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.add_api_client("porkbun", primary, set_active=True)
+        manager.add_api_client("namecheap", backup, set_active=False)
+
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["provider"] == "namecheap"
+
+    def test_provider_fallback_on_purchase(self):
+        """Test fallback to secondary provider when primary purchase fails."""
+        primary = Mock(spec=DomainAPIClient)
+        primary.purchase_domain.return_value = {"success": False, "message": "failure"}
+
+        backup = Mock(spec=DomainAPIClient)
+        backup.purchase_domain.return_value = {"success": True, "order_id": "abc"}
+
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.add_api_client("porkbun", primary, set_active=True)
+        manager.add_api_client("namecheap", backup, set_active=False)
+
+        success = manager.purchase_domain_if_budget_allows("test123.xyz", 2.0)
+
+        assert success is True
+        assert manager.get_active_provider() == "namecheap"
