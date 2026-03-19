@@ -99,7 +99,11 @@ def _scan_nested_github(root: Path, findings: List[Finding], fix: bool) -> None:
     if not nested.exists():
         return
 
-    for workflow in nested.glob("*.[yY][aA][mM][lL]"):
+    for workflow in nested.iterdir():
+        if not workflow.is_file():
+            continue
+        if workflow.suffix.lower() not in {".yml", ".yaml"}:
+            continue
         rel = str(workflow.relative_to(root))
         text = workflow.read_text(encoding="utf-8", errors="replace")
         finding = Finding(
