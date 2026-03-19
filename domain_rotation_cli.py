@@ -17,12 +17,14 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from getpass import getpass
-from domain_manager import PorkbunAPIClient, DomainRotationManager
+from domain_manager import DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+DEFAULT_MONTHLY_BUDGET = 50.0
 
 
 def load_config():
@@ -49,6 +51,31 @@ def save_config(config):
         print(f"Configuration saved to {CONFIG_FILE}")
     except Exception as e:
         print(f"Error saving config: {e}")
+
+
+def _format_datetime(value, format_string: str) -> str:
+    """Format datetime values loaded from either objects or ISO strings."""
+    if isinstance(value, datetime):
+        return value.strftime(format_string)
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value).strftime(format_string)
+        except ValueError:
+            return value
+    return "unknown"
+
+
+def _legacy_state_from_config(config):
+    """Build backward-compatible runtime state from legacy flat keys."""
+    legacy_keys = ("current_spending", "owned_domains", "active_domain")
+    if not any(key in config for key in legacy_keys):
+        return {}
+    return {
+        "monthly_budget": config.get("monthly_budget", DEFAULT_MONTHLY_BUDGET),
+        "current_spending": config.get("current_spending", 0.0),
+        "owned_domains": config.get("owned_domains", []),
+        "active_domain": config.get("active_domain")
+    }
 
 
 def configure_api():
@@ -87,7 +114,7 @@ def configure_api():
         except ValueError:
             print("Invalid budget amount, keeping previous value")
     elif 'monthly_budget' not in config:
-        config['monthly_budget'] = 50.0
+        config['monthly_budget'] = DEFAULT_MONTHLY_BUDGET
     
     save_config(config)
     print("\n✅ Configuration updated successfully!")
@@ -102,28 +129,27 @@ def get_manager():
         print("Run: python domain_rotation_cli.py config")
         sys.exit(1)
     
-    client = PorkbunAPIClient(config['api_key'], config['api_secret'])
-    manager = DomainRotationManager(
-        api_client=client,
-        monthly_budget=config.get('monthly_budget', 50.0)
+    manager = DomainRotationManager(monthly_budget=config.get('monthly_budget', DEFAULT_MONTHLY_BUDGET))
+    manager.configure(
+        api_key=config['api_key'],
+        secret_key=config['api_secret'],
+        monthly_budget=config.get('monthly_budget', DEFAULT_MONTHLY_BUDGET)
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+
+    # Load saved state (new structured state first, then legacy fallback)
+    state = config.get("state") or _legacy_state_from_config(config)
+    manager.load_state(state)
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    config['state'] = manager.export_state()
+    # Remove legacy state keys after successful migration.
+    config.pop('current_spending', None)
+    config.pop('owned_domains', None)
+    config.pop('active_domain', None)
     save_config(config)
 
 
@@ -144,8 +170,8 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_datetime(domain.get('purchased_at'), '%Y-%m-%d %H:%M')}")
+        print(f"   Expires: {_format_datetime(domain.get('expires_at'), '%Y-%m-%d')}")
         print()
 
 

@@ -2,6 +2,7 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +175,51 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+    
+    @patch('domain_manager.PorkbunAPIClient')
+    def test_configure_sets_runtime_client_and_budget(self, mock_client_class):
+        """Test configuring registrar credentials and budget."""
+        manager = DomainRotationManager(monthly_budget=10.0)
+        manager.configure("pk_test_1234", "sk_test_5678", monthly_budget=25.0)
+        
+        mock_client_class.assert_called_once_with("pk_test_1234", "sk_test_5678")
+        assert manager.monthly_budget == 25.0
+        assert manager.api_client is mock_client_class.return_value
+    
+    @patch('domain_manager.PorkbunAPIClient')
+    def test_get_config_masks_secrets(self, mock_client_class):
+        """Test safe config view does not expose secrets in plaintext."""
+        manager = DomainRotationManager()
+        manager.configure("pk_test_abcdef12", "sk_test_zzzz9999")
+        
+        config = manager.get_config()
+        assert config["configured"] is True
+        assert config["api_key"].endswith("ef12")
+        assert "*" in config["api_key"]
+        assert config["secret_key"].endswith("9999")
+        assert "*" in config["secret_key"]
+    
+    def test_export_and_load_state_round_trip(self):
+        """Test persisted state survives serialization/deserialization."""
+        manager = DomainRotationManager(monthly_budget=30.0)
+        manager.current_spending = 4.5
+        manager.active_domain = "alpha123.xyz"
+        manager.owned_domains = [{
+            "domain": "alpha123.xyz",
+            "price": 2.25,
+            "purchased_at": datetime(2026, 3, 14, 10, 30, 0),
+            "expires_at": datetime(2027, 3, 14, 10, 30, 0)
+        }]
+        
+        exported = manager.export_state()
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(exported["owned_domains"][0]["expires_at"], str)
+        
+        restored = DomainRotationManager(monthly_budget=1.0)
+        restored.load_state(exported)
+        
+        assert restored.monthly_budget == 30.0
+        assert restored.current_spending == 4.5
+        assert restored.active_domain == "alpha123.xyz"
+        assert restored.owned_domains[0]["domain"] == "alpha123.xyz"
+        assert isinstance(restored.owned_domains[0]["purchased_at"], datetime)
