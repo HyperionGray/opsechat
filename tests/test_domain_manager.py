@@ -3,6 +3,7 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime, timedelta
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -174,3 +175,101 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_and_get_config(self):
+        """Test manager configuration helper used by web routes."""
+        manager = DomainRotationManager()
+        config = manager.configure(
+            api_key="pk1_test_1234",
+            secret_key="sk1_secret_5678",
+            monthly_budget=25.0,
+        )
+
+        assert config["configured"] is True
+        assert config["provider"] == "porkbun"
+        assert config["monthly_budget"] == 25.0
+        assert config["api_key"].endswith("1234")
+        assert config["secret_key"].endswith("5678")
+        assert manager.api_client is not None
+
+    def test_search_cheap_domains_returns_unique_domains(self):
+        """Search should return unique domain candidates up to limit."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": "2.50"
+        }
+        manager = DomainRotationManager(mock_client)
+
+        with patch.object(
+            manager,
+            "generate_random_domain",
+            side_effect=["alpha.xyz", "beta.xyz", "alpha.xyz", "gamma.xyz"],
+        ):
+            results = manager.search_cheap_domains(limit=2, max_attempts_per_domain=2)
+
+        assert len(results) == 2
+        assert results[0]["domain"] == "alpha.xyz"
+        assert results[1]["domain"] == "beta.xyz"
+
+    def test_rotate_to_new_domain_returns_structured_response(self):
+        """Structured rotate response should include success, domain and cost."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": 2.99
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "rotate123.xyz"
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        with patch.object(manager, "generate_random_domain", return_value="rotate123.xyz"):
+            result = manager.rotate_to_new_domain()
+
+        assert result["success"] is True
+        assert result["domain"] == "rotate123.xyz"
+        assert result["cost"] == 2.99
+        assert manager.active_domain == "rotate123.xyz"
+
+    def test_cleanup_expired_domains_updates_active_domain(self):
+        """Expired domains should be removed and active reassigned."""
+        now = datetime.now()
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.owned_domains = [
+            {"domain": "expired.xyz", "expires_at": now - timedelta(days=1)},
+            {"domain": "current.xyz", "expires_at": now + timedelta(days=1)},
+        ]
+        manager.active_domain = "expired.xyz"
+
+        removed = manager.cleanup_expired_domains(reference_time=now)
+
+        assert removed == ["expired.xyz"]
+        assert manager.active_domain == "current.xyz"
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["domain"] == "current.xyz"
+
+    def test_find_cheap_available_domain_skips_invalid_price(self):
+        """Invalid price values should be skipped instead of crashing."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.side_effect = [
+            {"available": True, "price": "n/a"},
+            {"available": True, "price": "$1.25"},
+        ]
+        manager = DomainRotationManager(mock_client)
+
+        with patch.object(
+            manager,
+            "generate_random_domain",
+            side_effect=["invalid.xyz", "valid.xyz"],
+        ):
+            result = manager.find_cheap_available_domain(
+                max_price=2.0,
+                max_attempts=2,
+                tlds=["xyz"],
+            )
+
+        assert result is not None
+        assert result["domain"] == "valid.xyz"
+        assert result["price"] == 1.25

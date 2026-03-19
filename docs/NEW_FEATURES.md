@@ -273,6 +273,15 @@ Output:
    Expires: 2027-03-02
 ```
 
+#### Prune Expired Domains
+```bash
+python domain_rotation_cli.py prune
+
+Output:
+Removed expired domains:
+- oldburner123.xyz
+```
+
 ### Integration with Burner Email
 After rotating domains, update your email configuration:
 1. Run `python domain_rotation_cli.py status` to get active domain
@@ -285,6 +294,8 @@ After rotating domains, update your email configuration:
 - CLI tracks spending automatically
 - Prevents purchases that would exceed budget
 - Resets monthly (manual reset required)
+- Domain timestamps are stored as ISO-8601 strings to keep state persistence JSON-safe
+- Expired domains are automatically pruned when loading CLI state (or manually via `prune`)
 
 ---
 
