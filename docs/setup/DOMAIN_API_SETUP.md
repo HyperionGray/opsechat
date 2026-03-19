@@ -81,7 +81,7 @@ Porkbun offers cheap domains and a simple API, making it ideal for burner email 
 
 ### Namecheap
 
-While not directly integrated, Namecheap offers competitive pricing and API access.
+Namecheap is now directly integrated through the domain API client factory.
 
 #### Getting Started
 - Website: [namecheap.com](https://namecheap.com)
@@ -89,9 +89,9 @@ While not directly integrated, Namecheap offers competitive pricing and API acce
 - Pricing: .com domains ~$8.88/year, .xyz ~$1.98/year
 
 #### Integration Notes
-- Requires custom API client implementation
-- More complex API than Porkbun
-- Good for high-volume usage
+- Uses Namecheap XML API (`namecheap.domains.check`, `namecheap.users.getPricing`, `namecheap.domains.create`)
+- Requires account username and allowlisted client IP in Namecheap API settings
+- Supports sandbox mode for safer validation
 
 ### GoDaddy
 
@@ -148,7 +148,8 @@ Enterprise-focused with comprehensive API.
 ### Initial Setup
 
 1. **Choose Registrar**
-   - Porkbun recommended for beginners
+   - Porkbun recommended for easiest setup
+   - Namecheap supported if you already use Namecheap operationally
    - Consider volume and budget requirements
 
 2. **Create Account and Get API Keys**
@@ -158,6 +159,7 @@ Enterprise-focused with comprehensive API.
 3. **Configure in Opsechat**
    - Access email configuration page
    - Enter API credentials and budget
+   - For Namecheap, include username and allowlisted client IP
    - Test configuration
 
 ### Daily Operations

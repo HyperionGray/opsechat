@@ -6,7 +6,8 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+import xml.etree.ElementTree as ET
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -121,6 +122,221 @@ class PorkbunAPIClient(DomainAPIClient):
         return []
 
 
+class NamecheapAPIClient(DomainAPIClient):
+    """
+    Namecheap API client for domain management
+    https://www.namecheap.com/support/api/intro/
+    """
+
+    BASE_URL = "https://api.namecheap.com/xml.response"
+    SANDBOX_BASE_URL = "https://api.sandbox.namecheap.com/xml.response"
+    XML_NS = {"nc": "http://api.namecheap.com/xml.response"}
+
+    def __init__(
+        self,
+        api_key: str,
+        username: str,
+        client_ip: str = "127.0.0.1",
+        api_user: Optional[str] = None,
+        sandbox: bool = False,
+    ):
+        super().__init__(api_key, api_secret=None)
+        self.username = username
+        self.api_user = api_user or username
+        self.client_ip = client_ip
+        self.sandbox = sandbox
+        self.base_url = self.SANDBOX_BASE_URL if sandbox else self.BASE_URL
+        self.session = requests.Session()
+
+    def _make_request(self, command: str, params: Optional[Dict[str, Any]] = None) -> Dict:
+        """Make Namecheap XML API request."""
+        payload = {
+            "ApiUser": self.api_user,
+            "ApiKey": self.api_key,
+            "UserName": self.username,
+            "ClientIp": self.client_ip,
+            "Command": command,
+        }
+        if params:
+            payload.update(params)
+
+        try:
+            response = self.session.get(self.base_url, params=payload, timeout=30)
+            response.raise_for_status()
+            root = ET.fromstring(response.text)
+
+            api_errors = root.findall(".//nc:Errors/nc:Error", self.XML_NS)
+            if api_errors:
+                error_messages = []
+                for error in api_errors:
+                    message = (error.text or "").strip()
+                    if message:
+                        error_messages.append(message)
+
+                return {
+                    "status": "ERROR",
+                    "message": "; ".join(error_messages) or "Unknown Namecheap API error",
+                }
+
+            status = (root.attrib.get("Status") or "").upper()
+            if status != "OK":
+                return {
+                    "status": "ERROR",
+                    "message": f"Namecheap API returned status {status or 'UNKNOWN'}",
+                }
+
+            return {"status": "SUCCESS", "xml": root}
+        except ET.ParseError as exc:
+            logger.error(f"Namecheap API XML parse failed: {exc}")
+            return {"status": "ERROR", "message": f"Invalid XML response: {exc}"}
+        except Exception as exc:
+            logger.error(f"Namecheap API request failed: {exc}")
+            return {"status": "ERROR", "message": str(exc)}
+
+    def search_domain(self, domain: str) -> Dict:
+        """Check if domain is available."""
+        result = self._make_request("namecheap.domains.check", {"DomainList": domain})
+        if result.get("status") != "SUCCESS":
+            return {
+                "domain": domain,
+                "available": False,
+                "price": None,
+                "currency": "USD",
+                "message": result.get("message", "Search failed"),
+            }
+
+        xml_root = result["xml"]
+        check_result = xml_root.find(".//nc:DomainCheckResult", self.XML_NS)
+        if check_result is None:
+            return {
+                "domain": domain,
+                "available": False,
+                "price": None,
+                "currency": "USD",
+                "message": "Missing DomainCheckResult in API response",
+            }
+
+        available = (check_result.attrib.get("Available", "false").lower() == "true")
+        premium = (check_result.attrib.get("IsPremiumName", "false").lower() == "true")
+
+        price = None
+        if available:
+            tld = domain.rsplit(".", 1)[-1] if "." in domain else domain
+            pricing = self.get_pricing(tld)
+            price = pricing.get("registration")
+
+        return {
+            "domain": domain,
+            "available": available,
+            "price": price,
+            "currency": "USD",
+            "premium": premium,
+        }
+
+    def purchase_domain(self, domain: str, years: int = 1) -> Dict:
+        """Purchase domain using Namecheap API."""
+        result = self._make_request(
+            "namecheap.domains.create",
+            {"DomainName": domain, "Years": str(years)},
+        )
+        if result.get("status") != "SUCCESS":
+            return {
+                "success": False,
+                "domain": domain,
+                "message": result.get("message", "Purchase failed"),
+                "order_id": None,
+            }
+
+        xml_root = result["xml"]
+        create_result = xml_root.find(".//nc:DomainCreateResult", self.XML_NS)
+        if create_result is None:
+            return {
+                "success": False,
+                "domain": domain,
+                "message": "Missing DomainCreateResult in API response",
+                "order_id": None,
+            }
+
+        was_registered = (create_result.attrib.get("Registered", "false").lower() == "true")
+        order_id = create_result.attrib.get("OrderID")
+        charged_amount = create_result.attrib.get("ChargedAmount")
+
+        return {
+            "success": was_registered,
+            "domain": domain,
+            "message": "Domain purchased successfully" if was_registered else "Domain purchase failed",
+            "order_id": order_id,
+            "charged_amount": charged_amount,
+        }
+
+    def get_pricing(self, tld: str) -> Dict:
+        """Get registration pricing for a TLD."""
+        result = self._make_request(
+            "namecheap.users.getPricing",
+            {
+                "ProductType": "DOMAIN",
+                "ProductCategory": "register",
+                "ProductName": tld,
+                "ActionName": "REGISTER",
+            },
+        )
+        if result.get("status") != "SUCCESS":
+            return {}
+
+        xml_root = result["xml"]
+        price_node = xml_root.find(".//nc:ProductPrice", self.XML_NS)
+        if price_node is None:
+            return {}
+
+        registration = price_node.attrib.get("YourPrice") or price_node.attrib.get("Price")
+        renewal = price_node.attrib.get("YourAdditonalCost")
+        currency = price_node.attrib.get("Currency", "USD")
+
+        return {
+            "tld": tld,
+            "registration": registration,
+            "renewal": renewal,
+            "transfer": None,
+            "currency": currency,
+        }
+
+
+def create_domain_api_client(registrar: str, **kwargs) -> DomainAPIClient:
+    """
+    Create a domain registrar API client from configuration.
+
+    Supported registrars:
+    - porkbun: requires api_key + api_secret (or secret_key)
+    - namecheap: requires api_key + username (+ optional client_ip/api_user/sandbox)
+    """
+    selected_registrar = (registrar or "porkbun").strip().lower()
+
+    if selected_registrar == "porkbun":
+        api_key = kwargs.get("api_key")
+        api_secret = kwargs.get("api_secret") or kwargs.get("secret_key")
+        if not api_key or not api_secret:
+            raise ValueError("Porkbun requires both api_key and api_secret")
+        return PorkbunAPIClient(api_key=api_key, api_secret=api_secret)
+
+    if selected_registrar == "namecheap":
+        api_key = kwargs.get("api_key")
+        username = kwargs.get("username")
+        client_ip = kwargs.get("client_ip", "127.0.0.1")
+        api_user = kwargs.get("api_user")
+        sandbox = bool(kwargs.get("sandbox", False))
+        if not api_key or not username:
+            raise ValueError("Namecheap requires both api_key and username")
+        return NamecheapAPIClient(
+            api_key=api_key,
+            username=username,
+            client_ip=client_ip,
+            api_user=api_user,
+            sandbox=sandbox,
+        )
+
+    raise ValueError(f"Unsupported registrar: {registrar}")
+
+
 class DomainRotationManager:
     """
     Manage domain rotation for burner emails
@@ -134,10 +350,70 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+        self.registrar = self._detect_registrar(api_client)
+
+    @staticmethod
+    def _detect_registrar(api_client: Optional[DomainAPIClient]) -> Optional[str]:
+        """Best-effort registrar detection for status/config."""
+        if isinstance(api_client, PorkbunAPIClient):
+            return "porkbun"
+        if isinstance(api_client, NamecheapAPIClient):
+            return "namecheap"
+        if api_client is None:
+            return None
+        return "custom"
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+        self.registrar = self._detect_registrar(api_client)
+
+    def configure(
+        self,
+        api_key: str,
+        secret_key: Optional[str] = None,
+        monthly_budget: float = 50.0,
+        registrar: str = "porkbun",
+        username: Optional[str] = None,
+        client_ip: str = "127.0.0.1",
+        api_user: Optional[str] = None,
+        sandbox: bool = False,
+    ) -> Dict:
+        """
+        Configure domain rotation manager credentials and budget.
+
+        `secret_key` is used for Porkbun. Namecheap uses `username`.
+        """
+        if monthly_budget <= 0:
+            raise ValueError("monthly_budget must be greater than 0")
+
+        self.monthly_budget = float(monthly_budget)
+        selected_registrar = (registrar or "porkbun").strip().lower()
+
+        api_client = create_domain_api_client(
+            selected_registrar,
+            api_key=api_key,
+            api_secret=secret_key,
+            username=username,
+            client_ip=client_ip,
+            api_user=api_user,
+            sandbox=sandbox,
+        )
+        self.set_api_client(api_client)
+        self.registrar = selected_registrar
+        return self.get_config()
+
+    def get_config(self) -> Dict:
+        """Return non-sensitive configuration and budget state."""
+        return {
+            "configured": self.api_client is not None,
+            "registrar": self.registrar or "unconfigured",
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "remaining_budget": self.monthly_budget - self.current_spending,
+            "domains_owned": len(self.owned_domains),
+            "active_domain": self.active_domain,
+        }
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -173,6 +449,9 @@ class DomainRotationManager:
                 if isinstance(price, str):
                     # Remove currency symbols
                     price = float(price.replace("$", "").replace("€", ""))
+
+                if price is None:
+                    continue
                 
                 if price <= max_price:
                     return {

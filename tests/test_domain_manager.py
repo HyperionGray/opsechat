@@ -4,7 +4,11 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient,
+    PorkbunAPIClient,
+    NamecheapAPIClient,
+    DomainRotationManager,
+    create_domain_api_client,
 )
 
 
@@ -174,3 +178,141 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    @patch("domain_manager.create_domain_api_client")
+    def test_configure_sets_client_and_budget(self, mock_factory):
+        """Test manager configure helper updates client and budget"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_factory.return_value = mock_client
+        manager = DomainRotationManager()
+
+        config = manager.configure(
+            api_key="test_key",
+            secret_key="test_secret",
+            monthly_budget=25.0,
+            registrar="porkbun"
+        )
+
+        assert manager.api_client == mock_client
+        assert manager.monthly_budget == 25.0
+        assert manager.registrar == "porkbun"
+        assert config["configured"] is True
+        assert config["monthly_budget"] == 25.0
+
+    def test_get_config_unconfigured(self):
+        """Test config export with no configured API client"""
+        manager = DomainRotationManager(monthly_budget=12.0)
+
+        config = manager.get_config()
+
+        assert config["configured"] is False
+        assert config["registrar"] == "unconfigured"
+        assert config["monthly_budget"] == 12.0
+        assert config["domains_owned"] == 0
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch("domain_manager.requests.Session")
+    def test_search_domain_available(self, mock_session_class):
+        """Search should parse availability and pricing from XML"""
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+
+        mock_check_response = Mock()
+        mock_check_response.raise_for_status.return_value = None
+        mock_check_response.text = """<?xml version="1.0" encoding="utf-8"?>
+<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+  <CommandResponse Type="namecheap.domains.check">
+    <DomainCheckResult Domain="example.xyz" Available="true" IsPremiumName="false" />
+  </CommandResponse>
+</ApiResponse>
+"""
+
+        mock_price_response = Mock()
+        mock_price_response.raise_for_status.return_value = None
+        mock_price_response.text = """<?xml version="1.0" encoding="utf-8"?>
+<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+  <CommandResponse Type="namecheap.users.getPricing">
+    <UserGetPricingResult>
+      <ProductType Name="DOMAIN">
+        <ProductCategory Name="register">
+          <Product Name="xyz">
+            <Price>
+              <ProductPrice Price="1.98" YourPrice="1.98" Currency="USD" />
+            </Price>
+          </Product>
+        </ProductCategory>
+      </ProductType>
+    </UserGetPricingResult>
+  </CommandResponse>
+</ApiResponse>
+"""
+        mock_session.get.side_effect = [mock_check_response, mock_price_response]
+
+        client = NamecheapAPIClient(
+            api_key="test_key",
+            username="test_user",
+            client_ip="127.0.0.1",
+        )
+        result = client.search_domain("example.xyz")
+
+        assert result["available"] is True
+        assert result["domain"] == "example.xyz"
+        assert result["price"] == "1.98"
+        assert result["currency"] == "USD"
+
+    @patch("domain_manager.requests.Session")
+    def test_search_domain_error_response(self, mock_session_class):
+        """Search should gracefully return error-backed unavailable result"""
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+
+        mock_error_response = Mock()
+        mock_error_response.raise_for_status.return_value = None
+        mock_error_response.text = """<?xml version="1.0" encoding="utf-8"?>
+<ApiResponse Status="ERROR" xmlns="http://api.namecheap.com/xml.response">
+  <Errors>
+    <Error Number="1011150">Invalid request IP address</Error>
+  </Errors>
+</ApiResponse>
+"""
+        mock_session.get.return_value = mock_error_response
+
+        client = NamecheapAPIClient(
+            api_key="test_key",
+            username="test_user",
+            client_ip="127.0.0.1",
+        )
+        result = client.search_domain("example.xyz")
+
+        assert result["available"] is False
+        assert "Invalid request IP address" in result["message"]
+
+
+class TestDomainApiClientFactory:
+    """Test registrar client factory"""
+
+    @patch("domain_manager.requests.Session")
+    def test_create_porkbun_client(self, mock_session_class):
+        client = create_domain_api_client(
+            "porkbun",
+            api_key="test_key",
+            api_secret="test_secret"
+        )
+        assert isinstance(client, PorkbunAPIClient)
+
+    @patch("domain_manager.requests.Session")
+    def test_create_namecheap_client(self, mock_session_class):
+        client = create_domain_api_client(
+            "namecheap",
+            api_key="test_key",
+            username="test_user",
+            client_ip="127.0.0.1"
+        )
+        assert isinstance(client, NamecheapAPIClient)
+
+    def test_create_unknown_client_raises(self):
+        with pytest.raises(ValueError, match="Unsupported registrar"):
+            create_domain_api_client("unknown", api_key="x")

@@ -189,9 +189,16 @@ chmod +x domain_rotation_cli.py
 python domain_rotation_cli.py config
 
 # You'll be prompted for:
-# - Porkbun API Key
-# - Porkbun API Secret
+# - Registrar (porkbun or namecheap)
+# - API Key
+# - Registrar-specific credentials
 # - Monthly Budget (default: $50)
+```
+
+Namecheap setup is also available from CLI flags:
+
+```bash
+python domain_rotation_cli.py config --registrar namecheap --sandbox
 ```
 
 ### Usage
