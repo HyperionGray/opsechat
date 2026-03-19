@@ -87,12 +87,11 @@ class PorkbunAPIClient(DomainAPIClient):
     def search_domain(self, domain: str) -> Dict:
         """Check if domain is available"""
         result = self._make_request("domain/check", {"domain": domain})
-        normalized_price = self.normalize_price(result.get("price"))
         
         return {
             "domain": domain,
             "available": result.get("status") == "SUCCESS" and result.get("isAvailable", False),
-            "price": normalized_price if normalized_price is not None else result.get("price"),
+            "price": result.get("price"),
             "currency": result.get("currency", "USD"),
             "registrar": "porkbun",
         }
