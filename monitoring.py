@@ -8,6 +8,7 @@ import json
 import time
 import sys
 import os
+import socket
 from datetime import datetime
 from typing import Dict, Any, Optional
 from functools import wraps
@@ -321,21 +322,113 @@ def _read_version() -> str:
         return 'unknown'
 
 
-def get_health_status() -> Dict[str, Any]:
-    """Get application health status"""
+def _can_reach_tor_control_port() -> bool:
+    """Check if the Tor control port is reachable."""
+    tor_host = os.environ.get('OPSECHAT_TOR_CONTROL_HOST', '127.0.0.1')
+    tor_port_raw = os.environ.get('OPSECHAT_TOR_CONTROL_PORT', '9051')
+    timeout_raw = os.environ.get('OPSECHAT_HEALTH_SOCKET_TIMEOUT', '0.2')
+
+    try:
+        tor_port = int(tor_port_raw)
+        timeout = float(timeout_raw)
+    except ValueError:
+        return False
+
+    try:
+        with socket.create_connection((tor_host, tor_port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _get_memory_check() -> Dict[str, Any]:
+    """Return memory health details using configurable thresholds."""
+    apm.update_system_metrics()
+
+    usage_mb = float(apm.metrics['system'].get('memory_usage_mb', 0) or 0)
+    warn_threshold = float(os.environ.get('OPSECHAT_HEALTH_MEMORY_WARN_MB', '512'))
+    critical_threshold = float(os.environ.get('OPSECHAT_HEALTH_MEMORY_CRITICAL_MB', '1024'))
+
+    if usage_mb <= 0:
+        return {
+            'status': 'unknown',
+            'usage_mb': 0.0,
+            'warn_threshold_mb': warn_threshold,
+            'critical_threshold_mb': critical_threshold
+        }
+
+    if usage_mb >= critical_threshold:
+        status = 'critical'
+    elif usage_mb >= warn_threshold:
+        status = 'warning'
+    else:
+        status = 'ok'
+
     return {
-        'status': 'healthy',
+        'status': status,
+        'usage_mb': round(usage_mb, 2),
+        'warn_threshold_mb': warn_threshold,
+        'critical_threshold_mb': critical_threshold
+    }
+
+
+def get_liveness_status() -> Dict[str, Any]:
+    """Get liveness status for orchestrators."""
+    return {
+        'status': 'alive',
         'timestamp': datetime.utcnow().isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
-        'version': _read_version(),
+        'version': _read_version()
+    }
+
+
+def get_readiness_status() -> Dict[str, Any]:
+    """Get readiness status with concrete component checks."""
+    version = _read_version()
+    memory_check = _get_memory_check()
+    tor_reachable = _can_reach_tor_control_port()
+    require_tor = os.environ.get('OPSECHAT_REQUIRE_TOR_HEALTH', '0') == '1'
+
+    checks = {
+        'version_file': 'ok' if version != 'unknown' else 'missing',
+        'memory_usage': memory_check['status'],
+        'tor_control_port': 'ok' if tor_reachable else 'unreachable'
+    }
+
+    ready = checks['version_file'] == 'ok' and checks['memory_usage'] != 'critical'
+    if require_tor and not tor_reachable:
+        ready = False
+
+    return {
+        'status': 'ready' if ready else 'not_ready',
+        'ready': ready,
+        'timestamp': datetime.utcnow().isoformat(),
+        'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
+        'version': version,
+        'checks': checks,
+        'tor_required': require_tor,
+        'memory': memory_check
+    }
+
+
+def get_health_status() -> Dict[str, Any]:
+    """Get application health status"""
+    readiness = get_readiness_status()
+
+    return {
+        'status': 'healthy' if readiness['ready'] else 'degraded',
+        'timestamp': readiness['timestamp'],
+        'uptime_seconds': readiness['uptime_seconds'],
+        'version': readiness['version'],
         # active_rooms: this app uses a single global chat room. The field is
         # included for API consistency; it always reports 1 when the service is up.
         'active_rooms': 1,
         'checks': {
-            'tor_connection': 'unknown',  # Would need to check actual Tor status
-            'memory_usage': 'ok',
+            'tor_connection': readiness['checks']['tor_control_port'],
+            'memory_usage': readiness['checks']['memory_usage'],
             'disk_space': 'ok'
-        }
+        },
+        'ready': readiness['ready']
     }
 
 # Security event logging

@@ -190,6 +190,25 @@ Tests cover:
 
 For full testing documentation, see [Testing Guide](docs/user-guide/TESTING.md).
 
+Health Endpoints
+================
+
+The server exposes container/orchestrator-friendly health checks:
+
+```text
+GET /health        - Backward-compatible aggregate health payload
+GET /health/live   - Liveness probe (process is running)
+GET /health/ready  - Readiness probe (dependencies and runtime checks)
+```
+
+Readiness returns HTTP 200 when the app is ready, and HTTP 503 when not ready.
+
+Optional environment variables for health behavior:
+
+- `OPSECHAT_REQUIRE_TOR_HEALTH=1` to require Tor control-port reachability for readiness
+- `OPSECHAT_TOR_CONTROL_HOST` and `OPSECHAT_TOR_CONTROL_PORT` to configure Tor probe target
+- `OPSECHAT_HEALTH_MEMORY_WARN_MB` and `OPSECHAT_HEALTH_MEMORY_CRITICAL_MB` to tune memory thresholds
+
 
 How it works
 ============

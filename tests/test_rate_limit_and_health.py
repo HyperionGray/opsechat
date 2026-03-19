@@ -10,6 +10,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
+import monitoring
 from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
 
 # Shared test Flask app (avoids importing all of runserver.py)
@@ -113,3 +114,35 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_live_endpoint_reports_alive():
+    client = _test_app.test_client()
+    response = client.get("/health/live")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data is not None
+    assert data.get("status") == "alive"
+    assert "uptime_seconds" in data
+    assert "version" in data
+
+
+def test_health_ready_endpoint_returns_expected_payload():
+    client = _test_app.test_client()
+    response = client.get("/health/ready")
+    assert response.status_code in (200, 503)
+    data = response.get_json()
+    assert data is not None
+    assert "ready" in data
+    assert "checks" in data
+    assert "tor_control_port" in data["checks"]
+    assert "memory_usage" in data["checks"]
+
+
+def test_readiness_requires_tor_when_configured(monkeypatch):
+    monkeypatch.setenv("OPSECHAT_REQUIRE_TOR_HEALTH", "1")
+    monkeypatch.setattr(monitoring, "_can_reach_tor_control_port", lambda: False)
+
+    status = monitoring.get_readiness_status()
+    assert status["ready"] is False
+    assert status["status"] == "not_ready"
