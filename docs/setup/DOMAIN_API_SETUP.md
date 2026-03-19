@@ -15,6 +15,17 @@ Porkbun offers cheap domains and a simple API, making it ideal for burner email 
 - **Fast registration**: Domains available within minutes
 - **Good selection**: .xyz, .club, .online, .site, and more
 
+### Provider Registry (New)
+
+Domain rotation now supports a provider registry through `DomainRotationManager`:
+
+- Register one or more provider clients with `add_api_client(...)`
+- Select an active provider with `set_active_provider(...)`
+- Search and rotation can target a provider or fall back through configured providers
+- Runtime state can be exported/loaded safely (`export_state` / `load_state`)
+
+The CLI now persists provider config and runtime state in `~/.opsechat/domain_config.json`.
+
 #### Getting API Credentials
 
 1. **Create Account**
@@ -81,7 +92,7 @@ Porkbun offers cheap domains and a simple API, making it ideal for burner email 
 
 ### Namecheap
 
-While not directly integrated, Namecheap offers competitive pricing and API access.
+Namecheap is not wired into the CLI yet, but the manager now supports provider registration so integration can be added without changing the core rotation workflow.
 
 #### Getting Started
 - Website: [namecheap.com](https://namecheap.com)
@@ -159,6 +170,19 @@ Enterprise-focused with comprehensive API.
    - Access email configuration page
    - Enter API credentials and budget
    - Test configuration
+
+### CLI Provider Selection
+
+```bash
+# Configure API credentials and active provider
+python domain_rotation_cli.py config
+
+# Search using active provider
+python domain_rotation_cli.py search
+
+# Rotate using an explicit provider
+python domain_rotation_cli.py rotate --provider porkbun
+```
 
 ### Daily Operations
 

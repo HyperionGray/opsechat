@@ -1,5 +1,21 @@
 # Domain Rotation Guide
 
+## Current API Note
+
+This document contains historical examples. The current production API in
+`domain_manager.py` uses:
+
+- `find_cheap_available_domain(...)`
+- `purchase_domain_if_budget_allows(...)`
+- `rotate_domain(...)`
+- provider registry helpers: `add_api_client(...)`, `set_active_provider(...)`
+
+The CLI command `domain_rotation_cli.py` also supports provider override:
+
+```bash
+python domain_rotation_cli.py rotate --provider porkbun
+```
+
 ## Overview
 
 OpSecChat supports automated domain rotation for burner email systems. This allows you to quickly purchase and rotate domains to enhance privacy and avoid domain-based blocking.

@@ -3,6 +3,7 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -174,3 +175,62 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_and_get_config(self):
+        """Test manager provider configuration surface."""
+        manager = DomainRotationManager()
+
+        config = manager.configure(
+            api_key="test_key",
+            secret_key="test_secret",
+            monthly_budget=25.0,
+            provider="porkbun",
+        )
+
+        assert config["configured"] is True
+        assert config["active_provider"] == "porkbun"
+        assert config["monthly_budget"] == 25.0
+        assert "porkbun" in config["providers"]
+
+    def test_find_cheap_available_domain_provider_fallback(self):
+        """Test fallback across multiple configured providers."""
+        primary = Mock(spec=DomainAPIClient)
+        backup = Mock(spec=DomainAPIClient)
+
+        primary.search_domain.return_value = {"available": False}
+        backup.search_domain.return_value = {"available": True, "price": "1.99"}
+
+        manager = DomainRotationManager()
+        manager.add_api_client("primary", primary, make_active=True)
+        manager.add_api_client("backup", backup)
+
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["provider"] == "backup"
+        assert result["price"] == 1.99
+
+    def test_export_and_load_state_roundtrip(self):
+        """Test state export/load with datetime serialization."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 3.5
+        manager.owned_domains = [{
+            "domain": "example.xyz",
+            "price": 1.99,
+            "provider": "porkbun",
+            "purchased_at": datetime(2026, 1, 1, 12, 0, 0),
+            "expires_at": datetime(2027, 1, 1, 12, 0, 0),
+        }]
+        manager.active_domain = "example.xyz"
+        manager.add_api_client("porkbun", Mock(spec=DomainAPIClient), make_active=True)
+
+        state = manager.export_state()
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+
+        loaded = DomainRotationManager(monthly_budget=10.0)
+        loaded.add_api_client("porkbun", Mock(spec=DomainAPIClient), make_active=True)
+        loaded.load_state(state)
+
+        assert loaded.current_spending == 3.5
+        assert loaded.active_domain == "example.xyz"
+        assert isinstance(loaded.owned_domains[0]["purchased_at"], datetime)
