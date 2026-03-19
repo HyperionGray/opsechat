@@ -4,8 +4,8 @@
 <title>OpSec Email Inbox</title>
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 {% if script_enabled %}
-  <script src="{{ url_for('static', filename='jquery.js') }}"></script>
-  <script src="{{ url_for('static', filename='openpgp.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='jquery.js') }}" nonce="{{ csp_nonce() }}"></script>
+  <script src="{{ url_for('static', filename='openpgp.min.js') }}" nonce="{{ csp_nonce() }}"></script>
 {% endif %}
 </head>
 
@@ -208,7 +208,7 @@
   </div>
 
   {% if script_enabled %}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     // Auto-refresh inbox every 30 seconds
     setTimeout(function() {
       location.reload();

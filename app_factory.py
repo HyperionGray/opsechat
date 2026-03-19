@@ -6,7 +6,8 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+import secrets
+from flask import Flask, jsonify, g
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -67,23 +68,34 @@ def create_app():
     def add_review_wrapper(user_id, rating, review_text):
         return add_review(reviews, user_id, rating, review_text)
     
+    @app.before_request
+    def inject_csp_nonce():
+        """Generate a per-request CSP nonce for inline scripts."""
+        g.csp_nonce = secrets.token_urlsafe(16)
+
+    @app.context_processor
+    def inject_nonce_template_helper():
+        """Expose CSP nonce helper to Jinja templates."""
+        return {"csp_nonce": lambda: getattr(g, "csp_nonce", "")}
+
     # Add security headers after every response
     @app.after_request
     def add_security_headers(response):
         response.headers["Server"] = ""
         response.headers["Date"] = ""
-        # Content Security Policy: restrict resources to same origin, block inline scripts
+        nonce = getattr(g, "csp_nonce", "")
+        # Content Security Policy:
+        # - Allow same-origin resources
+        # - Allow inline scripts only when they carry this request's nonce
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self'; "
+            f"script-src 'self' 'nonce-{nonce}'; "
             "style-src 'self'; "
             "img-src 'self' data:; "
             "font-src 'self'; "
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
@@ -116,15 +128,5 @@ def create_app():
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # CHANGELOG (AI assistant):
-    # - Made rate_limiter import optional with a no-op fallback to prevent
-    #   ModuleNotFoundError in containerized installs that omit rate_limiter.py.
-    #
-    # Remaining checklist (non-blocking for runtime):
-    # - Update container/Podman build configuration to ensure rate_limiter.py
-    #   is included in the image (e.g., COPY list or packaging config).
-    # - Once packaging reliably includes rate_limiter.py, consider removing
-    #   the fallback or turning it into an explicit configuration option.
     
     return app

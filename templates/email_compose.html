@@ -253,7 +253,7 @@ Email body goes here..."></textarea>
     </ul>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     function toggleMode() {
       const mode = document.querySelector('input[name="compose-mode"]:checked').value;
       const standardForm = document.getElementById('standard-form');
