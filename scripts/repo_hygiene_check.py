@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Iterable, List
 
 UNFINISHED_MARKER_PATTERN = re.compile(
-    r"\b(TODO|FIXME|STUB|TBD|XXX|HACK)\b(?:\s*[:(]|$)",
+    r"\b(TODO|FIXME|STUB|TBD|XXX|HACK)\b",
     re.IGNORECASE,
 )
 
@@ -48,6 +48,27 @@ IGNORED_DIRS = {
 PLACEHOLDER_PREFIX = "# Placeholder workflow for "
 
 
+def _extract_comment_text(path: Path, line: str) -> str | None:
+    suffix = path.suffix.lower()
+
+    if suffix in {".py", ".sh", ".yml", ".yaml"}:
+        if "#" not in line:
+            return None
+        return line.split("#", 1)[1].strip()
+
+    if suffix in {".js", ".ts", ".tsx", ".jsx"}:
+        if "//" in line:
+            return line.split("//", 1)[1].strip()
+        if "/*" in line:
+            return line.split("/*", 1)[1].strip()
+        stripped = line.lstrip()
+        if stripped.startswith("*"):
+            return stripped[1:].strip()
+        return None
+
+    return None
+
+
 def _iter_candidate_files(root: Path) -> Iterable[Path]:
     for path in root.rglob("*"):
         if not path.is_file():
@@ -58,6 +79,9 @@ def _iter_candidate_files(root: Path) -> Iterable[Path]:
             continue
 
         if path.suffix.lower() not in CODE_SUFFIXES:
+            continue
+
+        if path.name.endswith(".min.js"):
             continue
 
         yield path
@@ -75,7 +99,11 @@ def find_unfinished_markers(root: Path) -> List[str]:
             continue
 
         for lineno, line in enumerate(lines, start=1):
-            match = UNFINISHED_MARKER_PATTERN.search(line)
+            comment_text = _extract_comment_text(path, line)
+            if not comment_text:
+                continue
+
+            match = UNFINISHED_MARKER_PATTERN.search(comment_text)
             if not match:
                 continue
             marker = match.group(1).upper()

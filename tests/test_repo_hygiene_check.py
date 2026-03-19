@@ -55,3 +55,22 @@ def test_nested_workflow_directory_is_reported(tmp_path):
 
     issues = repo_hygiene_check.run_hygiene_checks(tmp_path)
     assert any(".github/.github/workflows/sync.yml" in issue for issue in issues)
+
+
+def test_marker_keywords_in_non_comment_text_are_ignored(tmp_path):
+    (tmp_path / "amazon_q_config.yaml").write_text(
+        'patterns:\n  - "TODO:"\n  - "FIXME:"\n', encoding="utf-8"
+    )
+
+    issues = repo_hygiene_check.run_hygiene_checks(tmp_path)
+    assert issues == []
+
+
+def test_minified_javascript_files_are_ignored(tmp_path):
+    (tmp_path / "static").mkdir()
+    (tmp_path / "static" / "openpgp.min.js").write_text(
+        "var a='STUB';\n", encoding="utf-8"
+    )
+
+    issues = repo_hygiene_check.run_hygiene_checks(tmp_path)
+    assert issues == []
