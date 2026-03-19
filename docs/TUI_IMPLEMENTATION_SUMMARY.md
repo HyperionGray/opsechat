@@ -224,7 +224,6 @@ See `docs/TUI_TODO.md` for detailed roadmap:
 
 - PGP encryption (E2E)
 - Multi-room support
-- Rate limiting
 - Admin commands
 - Performance optimizations
 
@@ -241,7 +240,7 @@ See `docs/TUI_TODO.md` for detailed roadmap:
 ### Remaining Considerations
 - No E2E encryption yet (Tor provides transport encryption)
 - No user authentication (ephemeral by design)
-- No spam prevention (future: rate limiting)
+- Fine-grained anti-abuse heuristics beyond rate limiting are still pending
 
 ## Conclusion
 

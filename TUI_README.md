@@ -15,6 +15,7 @@ This is a serious privacy and opsec tool for serious privacy and opsec people. I
 ✅ **Zero Disk** - Nothing touches disk except the application code  
 ✅ **Tor Integration** - Full support for Tor hidden services (.onion)  
 ✅ **SOCKS Proxy** - Client supports connecting via Tor SOCKS proxy  
+✅ **Per-Client Rate Limiting** - Server throttles message floods with retry hints  
 
 ## Quick Start
 
@@ -52,6 +53,9 @@ python tui-server.py
 
 # Bind to all interfaces
 python tui-server.py --host 0.0.0.0 --port 5555
+
+# Tune anti-spam throttling (default: 8 messages / 20 seconds)
+python tui-server.py --rate-limit-count 8 --rate-limit-window 20
 ```
 
 ### 3. Connect with Client
@@ -139,6 +143,13 @@ sudo systemctl start tor
 - **No images**: Text only, no exceptions
 - **No video**: Text only, no exceptions
 - **No b64 encoding**: Large base64-like strings are rejected
+- **Default rate limit**: 8 messages per 20 seconds per connected client
+
+You can tune the rate limiter:
+
+```bash
+python tui-server.py --rate-limit-count 12 --rate-limit-window 30
+```
 
 ## Architecture
 
@@ -155,6 +166,7 @@ sudo systemctl start tor
 - In-memory message storage
 - Background cleanup thread (runs every 10s)
 - Broadcasts messages to all connected clients
+- Per-client message rate limiting with retry-after guidance
 - JSON protocol for client/server communication
 
 ### Client
@@ -266,6 +278,7 @@ Having issues?
 2. Check Python version: `python --version` (need 3.8+)
 3. Check server is running before starting client
 4. Try `--host 127.0.0.1` explicitly if connection fails
+5. If you hit throttling, slow down or increase `--rate-limit-window`/`--rate-limit-count`
 
 ## License
 

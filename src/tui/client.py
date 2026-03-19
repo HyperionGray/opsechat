@@ -217,6 +217,13 @@ class ChatClient:
             username = msg.get('username', 'Unknown')
             message = msg.get('message', '')
             self.add_message(username, message)
+
+        elif msg_type == 'error':
+            error_message = msg.get('message', 'Server rejected the message.')
+            retry_after = msg.get('retry_after')
+            if retry_after:
+                error_message = f"{error_message} Retry in ~{retry_after}s."
+            self.add_message("System", error_message, is_system=True)
     
     def update_footer(self):
         """Update the footer with current username"""
