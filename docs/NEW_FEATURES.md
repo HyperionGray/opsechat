@@ -29,6 +29,32 @@ Previously, users had to manually share encryption keys. Now, each chat room aut
 
 ---
 
+## 🔐 Key Management UI (`/keys`)
+
+### What Changed
+A dedicated key management page is now available at `/keys` for session-scoped key lifecycle operations.
+
+### Capabilities
+- Generate a new AES-256 key
+- Import an existing base64-encoded 32-byte key
+- View non-sensitive metadata (key ID, fingerprint, source, creation time)
+- Export the current key as JSON for backup or transfer
+- Delete the current key from session state
+
+### API Endpoints
+- `GET /api/keys/status`
+- `POST /api/keys/generate`
+- `POST /api/keys/import`
+- `GET /api/keys/export`
+- `DELETE /api/keys`
+
+### Security Notes
+- Key material is session-scoped and stored in Flask session state.
+- Status responses intentionally exclude raw key bytes.
+- Delete operation performs best-effort in-session overwrite before removal.
+
+---
+
 ## 💬 Direct Messages (DM)
 
 ### Purpose

@@ -6,6 +6,7 @@
 
 **Latest Updates (v0.8.0):**
 - 🔑 **Automated Key Exchange** - No manual key sharing needed
+- 🔐 **Key Management UI** - Generate/import/export/delete session keys at `/keys`
 - 💬 **Direct Messages** - Ephemeral DM feature for sharing room IDs (1-min expiry)
 - 🔒 **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
 - 🌐 **Domain Rotation CLI** - Easy burner email domain management
@@ -45,6 +46,7 @@ python chat-room.py --tor
 ```
 
 Access the chat at `/chat` to create rooms and share with your contacts.
+Use `/keys` to manage session-scoped encryption keys (generate, import, export, delete).
 
 ### Terminal UI (TUI)
 - ✅ **TUI Only** - No web browser required

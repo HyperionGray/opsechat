@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpSecChat Key Management</title>
+</head>
+<body>
+    <main>
+        <h1>Key Management</h1>
+        <p>
+            Manage a session-scoped AES-256 key for secure operations.
+            Keys remain in memory and are cleared when this session ends.
+        </p>
+
+        <section aria-labelledby="key-status-heading">
+            <h2 id="key-status-heading">Current Key Status</h2>
+            <pre id="keyStatus" aria-live="polite">Loading key status...</pre>
+        </section>
+
+        <section aria-labelledby="key-actions-heading">
+            <h2 id="key-actions-heading">Actions</h2>
+            <p>
+                <button id="generateKeyBtn" type="button">Generate New Key</button>
+                <button id="exportKeyBtn" type="button">Export Key</button>
+                <button id="deleteKeyBtn" type="button">Delete Key</button>
+            </p>
+        </section>
+
+        <section aria-labelledby="key-import-heading">
+            <h2 id="key-import-heading">Import Key</h2>
+            <label for="importKeyInput">Base64 key (32-byte value encoded as base64)</label>
+            <p>
+                <textarea id="importKeyInput" rows="4" cols="80" spellcheck="false"></textarea>
+            </p>
+            <p>
+                <button id="importKeyBtn" type="button">Import Key</button>
+            </p>
+        </section>
+
+        <section aria-labelledby="key-export-heading">
+            <h2 id="key-export-heading">Export Output</h2>
+            <pre id="exportOutput" aria-live="polite">No export yet.</pre>
+        </section>
+
+        <section aria-labelledby="navigation-heading">
+            <h2 id="navigation-heading">Navigation</h2>
+            <ul>
+                <li><a href="/chat">Open chat rooms</a></li>
+            </ul>
+        </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='keys.js') }}"></script>
+</body>
+</html>
