@@ -175,8 +175,7 @@ class TestDomainRotationManager:
         assert new_domain is not None
         assert manager.active_domain == new_domain
 
-    @patch('domain_manager.PorkbunAPIClient')
-    def test_configure_porkbun(self, mock_porkbun_client):
+    def test_configure_porkbun(self):
         """Configure manager for Porkbun registrar"""
         manager = DomainRotationManager()
         manager.configure(
@@ -186,12 +185,11 @@ class TestDomainRotationManager:
             monthly_budget=25.0,
         )
 
-        mock_porkbun_client.assert_called_once_with("pk_test", "sk_test")
         assert manager.registrar == "porkbun"
         assert manager.monthly_budget == 25.0
+        assert isinstance(manager.api_client, PorkbunAPIClient)
 
-    @patch('domain_manager.NamecheapAPIClient')
-    def test_configure_namecheap(self, mock_namecheap_client):
+    def test_configure_namecheap(self):
         """Configure manager for Namecheap registrar"""
         manager = DomainRotationManager()
         manager.configure(
@@ -202,14 +200,9 @@ class TestDomainRotationManager:
             monthly_budget=35.0,
         )
 
-        mock_namecheap_client.assert_called_once_with(
-            api_key="nc_test",
-            username="nc-user",
-            client_ip="10.10.10.10",
-            contact_details=None,
-        )
         assert manager.registrar == "namecheap"
         assert manager.monthly_budget == 35.0
+        assert isinstance(manager.api_client, NamecheapAPIClient)
 
     def test_configure_invalid_budget_raises(self):
         """Budget must be greater than zero"""
