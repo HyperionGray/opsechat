@@ -511,6 +511,7 @@ class TestEmailRoutesExtended:
         data = r.get_json()
         assert isinstance(data["burners"], list)
         assert len(data["burners"]) == 1
+        assert data["stats"]["active_burners"] == 1
     
     def test_burner_expire_cannot_delete_another_users_burner(self):
         other_burner = _global_burner_manager.generate_burner_email("otheruser")

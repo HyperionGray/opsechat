@@ -301,3 +301,16 @@ class TestBurnerEmailManager:
         
         assert len(burners) == 1
         assert burners[0]['email'] == active_email
+
+    def test_get_user_stats(self):
+        """Test burner stats include active count and send limits"""
+        manager = BurnerEmailManager()
+        manager.generate_burner_email("user1")
+        manager.record_sent_email("user1")
+
+        stats = manager.get_user_stats("user1")
+
+        assert stats["active_burners"] == 1
+        assert stats["sends_used"] == 1
+        assert stats["sends_remaining"] == manager.max_sends_per_hour - 1
+        assert stats["receiving_unlimited"] is True

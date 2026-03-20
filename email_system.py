@@ -392,6 +392,16 @@ class BurnerEmailManager:
             'reset_time': limit_info['reset_time']
         }
 
+    def get_user_stats(self, user_id: str) -> Dict:
+        """Summarize a user's active burner and send-limit state."""
+        burners = self.get_user_burners(user_id)
+        send_status = self.get_send_limit_status(user_id)
+        return {
+            'active_burners': len(burners),
+            'receiving_unlimited': self.max_receives_unlimited,
+            **send_status,
+        }
+
 
 # Global instances
 email_storage = EmailStorage()
