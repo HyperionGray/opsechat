@@ -1,0 +1,101 @@
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #0a0a0a;
+    color: #d9ffd9;
+}
+
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.section {
+    margin-bottom: 20px;
+}
+
+.card {
+    background: #141414;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.muted {
+    color: #8eb38e;
+}
+
+.status-banner {
+    min-height: 20px;
+    margin-top: 10px;
+    color: #7ce47c;
+}
+
+.status-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.status-grid dt {
+    font-size: 0.9rem;
+    color: #9bcf9b;
+}
+
+.status-grid dd {
+    margin: 4px 0 0 0;
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.stacked-form {
+    margin-top: 14px;
+}
+
+input,
+textarea,
+button {
+    border-radius: 4px;
+    border: 1px solid #3a3a3a;
+    background: #0f0f0f;
+    color: #f0fff0;
+    padding: 10px;
+    font-size: 0.95rem;
+}
+
+textarea {
+    resize: vertical;
+}
+
+button {
+    cursor: pointer;
+    background: #1f5e1f;
+}
+
+button:hover {
+    background: #267326;
+}
+
+.button-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+button.danger {
+    background: #6f2424;
+}
+
+button.danger:hover {
+    background: #8d2e2e;
+}
+
+#publicKeyList {
+    margin: 10px 0 0 0;
+    padding-left: 18px;
+}
