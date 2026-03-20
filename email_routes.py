@@ -97,6 +97,7 @@ def register_email_routes(app, id_generator, get_random_color):
                               burner_emails=burner_emails,
                               script_enabled=True)
 
+    @app.route('/<string:url_addition>/email/burner/list', methods=["GET"])
     @app.route('/<string:url_addition>/email/burner/list.json', methods=["GET"])
     def email_burner_list_json(url_addition):
         """JSON API for burner email list"""
@@ -344,5 +345,5 @@ def register_email_routes(app, id_generator, get_random_color):
         if "_id" not in session:
             return ('', 401)
 
-        burner_manager.expire_burner(burner_email)
+        burner_manager.expire_burner(burner_email, user_id=session["_id"])
         return redirect(url_for("email_burner", url_addition=url_addition))

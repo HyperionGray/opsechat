@@ -99,6 +99,6 @@ def email_burner_expire(url_addition, email):
     # Verify this burner belongs to the user
     burner_user = burner_manager.get_user_for_burner(email)
     if burner_user == session["_id"]:
-        burner_manager.expire_burner(email)
+        burner_manager.expire_burner(email, user_id=session["_id"])
     
     return redirect(f"/{app.config['path']}/email/burner", code=302)

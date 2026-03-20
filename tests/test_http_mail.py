@@ -22,7 +22,10 @@ from http_mail_system import (
     http_mail_storage,
     MAX_MAIL_MESSAGE_LENGTH,
 )
-from email_system import email_storage as _global_email_storage, EmailComposer
+from email_system import (
+    email_storage as _global_email_storage,
+    burner_manager as _global_burner_manager,
+)
 from app_factory import create_app
 
 
@@ -433,6 +436,10 @@ class TestEmailRoutesExtended:
         self.app.config["path"] = "secpath"
         self.app.config["hostname"] = "localhost"
         self.client = self.app.test_client()
+        _global_burner_manager.burner_addresses.clear()
+        _global_burner_manager.user_burners.clear()
+        _global_burner_manager.send_limits.clear()
+        _global_burner_manager.custom_domain = None
 
         # Set up a session with a known user_id
         with self.client.session_transaction() as sess:
@@ -455,6 +462,10 @@ class TestEmailRoutesExtended:
         # Clean up global state
         if "testuser99" in _global_email_storage.emails:
             _global_email_storage.emails["testuser99"] = []
+        _global_burner_manager.burner_addresses.clear()
+        _global_burner_manager.user_burners.clear()
+        _global_burner_manager.send_limits.clear()
+        _global_burner_manager.custom_domain = None
 
     def test_view_email_returns_200(self):
         r = self.client.get(f"/secpath/email/view/{self.email_id}")
@@ -490,6 +501,37 @@ class TestEmailRoutesExtended:
     def test_burner_generate_post_redirects(self):
         r = self.client.post("/secpath/email/burner", data={"action": "generate"})
         assert r.status_code == 302
+    
+    def test_burner_list_route_without_json_suffix_returns_json(self):
+        _global_burner_manager.generate_burner_email("testuser99")
+        
+        r = self.client.get("/secpath/email/burner/list")
+        
+        assert r.status_code == 200
+        data = r.get_json()
+        assert isinstance(data["burners"], list)
+        assert len(data["burners"]) == 1
+    
+    def test_burner_expire_cannot_delete_another_users_burner(self):
+        other_burner = _global_burner_manager.generate_burner_email("otheruser")
+        
+        r = self.client.post(f"/secpath/email/burner/expire/{other_burner}")
+        
+        assert r.status_code == 302
+        assert other_burner in _global_burner_manager.burner_addresses
+    
+    def test_burner_rotate_cannot_delete_another_users_burner(self):
+        other_burner = _global_burner_manager.generate_burner_email("otheruser")
+        
+        r = self.client.post(
+            "/secpath/email/burner",
+            data={"action": "rotate", "old_email": other_burner},
+        )
+        
+        assert r.status_code == 302
+        assert other_burner in _global_burner_manager.burner_addresses
+        own_burners = _global_burner_manager.get_user_burners("testuser99")
+        assert len(own_burners) == 1
 
     def test_burner_wrong_path_404(self):
         r = self.client.post("/wrongpath/email/burner", data={"action": "generate"})

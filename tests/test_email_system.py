@@ -208,6 +208,7 @@ class TestBurnerEmailManager:
         
         manager.cleanup_expired()
         assert email not in manager.burner_addresses
+        assert email not in manager.user_burners.get("user1", [])
     
     def test_get_user_burners(self):
         """Test retrieving all active burners for a user"""
@@ -232,6 +233,18 @@ class TestBurnerEmailManager:
         assert new_email != old_email
         assert old_email not in manager.burner_addresses
         assert new_email in manager.burner_addresses
+        assert old_email not in manager.user_burners.get("user1", [])
+    
+    def test_rotate_burner_cannot_expire_another_users_address(self):
+        """Test rotate only expires burners owned by the same user"""
+        manager = BurnerEmailManager()
+        other_users_email = manager.generate_burner_email("user2")
+        
+        new_email = manager.rotate_burner("user1", other_users_email)
+        
+        assert new_email in manager.burner_addresses
+        assert other_users_email in manager.burner_addresses
+        assert other_users_email in manager.user_burners.get("user2", [])
     
     def test_expire_burner(self):
         """Test manually expiring a burner"""
@@ -242,6 +255,18 @@ class TestBurnerEmailManager:
         
         assert result is True
         assert email not in manager.burner_addresses
+        assert email not in manager.user_burners.get("user1", [])
+    
+    def test_expire_burner_rejects_wrong_owner(self):
+        """Test burner expiry refuses a mismatched user_id"""
+        manager = BurnerEmailManager()
+        email = manager.generate_burner_email("user1")
+        
+        result = manager.expire_burner(email, user_id="user2")
+        
+        assert result is False
+        assert email in manager.burner_addresses
+        assert email in manager.user_burners.get("user1", [])
     
     def test_custom_domain(self):
         """Test setting custom domain for burners"""
