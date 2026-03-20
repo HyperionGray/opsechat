@@ -4,7 +4,7 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, DomainRotationManager, MultiProviderDomainClient
 )
 
 
@@ -174,3 +174,73 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+    
+    def test_prune_expired_domains(self):
+        """Expired domains should be removed from state."""
+        import datetime
+        
+        manager = DomainRotationManager(monthly_budget=50.0)
+        now = datetime.datetime.now()
+        manager.owned_domains = [
+            {
+                "domain": "expired.xyz",
+                "price": 1.0,
+                "purchased_at": now - datetime.timedelta(days=400),
+                "expires_at": now - datetime.timedelta(days=1),
+            },
+            {
+                "domain": "active.xyz",
+                "price": 2.0,
+                "purchased_at": now - datetime.timedelta(days=30),
+                "expires_at": now + datetime.timedelta(days=30),
+            },
+        ]
+        manager.active_domain = "expired.xyz"
+        
+        removed = manager.prune_expired_domains(reference_time=now)
+        
+        assert removed == 1
+        assert [entry["domain"] for entry in manager.owned_domains] == ["active.xyz"]
+        assert manager.active_domain == "active.xyz"
+
+
+class TestMultiProviderDomainClient:
+    """Test fallback behavior across multiple providers."""
+    
+    def test_search_uses_fallback_provider(self):
+        provider_a = Mock(spec=DomainAPIClient)
+        provider_b = Mock(spec=DomainAPIClient)
+        
+        provider_a.search_domain.return_value = {"available": False, "domain": "test123.xyz"}
+        provider_b.search_domain.return_value = {"available": True, "domain": "test123.xyz", "price": "1.99"}
+        
+        client = MultiProviderDomainClient(
+            providers=[provider_a, provider_b],
+            provider_names=["provider-a", "provider-b"]
+        )
+        
+        result = client.search_domain("test123.xyz")
+        
+        assert result["available"] is True
+        assert result["provider"] == "provider-b"
+    
+    def test_purchase_prefers_provider_that_found_domain(self):
+        provider_a = Mock(spec=DomainAPIClient)
+        provider_b = Mock(spec=DomainAPIClient)
+        
+        provider_a.search_domain.return_value = {"available": False, "domain": "test123.xyz"}
+        provider_b.search_domain.return_value = {"available": True, "domain": "test123.xyz", "price": "1.99"}
+        provider_b.purchase_domain.return_value = {"success": True, "domain": "test123.xyz", "order_id": "abc"}
+        provider_a.purchase_domain.return_value = {"success": False, "message": "not available"}
+        
+        client = MultiProviderDomainClient(
+            providers=[provider_a, provider_b],
+            provider_names=["provider-a", "provider-b"]
+        )
+        client.search_domain("test123.xyz")
+        
+        result = client.purchase_domain("test123.xyz")
+        
+        assert result["success"] is True
+        assert result["provider"] == "provider-b"
+        provider_b.purchase_domain.assert_called_once()

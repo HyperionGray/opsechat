@@ -11,6 +11,7 @@ Usage:
     python domain_rotation_cli.py rotate        # Rotate to a new domain
     python domain_rotation_cli.py status        # Show budget status
     python domain_rotation_cli.py config        # Configure API credentials
+    python domain_rotation_cli.py cleanup       # Remove expired local state
 """
 
 import argparse
@@ -19,10 +20,46 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
+from typing import Any, Dict
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _serialize_domain_record(record: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert datetime values to ISO strings for JSON storage."""
+    serialized = dict(record)
+    for key in ("purchased_at", "expires_at"):
+        if isinstance(serialized.get(key), datetime):
+            serialized[key] = serialized[key].isoformat()
+    return serialized
+
+
+def _deserialize_domain_record(record: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert ISO datetime strings from JSON back into datetime objects."""
+    deserialized = dict(record)
+    for key in ("purchased_at", "expires_at"):
+        value = deserialized.get(key)
+        if isinstance(value, str):
+            try:
+                deserialized[key] = datetime.fromisoformat(value)
+            except ValueError:
+                # Preserve original value if legacy or malformed.
+                pass
+    return deserialized
+
+
+def _format_datetime(value: Any, fmt: str, fallback: str = "unknown") -> str:
+    if isinstance(value, datetime):
+        return value.strftime(fmt)
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value).strftime(fmt)
+        except ValueError:
+            return fallback
+    return fallback
 
 
 def load_config():
@@ -31,7 +68,7 @@ def load_config():
         return {}
     
     try:
-        with open(CONFIG_FILE, 'r') as f:
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
         print(f"Error loading config: {e}")
@@ -43,7 +80,7 @@ def save_config(config):
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     
     try:
-        with open(CONFIG_FILE, 'w') as f:
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2)
         os.chmod(CONFIG_FILE, 0o600)  # Secure permissions
         print(f"Configuration saved to {CONFIG_FILE}")
@@ -90,7 +127,7 @@ def configure_api():
         config['monthly_budget'] = 50.0
     
     save_config(config)
-    print("\n✅ Configuration updated successfully!")
+    print("\nConfiguration updated successfully.")
 
 
 def get_manager():
@@ -98,7 +135,7 @@ def get_manager():
     config = load_config()
     
     if not config.get('api_key') or not config.get('api_secret'):
-        print("❌ Error: API credentials not configured.")
+        print("Error: API credentials not configured.")
         print("Run: python domain_rotation_cli.py config")
         sys.exit(1)
     
@@ -112,7 +149,7 @@ def get_manager():
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = [_deserialize_domain_record(entry) for entry in config['owned_domains']]
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,14 +159,14 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = [_serialize_domain_record(entry) for entry in manager.owned_domains]
     config['active_domain'] = manager.active_domain
     save_config(config)
 
 
 def list_domains():
     """List owned domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Owned Domains ===\n")
     
@@ -144,14 +181,16 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_datetime(domain.get('purchased_at'), '%Y-%m-%d %H:%M')}")
+        print(f"   Expires: {_format_datetime(domain.get('expires_at'), '%Y-%m-%d')}")
+        if domain.get("provider"):
+            print(f"   Provider: {domain['provider']}")
         print()
 
 
 def search_domains():
     """Search for available cheap domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
     print("Searching for domains under $5...\n")
@@ -161,9 +200,10 @@ def search_domains():
         domain_info = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
         
         if domain_info:
-            print(f"  ✅ Found: {domain_info['domain']} - ${domain_info['price']}")
+            provider_suffix = f" ({domain_info['provider']})" if domain_info.get("provider") else ""
+            print(f"  Found: {domain_info['domain']} - ${domain_info['price']}{provider_suffix}")
         else:
-            print(f"  ❌ No cheap domain found in this attempt")
+            print("  No cheap domain found in this attempt")
     
     print("\nTo purchase a domain, run: python domain_rotation_cli.py rotate")
 
@@ -181,7 +221,7 @@ def rotate_domain():
     print(f"Domains Owned: {budget_status['domains_owned']}\n")
     
     if budget_status['remaining'] < 1:
-        print("❌ Insufficient budget remaining this month.")
+        print("Insufficient budget remaining this month.")
         return
     
     print("Searching for available cheap domain...")
@@ -189,7 +229,7 @@ def rotate_domain():
     domain_info = manager.find_cheap_available_domain(max_price=min(5.0, budget_status['remaining']))
     
     if not domain_info:
-        print("❌ Could not find an available cheap domain within budget.")
+        print("Could not find an available cheap domain within budget.")
         return
     
     print(f"\nFound: {domain_info['domain']} for ${domain_info['price']}")
@@ -207,15 +247,15 @@ def rotate_domain():
     )
     
     if success:
-        print(f"\n✅ Successfully purchased and activated: {domain_info['domain']}")
+        print(f"\nSuccessfully purchased and activated: {domain_info['domain']}")
         save_manager_state(manager, config)
     else:
-        print("\n❌ Failed to purchase domain. Check API credentials and budget.")
+        print("\nFailed to purchase domain. Check API credentials and budget.")
 
 
 def show_status():
     """Show current status"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Domain Rotation Status ===\n")
     
@@ -229,8 +269,20 @@ def show_status():
     print(f"\nDomains Owned: {budget_status['domains_owned']}")
     
     if manager.active_domain:
-        print(f"\n✅ Current burner email domain: {manager.active_domain}")
+        print(f"\nCurrent burner email domain: {manager.active_domain}")
         print(f"   Configure your email system to use: user@{manager.active_domain}")
+
+
+def cleanup_domains():
+    """Prune expired domain state entries and persist."""
+    manager, config = get_manager()
+    removed = manager.prune_expired_domains()
+    save_manager_state(manager, config)
+    print(f"Removed {removed} expired domain entr{'y' if removed == 1 else 'ies'}.")
+    if manager.active_domain:
+        print(f"Active domain: {manager.active_domain}")
+    else:
+        print("No active domain set.")
 
 
 def main():
@@ -245,12 +297,13 @@ Examples:
   python domain_rotation_cli.py search     # Search for available domains
   python domain_rotation_cli.py rotate     # Rotate to a new domain
   python domain_rotation_cli.py list       # List owned domains
+  python domain_rotation_cli.py cleanup    # Remove expired domain entries
         """
     )
     
     parser.add_argument(
         'command',
-        choices=['config', 'status', 'search', 'rotate', 'list'],
+        choices=['config', 'status', 'search', 'rotate', 'list', 'cleanup'],
         help='Command to execute'
     )
     
@@ -266,6 +319,8 @@ Examples:
         rotate_domain()
     elif args.command == 'list':
         list_domains()
+    elif args.command == 'cleanup':
+        cleanup_domains()
 
 
 if __name__ == '__main__':
