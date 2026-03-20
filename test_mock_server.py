@@ -3,15 +3,16 @@
 Simple test script to verify mock server can start and respond
 """
 
-import sys
 import os
-import time
 import subprocess
-import requests
-from threading import Thread
+import sys
+import time
 
-def test_mock_server():
-    """Test that the mock server can start and respond to health checks"""
+import requests
+
+
+def run_mock_server_smoke_test():
+    """Run mock-server startup and health-check validation."""
     print("Testing mock server startup...")
     
     # Start the mock server in a subprocess
@@ -53,6 +54,11 @@ def test_mock_server():
     
     return False
 
+
+def test_mock_server():
+    """Pytest entrypoint: server should boot and answer /health."""
+    assert run_mock_server_smoke_test()
+
 if __name__ == '__main__':
-    success = test_mock_server()
+    success = run_mock_server_smoke_test()
     sys.exit(0 if success else 1)
