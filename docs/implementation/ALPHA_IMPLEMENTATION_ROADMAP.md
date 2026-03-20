@@ -897,7 +897,7 @@ The following sections contain the original detailed implementation plans for re
 - Modify: `domain_manager.py` - Multi-provider support
 - Modify: `email_routes.py` - Use multi-provider rotation
 - New: `tests/test_namecheap_api.py` - Namecheap tests
-- Modify: `DOMAIN_REGISTRAR_API.md` - Document second API
+- Modify: `docs/setup/DOMAIN_REGISTRAR_API.md` - Document second API
 
 ---
 
