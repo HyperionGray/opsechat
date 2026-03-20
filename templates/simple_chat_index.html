@@ -4,114 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OpSecChat - Secure Chat Rooms</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            background-color: #000;
-            color: #0f0;
-            font-family: 'Courier New', monospace;
-            padding: 20px;
-            line-height: 1.6;
-        }
-        
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        
-        h1 {
-            color: #0f0;
-            text-align: center;
-            margin-bottom: 30px;
-            font-size: 2em;
-            text-shadow: 0 0 10px #0f0;
-        }
-        
-        .info-box {
-            border: 1px solid #0f0;
-            padding: 20px;
-            margin-bottom: 20px;
-            background-color: #001100;
-        }
-        
-        .info-box h2 {
-            color: #0f0;
-            margin-bottom: 10px;
-            font-size: 1.3em;
-        }
-        
-        .info-box ul {
-            list-style-type: none;
-            padding-left: 20px;
-        }
-        
-        .info-box li:before {
-            content: "> ";
-            color: #0f0;
-        }
-        
-        .create-room {
-            text-align: center;
-            margin: 40px 0;
-        }
-        
-        button {
-            background-color: #0f0;
-            color: #000;
-            border: none;
-            padding: 15px 30px;
-            font-size: 1.2em;
-            font-family: 'Courier New', monospace;
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.3s;
-        }
-        
-        button:hover {
-            background-color: #0d0;
-            box-shadow: 0 0 20px #0f0;
-        }
-        
-        button:active {
-            transform: scale(0.95);
-        }
-        
-        .status {
-            text-align: center;
-            margin-top: 20px;
-            color: #0f0;
-        }
-        
-        a {
-            color: #0ff;
-            text-decoration: none;
-        }
-        
-        a:hover {
-            text-decoration: underline;
-        }
-        
-        .warning {
-            color: #ff0;
-            font-weight: bold;
-        }
-        
-        .footer {
-            text-align: center;
-            margin-top: 40px;
-            padding: 20px;
-            color: #0a0;
-            font-size: 0.8em;
-            border-top: 1px solid #0a0;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='simple_chat.css') }}">
 </head>
-<body>
+<body class="simple-chat-index">
     <div class="container" role="main">
         <h1>⚡ OpSecChat ⚡</h1>
         
@@ -159,39 +54,6 @@
     <div class="footer">
         OpSecChat {{ version|default('0.8.0-alpha') }} | <a href="https://github.com/HyperionGray/opsechat">GitHub</a> | MIT License
     </div>
-    
-    <script>
-        // Simple room creation with no external dependencies
-        document.getElementById('createRoomBtn').addEventListener('click', async function() {
-            const statusDiv = document.getElementById('status');
-            statusDiv.textContent = 'Creating room...';
-            
-            try {
-                const response = await fetch('/chat/create', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to create room');
-                }
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    statusDiv.innerHTML = `Room created! Redirecting...<br><a href="${data.room_url}">${window.location.origin}${data.room_url}</a>`;
-                    setTimeout(() => {
-                        window.location.href = data.room_url;
-                    }, 1000);
-                } else {
-                    statusDiv.textContent = 'Error creating room';
-                }
-            } catch (error) {
-                statusDiv.textContent = 'Error: ' + error.message;
-            }
-        });
-    </script>
+    <script src="{{ url_for('static', filename='simple_chat_index.js') }}"></script>
 </body>
 </html>

@@ -2,6 +2,33 @@
 
 This guide covers the new features added in the final push for OpSecHat production readiness.
 
+## 🛡️ CSP-Compatible Simple Chat Frontend
+
+### What Changed
+Simple chat templates were migrated away from inline `<script>`, inline
+`<style>`, and inline event handlers to external static assets.
+
+- `templates/simple_chat_index.html`
+- `templates/simple_chat_room.html`
+- `templates/simple_chat_error.html`
+
+Now they use:
+
+- `static/simple_chat.css`
+- `static/simple_chat_index.js`
+- `static/simple_chat_room.js`
+
+### Why It Matters
+The app already sends strict security headers:
+
+- `script-src 'self'`
+- `style-src 'self'`
+
+This migration keeps simple chat fully compatible with those policies without
+weakening CSP.
+
+---
+
 ## 🔑 Automated Key Exchange
 
 ### What Changed

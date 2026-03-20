@@ -4,54 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OpSecChat - Error</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            background-color: #000;
-            color: #f00;
-            font-family: 'Courier New', monospace;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            text-align: center;
-            padding: 20px;
-        }
-        
-        .error-container {
-            border: 1px solid #f00;
-            padding: 40px;
-            max-width: 600px;
-        }
-        
-        h1 {
-            font-size: 2em;
-            margin-bottom: 20px;
-            text-shadow: 0 0 10px #f00;
-        }
-        
-        p {
-            margin-bottom: 20px;
-            line-height: 1.6;
-        }
-        
-        a {
-            color: #0f0;
-            text-decoration: none;
-            font-weight: bold;
-        }
-        
-        a:hover {
-            text-decoration: underline;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='simple_chat.css') }}">
 </head>
-<body>
+<body class="simple-chat-error">
     <div class="error-container">
         <h1>⚠ Error</h1>
         <p>{{ error }}</p>

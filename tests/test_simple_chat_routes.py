@@ -4,6 +4,7 @@ Tests for simple_chat_routes.py
 Covers: room creation, messaging, direct messages, room key exchange,
         input validation, rate-limit logic, and helper utilities.
 """
+import re
 import pytest
 from unittest.mock import patch
 from app_factory import create_app
@@ -236,6 +237,39 @@ class TestChatRoutes:
     def test_get_room_key_nonexistent_room(self, client):
         response = client.get("/chat/room/no-such-room/key")
         assert response.status_code == 404
+
+
+class TestSimpleChatTemplateCspCompatibility:
+    @staticmethod
+    def _assert_no_inline_assets(html: str):
+        assert "<style>" not in html
+        assert "<script>" not in html
+        assert re.search(r"\son[a-zA-Z]+=", html) is None
+        assert " style=" not in html
+
+    def test_chat_index_uses_external_assets_only(self, client):
+        response = client.get("/chat")
+        assert response.status_code == 200
+        html = response.get_data(as_text=True)
+        self._assert_no_inline_assets(html)
+        assert "/static/simple_chat.css" in html
+        assert "/static/simple_chat_index.js" in html
+
+    def test_chat_room_uses_external_assets_only(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.get(f"/chat/room/{room_id}")
+        assert response.status_code == 200
+        html = response.get_data(as_text=True)
+        self._assert_no_inline_assets(html)
+        assert "/static/simple_chat.css" in html
+        assert "/static/simple_chat_room.js" in html
+
+    def test_chat_error_uses_external_assets_only(self, client):
+        response = client.get("/chat/room/nonexistent-room-id-xyz")
+        assert response.status_code == 404
+        html = response.get_data(as_text=True)
+        self._assert_no_inline_assets(html)
+        assert "/static/simple_chat.css" in html
 
 
 # ---------------------------------------------------------------------------
