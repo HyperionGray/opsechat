@@ -190,6 +190,18 @@ class BurnerEmailManager:
         self.send_limits: Dict[str, Dict] = {}  # user_id -> {count, reset_time}
         self.max_sends_per_hour = 10  # Maximum emails per hour
         self.max_receives_unlimited = True  # Receiving is unlimited (main use case)
+
+    def _remove_user_burner(self, user_id: str, email: str) -> None:
+        """Drop a burner from the per-user index if it is still referenced."""
+        user_burners = self.user_burners.get(user_id)
+        if not user_burners:
+            return
+
+        if email in user_burners:
+            user_burners.remove(email)
+
+        if not user_burners:
+            del self.user_burners[user_id]
     
     def set_custom_domain(self, domain: str) -> None:
         """Set custom domain for burner emails"""
@@ -268,16 +280,23 @@ class BurnerEmailManager:
             New burner email address
         """
         if old_email:
-            self.expire_burner(old_email)
+            self.expire_burner(old_email, user_id=user_id)
         
         return self.generate_burner_email(user_id)
     
-    def expire_burner(self, email: str) -> bool:
-        """Immediately expire a burner email"""
-        if email in self.burner_addresses:
-            del self.burner_addresses[email]
-            return True
-        return False
+    def expire_burner(self, email: str, user_id: Optional[str] = None) -> bool:
+        """Immediately expire a burner email, optionally enforcing ownership."""
+        burner_info = self.burner_addresses.get(email)
+        if burner_info is None:
+            return False
+
+        owner_id = burner_info['user_id']
+        if user_id is not None and owner_id != user_id:
+            return False
+
+        del self.burner_addresses[email]
+        self._remove_user_burner(owner_id, email)
+        return True
     
     def get_user_for_burner(self, email: str) -> Optional[str]:
         """Get user ID for burner email"""
@@ -292,12 +311,9 @@ class BurnerEmailManager:
         expired = [email for email, info in self.burner_addresses.items() 
                    if info['expires_at'] <= now]
         for email in expired:
+            user_id = self.burner_addresses[email]['user_id']
             del self.burner_addresses[email]
-            # Also remove from user_burners
-            user_id = self.burner_addresses.get(email, {}).get('user_id')
-            if user_id and user_id in self.user_burners:
-                if email in self.user_burners[user_id]:
-                    self.user_burners[user_id].remove(email)
+            self._remove_user_burner(user_id, email)
     
     def _format_time_remaining(self, time_delta: datetime.timedelta) -> str:
         """Format time remaining in human-readable format"""

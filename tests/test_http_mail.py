@@ -22,7 +22,11 @@ from http_mail_system import (
     http_mail_storage,
     MAX_MAIL_MESSAGE_LENGTH,
 )
-from email_system import email_storage as _global_email_storage, EmailComposer
+from email_system import (
+    email_storage as _global_email_storage,
+    burner_manager as _global_burner_manager,
+    EmailComposer,
+)
 from app_factory import create_app
 
 
@@ -114,6 +118,16 @@ class TestHttpMailStorage:
         mb.add_message("subj", "body", "sender")
         self.storage.cleanup_empty_old_mailboxes()
         assert self.storage.get_mailbox(mb.address) is not None
+
+    def test_cleanup_removes_mailbox_with_only_expired_messages(self):
+        mb = self.storage.create_mailbox()
+        mb.created_at = datetime.datetime.now() - datetime.timedelta(hours=49)
+        mb.add_message("subj", "body", "sender")
+        mb.messages[0].timestamp = datetime.datetime.now() - datetime.timedelta(hours=25)
+
+        self.storage.cleanup_empty_old_mailboxes()
+
+        assert self.storage.get_mailbox(mb.address) is None
 
 
 # ===========================================================================
@@ -455,6 +469,9 @@ class TestEmailRoutesExtended:
         # Clean up global state
         if "testuser99" in _global_email_storage.emails:
             _global_email_storage.emails["testuser99"] = []
+        _global_burner_manager.burner_addresses.clear()
+        _global_burner_manager.user_burners.clear()
+        _global_burner_manager.send_limits.clear()
 
     def test_view_email_returns_200(self):
         r = self.client.get(f"/secpath/email/view/{self.email_id}")
@@ -490,6 +507,34 @@ class TestEmailRoutesExtended:
     def test_burner_generate_post_redirects(self):
         r = self.client.post("/secpath/email/burner", data={"action": "generate"})
         assert r.status_code == 302
+
+    def test_burner_rotate_rejects_another_users_address(self):
+        other_users_email = _global_burner_manager.generate_burner_email("otheruser")
+
+        r = self.client.post(
+            "/secpath/email/burner",
+            data={"action": "rotate", "old_email": other_users_email},
+        )
+
+        assert r.status_code == 403
+        assert other_users_email in _global_burner_manager.burner_addresses
+        assert _global_burner_manager.get_user_burners("testuser99") == []
+
+    def test_burner_expire_removes_owned_address(self):
+        burner_email = _global_burner_manager.generate_burner_email("testuser99")
+
+        r = self.client.post(f"/secpath/email/burner/expire/{burner_email}")
+
+        assert r.status_code == 302
+        assert burner_email not in _global_burner_manager.burner_addresses
+
+    def test_burner_expire_rejects_another_users_address(self):
+        other_users_email = _global_burner_manager.generate_burner_email("otheruser")
+
+        r = self.client.post(f"/secpath/email/burner/expire/{other_users_email}")
+
+        assert r.status_code == 403
+        assert other_users_email in _global_burner_manager.burner_addresses
 
     def test_burner_wrong_path_404(self):
         r = self.client.post("/wrongpath/email/burner", data={"action": "generate"})

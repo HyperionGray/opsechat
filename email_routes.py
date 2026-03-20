@@ -325,7 +325,10 @@ def register_email_routes(app, id_generator, get_random_color):
         if action == "generate":
             burner_manager.generate_burner_email(session["_id"])
         elif action == "rotate":
-            old_email = request.form.get("old_email", "")
+            old_email = request.form.get("old_email", "").strip()
+            burner_owner = burner_manager.get_user_for_burner(old_email) if old_email else None
+            if burner_owner is not None and burner_owner != session["_id"]:
+                return ('', 403)
             burner_manager.rotate_burner(session["_id"], old_email or None)
 
         return redirect(url_for("email_burner", url_addition=url_addition))
@@ -344,5 +347,8 @@ def register_email_routes(app, id_generator, get_random_color):
         if "_id" not in session:
             return ('', 401)
 
-        burner_manager.expire_burner(burner_email)
+        if burner_manager.get_user_for_burner(burner_email) != session["_id"]:
+            return ('', 403)
+
+        burner_manager.expire_burner(burner_email, user_id=session["_id"])
         return redirect(url_for("email_burner", url_addition=url_addition))

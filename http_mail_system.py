@@ -146,8 +146,10 @@ class HttpMailStorage:
                 return False
             if not secrets.compare_digest(read_key, mailbox.read_key):
                 return False
-            for msg in mailbox.messages:
-                msg.overwrite()
+            with mailbox.lock:
+                for msg in mailbox.messages:
+                    msg.overwrite()
+                mailbox.messages.clear()
             del self._mailboxes[address]
             return True
 
@@ -155,10 +157,12 @@ class HttpMailStorage:
         """Remove mailboxes with no messages that are older than 48 hours."""
         cutoff = datetime.datetime.now() - datetime.timedelta(hours=48)
         with self._lock:
-            stale = [
-                addr for addr, mb in self._mailboxes.items()
-                if mb.created_at < cutoff and len(mb.messages) == 0
-            ]
+            stale = []
+            for addr, mailbox in self._mailboxes.items():
+                mailbox._expire_old_messages()
+                with mailbox.lock:
+                    if mailbox.created_at < cutoff and len(mailbox.messages) == 0:
+                        stale.append(addr)
             for addr in stale:
                 del self._mailboxes[addr]
 
