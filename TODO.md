@@ -82,7 +82,7 @@
   - [x] Implement per-session/IP limits (Flask-Limiter)
   - [x] Add per-endpoint throttling (`/chat/create`, `/chat/*/messages`, `/chat/dm/send`)
   - [ ] Configure reasonable thresholds (review after load testing)
-  - [ ] Add backoff/retry logic
+  - [x] Add backoff/retry logic (structured 429 response + `Retry-After` metadata)
 - [ ] Integrate second domain registrar API
   - [ ] Choose registrar (Namecheap recommended)
   - [ ] Implement API client
@@ -327,10 +327,10 @@
 
 ### Merge Blockers (From rules.json)
 ⚠️ **CRITICAL:** Repository currently violates merge requirements:
-- Missing `docs/` directory - all documentation in root
-- Missing `VERSION` file
-- Missing unified build system
-- Python files not organized in `src/`
+- [x] `docs/` directory exists with categorized subdirectories
+- [x] `VERSION` file exists
+- [ ] Unified build system still needs consolidation
+- [ ] Python file organization into `src/` is partially complete and still in progress
 
 **These MUST be fixed before merge per rules.json rule 07kwRDfGEGxIqlUsk3232**
 

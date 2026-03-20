@@ -11,13 +11,13 @@ This module provides a simplified, security-focused chat system with:
 - Rate limiting on all write endpoints
 """
 
-import re
 import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+import re
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Global room storage (in-memory only)
@@ -38,6 +38,12 @@ RATE_LIMITS = {
     "chat_create": {"max_requests": 10, "window_seconds": 60},
     "chat_message": {"max_requests": 30, "window_seconds": 60},
     "dm_send": {"max_requests": 5, "window_seconds": 60},
+}
+
+RATE_LIMIT_ENDPOINT_LABELS = {
+    "chat_create": "room creation",
+    "chat_message": "room messages",
+    "dm_send": "direct messages",
 }
 
 # Maximum message length to prevent base64 encoding of images
@@ -222,6 +228,51 @@ def cleanup_rate_limits():
             del _rate_limit_store[sid]
 
 
+def build_rate_limit_error(endpoint: str, retry_after: int):
+    """
+    Build a standardized 429 response with backoff metadata.
+
+    Args:
+        endpoint: Key from RATE_LIMITS.
+        retry_after: Number of seconds to wait before retry.
+
+    Returns:
+        Flask response tuple with 429 status and Retry-After header.
+    """
+    config = RATE_LIMITS.get(endpoint, {})
+    max_requests = config.get("max_requests", 0)
+    window_seconds = config.get("window_seconds", 60)
+    label = RATE_LIMIT_ENDPOINT_LABELS.get(endpoint, endpoint)
+
+    # Provide a simple client-side exponential backoff plan capped by the window.
+    schedule = [
+        retry_after,
+        min(window_seconds, retry_after * 2),
+        min(window_seconds, retry_after * 4),
+    ]
+
+    response = jsonify({
+        "error": (
+            f"Rate limit exceeded for {label}. "
+            f"Try again in {retry_after} seconds."
+        ),
+        "retry_after_seconds": retry_after,
+        "backoff_schedule_seconds": schedule,
+        "rate_limit": {
+            "endpoint": endpoint,
+            "limit": max_requests,
+            "window_seconds": window_seconds,
+            "remaining": 0,
+        },
+    })
+    response.status_code = 429
+    response.headers["Retry-After"] = str(retry_after)
+    response.headers["X-RateLimit-Limit"] = str(max_requests)
+    response.headers["X-RateLimit-Remaining"] = "0"
+    response.headers["X-RateLimit-Window"] = str(window_seconds)
+    return response
+
+
 # Background cleanup thread
 def cleanup_loop():
     """Continuously clean up old messages and rooms"""
@@ -279,9 +330,7 @@ def register_simple_chat_routes(app):
 
         allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Try again in {retry_after} seconds."
-            }), 429
+            return build_rate_limit_error("chat_create", retry_after)
 
         room_id = generate_secure_room_id(32)
         
@@ -332,9 +381,7 @@ def register_simple_chat_routes(app):
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
             if not allowed:
-                return jsonify({
-                    "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds."
-                }), 429
+                return build_rate_limit_error("chat_message", retry_after)
             
             # Get message from request
             data = request.get_json()
@@ -409,9 +456,7 @@ def register_simple_chat_routes(app):
         # Check rate limit for DMs
         allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds."
-            }), 429
+            return build_rate_limit_error("dm_send", retry_after)
         
         data = request.get_json()
         if not data or "room_id" not in data or "message" not in data:
@@ -488,6 +533,17 @@ def register_simple_chat_routes(app):
                 "room_id": room_id,
                 "encryption_key": room.get_room_key()
             })
+
+    @app.route('/chat/rate-limits', methods=['GET'])
+    def chat_rate_limits():
+        """Expose effective write-endpoint rate limits for client backoff logic."""
+        return jsonify({
+            "limits": RATE_LIMITS,
+            "notes": (
+                "When a limit is exceeded, write endpoints return HTTP 429 with "
+                "Retry-After and a backoff_schedule_seconds payload."
+            ),
+        })
 
 
 def generate_random_username():

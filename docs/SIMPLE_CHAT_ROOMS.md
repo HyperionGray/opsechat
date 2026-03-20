@@ -135,12 +135,49 @@ POST /chat/create
 Response: {"success": true, "room_id": "...", "room_url": "/chat/room/..."}
 ```
 
+#### Discover Write Rate Limits
+```
+GET /chat/rate-limits
+Response: {
+  "limits": {
+    "chat_create": {"max_requests": 10, "window_seconds": 60},
+    "chat_message": {"max_requests": 30, "window_seconds": 60},
+    "dm_send": {"max_requests": 5, "window_seconds": 60}
+  },
+  "notes": "..."
+}
+```
+
 #### Get/Post Messages
 ```
 GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
+
+#### Rate-Limit Error Format (HTTP 429)
+When a write endpoint is throttled (`/chat/create`, message POST, or `/chat/dm/send`),
+the API returns structured retry metadata:
+
+```
+{
+  "error": "Rate limit exceeded for ...",
+  "retry_after_seconds": 17,
+  "backoff_schedule_seconds": [17, 34, 60],
+  "rate_limit": {
+    "endpoint": "chat_message",
+    "limit": 30,
+    "window_seconds": 60,
+    "remaining": 0
+  }
+}
+```
+
+And response headers include:
+- `Retry-After`
+- `X-RateLimit-Limit`
+- `X-RateLimit-Remaining`
+- `X-RateLimit-Window`
 
 ### Encryption Implementation
 

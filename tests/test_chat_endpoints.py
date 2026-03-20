@@ -21,6 +21,9 @@ from simple_chat_routes import (
     dm_lock,
     rooms_lock,
     MAX_MESSAGE_LENGTH,
+    _rate_limit_lock,
+    _rate_limit_store,
+    RATE_LIMITS,
 )
 from app_factory import create_app
 
@@ -47,6 +50,11 @@ def _clear_dms():
         direct_messages.clear()
 
 
+def _clear_rate_limits():
+    with _rate_limit_lock:
+        _rate_limit_store.clear()
+
+
 # ===========================================================================
 # /chat/create
 # ===========================================================================
@@ -54,6 +62,7 @@ def _clear_dms():
 class TestChatCreateEndpoint:
     def setup_method(self):
         _clear_rooms()
+        _clear_rate_limits()
         self.app = _fresh_app()
         self.client = self.app.test_client()
 
@@ -85,6 +94,27 @@ class TestChatCreateEndpoint:
         resp = self.client.get("/chat/room/nonexistent-room-id-12345678")
         assert resp.status_code == 404
 
+    def test_create_rate_limit_returns_retry_after_metadata(self):
+        with self.client.session_transaction() as sess:
+            sess["_id"] = "sid-create-rl"
+            sess["username"] = "TestUser"
+            sess["color"] = [1, 2, 3]
+
+        with _rate_limit_lock:
+            _rate_limit_store["sid-create-rl"] = {
+                "chat_create": [datetime.datetime.now()]
+                * RATE_LIMITS["chat_create"]["max_requests"]
+            }
+
+        resp = self.client.post("/chat/create")
+        assert resp.status_code == 429
+        data = resp.get_json()
+        assert data["retry_after_seconds"] >= 1
+        assert data["rate_limit"]["endpoint"] == "chat_create"
+        assert isinstance(data["backoff_schedule_seconds"], list)
+        assert len(data["backoff_schedule_seconds"]) == 3
+        assert resp.headers["Retry-After"] == str(data["retry_after_seconds"])
+
 
 # ===========================================================================
 # /chat/room/<id>/messages
@@ -93,6 +123,7 @@ class TestChatCreateEndpoint:
 class TestChatMessagesEndpoint:
     def setup_method(self):
         _clear_rooms()
+        _clear_rate_limits()
         self.app = _fresh_app()
         self.client = self.app.test_client()
         # Create a room for each test
@@ -190,6 +221,28 @@ class TestChatMessagesEndpoint:
         for field in ("username", "color", "message", "timestamp", "is_mine"):
             assert field in msg, f"Missing field: {field}"
 
+    def test_messages_rate_limit_returns_retry_after_metadata(self):
+        with self.client.session_transaction() as sess:
+            sess["_id"] = "sid-msg-rl"
+            sess["username"] = "TestUser"
+            sess["color"] = [1, 2, 3]
+
+        with _rate_limit_lock:
+            _rate_limit_store["sid-msg-rl"] = {
+                "chat_message": [datetime.datetime.now()]
+                * RATE_LIMITS["chat_message"]["max_requests"]
+            }
+
+        resp = self.client.post(
+            f"/chat/room/{self.room_id}/messages",
+            json={"message": "blocked"},
+        )
+        assert resp.status_code == 429
+        data = resp.get_json()
+        assert data["rate_limit"]["endpoint"] == "chat_message"
+        assert data["retry_after_seconds"] >= 1
+        assert resp.headers["Retry-After"] == str(data["retry_after_seconds"])
+
 
 # ===========================================================================
 # /chat/room/<id>/key  (automated key exchange)
@@ -233,6 +286,23 @@ class TestRoomKeyEndpoint:
         assert resp.status_code == 404
 
 
+class TestRateLimitsEndpoint:
+    def setup_method(self):
+        _clear_rate_limits()
+        self.app = _fresh_app()
+        self.client = self.app.test_client()
+
+    def test_rate_limits_endpoint_returns_expected_shape(self):
+        resp = self.client.get("/chat/rate-limits")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert "limits" in data
+        assert "chat_create" in data["limits"]
+        assert "chat_message" in data["limits"]
+        assert "dm_send" in data["limits"]
+        assert "notes" in data
+
+
 # ===========================================================================
 # /chat/dm/send and /chat/dm/<id>
 # ===========================================================================
@@ -243,6 +313,7 @@ class TestDMEndpoints:
     def setup_method(self):
         _clear_rooms()
         _clear_dms()
+        _clear_rate_limits()
         self.app = _fresh_app()
         self.client = self.app.test_client()
         # Create a room to reference in DMs
@@ -312,3 +383,25 @@ class TestDMEndpoints:
             json={"room_id": self.room_id, "message": "x" * 201},
         )
         assert resp.status_code == 400
+
+    def test_dm_rate_limit_returns_retry_after_metadata(self):
+        with self.client.session_transaction() as sess:
+            sess["_id"] = "sid-dm-rl"
+            sess["username"] = "TestUser"
+            sess["color"] = [1, 2, 3]
+
+        with _rate_limit_lock:
+            _rate_limit_store["sid-dm-rl"] = {
+                "dm_send": [datetime.datetime.now()]
+                * RATE_LIMITS["dm_send"]["max_requests"]
+            }
+
+        resp = self.client.post(
+            "/chat/dm/send",
+            json={"room_id": self.room_id, "message": "blocked"},
+        )
+        assert resp.status_code == 429
+        data = resp.get_json()
+        assert data["rate_limit"]["endpoint"] == "dm_send"
+        assert data["retry_after_seconds"] >= 1
+        assert resp.headers["Retry-After"] == str(data["retry_after_seconds"])
