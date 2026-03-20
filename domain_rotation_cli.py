@@ -19,6 +19,7 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
@@ -49,6 +50,48 @@ def save_config(config):
         print(f"Configuration saved to {CONFIG_FILE}")
     except Exception as e:
         print(f"Error saving config: {e}")
+
+
+def _parse_iso_datetime(value):
+    """Parse ISO datetime strings safely."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def serialize_owned_domains(owned_domains):
+    """Convert domain datetime fields into JSON-serializable strings."""
+    serialized = []
+    for domain in owned_domains:
+        item = dict(domain)
+        purchased_at = item.get('purchased_at')
+        expires_at = item.get('expires_at')
+        if isinstance(purchased_at, datetime):
+            item['purchased_at'] = purchased_at.isoformat()
+        if isinstance(expires_at, datetime):
+            item['expires_at'] = expires_at.isoformat()
+        serialized.append(item)
+    return serialized
+
+
+def deserialize_owned_domains(owned_domains):
+    """Convert serialized datetime strings back into datetime objects."""
+    deserialized = []
+    for domain in owned_domains:
+        item = dict(domain)
+        parsed_purchased = _parse_iso_datetime(item.get('purchased_at'))
+        parsed_expires = _parse_iso_datetime(item.get('expires_at'))
+        if parsed_purchased:
+            item['purchased_at'] = parsed_purchased
+        if parsed_expires:
+            item['expires_at'] = parsed_expires
+        deserialized.append(item)
+    return deserialized
 
 
 def configure_api():
@@ -109,10 +152,10 @@ def get_manager():
     )
     
     # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
+    if 'current_spending' in config:
+        manager.current_spending = float(config['current_spending'])
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = deserialize_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +165,7 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -142,10 +185,14 @@ def list_domains():
     
     for i, domain in enumerate(domains, 1):
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
+        purchased_at = _parse_iso_datetime(domain.get('purchased_at'))
+        expires_at = _parse_iso_datetime(domain.get('expires_at'))
+        purchased_text = purchased_at.strftime('%Y-%m-%d %H:%M') if purchased_at else "Unknown"
+        expires_text = expires_at.strftime('%Y-%m-%d') if expires_at else "Unknown"
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {purchased_text}")
+        print(f"   Expires: {expires_text}")
         print()
 
 

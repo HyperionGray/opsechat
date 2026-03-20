@@ -174,3 +174,79 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_and_get_config(self):
+        """Test manager configuration metadata"""
+        manager = DomainRotationManager(monthly_budget=10.0)
+        manager.configure(
+            api_key="pk_test_1234",
+            secret_key="sk_test_5678",
+            monthly_budget=25.0
+        )
+
+        config = manager.get_config()
+
+        assert isinstance(manager.api_client, PorkbunAPIClient)
+        assert config["configured"] is True
+        assert config["provider"] == "porkbun"
+        assert config["monthly_budget"] == 25.0
+        assert config["api_key_masked"].endswith("1234")
+
+    def test_search_cheap_domains_returns_multiple_results(self):
+        """Test searching multiple cheap domains"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": "$2.50"
+        }
+
+        manager = DomainRotationManager(mock_client)
+        with patch.object(
+            manager,
+            "generate_random_domain",
+            side_effect=["a.xyz", "b.club", "c.online"]
+        ):
+            results = manager.search_cheap_domains(
+                tlds=["xyz", "club", "online"],
+                max_price=3.0,
+                limit=2,
+                max_attempts=5
+            )
+
+        assert len(results) == 2
+        assert all(result["price"] <= 3.0 for result in results)
+        assert results[0]["domain"] != results[1]["domain"]
+
+    def test_rotate_to_new_domain_success(self):
+        """Test structured rotate response on success"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": 2.99
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "test789.xyz"
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        with patch.object(manager, "generate_random_domain", return_value="test789.xyz"):
+            result = manager.rotate_to_new_domain(max_price=5.0)
+
+        assert result["success"] is True
+        assert result["domain"] == "test789.xyz"
+        assert result["cost"] == 2.99
+        assert result["budget"]["domains_owned"] == 1
+
+    def test_rotate_to_new_domain_failure(self):
+        """Test structured rotate response on failure"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": False
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        result = manager.rotate_to_new_domain(max_price=1.0)
+
+        assert result["success"] is False
+        assert "error" in result
