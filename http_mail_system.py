@@ -80,13 +80,21 @@ class HttpMailbox:
             self.messages.append(msg)
         return msg_id
 
-    def get_messages(self, read_key: str) -> Optional[List[Dict]]:
+    def get_messages(
+        self,
+        read_key: str,
+        limit: Optional[int] = None,
+        offset: int = 0,
+    ) -> Optional[List[Dict]]:
         """Return messages if read_key matches, else None (default deny)."""
         if not secrets.compare_digest(read_key, self.read_key):
             return None
         self._expire_old_messages()
         with self.lock:
-            return [m.to_dict() for m in self.messages]
+            visible_messages = self.messages[offset:]
+            if limit is not None:
+                visible_messages = visible_messages[:limit]
+            return [m.to_dict() for m in visible_messages]
 
     def delete_message(self, read_key: str, msg_id: str) -> bool:
         """Delete a message by ID after verifying read_key. Returns True on success."""
@@ -99,6 +107,17 @@ class HttpMailbox:
                     del self.messages[i]
                     return True
         return False
+
+    def purge_messages(self, read_key: str) -> Optional[int]:
+        """Delete all messages after verifying read_key. Returns count or None on auth failure."""
+        if not secrets.compare_digest(read_key, self.read_key):
+            return None
+        with self.lock:
+            deleted_count = len(self.messages)
+            for msg in self.messages:
+                msg.overwrite()
+            self.messages = []
+            return deleted_count
 
     def _expire_old_messages(self) -> None:
         """Remove messages older than MAIL_EXPIRY_HOURS."""

@@ -268,6 +268,13 @@
     <!-- Destroy entire mailbox -->
     <div style="margin-top:30px; border-top:1px solid #333; padding-top:15px;">
       <h3 style="color:#f00;">Danger Zone</h3>
+      <form method="POST" action="/{{ path }}/mail/{{ inbox_address }}/purge" style="margin-bottom:10px;">
+        <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
+        <button type="submit" class="danger"
+                onclick="return confirm('Delete ALL messages in this mailbox?')">
+          Clear Inbox
+        </button>
+      </form>
       <form method="POST" action="/{{ path }}/mail/{{ inbox_address }}/destroy">
         <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
         <button type="submit" class="danger"
@@ -373,25 +380,30 @@
 
   function renderInbox(messages, address, readKey) {
     var container = document.getElementById('js-inbox-messages');
+    var html = '';
     if (messages.length === 0) {
-      container.innerHTML = '<p style="color:#888;margin-top:10px;">No messages in this mailbox.</p>';
-      return;
+      html += '<p style="color:#888;margin-top:10px;">No messages in this mailbox.</p>';
+    } else {
+      html += '<h3 style="margin-top:20px;">Messages (' + messages.length + ')</h3>';
+      messages.forEach(function(msg) {
+        html += '<div class="msg-card">' +
+          '<div class="msg-meta">From: ' + esc(msg.sender) + ' &nbsp;|&nbsp; ' + esc(msg.timestamp) + '</div>' +
+          '<div class="msg-subject">' + esc(msg.subject) + '</div>' +
+          '<div class="msg-body">' + esc(msg.body) + '</div>' +
+          '<div class="msg-actions">' +
+            '<button class="danger js-delete-msg"' +
+              ' data-address="' + esc(address) + '"' +
+              ' data-msg-id="' + esc(msg.id) + '"' +
+              ' data-read-key="' + esc(readKey) + '">🗑 Delete</button>' +
+          '</div></div>';
+      });
     }
-    var html = '<h3 style="margin-top:20px;">Messages (' + messages.length + ')</h3>';
-    messages.forEach(function(msg) {
-      html += '<div class="msg-card">' +
-        '<div class="msg-meta">From: ' + esc(msg.sender) + ' &nbsp;|&nbsp; ' + esc(msg.timestamp) + '</div>' +
-        '<div class="msg-subject">' + esc(msg.subject) + '</div>' +
-        '<div class="msg-body">' + esc(msg.body) + '</div>' +
-        '<div class="msg-actions">' +
-          '<button class="danger js-delete-msg"' +
-            ' data-address="' + esc(address) + '"' +
-            ' data-msg-id="' + esc(msg.id) + '"' +
-            ' data-read-key="' + esc(readKey) + '">🗑 Delete</button>' +
-        '</div></div>';
-    });
+
     html += '<div style="margin-top:30px;border-top:1px solid #333;padding-top:15px;">' +
       '<h3 style="color:#f00;">Danger Zone</h3>' +
+      '<button class="danger js-purge-mailbox"' +
+        ' data-address="' + esc(address) + '"' +
+        ' data-read-key="' + esc(readKey) + '">Clear Inbox</button>' +
       '<button class="danger js-destroy-mailbox"' +
         ' data-address="' + esc(address) + '"' +
         ' data-read-key="' + esc(readKey) + '">💣 Destroy Mailbox</button></div>';
@@ -408,6 +420,12 @@
       btn.addEventListener('click', function() {
         if (!confirm('Destroy mailbox and ALL messages permanently?')) return;
         destroyMailbox(btn.dataset.address, btn.dataset.readKey);
+      });
+    });
+    container.querySelectorAll('.js-purge-mailbox').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        if (!confirm('Delete ALL messages in this mailbox?')) return;
+        purgeInbox(btn.dataset.address, btn.dataset.readKey);
       });
     });
   }
@@ -438,6 +456,22 @@
           '<div class="success-box">✅ Mailbox destroyed.</div>';
       } else {
         alert('Error: ' + (d.error || 'Could not destroy mailbox'));
+      }
+    });
+  }
+
+  function purgeInbox(address, readKey) {
+    fetch('/{{ path }}/mail/' + encodeURIComponent(address) + '/purge', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: JSON.stringify({read_key: readKey})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.success) {
+        fetchInbox();
+      } else {
+        alert('Error: ' + (d.error || 'Could not purge inbox'));
       }
     });
   }

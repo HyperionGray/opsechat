@@ -143,6 +143,19 @@ class TestHttpMailbox:
         msgs = self.mailbox.get_messages("wrongkey")
         assert msgs is None
 
+    def test_get_messages_with_limit_and_offset(self):
+        self.mailbox.add_message("S1", "B1", "alice")
+        self.mailbox.add_message("S2", "B2", "bob")
+        self.mailbox.add_message("S3", "B3", "carol")
+
+        msgs = self.mailbox.get_messages(
+            "secretkey123456789012345678901",
+            limit=1,
+            offset=1,
+        )
+        assert len(msgs) == 1
+        assert msgs[0]["subject"] == "S2"
+
     def test_get_messages_empty_key_returns_none(self):
         msgs = self.mailbox.get_messages("")
         assert msgs is None
@@ -164,6 +177,19 @@ class TestHttpMailbox:
     def test_delete_nonexistent_message(self):
         result = self.mailbox.delete_message("secretkey123456789012345678901", "fakeid")
         assert result is False
+
+    def test_purge_messages_correct_key(self):
+        self.mailbox.add_message("S1", "B1", "alice")
+        self.mailbox.add_message("S2", "B2", "bob")
+        purged = self.mailbox.purge_messages("secretkey123456789012345678901")
+        assert purged == 2
+        assert self.mailbox.message_count() == 0
+
+    def test_purge_messages_wrong_key_returns_none(self):
+        self.mailbox.add_message("S1", "B1", "alice")
+        purged = self.mailbox.purge_messages("wrongkey")
+        assert purged is None
+        assert self.mailbox.message_count() == 1
 
     def test_message_expiry(self):
         self.mailbox.add_message("Old", "Old body", "bob")
@@ -283,6 +309,47 @@ class TestHttpMailRoutes:
         assert len(data["messages"]) == 1
         assert data["messages"][0]["subject"] == "Test"
 
+    def test_read_inbox_supports_limit_and_offset(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "First", "body": "One", "sender": "alice"},
+        )
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Second", "body": "Two", "sender": "bob"},
+        )
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Third", "body": "Three", "sender": "carol"},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&limit=1&offset=1",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["total_messages"] == 3
+        assert data["returned"] == 1
+        assert data["offset"] == 1
+        assert data["limit"] == 1
+        assert data["messages"][0]["subject"] == "Second"
+
+    def test_read_inbox_invalid_limit_returns_400(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&limit=0",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
+
     def test_read_inbox_wrong_key_is_denied(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
@@ -383,6 +450,47 @@ class TestHttpMailRoutes:
 
         r = self.client.post(
             f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": "badkey"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 403
+
+    def test_purge_mailbox_messages_correct_key(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "One", "body": "A", "sender": "x"},
+        )
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Two", "body": "B", "sender": "y"},
+        )
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/purge",
+            json={"read_key": read_key},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        assert r.get_json()["success"] is True
+        assert r.get_json()["deleted_count"] == 2
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        assert len(r.get_json()["messages"]) == 0
+
+    def test_purge_mailbox_messages_wrong_key(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/purge",
             json={"read_key": "badkey"},
             headers={"Accept": "application/json"},
         )

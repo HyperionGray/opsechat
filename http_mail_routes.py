@@ -10,6 +10,7 @@ Routes registered under /<path>/mail/:
   POST /<path>/mail/<address>/send         - Send a message to a mailbox (no auth)
   GET  /<path>/mail/<address>/inbox        - Read inbox (requires ?key=<read_key>)
   POST /<path>/mail/<address>/delete/<id>  - Delete a message (requires read_key in form)
+  POST /<path>/mail/<address>/purge        - Delete all messages (requires read_key in form)
   POST /<path>/mail/<address>/destroy      - Delete entire mailbox (requires read_key in form)
 """
 
@@ -35,6 +36,9 @@ def register_http_mail_routes(app):
         """Strip dangerous characters and enforce length."""
         text = re.sub(r'[<>&"\']', '', text)
         return text[:max_len]
+
+    def _wants_json() -> bool:
+        return request.headers.get("Accept", "").startswith("application/json")
 
     # ------------------------------------------------------------------
     # Main UI — create or access mailbox
@@ -132,7 +136,7 @@ def register_http_mail_routes(app):
 
         mailbox = http_mail_storage.get_mailbox(address)
         if mailbox is None:
-            if request.headers.get("Accept", "").startswith("application/json"):
+            if _wants_json():
                 return jsonify({"error": "Mailbox not found"}), 404
             return render_template("http_mail.html",
                                    path=app.config["path"],
@@ -141,10 +145,29 @@ def register_http_mail_routes(app):
                                    error="Mailbox not found"), 404
 
         read_key = request.args.get("key", "")
-        messages = mailbox.get_messages(read_key)
+        raw_limit = request.args.get("limit", "").strip()
+        raw_offset = request.args.get("offset", "0").strip()
+
+        limit = None
+        if raw_limit:
+            try:
+                limit = int(raw_limit)
+            except ValueError:
+                return jsonify({"error": "limit must be an integer >= 1"}), 400
+            if limit < 1:
+                return jsonify({"error": "limit must be an integer >= 1"}), 400
+
+        try:
+            offset = int(raw_offset) if raw_offset else 0
+        except ValueError:
+            return jsonify({"error": "offset must be an integer >= 0"}), 400
+        if offset < 0:
+            return jsonify({"error": "offset must be an integer >= 0"}), 400
+
+        messages = mailbox.get_messages(read_key, limit=limit, offset=offset)
 
         if messages is None:
-            if request.headers.get("Accept", "").startswith("application/json"):
+            if _wants_json():
                 return jsonify({"error": "Invalid read key"}), 403
             return render_template("http_mail.html",
                                    path=app.config["path"],
@@ -152,8 +175,16 @@ def register_http_mail_routes(app):
                                    max_message_length=MAX_MAIL_MESSAGE_LENGTH,
                                    error="Invalid read key — access denied"), 403
 
-        if request.headers.get("Accept", "").startswith("application/json"):
-            return jsonify({"address": address, "messages": messages})
+        if _wants_json():
+            total_messages = mailbox.message_count()
+            return jsonify({
+                "address": address,
+                "messages": messages,
+                "total_messages": total_messages,
+                "returned": len(messages),
+                "offset": offset,
+                "limit": limit,
+            })
 
         return render_template("http_mail.html",
                                path=app.config["path"],
@@ -162,6 +193,37 @@ def register_http_mail_routes(app):
                                inbox_address=address,
                                inbox_read_key=read_key,
                                messages=messages)
+
+    # ------------------------------------------------------------------
+    # Purge all messages from a mailbox (requires read_key in POST body)
+    # ------------------------------------------------------------------
+
+    @app.route('/<string:url_addition>/mail/<string:address>/purge', methods=["POST"])
+    def http_mail_purge_messages(url_addition, address):
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+
+        mailbox = http_mail_storage.get_mailbox(address)
+        if mailbox is None:
+            return jsonify({"error": "Mailbox not found"}), 404
+
+        if request.is_json:
+            read_key = (request.get_json() or {}).get("read_key", "")
+        else:
+            read_key = request.form.get("read_key", "")
+
+        deleted_count = mailbox.purge_messages(read_key)
+        if deleted_count is None:
+            return jsonify({"error": "Invalid read key"}), 403
+
+        if request.is_json or _wants_json():
+            return jsonify({"success": True, "deleted_count": deleted_count})
+
+        return redirect(url_for("http_mail_inbox",
+                                url_addition=url_addition,
+                                address=address,
+                                key=read_key))
 
     # ------------------------------------------------------------------
     # Delete a single message (requires read_key in POST body)

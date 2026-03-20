@@ -37,6 +37,7 @@ Installation and deployment guides for different environments.
 ### 📖 User Guide
 Documentation for end users and operators.
 
+- [HTTP Mail System](user-guide/HTTP_MAIL_SYSTEM.md) - Email-over-HTTP mailbox usage and API
 - [Email System](user-guide/EMAIL_SYSTEM.md) - Comprehensive email documentation
 - [Email Quick Start](user-guide/EMAIL_QUICKSTART.md) - Quick email setup guide
 - [PGP Usage](user-guide/PGP_USAGE.md) - PGP encryption guide
