@@ -100,6 +100,15 @@ class HttpMailbox:
                     return True
         return False
 
+    def rotate_read_key(self, current_read_key: str) -> Optional[str]:
+        """Rotate the mailbox read key after verifying the current key."""
+        if not secrets.compare_digest(current_read_key, self.read_key):
+            return None
+        new_key = _generate_id(24)  # 24 bytes -> 32 URL-safe chars
+        with self.lock:
+            self.read_key = new_key
+        return new_key
+
     def _expire_old_messages(self) -> None:
         """Remove messages older than MAIL_EXPIRY_HOURS."""
         cutoff = datetime.datetime.now() - datetime.timedelta(hours=MAIL_EXPIRY_HOURS)
@@ -146,19 +155,32 @@ class HttpMailStorage:
                 return False
             if not secrets.compare_digest(read_key, mailbox.read_key):
                 return False
-            for msg in mailbox.messages:
-                msg.overwrite()
+            with mailbox.lock:
+                for msg in mailbox.messages:
+                    msg.overwrite()
+                mailbox.messages = []
             del self._mailboxes[address]
             return True
+
+    def rotate_mailbox_key(self, address: str, current_read_key: str) -> Optional[str]:
+        """Rotate the read key for a mailbox after verifying current_read_key."""
+        with self._lock:
+            mailbox = self._mailboxes.get(address)
+        if mailbox is None:
+            return None
+        return mailbox.rotate_read_key(current_read_key)
 
     def cleanup_empty_old_mailboxes(self) -> None:
         """Remove mailboxes with no messages that are older than 48 hours."""
         cutoff = datetime.datetime.now() - datetime.timedelta(hours=48)
+        stale = []
         with self._lock:
-            stale = [
-                addr for addr, mb in self._mailboxes.items()
-                if mb.created_at < cutoff and len(mb.messages) == 0
-            ]
+            for addr, mb in self._mailboxes.items():
+                mb._expire_old_messages()
+                with mb.lock:
+                    is_empty = len(mb.messages) == 0
+                if mb.created_at < cutoff and is_empty:
+                    stale.append(addr)
             for addr in stale:
                 del self._mailboxes[addr]
 

@@ -4,7 +4,7 @@ Tests for the HTTP mail system (email over HTTP, no SMTP/IMAP).
 Covers:
 - HttpMailStorage: create mailbox, send, read (default deny), delete, destroy
 - http_mail_routes: all REST endpoints via Flask test client
-- Missing email_routes: view, edit, delete, burner POST, expire
+- Extended email_routes: view, edit, delete, burner POST actions
 """
 
 import datetime
@@ -101,6 +101,20 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_rotate_mailbox_key_with_correct_key(self):
+        mb = self.storage.create_mailbox()
+        old_key = mb.read_key
+        new_key = self.storage.rotate_mailbox_key(mb.address, old_key)
+        assert new_key is not None
+        assert new_key != old_key
+        assert mb.read_key == new_key
+
+    def test_rotate_mailbox_key_with_wrong_key_fails(self):
+        mb = self.storage.create_mailbox()
+        new_key = self.storage.rotate_mailbox_key(mb.address, "wrongkey")
+        assert new_key is None
+        assert mb.read_key != "wrongkey"
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -164,6 +178,20 @@ class TestHttpMailbox:
     def test_delete_nonexistent_message(self):
         result = self.mailbox.delete_message("secretkey123456789012345678901", "fakeid")
         assert result is False
+
+    def test_rotate_read_key_correct_key(self):
+        old_key = self.mailbox.read_key
+        new_key = self.mailbox.rotate_read_key(old_key)
+        assert new_key is not None
+        assert new_key != old_key
+        assert self.mailbox.get_messages(old_key) is None
+        assert self.mailbox.get_messages(new_key) == []
+
+    def test_rotate_read_key_wrong_key(self):
+        old_key = self.mailbox.read_key
+        new_key = self.mailbox.rotate_read_key("wrongkey")
+        assert new_key is None
+        assert self.mailbox.read_key == old_key
 
     def test_message_expiry(self):
         self.mailbox.add_message("Old", "Old body", "bob")
@@ -387,6 +415,53 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 403
+
+    def test_rotate_read_key_success(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        old_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Rotate", "body": "Before rotation", "sender": "alice"},
+        )
+
+        rotate = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
+            json={"read_key": old_key},
+            headers={"Accept": "application/json"},
+        )
+        assert rotate.status_code == 200
+        payload = rotate.get_json()
+        assert payload["success"] is True
+        assert payload["read_key"] != old_key
+        new_key = payload["read_key"]
+
+        # Old key is denied after rotation.
+        denied = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={old_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert denied.status_code == 403
+
+        # New key can still read existing messages.
+        allowed = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={new_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert allowed.status_code == 200
+        assert len(allowed.get_json()["messages"]) == 1
+
+    def test_rotate_read_key_wrong_key(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        rotate = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
+            json={"read_key": "badkey"},
+            headers={"Accept": "application/json"},
+        )
+        assert rotate.status_code == 403
 
     def test_message_body_sanitized(self):
         r = self.client.post(f"/{self.path}/mail/new")
