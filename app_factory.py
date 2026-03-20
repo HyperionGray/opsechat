@@ -100,6 +100,10 @@ def create_app():
     # Register email routes
     from email_routes import register_email_routes
     register_email_routes(app, id_generator, get_random_color)
+
+    # Register legal policy routes
+    from legal_routes import register_legal_routes
+    register_legal_routes(app)
     
     # Register review routes (existing function-based registration)
     register_review_routes(app, id_generator, get_random_color, 

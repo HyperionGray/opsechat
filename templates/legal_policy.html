@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ policy_title }} - OpSecChat</title>
+  <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <main role="main">
+    <h1>{{ policy_title }}</h1>
+    <p>
+      <a href="/terms">Terms</a> |
+      <a href="/privacy">Privacy</a> |
+      <a href="/aup">AUP</a> |
+      <a href="/">Home</a>
+    </p>
+    <pre>{{ policy_text }}</pre>
+  </main>
+</body>
+</html>
