@@ -42,6 +42,9 @@ RATE_LIMITS = {
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
+# ASCII prefix used to mark encrypted payloads in transit/storage.
+# We avoid emoji markers so sanitization does not strip encryption metadata.
+ENCRYPTED_MESSAGE_PREFIX = "ENC:"
 
 # Room class to manage chat state
 class ChatRoom:
@@ -222,6 +225,52 @@ def cleanup_rate_limits():
             del _rate_limit_store[sid]
 
 
+def _is_encrypted_message(message_text: str) -> bool:
+    """
+    Return True when message contains an encrypted payload marker.
+
+    Supports both the new ASCII marker (ENC:) and the legacy emoji marker (🔒)
+    for backward compatibility with older clients.
+    """
+    return (
+        message_text.startswith(ENCRYPTED_MESSAGE_PREFIX)
+        or message_text.startswith("🔒")
+    )
+
+
+def _normalize_encrypted_message(message_text: str) -> str:
+    """
+    Normalize encrypted message marker to ASCII-only ENC: prefix.
+    """
+    if message_text.startswith("🔒"):
+        return f"{ENCRYPTED_MESSAGE_PREFIX}{message_text[1:]}"
+    return message_text
+
+
+def _is_valid_encrypted_payload(message_text: str) -> bool:
+    """
+    Validate encrypted payload format.
+
+    Expected format:
+      ENC:<base64(iv + ciphertext + gcm_tag)>
+    """
+    normalized = _normalize_encrypted_message(message_text)
+    if not normalized.startswith(ENCRYPTED_MESSAGE_PREFIX):
+        return False
+
+    payload = normalized[len(ENCRYPTED_MESSAGE_PREFIX):]
+    if not payload:
+        return False
+
+    try:
+        decoded = base64.b64decode(payload, validate=True)
+    except Exception:
+        return False
+
+    # Minimum AES-GCM payload: 12-byte IV + 16-byte auth tag.
+    return len(decoded) >= 28
+
+
 # Background cleanup thread
 def cleanup_loop():
     """Continuously clean up old messages and rooms"""
@@ -350,18 +399,23 @@ def register_simple_chat_routes(app):
             # Check for length cap to prevent base64 encoding of media
             if len(message_text) > MAX_MESSAGE_LENGTH:
                 return jsonify({"error": f"Message too long. Maximum {MAX_MESSAGE_LENGTH} characters allowed."}), 400
-            
-            # Detect potential base64 encoded content (basic check)
-            # Base64 has high entropy and typically lacks spaces
-            if len(message_text) > 100:
-                space_count = message_text.count(' ')
-                if space_count < len(message_text) * 0.05:  # Less than 5% spaces
-                    # Might be base64 or encoded content
-                    return jsonify({"error": "Invalid message format. Only plain text allowed."}), 400
-            
-            # Filter to ASCII only and remove emojis
-            message_text = filter_to_ascii(message_text)
-            message_text = sanitize_emojis(message_text)
+
+            if _is_encrypted_message(message_text):
+                if not _is_valid_encrypted_payload(message_text):
+                    return jsonify({"error": "Invalid encrypted payload format."}), 400
+                message_text = _normalize_encrypted_message(message_text)
+            else:
+                # Detect potential base64 encoded content (basic check)
+                # Base64 has high entropy and typically lacks spaces
+                if len(message_text) > 100:
+                    space_count = message_text.count(' ')
+                    if space_count < len(message_text) * 0.05:  # Less than 5% spaces
+                        # Might be base64 or encoded content
+                        return jsonify({"error": "Invalid message format. Only plain text allowed."}), 400
+
+                # Filter to ASCII only and remove emojis for plain-text messages.
+                message_text = filter_to_ascii(message_text)
+                message_text = sanitize_emojis(message_text)
             
             # Sanitize message (remove HTML tags)
             message_text = re.sub(r'[<>&"\']', '', message_text)

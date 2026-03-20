@@ -108,6 +108,9 @@ GET /chat/dm/xyz789
 Automatic detection and blocking of potential encoded content:
 - Messages with <5% spaces and >100 characters are flagged
 - Users get clear error: "Message appears to contain encoded data. Only plain text allowed."
+- Encrypted chat messages now use an explicit ASCII prefix: `ENC:<base64_payload>`
+- `ENC:` payloads are validated server-side (strict base64 + minimum AES-GCM size)
+- Legacy `🔒<payload>` markers are still accepted and normalized to `ENC:`
 
 ### XSS Protection
 All user input is now properly sanitized:

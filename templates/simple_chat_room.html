@@ -213,6 +213,7 @@
     <script>
         // Simple E2E encryption using Web Crypto API (reviewable and minimal)
         const roomId = "{{ room_id }}";
+        const ENCRYPTED_PREFIX = "ENC:";
         let encryptionEnabled = false;
         let encryptionKey = null;
         let pollInterval = null;
@@ -332,7 +333,17 @@
         }
         
         function isEncrypted(message) {
-            return message.startsWith("🔒");
+            return message.startsWith(ENCRYPTED_PREFIX) || message.startsWith("🔒");
+        }
+
+        function stripEncryptedPrefix(message) {
+            if (message.startsWith(ENCRYPTED_PREFIX)) {
+                return message.substring(ENCRYPTED_PREFIX.length);
+            }
+            if (message.startsWith("🔒")) {
+                return message.substring(1);
+            }
+            return message;
         }
         
         // UI functions
@@ -372,7 +383,7 @@
                     messageText.appendChild(lockIcon);
                     
                     if (encryptionEnabled && encryptionKey) {
-                        const encryptedData = msg.message.substring(1); // Remove lock emoji
+                        const encryptedData = stripEncryptedPrefix(msg.message);
                         const decrypted = await decryptMessage(encryptedData, encryptionKey);
                         messageText.appendChild(document.createTextNode(decrypted));
                     } else {
@@ -402,7 +413,7 @@
             
             // Encrypt if enabled
             if (encryptionEnabled && encryptionKey) {
-                messageToSend = '🔒' + await encryptMessage(message, encryptionKey);
+                messageToSend = ENCRYPTED_PREFIX + await encryptMessage(message, encryptionKey);
             }
             
             try {

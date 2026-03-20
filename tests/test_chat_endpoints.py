@@ -10,6 +10,7 @@ Related GitHub issues: #109 (initial chat/email plan), #112 (release push),
 """
 
 import datetime
+import base64
 import os
 import sys
 
@@ -174,6 +175,41 @@ class TestChatMessagesEndpoint:
             json={"message": b64_like},
         )
         assert resp.status_code == 400
+
+    def test_encrypted_payload_with_enc_prefix_allowed(self):
+        """ENC: payloads must bypass plain-text base64 heuristics."""
+        encrypted_blob = base64.b64encode(b"x" * 120).decode("ascii")
+        resp = self.client.post(
+            f"/chat/room/{self.room_id}/messages",
+            json={"message": f"ENC:{encrypted_blob}"},
+        )
+        assert resp.status_code == 200
+        assert resp.get_json()["success"] is True
+
+        messages = self.client.get(f"/chat/room/{self.room_id}/messages").get_json()["messages"]
+        assert len(messages) == 1
+        assert messages[0]["message"].startswith("ENC:")
+
+    def test_legacy_emoji_prefix_normalized_to_enc(self):
+        """Legacy client marker (🔒) should still be accepted and normalized."""
+        encrypted_blob = base64.b64encode(b"y" * 120).decode("ascii")
+        resp = self.client.post(
+            f"/chat/room/{self.room_id}/messages",
+            json={"message": f"🔒{encrypted_blob}"},
+        )
+        assert resp.status_code == 200
+        assert resp.get_json()["success"] is True
+
+        messages = self.client.get(f"/chat/room/{self.room_id}/messages").get_json()["messages"]
+        assert messages[0]["message"].startswith("ENC:")
+
+    def test_invalid_encrypted_payload_rejected(self):
+        resp = self.client.post(
+            f"/chat/room/{self.room_id}/messages",
+            json={"message": "ENC:not-base64-payload!!!"},
+        )
+        assert resp.status_code == 400
+        assert "Invalid encrypted payload format." in resp.get_json()["error"]
 
     def test_get_on_missing_room_returns_404(self):
         resp = self.client.get("/chat/room/no-such-room-xyz/messages")
