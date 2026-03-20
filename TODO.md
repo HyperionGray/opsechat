@@ -10,6 +10,7 @@
 - [x] Rate limiting on chat/create, chat/messages, and dm/send endpoints
 - [x] `/health` endpoint returning JSON status with version and uptime
 - [x] Domain rotation CLI and `domain_manager.py`
+- [x] Added second registrar support (Namecheap) with provider fallback
 - [x] Simple web-based chat rooms (`simple_chat_routes.py`)
 - [x] TUI server (`tui-server.py`) and client
 - [x] In-memory message expiry with memory overwriting (3-min chat, 1-min DM)
@@ -99,11 +100,11 @@
   - [x] Add per-endpoint throttling (`/chat/create`, `/chat/*/messages`, `/chat/dm/send`)
   - [ ] Configure reasonable thresholds (review after load testing)
   - [ ] Add backoff/retry logic
-- [ ] Integrate second domain registrar API
-  - [ ] Choose registrar (Namecheap recommended)
-  - [ ] Implement API client
-  - [ ] Update domain rotation logic
-  - [ ] Test automated purchasing
+- [x] Integrate second domain registrar API
+  - [x] Choose registrar (Namecheap recommended)
+  - [x] Implement API client
+  - [x] Update domain rotation logic
+  - [ ] Test live automated purchasing with non-test credentials
 - [ ] Add abuse detection
   - [ ] Keyword filtering
   - [ ] Pattern detection
