@@ -31,9 +31,9 @@ class TestKeyManagementRoutes:
         html = self.client.get("/keys").get_data(as_text=True)
 
         # No inline <script> blocks.
-        assert re.search(r"<script(?![^>]*\\bsrc=)", html) is None
+        assert re.search(r"<script(?![^>]*\bsrc=)", html) is None
         # Avoid inline script attributes on elements.
-        assert re.search(r"\\son[a-zA-Z]+\\s*=", html) is None
+        assert re.search(r"\son[a-zA-Z]+\s*=", html) is None
 
     def test_keys_page_includes_expected_assets(self):
         html = self.client.get("/keys").get_data(as_text=True)
