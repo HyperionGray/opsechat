@@ -142,6 +142,36 @@ POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
 
+#### Get Shared Room Key
+```
+GET /chat/room/<room_id>/key
+Response: {"room_id": "...", "encryption_key": "..."}
+```
+
+#### Get Room Stats
+```
+GET /chat/room/<room_id>/stats
+Response: {
+  "room_id": "...",
+  "message_count": 0,
+  "active_user_count": 0,
+  "room_age_seconds": 12,
+  "newest_message_age_seconds": null,
+  "oldest_message_age_seconds": null,
+  "limits": {
+    "message_ttl_seconds": 180,
+    "room_ttl_seconds": 3600,
+    "max_message_length": 500
+  }
+}
+```
+
+#### Send/View Direct Messages
+```
+POST /chat/dm/send
+GET  /chat/dm/<dm_id>
+```
+
 ### Encryption Implementation
 
 The E2E encryption uses native Web Crypto API:

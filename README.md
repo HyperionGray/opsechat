@@ -252,6 +252,7 @@ Features
 - New chat service created every time the server is started
 - No frills, no fancy CSS, code is easy to follow and review to ensure your safety
 - **Memory Overwriting** - Messages are overwritten in memory before deletion for enhanced security
+- **Room Stats API** - Read-only room diagnostics at `/chat/room/<room_id>/stats`
 
 ### Email System (NEW - REAL EMAIL SUPPORT!)
 - **Real SMTP/IMAP Integration** - Send and receive actual emails via configured email servers (see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md))

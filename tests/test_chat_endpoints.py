@@ -234,6 +234,66 @@ class TestRoomKeyEndpoint:
 
 
 # ===========================================================================
+# /chat/room/<id>/stats
+# ===========================================================================
+
+class TestRoomStatsEndpoint:
+    def setup_method(self):
+        _clear_rooms()
+        self.app = _fresh_app()
+        self.client = self.app.test_client()
+        create_resp = self.client.post("/chat/create")
+        self.room_id = create_resp.get_json()["room_id"]
+
+    def test_stats_endpoint_returns_expected_fields(self):
+        resp = self.client.get(f"/chat/room/{self.room_id}/stats")
+        assert resp.status_code == 200
+        data = resp.get_json()
+
+        for field in (
+            "room_id",
+            "message_count",
+            "active_user_count",
+            "room_age_seconds",
+            "newest_message_age_seconds",
+            "oldest_message_age_seconds",
+            "limits",
+        ):
+            assert field in data, f"Missing field: {field}"
+
+        assert data["room_id"] == self.room_id
+        assert data["message_count"] == 0
+        assert data["newest_message_age_seconds"] is None
+        assert data["oldest_message_age_seconds"] is None
+        assert data["room_age_seconds"] >= 0
+
+        limits = data["limits"]
+        assert limits["max_message_length"] == MAX_MESSAGE_LENGTH
+        assert limits["message_ttl_seconds"] == 180
+        assert limits["room_ttl_seconds"] == 3600
+
+    def test_stats_reflects_message_activity(self):
+        self.client.post(
+            f"/chat/room/{self.room_id}/messages",
+            json={"message": "stats coverage message"},
+        )
+        resp = self.client.get(f"/chat/room/{self.room_id}/stats")
+        assert resp.status_code == 200
+        data = resp.get_json()
+
+        assert data["message_count"] == 1
+        assert data["active_user_count"] >= 1
+        assert data["newest_message_age_seconds"] is not None
+        assert data["oldest_message_age_seconds"] is not None
+        assert data["newest_message_age_seconds"] >= 0
+        assert data["oldest_message_age_seconds"] >= 0
+
+    def test_stats_on_missing_room_returns_404(self):
+        resp = self.client.get("/chat/room/no-room-here/stats")
+        assert resp.status_code == 404
+
+
+# ===========================================================================
 # /chat/dm/send and /chat/dm/<id>
 # ===========================================================================
 

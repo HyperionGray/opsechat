@@ -1,4 +1,4 @@
-# Testing Checklist - OpSecHat v0.8.0
+# Testing Checklist - OpSecChat v0.8.0
 
 Use this checklist to verify all new features are working correctly.
 
@@ -9,9 +9,9 @@ Use this checklist to verify all new features are working correctly.
 ### 1. Unit Tests
 ```bash
 cd /path/to/opsechat
-python3 test_new_features.py
+python3 -m pytest tests/test_chatroom.py tests/test_chat_ids.py tests/test_chat_endpoints.py
 ```
-**Expected**: All 6 tests pass
+**Expected**: All chat unit/integration tests pass
 - [ ] ✅ Secure ID generation
 - [ ] ✅ Automated key exchange
 - [ ] ✅ Rate limiting
@@ -391,7 +391,7 @@ pip install Flask stem
 ```bash
 # Ensure you're in the correct directory
 cd /path/to/opsechat
-python3 test_new_features.py
+python3 -m pytest tests/test_chatroom.py tests/test_chat_ids.py tests/test_chat_endpoints.py
 ```
 
 **API tests fail:**

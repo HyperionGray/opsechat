@@ -239,7 +239,11 @@
 ## COMPLETED ✅
 
 ### Capabilities Assessment & Tests (NEW - March 2026)
-- [x] 56 new unit + integration tests in `tests/test_simple_chat.py`
+- [x] 56+ unit + integration tests split into focused modules:
+  - [x] `tests/test_chatroom.py`
+  - [x] `tests/test_chat_endpoints.py`
+  - [x] `tests/test_chat_ids.py`
+  - [x] `tests/test_security_headers.py`
   - [x] `ChatRoom` class: message lifecycle, auto-expiry, memory overwriting, unique keys
   - [x] DM system: send, view, expiry, cleanup, memory overwrite
   - [x] Secure ID generation: room IDs and DM IDs (uniqueness, length, URL-safety)
@@ -248,6 +252,7 @@
   - [x] `/chat/create` API endpoint
   - [x] `/chat/room/<id>/messages` GET + POST endpoint
   - [x] `/chat/room/<id>/key` automated key exchange endpoint
+  - [x] `/chat/room/<id>/stats` room diagnostics endpoint
   - [x] `/chat/dm/send` and `/chat/dm/<id>` DM endpoints
   - [x] Security headers (CSP, X-Frame-Options, Referrer-Policy, Server suppression)
   - [x] Message sanitization and length limits
