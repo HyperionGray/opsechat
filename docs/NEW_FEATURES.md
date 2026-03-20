@@ -106,8 +106,10 @@ GET /chat/dm/xyz789
 
 ### Base64 Detection
 Automatic detection and blocking of potential encoded content:
-- Messages with <5% spaces and >100 characters are flagged
-- Users get clear error: "Message appears to contain encoded data. Only plain text allowed."
+- Messages over 100 characters with very low whitespace and base64/base64url
+  character profiles are flagged
+- Users get clear error: "Invalid message format. Only plain text allowed."
+- Blocked attempts are emitted as sanitized security audit events
 
 ### XSS Protection
 All user input is now properly sanitized:

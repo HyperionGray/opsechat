@@ -97,6 +97,13 @@ python chat-room.py --port 8080
 - The timer starts when the message is sent
 - Deleted messages are overwritten in memory before removal
 
+### Encoded Payload Filtering
+- Chat messages are validated with an encoded-payload detector before storage.
+- Long high-entropy blobs (base64/base64url-like strings) are rejected.
+- This reduces abuse risk from users trying to transfer media or binary data
+  through text endpoints.
+- Rejected payloads return: `Invalid message format. Only plain text allowed.`
+
 ### Memory Overwriting
 When messages expire:
 ```python
@@ -111,6 +118,14 @@ This prevents memory forensics from recovering deleted messages.
 - Rooms are automatically deleted after **1 hour** of inactivity
 - All message data is overwritten before room deletion
 - No persistent storage - everything is in-memory
+
+### Security Audit Events
+- Suspicious events are logged through the structured security logger:
+  - chat room creation rate-limit violations
+  - chat message rate-limit violations
+  - direct-message rate-limit violations
+  - blocked encoded payload attempts
+- Logs are sanitized before emission to avoid leaking sensitive identifiers.
 
 ### Username Randomization
 - Usernames are server-generated and non-reusable

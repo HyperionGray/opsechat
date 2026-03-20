@@ -12,6 +12,7 @@ from simple_chat_routes import (
     generate_secure_dm_id,
     generate_random_username,
     get_random_color_rgb,
+    is_potentially_encoded_payload,
     ChatRoom,
     check_rate_limit,
     RATE_LIMITS,
@@ -139,6 +140,28 @@ class TestCheckRateLimit:
 
 
 # ---------------------------------------------------------------------------
+# Encoded payload detection
+# ---------------------------------------------------------------------------
+
+class TestEncodedPayloadFilter:
+    def test_detects_long_base64_payload(self):
+        payload = "A" * 180
+        assert is_potentially_encoded_payload(payload) is True
+
+    def test_detects_long_base64url_payload(self):
+        payload = ("a_b-cD12" * 20).strip()
+        assert is_potentially_encoded_payload(payload) is True
+
+    def test_allows_plain_text_with_spaces(self):
+        msg = "this is ordinary human text with spacing " * 5
+        assert is_potentially_encoded_payload(msg) is False
+
+    def test_allows_long_text_with_punctuation(self):
+        msg = ("This long sentence includes punctuation, commas, and periods. " * 4).strip()
+        assert is_potentially_encoded_payload(msg) is False
+
+
+# ---------------------------------------------------------------------------
 # HTTP routes – chat rooms
 # ---------------------------------------------------------------------------
 
@@ -216,6 +239,17 @@ class TestChatRoutes:
             content_type="application/json",
         )
         assert response.status_code == 400
+
+    def test_post_message_rejects_encoded_payload(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        encoded_blob = "QWxhZGRpbjpPcGVuU2VzYW1l" * 8
+        response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": encoded_blob},
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        assert "Invalid message format" in response.get_json()["error"]
 
     def test_post_message_to_nonexistent_room(self, client):
         response = client.post(

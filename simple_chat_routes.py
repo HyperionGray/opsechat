@@ -19,6 +19,13 @@ import base64
 from flask import render_template, request, session, jsonify, Blueprint
 from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
+try:
+    from monitoring import security_logger
+except ModuleNotFoundError:
+    class _NoOpSecurityLogger:
+        def log_suspicious_activity(self, *_args, **_kwargs):
+            return
+    security_logger = _NoOpSecurityLogger()
 
 # Global room storage (in-memory only)
 chat_rooms = {}
@@ -42,6 +49,9 @@ RATE_LIMITS = {
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
+ENCODED_PAYLOAD_MIN_LENGTH = 100
+ENCODED_PAYLOAD_MAX_SPACE_RATIO = 0.05
+ENCODED_PAYLOAD_PATTERN = re.compile(r"^[A-Za-z0-9+/=_-]+$")
 
 # Room class to manage chat state
 class ChatRoom:
@@ -153,6 +163,28 @@ def cleanup_old_dms():
             dm["message"] = "X" * len(dm["message"])
             dm["room_id"] = "X" * len(dm["room_id"])
             del direct_messages[dm_id]
+
+
+def is_potentially_encoded_payload(message_text: str) -> bool:
+    """
+    Return True when text resembles a long encoded payload (base64/base64url).
+
+    This keeps chat text-only by blocking high-entropy encoded blobs that are
+    often used for media/file transfer.
+    """
+    stripped = message_text.strip()
+    if len(stripped) < ENCODED_PAYLOAD_MIN_LENGTH:
+        return False
+
+    collapsed = re.sub(r"\s+", "", stripped)
+    if len(collapsed) < ENCODED_PAYLOAD_MIN_LENGTH:
+        return False
+
+    space_ratio = stripped.count(" ") / len(stripped)
+    if space_ratio >= ENCODED_PAYLOAD_MAX_SPACE_RATIO:
+        return False
+
+    return ENCODED_PAYLOAD_PATTERN.fullmatch(collapsed) is not None
 
 
 def check_rate_limit(session_id: str, endpoint: str) -> tuple:
@@ -279,6 +311,10 @@ def register_simple_chat_routes(app):
 
         allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
         if not allowed:
+            security_logger.log_suspicious_activity(
+                "chat_create_rate_limit_exceeded",
+                {"room_id": "new_room_request", "retry_after_seconds": retry_after},
+            )
             return jsonify({
                 "error": f"Rate limit exceeded. Try again in {retry_after} seconds."
             }), 429
@@ -332,6 +368,10 @@ def register_simple_chat_routes(app):
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
             if not allowed:
+                security_logger.log_suspicious_activity(
+                    "chat_message_rate_limit_exceeded",
+                    {"room_id": room_id, "retry_after_seconds": retry_after},
+                )
                 return jsonify({
                     "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds."
                 }), 429
@@ -351,13 +391,13 @@ def register_simple_chat_routes(app):
             if len(message_text) > MAX_MESSAGE_LENGTH:
                 return jsonify({"error": f"Message too long. Maximum {MAX_MESSAGE_LENGTH} characters allowed."}), 400
             
-            # Detect potential base64 encoded content (basic check)
-            # Base64 has high entropy and typically lacks spaces
-            if len(message_text) > 100:
-                space_count = message_text.count(' ')
-                if space_count < len(message_text) * 0.05:  # Less than 5% spaces
-                    # Might be base64 or encoded content
-                    return jsonify({"error": "Invalid message format. Only plain text allowed."}), 400
+            # Detect and block likely encoded payloads (base64/base64url blobs)
+            if is_potentially_encoded_payload(message_text):
+                security_logger.log_suspicious_activity(
+                    "encoded_payload_blocked",
+                    {"room_id": room_id, "message_length": len(message_text)},
+                )
+                return jsonify({"error": "Invalid message format. Only plain text allowed."}), 400
             
             # Filter to ASCII only and remove emojis
             message_text = filter_to_ascii(message_text)
@@ -409,6 +449,10 @@ def register_simple_chat_routes(app):
         # Check rate limit for DMs
         allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
         if not allowed:
+            security_logger.log_suspicious_activity(
+                "dm_send_rate_limit_exceeded",
+                {"retry_after_seconds": retry_after},
+            )
             return jsonify({
                 "error": f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds."
             }), 429
