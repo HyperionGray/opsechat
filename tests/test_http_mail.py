@@ -91,6 +91,18 @@ class TestHttpMailStorage:
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
 
+    def test_deleted_mailbox_reference_rejects_new_writes(self):
+        mb = self.storage.create_mailbox()
+        addr = mb.address
+        key = mb.read_key
+        mailbox_ref = self.storage.get_mailbox(addr)
+        assert mailbox_ref is not None
+
+        result = self.storage.delete_mailbox(addr, key)
+        assert result is True
+        assert mailbox_ref.add_message("Subj", "Body", "sender") is None
+        assert mailbox_ref.get_messages(key) is None
+
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
         result = self.storage.delete_mailbox(mb.address, "wrongkey")
@@ -197,6 +209,11 @@ class TestHttpMailbox:
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
 
+    def test_destroyed_mailbox_rejects_writes_and_reads(self):
+        self.mailbox.destroy()
+        assert self.mailbox.add_message("Subj", "Body", "alice") is None
+        assert self.mailbox.get_messages("secretkey123456789012345678901") is None
+
 
 # ===========================================================================
 # HTTP mail route integration tests
@@ -247,6 +264,42 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_form_nojs_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        payload = r.get_json()
+        addr = payload["address"]
+        read_key = payload["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "No JS route",
+                "body": "Form submission works",
+                "sender": "noscript",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        messages = r.get_json()["messages"]
+        assert len(messages) == 1
+        assert messages[0]["subject"] == "No JS route"
+        assert messages[0]["body"] == "Form submission works"
+
+    def test_send_message_form_nojs_route_missing_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "X", "body": "Y", "sender": "z"},
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required" in r.data
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")

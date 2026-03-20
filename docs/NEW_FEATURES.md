@@ -172,6 +172,31 @@ When limit exceeded:
 
 ---
 
+## HTTP Mail Reliability Improvements
+
+### Non-JavaScript Compose Support
+The HTTP Mail page now supports a full no-JavaScript send flow via:
+
+```text
+POST /<path>/mail/send
+```
+
+This endpoint reads the destination mailbox from the form payload (`_address_override`)
+and sends the message server-side. This closes a functional gap where compose only worked
+when JavaScript rewrote the form action.
+
+### Destroyed Mailbox Write Protection
+Mailbox destruction now enforces a hard destroyed state in memory:
+
+- Writes are rejected after mailbox destruction
+- Reads from stale mailbox references are denied
+- Message memory is still overwritten before clearing
+
+This removes a race window where old in-process mailbox references could still accept writes
+after global mailbox deletion.
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose
