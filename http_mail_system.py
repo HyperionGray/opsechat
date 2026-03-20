@@ -16,7 +16,6 @@ Design:
 
 import datetime
 import secrets
-import string
 import threading
 from typing import Dict, List, Optional
 
@@ -65,9 +64,13 @@ class HttpMailbox:
         self.messages: List[HttpMessage] = []
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
+        self.destroyed = False
 
-    def add_message(self, subject: str, body: str, sender_handle: str) -> str:
-        """Add a message; returns the new message ID."""
+    def add_message(self, subject: str, body: str, sender_handle: str) -> Optional[str]:
+        """Add a message; returns the new message ID, or None if mailbox is destroyed."""
+        with self.lock:
+            if self.destroyed:
+                return None
         msg_id = _generate_id(12)  # 12 bytes → 16 URL-safe chars
         msg = HttpMessage(
             msg_id=msg_id,
@@ -77,6 +80,8 @@ class HttpMailbox:
             timestamp=datetime.datetime.now(),
         )
         with self.lock:
+            if self.destroyed:
+                return None
             self.messages.append(msg)
         return msg_id
 
@@ -145,10 +150,6 @@ class HttpMailStorage:
         - We remove the mailbox from the global store under `self._lock`.
         - We then overwrite and clear messages under the per-mailbox lock
           to avoid races with concurrent send/add operations.
-
-        Checklist (follow-ups outside this class):
-        - [ ] Ensure HttpMailbox exposes a `lock` used by all writers.
-        - [ ] Ensure add_message (or equivalent) checks a `destroyed` flag.
         """
         # First, look up and authenticate the mailbox under the global lock.
         with self._lock:
@@ -157,6 +158,9 @@ class HttpMailStorage:
                 return False
             if not secrets.compare_digest(read_key, mailbox.read_key):
                 return False
+            # Mark as destroyed while mailbox is still globally locked so
+            # concurrent writers can fail fast even if they already hold a reference.
+            mailbox.destroyed = True
             # Remove the mailbox from the global mapping while still holding
             # the storage lock so no new lookups can obtain it.
             del self._mailboxes[address]
@@ -171,15 +175,12 @@ class HttpMailStorage:
                     msg.overwrite()
                 # Clear the list so message objects can be GC'ed.
                 mailbox.messages.clear()
-                # Mark as destroyed so writers can refuse future sends.
-                setattr(mailbox, "destroyed", True)
         else:
             # Fallback: no explicit mailbox lock available; still perform
             # overwrite/clear to maintain best-effort data scrubbing.
             for msg in mailbox.messages:
                 msg.overwrite()
             mailbox.messages.clear()
-            setattr(mailbox, "destroyed", True)
 
         return True
     def cleanup_empty_old_mailboxes(self) -> None:
