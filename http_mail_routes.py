@@ -10,6 +10,7 @@ Routes registered under /<path>/mail/:
   POST /<path>/mail/<address>/send         - Send a message to a mailbox (no auth)
   GET  /<path>/mail/<address>/inbox        - Read inbox (requires ?key=<read_key>)
   POST /<path>/mail/<address>/delete/<id>  - Delete a message (requires read_key in form)
+  POST /<path>/mail/<address>/rotate-key   - Rotate mailbox read key (requires current key)
   POST /<path>/mail/<address>/destroy      - Delete entire mailbox (requires read_key in form)
 """
 
@@ -224,3 +225,33 @@ def register_http_mail_routes(app):
                                hostname=app.config.get("hostname", ""),
                                max_message_length=MAX_MAIL_MESSAGE_LENGTH,
                                success="Mailbox destroyed.")
+
+    # ------------------------------------------------------------------
+    # Rotate mailbox read key (requires current key in POST body)
+    # ------------------------------------------------------------------
+
+    @app.route('/<string:url_addition>/mail/<string:address>/rotate-key', methods=["POST"])
+    def http_mail_rotate_key(url_addition, address):
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+
+        if request.is_json:
+            current_key = (request.get_json() or {}).get("read_key", "")
+        else:
+            current_key = request.form.get("read_key", "")
+
+        new_key = http_mail_storage.rotate_mailbox_key(address, current_key)
+        if not new_key:
+            return jsonify({"error": "Invalid read key or mailbox not found"}), 403
+
+        if request.is_json:
+            return jsonify({"success": True, "new_read_key": new_key})
+
+        return render_template("http_mail.html",
+                               path=app.config["path"],
+                               hostname=app.config.get("hostname", ""),
+                               max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                               success="Read key rotated. Save the new key now.",
+                               rotated_address=address,
+                               rotated_new_read_key=new_key)

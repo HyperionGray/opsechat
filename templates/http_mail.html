@@ -113,6 +113,14 @@
 <div class="success-box">✅ {{ success }}</div>
 {% endif %}
 
+{% if rotated_new_read_key %}
+<div class="warn">
+  <strong>New Read Key for {{ rotated_address }}:</strong>
+  <div class="token-box" id="rotated-read-key">{{ rotated_new_read_key }}</div>
+  <button onclick="copyText('rotated-read-key')">Copy New Read Key</button>
+</div>
+{% endif %}
+
 <div class="info">
   <strong>How HTTP Mail works:</strong><br>
   1. Create a mailbox — you get a public <em>address</em> and a private <em>read key</em>.<br>
@@ -268,6 +276,13 @@
     <!-- Destroy entire mailbox -->
     <div style="margin-top:30px; border-top:1px solid #333; padding-top:15px;">
       <h3 style="color:#f00;">Danger Zone</h3>
+      <form method="POST" action="/{{ path }}/mail/{{ inbox_address }}/rotate-key">
+        <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
+        <button type="submit"
+                onclick="return confirm('Rotate read key? Old key will stop working immediately.')">
+          Rotate Read Key
+        </button>
+      </form>
       <form method="POST" action="/{{ path }}/mail/{{ inbox_address }}/destroy">
         <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
         <button type="submit" class="danger"
@@ -392,6 +407,9 @@
     });
     html += '<div style="margin-top:30px;border-top:1px solid #333;padding-top:15px;">' +
       '<h3 style="color:#f00;">Danger Zone</h3>' +
+      '<button class="js-rotate-key"' +
+        ' data-address="' + esc(address) + '"' +
+        ' data-read-key="' + esc(readKey) + '">Rotate Read Key</button> ' +
       '<button class="danger js-destroy-mailbox"' +
         ' data-address="' + esc(address) + '"' +
         ' data-read-key="' + esc(readKey) + '">💣 Destroy Mailbox</button></div>';
@@ -408,6 +426,12 @@
       btn.addEventListener('click', function() {
         if (!confirm('Destroy mailbox and ALL messages permanently?')) return;
         destroyMailbox(btn.dataset.address, btn.dataset.readKey);
+      });
+    });
+    container.querySelectorAll('.js-rotate-key').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        if (!confirm('Rotate read key? Old key will stop working immediately.')) return;
+        rotateReadKey(btn.dataset.address, btn.dataset.readKey);
       });
     });
   }
@@ -439,6 +463,26 @@
       } else {
         alert('Error: ' + (d.error || 'Could not destroy mailbox'));
       }
+    });
+  }
+
+  function rotateReadKey(address, readKey) {
+    fetch('/{{ path }}/mail/' + encodeURIComponent(address) + '/rotate-key', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: JSON.stringify({read_key: readKey})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.success) {
+        alert('Error: ' + (d.error || 'Could not rotate read key'));
+        return;
+      }
+      var newKey = d.new_read_key;
+      document.getElementById('read-key-input').value = newKey;
+      document.getElementById('js-inbox-messages').innerHTML =
+        '<div class="success-box">Read key rotated. New key loaded into the form.</div>';
+      fetchInbox();
     });
   }
 
