@@ -282,6 +282,8 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert len(data["messages"]) == 1
         assert data["messages"][0]["subject"] == "Test"
+        assert data["total_messages"] == 1
+        assert data["returned_messages"] == 1
 
     def test_read_inbox_wrong_key_is_denied(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -309,6 +311,86 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 404
+
+    def test_read_inbox_filter_by_sender(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "A", "body": "Body 1", "sender": "alice"},
+        )
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "B", "body": "Body 2", "sender": "bob"},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&sender=ali",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["total_messages"] == 1
+        assert data["returned_messages"] == 1
+        assert data["messages"][0]["sender"] == "alice"
+        assert data["filters"]["sender"] == "ali"
+
+    def test_read_inbox_limit_offset_and_order(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "first", "body": "Body 1", "sender": "alice"},
+        )
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "second", "body": "Body 2", "sender": "bob"},
+        )
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "third", "body": "Body 3", "sender": "carol"},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&order=desc&limit=1&offset=1",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["total_messages"] == 3
+        assert data["returned_messages"] == 1
+        assert data["messages"][0]["subject"] == "second"
+        assert data["filters"]["order"] == "desc"
+        assert data["filters"]["limit"] == 1
+        assert data["filters"]["offset"] == 1
+
+    def test_read_inbox_invalid_limit_returns_400(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&limit=999",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
+        assert "limit" in r.get_json()["error"]
+
+    def test_read_inbox_invalid_since_returns_400(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&since=not-a-date",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
+        assert "since" in r.get_json()["error"]
 
     def test_delete_message_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -421,6 +503,14 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.get_json()["messages"][0]["sender"] == "anonymous"
+
+    def test_mail_index_uses_external_assets_no_inline_blocks(self):
+        r = self.client.get(f"/{self.path}/mail")
+        assert r.status_code == 200
+        html = r.get_data(as_text=True)
+        assert 'href="/static/http_mail.css"' in html
+        assert 'src="/static/http_mail.js"' in html
+        assert "<style>" not in html
 
 
 # ===========================================================================

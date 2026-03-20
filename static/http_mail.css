@@ -1,0 +1,253 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #000;
+  color: #0f0;
+  font-family: "Courier New", monospace;
+  font-size: 15px;
+  padding: 20px;
+  min-height: 100vh;
+}
+
+.header {
+  border-bottom: 2px solid #0f0;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+
+h1 {
+  color: #0f0;
+  font-size: 22px;
+}
+
+h2 {
+  color: #0ff;
+  font-size: 18px;
+  margin: 20px 0 10px;
+}
+
+h3 {
+  color: #0f0;
+  font-size: 15px;
+  margin: 10px 0 5px;
+}
+
+.subheader,
+.muted,
+.hint,
+.msg-meta {
+  color: #888;
+}
+
+.subheader {
+  font-size: 13px;
+}
+
+.paragraph-gap {
+  margin-bottom: 15px;
+}
+
+.hint {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.top-gap {
+  margin-top: 20px;
+}
+
+.nav {
+  margin: 15px 0;
+}
+
+.nav a {
+  color: #0f0;
+  text-decoration: none;
+  margin-right: 15px;
+  padding: 4px 10px;
+  border: 1px solid #0f0;
+  display: inline-block;
+  margin-bottom: 8px;
+}
+
+.nav a:hover {
+  background: #0f0;
+  color: #000;
+}
+
+.panel {
+  border: 1px solid #0f0;
+  padding: 20px;
+  margin: 20px 0;
+  max-width: 900px;
+}
+
+.info,
+.warn,
+.success-box,
+.error-box {
+  padding: 15px;
+  margin: 15px 0;
+  border: 1px solid;
+}
+
+.info {
+  background: #003;
+  border-color: #0ff;
+  color: #0ff;
+}
+
+.warn {
+  background: #330;
+  border-color: #f90;
+  color: #f90;
+}
+
+.success-box {
+  background: #030;
+  border-color: #0f0;
+  color: #0f0;
+}
+
+.error-box {
+  background: #300;
+  border-color: #f00;
+  color: #f00;
+}
+
+.info ol {
+  margin-top: 8px;
+  margin-left: 24px;
+}
+
+.info li {
+  margin-bottom: 4px;
+}
+
+label {
+  display: block;
+  color: #0f0;
+  margin-bottom: 4px;
+}
+
+input[type="text"],
+textarea,
+select {
+  width: 100%;
+  background: #111;
+  color: #0f0;
+  border: 1px solid #0f0;
+  padding: 8px;
+  font-family: "Courier New", monospace;
+  font-size: 14px;
+}
+
+textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+button,
+.btn {
+  background: #000;
+  color: #0f0;
+  border: 1px solid #0f0;
+  padding: 8px 18px;
+  font-family: "Courier New", monospace;
+  font-size: 14px;
+  cursor: pointer;
+  margin-right: 10px;
+  margin-top: 5px;
+  text-decoration: none;
+  display: inline-block;
+}
+
+button:hover,
+.btn:hover {
+  background: #0f0;
+  color: #000;
+}
+
+button.danger {
+  border-color: #f00;
+  color: #f00;
+}
+
+button.danger:hover {
+  background: #f00;
+  color: #fff;
+}
+
+.section-toggle {
+  margin: 20px 0;
+}
+
+.section-toggle button {
+  margin-bottom: 5px;
+}
+
+.hidden {
+  display: none;
+}
+
+.token-box {
+  background: #111;
+  border: 1px solid #0ff;
+  padding: 12px;
+  margin: 10px 0;
+  word-break: break-all;
+  color: #0ff;
+  font-size: 13px;
+}
+
+.token-label {
+  color: #888;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.msg-card {
+  border: 1px solid #0f0;
+  padding: 15px;
+  margin: 12px 0;
+  background: #050505;
+}
+
+.msg-subject {
+  color: #0ff;
+  font-weight: bold;
+  margin-bottom: 6px;
+}
+
+.msg-body {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.msg-actions {
+  margin-top: 10px;
+}
+
+.danger-zone {
+  margin-top: 30px;
+  border-top: 1px solid #333;
+  padding-top: 15px;
+}
+
+.danger-title {
+  color: #f00;
+}

@@ -20,6 +20,33 @@ Misuse of these features may be illegal in your jurisdiction. Always obtain prop
 
 ## Core Features
 
+### 0. HTTP Mailboxes (No SMTP/IMAP Required)
+
+The HTTP Mail subsystem provides mailbox-style messaging fully over HTTP:
+
+- Create a mailbox at `/{path}/mail/new` to receive:
+  - public `address` (share with senders)
+  - private `read_key` (required to read or delete)
+- Send messages to `/{path}/mail/{address}/send` (JSON or form)
+- Read messages at `/{path}/mail/{address}/inbox?key={read_key}`
+- Delete a message at `/{path}/mail/{address}/delete/{msg_id}` (POST)
+- Destroy a mailbox at `/{path}/mail/{address}/destroy` (POST)
+
+Inbox reads now support query filters and pagination:
+
+- `sender`: substring match on sender handle
+- `subject`: substring match on subject
+- `since`: ISO-8601 timestamp lower bound
+- `limit`: max messages to return (1-200)
+- `offset`: number of matching messages to skip (>= 0)
+- `order`: `asc` or `desc` by timestamp
+
+Example:
+
+```
+/{path}/mail/AbC123xyz890/inbox?key=...&sender=alice&limit=20&offset=0&order=desc
+```
+
 ### 1. Real Email Integration (NEW!)
 
 #### SMTP Email Sending

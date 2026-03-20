@@ -16,7 +16,6 @@ Design:
 
 import datetime
 import secrets
-import string
 import threading
 from typing import Dict, List, Optional
 
@@ -82,11 +81,54 @@ class HttpMailbox:
 
     def get_messages(self, read_key: str) -> Optional[List[Dict]]:
         """Return messages if read_key matches, else None (default deny)."""
+        query = self.query_messages(read_key=read_key)
+        if query is None:
+            return None
+        return query["messages"]
+
+    def query_messages(self,
+                       read_key: str,
+                       sender_contains: str = "",
+                       subject_contains: str = "",
+                       since: Optional[datetime.datetime] = None,
+                       limit: Optional[int] = None,
+                       offset: int = 0,
+                       order: str = "asc") -> Optional[Dict]:
+        """Query messages with optional filtering and pagination.
+
+        Returns None when read_key validation fails.
+        """
         if not secrets.compare_digest(read_key, self.read_key):
             return None
+
         self._expire_old_messages()
         with self.lock:
-            return [m.to_dict() for m in self.messages]
+            filtered = list(self.messages)
+
+        sender_q = sender_contains.lower().strip()
+        subject_q = subject_contains.lower().strip()
+
+        if sender_q:
+            filtered = [m for m in filtered if sender_q in m.sender_handle.lower()]
+        if subject_q:
+            filtered = [m for m in filtered if subject_q in m.subject.lower()]
+        if since is not None:
+            filtered = [m for m in filtered if m.timestamp >= since]
+
+        reverse = (order == "desc")
+        filtered.sort(key=lambda m: m.timestamp, reverse=reverse)
+
+        total = len(filtered)
+        if offset:
+            filtered = filtered[offset:]
+        if limit is not None:
+            filtered = filtered[:limit]
+
+        return {
+            "total": total,
+            "returned": len(filtered),
+            "messages": [m.to_dict() for m in filtered],
+        }
 
     def delete_message(self, read_key: str, msg_id: str) -> bool:
         """Delete a message by ID after verifying read_key. Returns True on success."""
