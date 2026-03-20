@@ -50,6 +50,27 @@ Porkbun offers cheap domains and a simple API, making it ideal for burner email 
    - System will validate credentials
    - Check budget status display
 
+### CLI State Persistence (Updated)
+
+The `domain_rotation_cli.py` tool now persists rotation state in a structured
+`domain_state` object inside:
+
+```
+~/.opsechat/domain_config.json
+```
+
+Persisted state includes:
+- `current_spending`
+- `active_domain`
+- `owned_domains` (with ISO-8601 timestamps)
+
+Notes:
+- Datetimes are stored as ISO strings and restored to runtime datetime objects.
+- Legacy flat keys (`current_spending`, `owned_domains`, `active_domain`) are
+  still read for backward compatibility.
+- Corrupt or malformed domain entries are skipped instead of crashing CLI
+  operations.
+
 #### Recommended Domain Extensions
 
 **Cheapest Options:**
@@ -236,6 +257,12 @@ Enterprise-focused with comprehensive API.
 - Budget resets monthly, not rolling
 - Check registrar account for actual spending
 - Consider API rate limits affecting purchases
+
+**Saved domains fail to render in `list` command**
+- Ensure your `~/.opsechat/domain_config.json` is valid JSON.
+- The CLI now tolerates malformed entries, but badly broken files may still
+  require manual cleanup.
+- Remove invalid `owned_domains` entries that are missing `domain` fields.
 
 ## Best Practices
 

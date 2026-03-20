@@ -6,13 +6,14 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
 
-class DomainAPIClient:
+class DomainAPIClient(ABC):
     """
     Base class for domain registrar API clients
     """
@@ -21,17 +22,20 @@ class DomainAPIClient:
         self.api_key = api_key
         self.api_secret = api_secret
     
+    @abstractmethod
     def search_domain(self, domain: str) -> Dict:
         """Search if domain is available"""
-        raise NotImplementedError
+        raise NotImplementedError("Subclasses must implement search_domain")
     
+    @abstractmethod
     def purchase_domain(self, domain: str, years: int = 1) -> Dict:
         """Purchase domain"""
-        raise NotImplementedError
+        raise NotImplementedError("Subclasses must implement purchase_domain")
     
+    @abstractmethod
     def get_pricing(self, tld: str) -> Dict:
         """Get pricing for TLD"""
-        raise NotImplementedError
+        raise NotImplementedError("Subclasses must implement get_pricing")
 
 
 class PorkbunAPIClient(DomainAPIClient):
@@ -259,6 +263,93 @@ class DomainRotationManager:
             "current_spending": self.current_spending,
             "remaining": self.monthly_budget - self.current_spending,
             "domains_owned": len(self.owned_domains)
+        }
+
+    def export_state(self) -> Dict[str, Any]:
+        """
+        Export manager state as a JSON-serializable dictionary.
+        """
+        return {
+            "current_spending": float(self.current_spending),
+            "owned_domains": [
+                self._serialize_domain_entry(entry) for entry in self.owned_domains
+            ],
+            "active_domain": self.active_domain,
+            "state_version": 1,
+        }
+
+    def load_state(self, state: Optional[Dict[str, Any]]) -> None:
+        """
+        Load manager state from a dictionary.
+        Handles legacy data gracefully and skips malformed records.
+        """
+        if not state:
+            return
+
+        self.current_spending = self._coerce_price(state.get("current_spending", 0.0))
+        self.active_domain = state.get("active_domain")
+        self.owned_domains = []
+
+        for entry in state.get("owned_domains", []):
+            parsed_entry = self._deserialize_domain_entry(entry)
+            if parsed_entry:
+                self.owned_domains.append(parsed_entry)
+
+    @staticmethod
+    def _coerce_price(value: Any) -> float:
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            cleaned = value.replace("$", "").replace("€", "").strip()
+            try:
+                return float(cleaned)
+            except ValueError:
+                return 0.0
+        return 0.0
+
+    @staticmethod
+    def _coerce_datetime(value: Any, fallback: datetime) -> datetime:
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return fallback
+        return fallback
+
+    def _serialize_domain_entry(self, entry: Dict[str, Any]) -> Dict[str, Any]:
+        purchased_at = self._coerce_datetime(
+            entry.get("purchased_at"), datetime.now()
+        )
+        expires_at = self._coerce_datetime(
+            entry.get("expires_at"), purchased_at + timedelta(days=365)
+        )
+        return {
+            "domain": entry.get("domain"),
+            "price": self._coerce_price(entry.get("price", 0.0)),
+            "purchased_at": purchased_at.isoformat(),
+            "expires_at": expires_at.isoformat(),
+        }
+
+    def _deserialize_domain_entry(self, entry: Any) -> Optional[Dict[str, Any]]:
+        if not isinstance(entry, dict):
+            return None
+
+        domain = entry.get("domain")
+        if not domain or not isinstance(domain, str):
+            return None
+
+        purchased_at = self._coerce_datetime(entry.get("purchased_at"), datetime.now())
+        expires_at = self._coerce_datetime(
+            entry.get("expires_at"), purchased_at + timedelta(days=365)
+        )
+
+        return {
+            "domain": domain,
+            "price": self._coerce_price(entry.get("price", 0.0)),
+            "purchased_at": purchased_at,
+            "expires_at": expires_at,
         }
 
 

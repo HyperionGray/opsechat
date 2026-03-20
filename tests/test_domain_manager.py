@@ -1,6 +1,8 @@
 """
 Tests for domain management module
 """
+import datetime
+import json
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
@@ -174,3 +176,58 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_export_state_is_json_serializable(self):
+        """Exported state should be safe for json.dump."""
+        manager = DomainRotationManager(monthly_budget=25.0)
+        manager.current_spending = 4.5
+        manager.active_domain = "alpha.xyz"
+        manager.owned_domains = [{
+            "domain": "alpha.xyz",
+            "price": 4.5,
+            "purchased_at": datetime.datetime(2026, 3, 1, 10, 30, 0),
+            "expires_at": datetime.datetime(2027, 3, 1, 10, 30, 0),
+        }]
+
+        exported = manager.export_state()
+
+        assert exported["state_version"] == 1
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(exported["owned_domains"][0]["expires_at"], str)
+        # Must not raise TypeError.
+        json.dumps(exported)
+
+    def test_load_state_parses_dates_and_prices(self):
+        """State load should coerce legacy string values into runtime types."""
+        manager = DomainRotationManager(monthly_budget=25.0)
+        manager.load_state({
+            "current_spending": "$7.25",
+            "active_domain": "loaded.xyz",
+            "owned_domains": [{
+                "domain": "loaded.xyz",
+                "price": "3.50",
+                "purchased_at": "2026-03-02T11:00:00",
+                "expires_at": "2027-03-02T11:00:00",
+            }]
+        })
+
+        assert manager.current_spending == 7.25
+        assert manager.active_domain == "loaded.xyz"
+        assert len(manager.owned_domains) == 1
+        assert isinstance(manager.owned_domains[0]["purchased_at"], datetime.datetime)
+        assert isinstance(manager.owned_domains[0]["expires_at"], datetime.datetime)
+        assert manager.owned_domains[0]["price"] == 3.5
+
+    def test_load_state_skips_invalid_entries(self):
+        """Malformed domain records should be ignored, not crash load_state."""
+        manager = DomainRotationManager(monthly_budget=25.0)
+        manager.load_state({
+            "owned_domains": [
+                {"price": 2.0},  # missing domain
+                "invalid",  # wrong type
+                {"domain": "valid.xyz", "price": 1.99},
+            ]
+        })
+
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["domain"] == "valid.xyz"
