@@ -19,7 +19,7 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from flask import Flask, session
+from flask import Flask
 from mock_routes import create_mock_routes
 
 # Create Flask app with absolute paths for better CI compatibility
@@ -69,14 +69,70 @@ except ImportError as e:
     print(f"Warning: Could not import email_system: {e}")
     # Create mock objects for testing
     class MockEmailStorage:
-        def create_user_inbox(self, user_id): pass
+        def __init__(self):
+            self.emails = {}
+
+        def create_user_inbox(self, user_id):
+            self.emails.setdefault(user_id, [])
+
     class MockBurnerManager:
-        def cleanup_expired(self): pass
-        def generate_burner_email(self, user_id): return f"test{user_id}@example.com"
-        def rotate_burner(self, user_id, old_email): return f"test{user_id}@example.com"
-        def get_user_burners(self, user_id): return []
-        def get_user_for_burner(self, email): return None
-        def expire_burner(self, email): pass
+        def __init__(self):
+            self.burner_addresses = {}
+            self.user_burners = {}
+
+        def cleanup_expired(self):
+            now = datetime.datetime.now()
+            expired = [email for email, info in self.burner_addresses.items() if info['expires_at'] <= now]
+            for email in expired:
+                self.expire_burner(email)
+
+        def generate_burner_email(self, user_id):
+            local = f"test{user_id}{id_generator(6).lower()}"
+            email = f"{local}@example.com"
+            now = datetime.datetime.now()
+            self.burner_addresses[email] = {
+                'user_id': user_id,
+                'created_at': now,
+                'expires_at': now + datetime.timedelta(hours=24),
+            }
+            self.user_burners.setdefault(user_id, []).append(email)
+            return email
+
+        def rotate_burner(self, user_id, old_email):
+            if old_email:
+                self.expire_burner(old_email)
+            return self.generate_burner_email(user_id)
+
+        def get_user_burners(self, user_id):
+            self.cleanup_expired()
+            burners = []
+            for burner_email in self.user_burners.get(user_id, []):
+                info = self.burner_addresses.get(burner_email)
+                if info:
+                    burners.append({
+                        'email': burner_email,
+                        'created_at': info['created_at'],
+                        'expires_at': info['expires_at'],
+                    })
+            return burners
+
+        def get_user_for_burner(self, email):
+            self.cleanup_expired()
+            info = self.burner_addresses.get(email)
+            return info['user_id'] if info else None
+
+        def expire_burner(self, email):
+            info = self.burner_addresses.pop(email, None)
+            if not info:
+                return False
+
+            user_id = info['user_id']
+            burners = self.user_burners.get(user_id, [])
+            if email in burners:
+                burners.remove(email)
+            if not burners and user_id in self.user_burners:
+                del self.user_burners[user_id]
+            return True
     
     email_storage = MockEmailStorage()
     burner_manager = MockBurnerManager()

@@ -240,10 +240,11 @@ class BurnerEmailManager:
         
         now = datetime.datetime.now()
         active_burners = []
-        
+        active_email_refs = []
+
         for email in self.user_burners[user_id]:
-            if email in self.burner_addresses:
-                info = self.burner_addresses[email]
+            info = self.burner_addresses.get(email)
+            if info:
                 time_remaining = info['expires_at'] - now
                 active_burners.append({
                     'email': email,
@@ -252,6 +253,12 @@ class BurnerEmailManager:
                     'time_remaining_seconds': int(time_remaining.total_seconds()),
                     'time_remaining_str': self._format_time_remaining(time_remaining)
                 })
+                active_email_refs.append(email)
+
+        # Self-heal stale references left over from older state transitions.
+        self.user_burners[user_id] = active_email_refs
+        if not active_email_refs:
+            del self.user_burners[user_id]
         
         return active_burners
     
@@ -274,10 +281,14 @@ class BurnerEmailManager:
     
     def expire_burner(self, email: str) -> bool:
         """Immediately expire a burner email"""
-        if email in self.burner_addresses:
-            del self.burner_addresses[email]
-            return True
-        return False
+        burner_info = self.burner_addresses.pop(email, None)
+        if not burner_info:
+            return False
+
+        user_id = burner_info.get('user_id')
+        if user_id:
+            self._remove_user_burner_reference(user_id, email)
+        return True
     
     def get_user_for_burner(self, email: str) -> Optional[str]:
         """Get user ID for burner email"""
@@ -292,12 +303,19 @@ class BurnerEmailManager:
         expired = [email for email, info in self.burner_addresses.items() 
                    if info['expires_at'] <= now]
         for email in expired:
-            del self.burner_addresses[email]
-            # Also remove from user_burners
-            user_id = self.burner_addresses.get(email, {}).get('user_id')
-            if user_id and user_id in self.user_burners:
-                if email in self.user_burners[user_id]:
-                    self.user_burners[user_id].remove(email)
+            self.expire_burner(email)
+
+    def _remove_user_burner_reference(self, user_id: str, email: str) -> None:
+        """Drop burner reference from user index and prune empty lists."""
+        burners = self.user_burners.get(user_id)
+        if not burners:
+            return
+
+        if email in burners:
+            burners.remove(email)
+
+        if not burners:
+            del self.user_burners[user_id]
     
     def _format_time_remaining(self, time_delta: datetime.timedelta) -> str:
         """Format time remaining in human-readable format"""

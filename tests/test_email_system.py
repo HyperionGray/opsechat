@@ -242,6 +242,7 @@ class TestBurnerEmailManager:
         
         assert result is True
         assert email not in manager.burner_addresses
+        assert "user1" not in manager.user_burners
     
     def test_custom_domain(self):
         """Test setting custom domain for burners"""
@@ -276,3 +277,30 @@ class TestBurnerEmailManager:
         
         assert len(burners) == 1
         assert burners[0]['email'] == active_email
+
+    def test_cleanup_expired_removes_user_index_references(self):
+        """Expired burners should be removed from burner and user indexes."""
+        manager = BurnerEmailManager()
+        expired_email = manager.generate_burner_email("user1")
+
+        manager.burner_addresses[expired_email]['expires_at'] = (
+            datetime.datetime.now() - datetime.timedelta(hours=1)
+        )
+
+        manager.cleanup_expired()
+
+        assert expired_email not in manager.burner_addresses
+        assert "user1" not in manager.user_burners
+
+    def test_get_user_burners_self_heals_stale_references(self):
+        """Stale user index entries should be pruned during reads."""
+        manager = BurnerEmailManager()
+        email = manager.generate_burner_email("user1")
+
+        # Simulate a stale index entry from historical inconsistent state.
+        del manager.burner_addresses[email]
+
+        burners = manager.get_user_burners("user1")
+
+        assert burners == []
+        assert "user1" not in manager.user_burners
