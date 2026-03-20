@@ -15,6 +15,7 @@ OpSecChat now includes a simple, security-focused web-based chat room system des
 - **Text-Only**: No media, images, or file sharing
 - **In-Memory Storage**: Zero disk writes
 - **Tor Ready**: Works seamlessly with Tor hidden services
+- **Client Backoff Metadata**: 429 responses include `Retry-After` and `retry_after`
 
 ## Quick Start
 
@@ -141,6 +142,39 @@ GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
+
+#### Rate-Limit Metadata
+```
+GET /chat/rate-limits
+Response: {
+  "chat_create": {"limits": [...]},
+  "chat_message": {"limits": [...]},
+  "dm_send": {"limits": [...]}
+}
+```
+
+### Rate Limits and Backoff
+
+Defaults (per session):
+- `chat_create`: 3/minute, 10/hour
+- `chat_message`: 30/minute, 300/hour
+- `dm_send`: 5/minute, 20/hour
+
+When a limit is exceeded, chat endpoints return:
+- HTTP `429 Too Many Requests`
+- `Retry-After` response header (seconds)
+- JSON body with:
+  - `error`
+  - `endpoint`
+  - `retry_after`
+
+Environment overrides:
+- `OPSECHAT_CHAT_CREATE_PER_MINUTE`
+- `OPSECHAT_CHAT_CREATE_PER_HOUR`
+- `OPSECHAT_CHAT_MESSAGE_PER_MINUTE`
+- `OPSECHAT_CHAT_MESSAGE_PER_HOUR`
+- `OPSECHAT_DM_SEND_PER_MINUTE`
+- `OPSECHAT_DM_SEND_PER_HOUR`
 
 ### Encryption Implementation
 

@@ -126,8 +126,12 @@ class TestCheckRateLimit:
 
     def test_blocks_when_exceeded(self):
         session_id = "sess-ratelimit-test"
-        limit = RATE_LIMITS["chat_create"]["max_requests"]
-        for _ in range(limit):
+        minute_limit = next(
+            rule["max_requests"]
+            for rule in RATE_LIMITS["chat_create"]["limits"]
+            if rule["window_seconds"] == 60
+        )
+        for _ in range(minute_limit):
             check_rate_limit(session_id, "chat_create")
         allowed, retry_after = check_rate_limit(session_id, "chat_create")
         assert allowed is False
@@ -159,6 +163,32 @@ class TestChatRoutes:
         r1 = client.post("/chat/create").get_json()["room_id"]
         r2 = client.post("/chat/create").get_json()["room_id"]
         assert r1 != r2
+
+    def test_chat_rate_limits_endpoint_returns_config(self, client):
+        response = client.get("/chat/rate-limits")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert "chat_create" in data
+        assert "chat_message" in data
+        assert "dm_send" in data
+        assert isinstance(data["chat_create"]["limits"], list)
+
+    def test_create_room_rate_limit_returns_retry_metadata(self, client):
+        minute_limit = next(
+            rule["max_requests"]
+            for rule in RATE_LIMITS["chat_create"]["limits"]
+            if rule["window_seconds"] == 60
+        )
+        for _ in range(minute_limit):
+            ok_response = client.post("/chat/create", content_type="application/json")
+            assert ok_response.status_code == 200
+
+        blocked = client.post("/chat/create", content_type="application/json")
+        assert blocked.status_code == 429
+        assert blocked.headers.get("Retry-After") is not None
+        payload = blocked.get_json()
+        assert payload["error"] == "Rate limit exceeded"
+        assert payload["retry_after"] >= 1
 
     def test_join_nonexistent_room_returns_404(self, client):
         response = client.get("/chat/room/nonexistent-room-id-xyz")

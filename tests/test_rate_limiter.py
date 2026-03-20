@@ -40,6 +40,10 @@ def test_post_is_rate_limited_get_is_not():
 
         r = client.post("/chat/create", content_type="application/json")
         assert r.status_code == 429, f"4th POST should be rate-limited (429), got {r.status_code}"
+        assert r.headers.get("Retry-After"), "429 response should include Retry-After header"
+        body = r.get_json()
+        assert body["error"] == "Rate limit exceeded"
+        assert body["retry_after"] >= 1
 
     print("✅ POST /chat/create is rate-limited after 3 requests; GET / is never throttled")
 
@@ -58,6 +62,7 @@ def test_separate_sessions_have_independent_limits():
         # Session A must now be blocked
         r = client_a.post("/chat/create", content_type="application/json")
         assert r.status_code == 429, f"Client A should be blocked, got {r.status_code}"
+        assert r.headers.get("Retry-After"), "429 response should include Retry-After header"
 
     # A new test client gets a fresh session with its own counter
     with app.test_client() as client_b:

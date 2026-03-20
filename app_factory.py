@@ -6,7 +6,7 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -82,11 +82,31 @@ def create_app():
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
+        return response
+
+    @app.errorhandler(429)
+    def handle_rate_limit_error(error):
+        """Return consistent JSON for any rate-limit rejection."""
+        retry_after = 1
+        if hasattr(error, "get_response"):
+            try:
+                error_response = error.get_response()
+                retry_header = error_response.headers.get("Retry-After")
+                if retry_header:
+                    retry_after = max(int(float(retry_header)), 1)
+            except Exception:
+                retry_after = 1
+
+        response = jsonify({
+            "error": "Rate limit exceeded",
+            "endpoint": request.path,
+            "retry_after": retry_after,
+        })
+        response.status_code = 429
+        response.headers["Retry-After"] = str(retry_after)
         return response
     
     # Register chat routes

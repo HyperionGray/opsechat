@@ -216,6 +216,7 @@
         let encryptionEnabled = false;
         let encryptionKey = null;
         let pollInterval = null;
+        let sendBlockedUntil = 0;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
         
         // Show security warning on first load
@@ -397,6 +398,13 @@
             const message = input.value.trim();
             
             if (!message) return;
+
+            const nowMs = Date.now();
+            if (sendBlockedUntil > nowMs) {
+                const remaining = Math.ceil((sendBlockedUntil - nowMs) / 1000);
+                showStatus(`Rate limited. Retry in ${remaining}s.`, 2000);
+                return;
+            }
             
             let messageToSend = message;
             
@@ -418,7 +426,26 @@
                     input.value = '';
                     await pollMessages();
                 } else {
-                    showStatus('Error sending message');
+                    let retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
+                    let errorMessage = 'Error sending message';
+                    try {
+                        const errorBody = await response.json();
+                        if (typeof errorBody.retry_after === 'number') {
+                            retryAfter = errorBody.retry_after;
+                        }
+                        if (typeof errorBody.error === 'string' && errorBody.error) {
+                            errorMessage = errorBody.error;
+                        }
+                    } catch (e) {
+                        // Ignore non-JSON error payloads.
+                    }
+
+                    if (response.status === 429 && retryAfter > 0) {
+                        sendBlockedUntil = Date.now() + (retryAfter * 1000);
+                        showStatus(`${errorMessage}. Retry in ${retryAfter}s.`, 2000);
+                    } else {
+                        showStatus(errorMessage);
+                    }
                 }
             } catch (error) {
                 showStatus('Error: ' + error.message);
