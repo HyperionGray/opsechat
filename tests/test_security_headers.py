@@ -6,6 +6,7 @@ X-Content-Type-Options, and Server header suppression.
 """
 
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -52,3 +53,16 @@ class TestSecurityHeaders:
     def test_server_header_stripped(self):
         h = self._headers()
         assert h.get("Server", "") == ""
+
+    def test_csp_uses_request_nonce_for_scripts(self):
+        csp = self._headers()["Content-Security-Policy"]
+        assert re.search(r"script-src 'self' 'nonce-[^']+'", csp)
+
+    def test_inline_scripts_include_csp_nonce(self):
+        resp = self.client.get("/chat")
+        csp = resp.headers["Content-Security-Policy"]
+        match = re.search(r"script-src 'self' 'nonce-([^']+)'", csp)
+        assert match, "Expected nonce in CSP script-src"
+        nonce = match.group(1)
+        html = resp.get_data(as_text=True)
+        assert f'nonce="{nonce}"' in html

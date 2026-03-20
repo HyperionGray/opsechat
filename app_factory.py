@@ -5,8 +5,10 @@ This module handles Flask application creation and configuration,
 extracted from runserver.py to improve code organization.
 """
 
+import base64
 import os
-from flask import Flask, jsonify
+import secrets
+from flask import Flask, jsonify, g, has_request_context
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -68,22 +70,38 @@ def create_app():
         return add_review(reviews, user_id, rating, review_text)
     
     # Add security headers after every response
+    @app.before_request
+    def set_csp_nonce():
+        # Per-request nonce allows trusted inline scripts without opening script-src.
+        g.csp_nonce = base64.b64encode(secrets.token_bytes(16)).decode("ascii")
+
+    @app.context_processor
+    def inject_csp_nonce():
+        return {"csp_nonce": getattr(g, "csp_nonce", "")}
+
     @app.after_request
     def add_security_headers(response):
         response.headers["Server"] = ""
         response.headers["Date"] = ""
-        # Content Security Policy: restrict resources to same origin, block inline scripts
+        script_src = "script-src 'self'"
+        if has_request_context():
+            nonce = getattr(g, "csp_nonce", "")
+            if nonce:
+                script_src = f"{script_src} 'nonce-{nonce}'"
+
+        # CSP: keep scripts locked to same-origin + per-request nonce.
+        # style-src keeps unsafe-inline due existing inline style attributes/templates.
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self'; "
-            "style-src 'self'; "
+            f"{script_src}; "
+            "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data:; "
             "font-src 'self'; "
             "connect-src 'self'; "
-            "frame-ancestors 'none';"
+            "frame-ancestors 'none'; "
+            "object-src 'none'; "
+            "base-uri 'self';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"

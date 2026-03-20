@@ -18,11 +18,24 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
                         check_older_than, process_chat):
     """Register all chat-related routes with the Flask app"""
     # Security headers are applied globally via @app.after_request in app_factory.
+    def _path_is_valid(url_addition):
+        configured_path = app.config.get("path")
+        return bool(configured_path) and url_addition == configured_path
+
+    def _flatten_processed_messages():
+        flattened = []
+        for chat in chatlines:
+            processed = process_chat(chat)
+            if isinstance(processed, list):
+                flattened.extend(processed)
+            elif processed:
+                flattened.append(processed)
+        return flattened
 
     @app.route('/<string:url_addition>')
     def drop(url_addition):
         """Main chat landing page"""
-        if url_addition != app.config["path"]:
+        if not _path_is_valid(url_addition):
             return ('', 404)
         return render_template("landing.html", 
                               hostname=app.config["hostname"], 
@@ -31,7 +44,7 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
     @app.route('/<string:url_addition>/landing')
     def drop_landing(url_addition):
         """Chat landing page with explicit landing route"""
-        if url_addition != app.config["path"]:
+        if not _path_is_valid(url_addition):
             return ('', 404)
         return render_template("landing.html", 
                               hostname=app.config["hostname"], 
@@ -40,7 +53,7 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
     @app.route('/<string:url_addition>/landing/auto')
     def drop_landing_auto(url_addition):
         """Auto-redirect landing page for JavaScript detection"""
-        if url_addition != app.config["path"]:
+        if not _path_is_valid(url_addition):
             return ('', 404)
         return render_template("landing_auto.html", 
                               hostname=app.config["hostname"], 
@@ -49,14 +62,14 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
     @app.route('/<string:url_addition>/yesscript')
     def drop_yes(url_addition):
         """JavaScript-enabled chat interface"""
-        if url_addition != app.config["path"]:
+        if not _path_is_valid(url_addition):
             return ('', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
             session["color"] = get_random_color()
         
-        return render_template("chat.html", 
+        return render_template("drop.html", 
                               hostname=app.config["hostname"], 
                               path=app.config["path"], 
                               script_enabled=True)
@@ -64,22 +77,23 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
     @app.route('/<string:url_addition>/noscript')
     def drop_noscript(url_addition):
         """No-JavaScript chat interface"""
-        if url_addition != app.config["path"]:
+        if not _path_is_valid(url_addition):
             return ('', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
             session["color"] = get_random_color()
         
-        return render_template("chat.html", 
+        return render_template("drop.html", 
                               hostname=app.config["hostname"], 
                               path=app.config["path"], 
                               script_enabled=False)
 
+    @app.route('/<string:url_addition>/chats', methods=["GET", "POST"])
     @app.route('/<string:url_addition>/messages', methods=["GET", "POST"])
     def chat_messages(url_addition):
         """Handle chat messages for no-JavaScript interface"""
-        if url_addition != app.config["path"]:
+        if not _path_is_valid(url_addition):
             return ('', 404)
         
         if "_id" not in session:
@@ -88,7 +102,7 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
         
         if request.method == "POST":
             # Process new message
-            message_text = request.form.get("message", "").strip()
+            message_text = request.form.get("dropdata", request.form.get("message", "")).strip()
             if message_text:
                 # Filter to ASCII and remove emojis
                 message_text = filter_to_ascii(message_text)
@@ -98,7 +112,9 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
                 
                 # Create message object
                 message = {
+                    "msg": message_text,
                     "message": message_text,
+                    "username": session["_id"],
                     "user_id": session["_id"],
                     "color": session["color"],
                     "timestamp": datetime.datetime.now()
@@ -114,25 +130,39 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
                         "color": session["color"],
                         "timestamp": datetime.datetime.now()
                     })
+                else:
+                    for chatter in chatters:
+                        if chatter["user_id"] == session["_id"]:
+                            chatter["timestamp"] = datetime.datetime.now()
+                            break
         
         # Clean up old messages (modify in place to preserve reference)
         to_remove = [msg for msg in chatlines if check_older_than(msg)]
         for msg in to_remove:
             chatlines.remove(msg)
+
+        stale_chatters = [c for c in chatters if check_older_than(c)]
+        for chatter in stale_chatters:
+            chatters.remove(chatter)
         
         # Process messages for display
-        processed_messages = [process_chat(msg) for msg in chatlines]
+        processed_messages = _flatten_processed_messages()
+        num_people = len(chatters)
+        for msg in processed_messages:
+            msg["num_people"] = num_people
         
-        return render_template("messages.html",
-                              messages=processed_messages,
+        return render_template("chats.html",
+                              chatlines=processed_messages,
+                              num_people=num_people,
                               hostname=app.config["hostname"],
                               path=app.config["path"],
                               script_enabled=False)
 
+    @app.route('/<string:url_addition>/chatsjs', methods=["GET", "POST"])
     @app.route('/<string:url_addition>/messages.json', methods=["GET", "POST"])
     def chat_messages_js(url_addition):
         """Handle chat messages for JavaScript interface"""
-        if url_addition != app.config["path"]:
+        if not _path_is_valid(url_addition):
             return ('', 404)
         
         if "_id" not in session:
@@ -140,46 +170,68 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
             session["color"] = get_random_color()
         
         if request.method == "POST":
-            # Get JSON data
-            data = request.get_json()
+            data = request.get_json(silent=True) if request.is_json else None
+            message_text = ""
             if data and "message" in data:
                 message_text = data["message"].strip()
-                if message_text:
-                    # Filter to ASCII and remove emojis
-                    message_text = filter_to_ascii(message_text)
-                    message_text = sanitize_emojis(message_text)
-                    # Sanitize message
-                    message_text = re.sub(r'[<>&"\']', '', message_text)
-                    
-                    # Create message object
-                    message = {
-                        "message": message_text,
+            elif "dropdata" in request.form:
+                message_text = request.form.get("dropdata", "").strip()
+            elif "message" in request.form:
+                message_text = request.form.get("message", "").strip()
+
+            if message_text:
+                # Filter to ASCII and remove emojis
+                message_text = filter_to_ascii(message_text)
+                message_text = sanitize_emojis(message_text)
+                # Sanitize message
+                message_text = re.sub(r'[<>&"\']', '', message_text)
+                
+                # Create message object
+                message = {
+                    "msg": message_text,
+                    "message": message_text,
+                    "username": session["_id"],
+                    "user_id": session["_id"],
+                    "color": session["color"],
+                    "timestamp": datetime.datetime.now()
+                }
+                
+                # Add to chat
+                chatlines.append(message)
+                
+                # Add user to chatters if not already present
+                if session["_id"] not in [c["user_id"] for c in chatters]:
+                    chatters.append({
                         "user_id": session["_id"],
                         "color": session["color"],
                         "timestamp": datetime.datetime.now()
-                    }
-                    
-                    # Add to chat
-                    chatlines.append(message)
-                    
-                    # Add user to chatters if not already present
-                    if session["_id"] not in [c["user_id"] for c in chatters]:
-                        chatters.append({
-                            "user_id": session["_id"],
-                            "color": session["color"],
-                            "timestamp": datetime.datetime.now()
-                        })
+                    })
+                else:
+                    for chatter in chatters:
+                        if chatter["user_id"] == session["_id"]:
+                            chatter["timestamp"] = datetime.datetime.now()
+                            break
         
         # Clean up old messages (modify in place to preserve reference)
         to_remove = [msg for msg in chatlines if check_older_than(msg)]
         for msg in to_remove:
             chatlines.remove(msg)
-        
+
+        stale_chatters = [c for c in chatters if check_older_than(c)]
+        for chatter in stale_chatters:
+            chatters.remove(chatter)
+
         # Process messages for JSON response
-        processed_messages = [process_chat(msg) for msg in chatlines]
-        
-        return jsonify({
-            "messages": processed_messages,
-            "user_id": session["_id"],
-            "user_color": session["color"]
-        })
+        processed_messages = _flatten_processed_messages()
+        num_people = len(chatters)
+        for msg in processed_messages:
+            msg["num_people"] = num_people
+
+        if request.path.endswith("/messages.json"):
+            return jsonify({
+                "messages": processed_messages,
+                "user_id": session["_id"],
+                "user_color": session["color"],
+                "num_people": num_people,
+            })
+        return jsonify(processed_messages)

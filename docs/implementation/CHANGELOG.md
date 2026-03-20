@@ -11,13 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- Request-scoped CSP nonce support for inline scripts
+- Legacy chat route regression tests (`tests/test_legacy_chat_routes.py`)
 
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- Restored legacy chat template/endpoint compatibility (`/chats`, `/chatsjs`)
+- Updated inline script templates to include CSP nonce attributes
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022
+- Hardened `script-src` policy with per-request nonces (no `unsafe-inline`)
 
 ## [2.0.0] - 2024-12-08
 

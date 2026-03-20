@@ -99,6 +99,15 @@ GET /chat/dm/xyz789
 
 ## 🔒 Enhanced Security Features
 
+### CSP Nonce Support for Inline Scripts
+- Added request-scoped CSP nonces generated in `app_factory.py`
+- Updated inline `<script>` tags in templates to include `nonce="{{ csp_nonce }}"`
+- Kept `script-src` strict (`'self'` + nonce), without `unsafe-inline`
+- Preserved existing inline CSS behavior with `style-src 'self' 'unsafe-inline'`
+
+This closes the unfinished CSP hardening checklist in `app_factory.py` while
+keeping existing templates functional.
+
 ### Message Length Caps
 - **Chat messages**: 500 characters maximum
 - **DM messages**: 200 characters maximum

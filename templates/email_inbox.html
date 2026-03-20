@@ -208,7 +208,7 @@
   </div>
 
   {% if script_enabled %}
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Auto-refresh inbox every 30 seconds
     setTimeout(function() {
       location.reload();
