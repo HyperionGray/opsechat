@@ -197,6 +197,19 @@ class TestHttpMailbox:
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
 
+    def test_rotate_read_key_success(self):
+        new_key = self.mailbox.rotate_read_key("secretkey123456789012345678901")
+        assert new_key is not None
+        assert new_key != "secretkey123456789012345678901"
+        assert self.mailbox.get_messages("secretkey123456789012345678901") is None
+        assert self.mailbox.get_messages(new_key) == []
+
+    def test_rotate_read_key_wrong_key_fails(self):
+        old_key = self.mailbox.read_key
+        new_key = self.mailbox.rotate_read_key("wrongkey")
+        assert new_key is None
+        assert self.mailbox.read_key == old_key
+
 
 # ===========================================================================
 # HTTP mail route integration tests
@@ -388,6 +401,51 @@ class TestHttpMailRoutes:
         )
         assert r.status_code == 403
 
+    def test_rotate_read_key_success_invalidates_old_key(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        old_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "S", "body": "B", "sender": "alice"},
+        )
+
+        rotate = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
+            json={"read_key": old_key},
+            headers={"Accept": "application/json"},
+        )
+        assert rotate.status_code == 200
+        data = rotate.get_json()
+        assert data["success"] is True
+        assert "new_read_key" in data
+        assert data["new_read_key"] != old_key
+
+        denied = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={old_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert denied.status_code == 403
+
+        allowed = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={data['new_read_key']}",
+            headers={"Accept": "application/json"},
+        )
+        assert allowed.status_code == 200
+        assert len(allowed.get_json()["messages"]) == 1
+
+    def test_rotate_read_key_wrong_key_fails(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        rotate = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
+            json={"read_key": "wrongkey"},
+            headers={"Accept": "application/json"},
+        )
+        assert rotate.status_code == 403
+
     def test_message_body_sanitized(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
@@ -462,6 +520,12 @@ class TestEmailRoutesExtended:
         assert b"Hello" in r.data
 
     def test_view_nonexistent_email_returns_404(self):
+        r = self.client.get("/secpath/email/view/doesnotexist")
+        assert r.status_code == 404
+
+    def test_view_email_without_session_does_not_500(self):
+        with self.client.session_transaction() as sess:
+            sess.clear()
         r = self.client.get("/secpath/email/view/doesnotexist")
         assert r.status_code == 404
 

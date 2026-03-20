@@ -255,6 +255,8 @@ Features
 
 ### Email System (NEW - REAL EMAIL SUPPORT!)
 - **Real SMTP/IMAP Integration** - Send and receive actual emails via configured email servers (see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md))
+- **HTTP Mailboxes (No SMTP/IMAP)** - Shareable mailbox address + private read key with default-deny inbox access
+- **Read-Key Rotation** - Invalidate exposed HTTP mailbox read keys without replacing mailbox addresses
 - **Encrypted Email Inbox** - In-memory email storage with PGP support
 - **Raw Mode Editing** - Full control over email headers for security testing
 - **Modern Burner Email System** - Guerrillamail-style rotating anonymous email addresses with:
