@@ -97,6 +97,36 @@ GET /chat/dm/xyz789
 
 ---
 
+## Room Status API
+
+### Purpose
+Expose lightweight room metadata so clients and operators can inspect room state without fetching the full message list.
+
+### Endpoint
+```bash
+GET /chat/room/{room_id}/status
+```
+
+### Response
+```json
+{
+  "room_id": "wWR_qXjnWQlr4oXqlR2JLxA...",
+  "message_count": 4,
+  "active_user_count": 2,
+  "room_age_seconds": 153,
+  "seconds_since_activity": 12,
+  "expires_in_seconds": 3588,
+  "message_ttl_seconds": 180
+}
+```
+
+### Notes
+- `expires_in_seconds` tracks the 1-hour room inactivity window.
+- `message_ttl_seconds` reflects the per-message burn timer (3 minutes).
+- The endpoint returns `404` if the room does not exist or has already expired.
+
+---
+
 ## 🔒 Enhanced Security Features
 
 ### Message Length Caps

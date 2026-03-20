@@ -237,6 +237,32 @@ class TestChatRoutes:
         response = client.get("/chat/room/no-such-room/key")
         assert response.status_code == 404
 
+    def test_get_room_status_returns_metadata(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+
+        post_response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "status check"},
+            content_type="application/json",
+        )
+        assert post_response.status_code == 200
+
+        response = client.get(f"/chat/room/{room_id}/status")
+        assert response.status_code == 200
+        data = response.get_json()
+
+        assert data["room_id"] == room_id
+        assert data["message_count"] >= 1
+        assert data["active_user_count"] >= 1
+        assert data["room_age_seconds"] >= 0
+        assert data["seconds_since_activity"] >= 0
+        assert data["expires_in_seconds"] <= 3600
+        assert data["message_ttl_seconds"] == 180
+
+    def test_get_room_status_nonexistent_room(self, client):
+        response = client.get("/chat/room/no-such-room/status")
+        assert response.status_code == 404
+
 
 # ---------------------------------------------------------------------------
 # HTTP routes – direct messages

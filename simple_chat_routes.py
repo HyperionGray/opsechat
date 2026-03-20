@@ -489,6 +489,35 @@ def register_simple_chat_routes(app):
                 "encryption_key": room.get_room_key()
             })
 
+    @app.route('/chat/room/<string:room_id>/status', methods=['GET'])
+    def get_room_status(room_id):
+        """Get room metadata for clients (counts and expiry windows)."""
+        with rooms_lock:
+            if room_id not in chat_rooms:
+                return jsonify({"error": "Room not found"}), 404
+            room = chat_rooms[room_id]
+
+        messages = room.get_messages()
+        active_user_count = room.get_user_count()
+
+        now = datetime.datetime.now()
+        last_activity = room.created_at
+        if messages:
+            last_activity = max(msg["timestamp"] for msg in messages)
+
+        seconds_since_activity = int((now - last_activity).total_seconds())
+        room_age_seconds = int((now - room.created_at).total_seconds())
+
+        return jsonify({
+            "room_id": room_id,
+            "message_count": len(messages),
+            "active_user_count": active_user_count,
+            "room_age_seconds": max(room_age_seconds, 0),
+            "seconds_since_activity": max(seconds_since_activity, 0),
+            "expires_in_seconds": max(3600 - seconds_since_activity, 0),
+            "message_ttl_seconds": 180
+        })
+
 
 def generate_random_username():
     """Generate a random, non-reusable username"""
