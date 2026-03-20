@@ -33,6 +33,7 @@ OpSecChat now includes both **Web-Based Chat Rooms** and **Terminal UI (TUI)** f
 - ✅ **In-Memory Only** - Zero disk writes
 - ✅ **Tor Ready** - Works seamlessly with Tor hidden services
 - ✅ **Direct Messages** - Share room IDs securely (1-minute expiry)
+- ✅ **Smart Backoff Metadata** - 429 responses include `Retry-After` and JSON retry details
 
 ### Quick Start (Web Chat)
 

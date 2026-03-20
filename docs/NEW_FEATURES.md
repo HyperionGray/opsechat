@@ -133,6 +133,47 @@ First-time users see a prominent security warning:
 
 ---
 
+## Chat Rate-Limit Backoff Metadata
+
+### What Changed
+Chat write endpoints now return machine-readable rate-limit metadata when throttled:
+- `POST /chat/create`
+- `POST /chat/room/{room_id}/messages`
+- `POST /chat/dm/send`
+
+When a request is blocked, the API now includes:
+- JSON fields: `error`, `endpoint`, `retry_after`, `limit`, `window_seconds`
+- HTTP headers: `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Window`
+
+This allows web or CLI clients to implement automatic wait/retry behavior without
+guessing timing from string messages.
+
+### New Rate-Limit Discovery Endpoint
+Use `GET /chat/rate-limits` to fetch active rate-limit settings:
+
+```json
+{
+  "limits": {
+    "chat_create": { "max_requests": 10, "window_seconds": 60 },
+    "chat_message": { "max_requests": 30, "window_seconds": 60 },
+    "dm_send": { "max_requests": 5, "window_seconds": 60 }
+  }
+}
+```
+
+### Deployment Configuration
+Rate limits are now configurable via environment variables:
+- `OPSECHAT_CHAT_CREATE_MAX_REQUESTS`
+- `OPSECHAT_CHAT_CREATE_WINDOW_SECONDS`
+- `OPSECHAT_CHAT_MESSAGE_MAX_REQUESTS`
+- `OPSECHAT_CHAT_MESSAGE_WINDOW_SECONDS`
+- `OPSECHAT_DM_SEND_MAX_REQUESTS`
+- `OPSECHAT_DM_SEND_WINDOW_SECONDS`
+
+If these are not set, secure defaults are used.
+
+---
+
 ## 📧 Email Rate Limiting
 
 ### Purpose

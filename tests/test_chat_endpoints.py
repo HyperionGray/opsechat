@@ -20,6 +20,8 @@ from simple_chat_routes import (
     direct_messages,
     dm_lock,
     rooms_lock,
+    _rate_limit_store,
+    _rate_limit_lock,
     MAX_MESSAGE_LENGTH,
 )
 from app_factory import create_app
@@ -47,6 +49,11 @@ def _clear_dms():
         direct_messages.clear()
 
 
+def _clear_rate_limits():
+    with _rate_limit_lock:
+        _rate_limit_store.clear()
+
+
 # ===========================================================================
 # /chat/create
 # ===========================================================================
@@ -54,6 +61,7 @@ def _clear_dms():
 class TestChatCreateEndpoint:
     def setup_method(self):
         _clear_rooms()
+        _clear_rate_limits()
         self.app = _fresh_app()
         self.client = self.app.test_client()
 
@@ -93,6 +101,7 @@ class TestChatCreateEndpoint:
 class TestChatMessagesEndpoint:
     def setup_method(self):
         _clear_rooms()
+        _clear_rate_limits()
         self.app = _fresh_app()
         self.client = self.app.test_client()
         # Create a room for each test
@@ -198,6 +207,7 @@ class TestChatMessagesEndpoint:
 class TestRoomKeyEndpoint:
     def setup_method(self):
         _clear_rooms()
+        _clear_rate_limits()
         self.app = _fresh_app()
         self.client = self.app.test_client()
 
@@ -243,6 +253,7 @@ class TestDMEndpoints:
     def setup_method(self):
         _clear_rooms()
         _clear_dms()
+        _clear_rate_limits()
         self.app = _fresh_app()
         self.client = self.app.test_client()
         # Create a room to reference in DMs
@@ -312,3 +323,52 @@ class TestDMEndpoints:
             json={"room_id": self.room_id, "message": "x" * 201},
         )
         assert resp.status_code == 400
+
+
+# ===========================================================================
+# /chat/rate-limits and structured 429 metadata
+# ===========================================================================
+
+class TestRateLimitMetadata:
+    def setup_method(self):
+        _clear_rooms()
+        _clear_dms()
+        _clear_rate_limits()
+        self.app = _fresh_app()
+        self.client = self.app.test_client()
+        self.room_id = self.client.post("/chat/create").get_json()["room_id"]
+
+    def test_chat_rate_limits_endpoint_returns_config(self):
+        resp = self.client.get("/chat/rate-limits")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert "limits" in data
+        assert set(data["limits"].keys()) == {"chat_create", "chat_message", "dm_send"}
+        assert data["limits"]["chat_message"]["max_requests"] == 30
+        assert data["limits"]["chat_message"]["window_seconds"] == 60
+
+    def test_chat_message_rate_limit_returns_retry_metadata(self):
+        for idx in range(30):
+            resp = self.client.post(
+                f"/chat/room/{self.room_id}/messages",
+                json={"message": f"msg-{idx}"},
+            )
+            assert resp.status_code == 200
+
+        blocked = self.client.post(
+            f"/chat/room/{self.room_id}/messages",
+            json={"message": "blocked"},
+        )
+        assert blocked.status_code == 429
+
+        data = blocked.get_json()
+        assert data["error"] == "Rate limit exceeded"
+        assert data["endpoint"] == "chat_message"
+        assert data["limit"] == 30
+        assert data["window_seconds"] == 60
+        assert isinstance(data["retry_after"], int)
+        assert data["retry_after"] >= 1
+
+        assert blocked.headers.get("Retry-After") == str(data["retry_after"])
+        assert blocked.headers.get("X-RateLimit-Limit") == "30"
+        assert blocked.headers.get("X-RateLimit-Window") == "60"
