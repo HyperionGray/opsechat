@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpSecChat Key Management</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='key_management.css') }}">
+</head>
+<body>
+    <main class="container" role="main">
+        <h1>OpSecChat Key Management</h1>
+        <p class="summary">
+            Manage your local AES-256 key in this browser only. Keys are never uploaded to the server.
+        </p>
+
+        <section class="panel" aria-labelledby="status-title">
+            <h2 id="status-title">Current Key Status</h2>
+            <p id="keyStatus" class="status" role="status" aria-live="polite">
+                Checking browser key storage...
+            </p>
+            <p id="keyFingerprint" class="fingerprint">Fingerprint: none</p>
+        </section>
+
+        <section class="panel" aria-labelledby="generate-title">
+            <h2 id="generate-title">Generate New Key</h2>
+            <p>Creates a 256-bit AES-GCM key and stores it in browser local storage.</p>
+            <button id="generateKeyBtn" type="button">Generate Key</button>
+        </section>
+
+        <section class="panel" aria-labelledby="import-title">
+            <h2 id="import-title">Import Existing Key</h2>
+            <p>Paste a base64-encoded raw 32-byte AES key.</p>
+            <textarea
+                id="importKeyInput"
+                rows="4"
+                placeholder="Paste base64 key here"
+                aria-label="Base64 key input"
+            ></textarea>
+            <button id="importKeyBtn" type="button">Import Key</button>
+        </section>
+
+        <section class="panel" aria-labelledby="export-title">
+            <h2 id="export-title">Export / Backup Key</h2>
+            <p>Copy and store this key securely. Anyone with this key can decrypt your messages.</p>
+            <textarea
+                id="exportKeyOutput"
+                rows="4"
+                readonly
+                placeholder="No key loaded"
+                aria-label="Exported key output"
+            ></textarea>
+            <div class="actions">
+                <button id="copyKeyBtn" type="button">Copy Key</button>
+                <button id="deleteKeyBtn" type="button" class="danger">Delete Local Key</button>
+            </div>
+        </section>
+
+        <nav class="links" aria-label="Navigation">
+            <a href="/chat">Open chat rooms</a>
+            <a href="/">Home</a>
+        </nav>
+    </main>
+
+    <footer class="footer">OpSecChat {{ version|default('0.8.0-alpha') }}</footer>
+    <script src="{{ url_for('static', filename='key_management.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background: #060606;
+    color: #dbffdb;
+    font-family: "Courier New", monospace;
+}
+
+.container {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 24px;
+}
+
+h1 {
+    margin-top: 0;
+    color: #8ff58f;
+}
+
+.summary {
+    margin-bottom: 16px;
+}
+
+.panel {
+    border: 1px solid #235323;
+    background: #0d190d;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.status {
+    margin: 0 0 8px 0;
+    color: #8ff58f;
+}
+
+.fingerprint {
+    margin: 0;
+    color: #93d7ff;
+    word-break: break-all;
+}
+
+textarea {
+    width: 100%;
+    margin: 8px 0;
+    background: #081308;
+    color: #dbffdb;
+    border: 1px solid #2a6a2a;
+    padding: 10px;
+    font-family: "Courier New", monospace;
+}
+
+button {
+    background: #34b734;
+    color: #031703;
+    border: 0;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-weight: 700;
+}
+
+button:hover {
+    background: #2f9f2f;
+}
+
+button.danger {
+    background: #d15a5a;
+    color: #220808;
+}
+
+.actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.links a {
+    color: #93d7ff;
+    margin-right: 12px;
+}
+
+.footer {
+    text-align: center;
+    color: #5aa85a;
+    margin: 20px 0;
+}
