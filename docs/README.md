@@ -42,6 +42,7 @@ Documentation for end users and operators.
 - [PGP Usage](user-guide/PGP_USAGE.md) - PGP encryption guide
 - [PGP Test Examples](user-guide/PGP_TEST_EXAMPLE.md) - PGP testing examples
 - [Testing Guide](user-guide/TESTING.md) - How to run tests
+- [Key Management](user-guide/KEY_MANAGEMENT.md) - Generate/import/export keys in browser
 
 ### 👨‍💻 Development
 Information for developers contributing to the project.

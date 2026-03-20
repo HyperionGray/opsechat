@@ -254,18 +254,25 @@ def generate_secure_dm_id():
 
 def register_simple_chat_routes(app):
     """Register simple chat routes with the Flask app"""
+
+    def read_version():
+        """Read app version from VERSION file with safe fallback."""
+        try:
+            with open("VERSION", "r", encoding="utf-8") as version_file:
+                return version_file.read().strip()
+        except OSError:
+            return "0.8.0-alpha"
     
     @app.route('/chat')
     def chat_index():
         """Landing page for creating/joining chat rooms"""
-        # Read version from VERSION file
-        try:
-            with open('VERSION', 'r') as f:
-                version = f.read().strip()
-        except:
-            version = '0.8.0-alpha'  # fallback
-        
+        version = read_version()
         return render_template("simple_chat_index.html", version=version)
+
+    @app.route('/keys', methods=['GET'])
+    def key_management():
+        """Client-side key management UI for generating and importing PGP keys."""
+        return render_template("key_management.html", version=read_version())
     
     @app.route('/chat/create', methods=['POST'])
     @limiter.limit("10 per hour; 3 per minute")

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpSecChat Key Management</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='key_management.css') }}">
+  <script src="{{ url_for('static', filename='openpgp.min.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='pgp-manager.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='key_management.js') }}" defer></script>
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>Key Management</h1>
+      <p>Generate, import, export, and remove OpenPGP keys in your browser.</p>
+    </header>
+
+    <section class="panel">
+      <h2>Current Status</h2>
+      <p id="status-line">Loading key status...</p>
+      <ul id="public-key-list" class="key-list"></ul>
+    </section>
+
+    <section class="panel">
+      <h2>Generate New Key Pair</h2>
+      <p class="help-text">Your key pair is generated locally in this browser. The server never receives your private key.</p>
+      <form id="generate-key-form">
+        <label for="gen-name">Name</label>
+        <input id="gen-name" name="name" type="text" maxlength="64" required>
+
+        <label for="gen-email">Email (optional)</label>
+        <input id="gen-email" name="email" type="email" maxlength="128">
+
+        <label for="gen-passphrase">Passphrase</label>
+        <input id="gen-passphrase" name="passphrase" type="password" minlength="8" required>
+
+        <button type="submit">Generate Key Pair</button>
+      </form>
+      <p id="generate-result" class="result"></p>
+    </section>
+
+    <section class="panel">
+      <h2>Import Private Key</h2>
+      <form id="import-private-form">
+        <label for="private-key-input">Armored Private Key</label>
+        <textarea id="private-key-input" name="private_key" rows="8" required></textarea>
+
+        <label for="private-passphrase-input">Passphrase</label>
+        <input id="private-passphrase-input" name="passphrase" type="password" required>
+
+        <button type="submit">Import Private Key</button>
+      </form>
+      <p id="private-result" class="result"></p>
+    </section>
+
+    <section class="panel">
+      <h2>Import Public Key</h2>
+      <form id="import-public-form">
+        <label for="public-username-input">Label</label>
+        <input id="public-username-input" name="label" type="text" maxlength="64" required>
+
+        <label for="public-key-input">Armored Public Key</label>
+        <textarea id="public-key-input" name="public_key" rows="8" required></textarea>
+
+        <button type="submit">Import Public Key</button>
+      </form>
+      <p id="public-result" class="result"></p>
+    </section>
+
+    <section class="panel actions">
+      <h2>Export and Remove Keys</h2>
+      <div class="button-row">
+        <button id="export-private-btn" type="button">Export Private Key</button>
+        <button id="export-public-btn" type="button">Export Public Keys</button>
+      </div>
+      <div class="button-row">
+        <button id="clear-private-btn" type="button" class="danger">Delete Private Key</button>
+        <button id="clear-public-btn" type="button" class="danger">Delete All Public Keys</button>
+      </div>
+      <p id="action-result" class="result"></p>
+    </section>
+
+    <section class="panel">
+      <h2>What are encryption keys?</h2>
+      <ul>
+        <li>Your private key decrypts messages and must stay secret.</li>
+        <li>Your public key can be shared with contacts for encryption.</li>
+        <li>If you lose your private key, encrypted content cannot be recovered.</li>
+      </ul>
+      <p class="footer">Version {{ version }}</p>
+    </section>
+  </main>
+</body>
+</html>

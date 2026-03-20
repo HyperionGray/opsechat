@@ -41,18 +41,18 @@
 - [ ] Security review of authentication code
 **Estimated:** 10-15 days
 
-### 3. Key Management UI (20% Complete)
-- [ ] Create key management page (`/keys`)
-- [ ] Add "Generate New Key" wizard with step-by-step guide
-- [ ] Implement "Import Existing Key" form
-- [ ] Add key display/view interface
-- [ ] Implement key export/download functionality
-- [ ] Add key deletion with confirmation
-- [ ] Create educational modals:
-  - [ ] "What are encryption keys?"
-  - [ ] "Your key is generated in your browser"
-  - [ ] "We cannot decrypt your messages"
-  - [ ] "Save your key - we can't recover it"
+### 3. Key Management UI (60% Complete)
+- [x] Create key management page (`/keys`)
+- [x] Add "Generate New Key" wizard with step-by-step guide
+- [x] Implement "Import Existing Key" form
+- [x] Add key display/view interface
+- [x] Implement key export/download functionality
+- [x] Add key deletion with confirmation
+- [x] Create educational guidance (inline on `/keys`; modal enhancement optional):
+  - [x] "What are encryption keys?"
+  - [x] "Your key is generated in your browser"
+  - [x] "We cannot decrypt your messages"
+  - [x] "Save your key - we can't recover it"
 - [ ] Build first-time user onboarding flow
 - [ ] Add key backup reminders
 - [ ] Test key generation/import/export thoroughly

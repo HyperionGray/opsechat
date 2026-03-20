@@ -147,6 +147,11 @@ class TestChatRoutes:
         response = client.get("/chat")
         assert response.status_code == 200
 
+    def test_key_management_page_returns_200(self, client):
+        response = client.get("/keys")
+        assert response.status_code == 200
+        assert b"Key Management" in response.data
+
     def test_create_room_returns_success(self, client):
         response = client.post("/chat/create")
         assert response.status_code == 200

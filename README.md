@@ -244,6 +244,7 @@ Features
 - *Nothing* touches disk except the app, everything happens in-memory, no chat, image, video, or ANYTHING caching to storage.
 - This chat is meant to help you with opsec, disappearing messages, randomized usernames, encrypted comms are the default (much more to come)
 - **PGP encryption support** - Optional end-to-end encryption using PGP keys (see [PGP Usage Guide](docs/user-guide/PGP_USAGE.md))
+- **Key Management UI** - Browser-based key generation/import/export at `/keys` (see [Key Management Guide](docs/user-guide/KEY_MANAGEMENT.md))
 - No configuration required
 - Low barrier to entry, few dependencies
 - No need for a client (web-based or TUI available)

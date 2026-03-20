@@ -1,0 +1,93 @@
+body {
+  margin: 0;
+  font-family: monospace;
+  background: #0b0b0b;
+  color: #b6f5b6;
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+h1,
+h2 {
+  color: #8cff8c;
+}
+
+.panel {
+  border: 1px solid #1f8f1f;
+  border-radius: 6px;
+  background: #121212;
+  margin-top: 16px;
+  padding: 14px;
+}
+
+label {
+  display: block;
+  margin: 10px 0 6px;
+}
+
+input,
+textarea,
+button {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 4px;
+  border: 1px solid #1f8f1f;
+  background: #040404;
+  color: #b6f5b6;
+  padding: 8px;
+  font-family: monospace;
+}
+
+textarea {
+  resize: vertical;
+}
+
+button {
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.button-row {
+  display: flex;
+  gap: 10px;
+}
+
+.button-row button {
+  width: 100%;
+}
+
+.danger {
+  border-color: #9f3131;
+  color: #ffb0b0;
+}
+
+.result {
+  min-height: 1.25rem;
+}
+
+.ok {
+  color: #98ff98;
+}
+
+.error {
+  color: #ff9a9a;
+}
+
+.help-text,
+.footer {
+  color: #8fd18f;
+}
+
+.key-list {
+  margin: 8px 0;
+  padding-left: 22px;
+}
+
+.key-remove-btn {
+  width: auto;
+  margin-left: 8px;
+}
