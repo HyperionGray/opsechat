@@ -29,6 +29,25 @@ Previously, users had to manually share encryption keys. Now, each chat room aut
 
 ---
 
+## 🗝️ Browser Key Management Page
+
+### What Changed
+A new key management page is available at `/keys` for local PGP key operations in the browser.
+
+### Features
+- Generate a new ed25519 keypair
+- Import an armored private key
+- Export the currently stored private key
+- Add and remove contact public keys
+- Clear local key material from browser storage
+
+### Security Considerations
+- Keys managed on this page are stored in browser local storage.
+- Exported private keys should be backed up securely and treated as secrets.
+- The server does not persist keys from this UI.
+
+---
+
 ## 💬 Direct Messages (DM)
 
 ### Purpose

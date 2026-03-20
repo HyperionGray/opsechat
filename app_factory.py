@@ -82,8 +82,7 @@ def create_app():
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
+        # Keep CSP strict by default and prefer external JS/CSS assets.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
@@ -96,6 +95,10 @@ def create_app():
     # Register simple chat routes (new simplified interface)
     from simple_chat_routes import register_simple_chat_routes
     register_simple_chat_routes(app)
+
+    # Register browser-side key management UI
+    from key_routes import register_key_routes
+    register_key_routes(app)
     
     # Register email routes
     from email_routes import register_email_routes

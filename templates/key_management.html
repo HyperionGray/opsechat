@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpSecChat - Key Management</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/key_management.css') }}">
+</head>
+<body>
+    <main class="container" role="main">
+        <h1>OpSecChat Key Management</h1>
+        <p class="subtitle">
+            Manage local PGP keys in your browser. Private keys stay on this device.
+        </p>
+
+        <section class="panel" aria-label="Current key status">
+            <h2>Current Status</h2>
+            <ul class="status-list">
+                <li>Private key: <span id="privateKeyStatus">Unknown</span></li>
+                <li>Public keys saved: <span id="publicKeyCount">0</span></li>
+                <li>Private key fingerprint: <span id="privateFingerprint">N/A</span></li>
+            </ul>
+            <p id="statusMessage" class="status-message" role="status" aria-live="polite"></p>
+        </section>
+
+        <section class="panel" aria-label="Generate keypair">
+            <h2>Generate New Keypair</h2>
+            <form id="generateKeyForm">
+                <label for="nameInput">Name</label>
+                <input id="nameInput" name="name" type="text" maxlength="80" placeholder="Security Researcher">
+
+                <label for="emailInput">Email (optional)</label>
+                <input id="emailInput" name="email" type="email" maxlength="120" placeholder="researcher@example.org">
+
+                <label for="passphraseInput">Passphrase (recommended)</label>
+                <input id="passphraseInput" name="passphrase" type="password" maxlength="256" placeholder="Strong passphrase">
+
+                <button type="submit">Generate and Save Private Key</button>
+            </form>
+        </section>
+
+        <section class="panel" aria-label="Import and export private key">
+            <h2>Private Key Import / Export</h2>
+            <label for="privateKeyInput">Import armored private key</label>
+            <textarea
+                id="privateKeyInput"
+                rows="8"
+                placeholder="-----BEGIN PGP PRIVATE KEY BLOCK-----"></textarea>
+
+            <div class="button-row">
+                <button id="importPrivateKeyBtn" type="button">Import Private Key</button>
+                <button id="exportPrivateKeyBtn" type="button">Export Private Key</button>
+                <button id="deletePrivateKeyBtn" type="button" class="danger">Delete Private Key</button>
+            </div>
+        </section>
+
+        <section class="panel" aria-label="Public key contacts">
+            <h2>Public Keys (Contacts)</h2>
+            <label for="contactNameInput">Contact label</label>
+            <input id="contactNameInput" type="text" maxlength="120" placeholder="alice">
+
+            <label for="publicKeyInput">Armored public key</label>
+            <textarea
+                id="publicKeyInput"
+                rows="8"
+                placeholder="-----BEGIN PGP PUBLIC KEY BLOCK-----"></textarea>
+
+            <div class="button-row">
+                <button id="addPublicKeyBtn" type="button">Add Public Key</button>
+                <button id="clearPublicKeysBtn" type="button" class="danger">Clear All Public Keys</button>
+            </div>
+
+            <h3>Saved Contacts</h3>
+            <ul id="publicKeyList" class="key-list"></ul>
+        </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='openpgp.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='pgp-manager.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/key_management.js') }}"></script>
+</body>
+</html>

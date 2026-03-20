@@ -1,0 +1,134 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: #000;
+    color: #0f0;
+    font-family: "Courier New", monospace;
+    line-height: 1.5;
+}
+
+.container {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 24px 16px 40px;
+}
+
+h1 {
+    margin: 0 0 8px;
+    font-size: 1.8rem;
+}
+
+h2 {
+    margin: 0 0 12px;
+    font-size: 1.2rem;
+}
+
+h3 {
+    margin: 14px 0 8px;
+    font-size: 1rem;
+}
+
+.subtitle {
+    margin: 0 0 22px;
+    color: #9f9;
+}
+
+.panel {
+    border: 1px solid #0f0;
+    background: #001100;
+    padding: 14px;
+    margin-bottom: 16px;
+}
+
+label {
+    display: block;
+    margin: 10px 0 4px;
+}
+
+input,
+textarea,
+button {
+    width: 100%;
+    font-family: inherit;
+    font-size: 0.95rem;
+}
+
+input,
+textarea {
+    background: #000;
+    color: #0f0;
+    border: 1px solid #0f0;
+    padding: 8px;
+}
+
+textarea {
+    resize: vertical;
+}
+
+button {
+    margin-top: 10px;
+    border: 1px solid #0f0;
+    background: #0f0;
+    color: #000;
+    padding: 8px 10px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+button:hover {
+    background: #0b0;
+}
+
+.button-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.danger {
+    border-color: #f44;
+    background: #f44;
+}
+
+.danger:hover {
+    background: #c22;
+}
+
+.status-list {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.status-message {
+    margin: 8px 0 0;
+    min-height: 1.2rem;
+}
+
+.status-message.error {
+    color: #f66;
+}
+
+.status-message.success {
+    color: #6f6;
+}
+
+.key-list {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.key-list li {
+    margin-bottom: 8px;
+}
+
+.small-btn {
+    display: inline-block;
+    width: auto;
+    margin-left: 10px;
+    padding: 3px 8px;
+    font-size: 0.8rem;
+}
