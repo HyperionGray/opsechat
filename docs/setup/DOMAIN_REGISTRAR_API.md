@@ -117,12 +117,21 @@ Opsechat includes budget controls to prevent accidental overspending:
 
 - **Monthly Budget**: Maximum amount to spend per month
 - **Domain Price Limit**: Maximum price per domain (default: $5)
-- **Current Spending**: Tracked in-memory (resets on restart)
+- **Current Spending**: Tracked by the manager and reset on month change
 
-View budget status:
+View budget status (web):
 ```
 http://yourservice.onion/{path}/email/config
 ```
+
+View and manage budget status (CLI):
+```bash
+python domain_rotation_cli.py status
+python domain_rotation_cli.py cleanup
+```
+
+The `cleanup` command prunes expired domain records, normalizes persisted
+state, and applies monthly budget rollover logic.
 
 ## Domain Rotation Workflow
 
@@ -135,7 +144,9 @@ http://yourservice.onion/{path}/email/config
 
 ### API Key Storage
 
-⚠️ **Important**: API keys are stored in-memory only. They are NOT persisted to disk. After restart, you must reconfigure.
+⚠️ **Important**:
+- Web configuration stores API keys in-memory only. After restart, you must reconfigure.
+- The standalone `domain_rotation_cli.py` stores API credentials and domain state in `~/.opsechat/domain_config.json` with `0600` permissions.
 
 For persistent configuration:
 - Use environment variables in your deployment
@@ -151,7 +162,8 @@ All domains purchased through the API will use registrar privacy protection (Por
 - Always set a monthly budget
 - Start with a low budget for testing ($10-20)
 - Monitor spending in the config page
-- Budget resets on application restart (intentional for ephemeral deployments)
+- Web mode budget resets on application restart (ephemeral deployment model)
+- CLI mode budget rolls over automatically on calendar month boundaries
 
 ## Troubleshooting
 
@@ -161,10 +173,10 @@ Solution: Configure the domain API in email config page
 
 ### "Budget exceeded"
 
-Solution: 
-1. Wait for budget reset (restart application)
-2. Increase monthly budget
-3. Check current spending in config page
+Solution:
+1. Web mode: restart the app or increase monthly budget
+2. CLI mode: run `python domain_rotation_cli.py cleanup` to apply month rollover and prune expired domains
+3. Check current spending in config page or `python domain_rotation_cli.py status`
 
 ### "Could not find available cheap domain"
 
