@@ -56,6 +56,7 @@ Successfully implemented a Terminal User Interface (TUI) based chat system for O
 ### ✅ Security Features
 - **Text-Only**: Max 1000 chars, no images/videos/binary
 - **Input Validation**: Strips HTML, detects base64 encoding
+- **Per-User Rate Limiting**: Configurable anti-spam controls (default 12 msgs / 30s)
 - **Secure Deletion**: Overwrite with 'X' before clearing
 - **Tor Integration**: Hidden service support with ephemeral .onion
 - **SOCKS Proxy**: Client supports Tor connections
@@ -224,7 +225,6 @@ See `docs/TUI_TODO.md` for detailed roadmap:
 
 - PGP encryption (E2E)
 - Multi-room support
-- Rate limiting
 - Admin commands
 - Performance optimizations
 
@@ -241,7 +241,7 @@ See `docs/TUI_TODO.md` for detailed roadmap:
 ### Remaining Considerations
 - No E2E encryption yet (Tor provides transport encryption)
 - No user authentication (ephemeral by design)
-- No spam prevention (future: rate limiting)
+- Spam prevention is basic (per-user window limits); stronger abuse controls are future work
 
 ## Conclusion
 

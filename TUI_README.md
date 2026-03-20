@@ -11,6 +11,7 @@ This is a serious privacy and opsec tool for serious privacy and opsec people. I
 ✅ **Randomized Usernames** - Server-assigned, no "Jerry Here" problem  
 ✅ **Text Only** - No images, no video, no b64 encoded garbage  
 ✅ **Message Validation** - Max 1000 chars, prevents b64 image encoding  
+✅ **Per-User Rate Limiting** - Default 12 messages per 30 seconds (configurable)  
 ✅ **Secure Deletion** - Messages overwritten before removal  
 ✅ **Zero Disk** - Nothing touches disk except the application code  
 ✅ **Tor Integration** - Full support for Tor hidden services (.onion)  
@@ -52,6 +53,9 @@ python tui-server.py
 
 # Bind to all interfaces
 python tui-server.py --host 0.0.0.0 --port 5555
+
+# Customize anti-spam thresholds
+python tui-server.py --rate-limit-count 20 --rate-limit-window 60
 ```
 
 ### 3. Connect with Client
@@ -136,6 +140,7 @@ sudo systemctl start tor
 - **Max message length**: 1000 characters
 - **Message lifetime**: 4 minutes (240 seconds)
 - **Max chat history**: 200 messages in client (memory management)
+- **Default rate limit**: 12 messages per 30 seconds per user
 - **No images**: Text only, no exceptions
 - **No video**: Text only, no exceptions
 - **No b64 encoding**: Large base64-like strings are rejected
@@ -173,6 +178,9 @@ python -c "from src.tui.server import ChatServer; s = ChatServer(); print(s.gene
 
 # Test imports
 python -c "from src.tui import client, server; print('✓ Imports OK')"
+
+# Run dedicated rate-limit tests
+pytest tests/test_tui_server_rate_limit.py
 ```
 
 ### Code Structure

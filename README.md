@@ -52,6 +52,7 @@ Access the chat at `/chat` to create rooms and share with your contacts.
 - ✅ **Messages Burn** - Auto-delete after 3 minutes with overwriting
 - ✅ **Randomized Usernames** - Server-assigned, no reuse
 - ✅ **Text Only** - No images, videos, or encoded data
+- ✅ **Rate Limiting** - Per-user anti-spam controls (default 12 messages / 30 seconds)
 - ✅ **In-Memory Only** - Zero disk writes
 
 ### Quick Start (TUI)
