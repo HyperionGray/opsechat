@@ -11,6 +11,7 @@
 - 🌐 **Domain Rotation CLI** - Easy burner email domain management
 - 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
 - ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use
+- **Configurable CSP Modes** - `OPSECHAT_CSP_MODE` supports `auto`, `strict`, and `compatible`
 - 🚀 **Production Deployment** - Robust systemd units with auto-restart
 
 📖 **Full Details:** [New Features Guide](docs/NEW_FEATURES.md)
