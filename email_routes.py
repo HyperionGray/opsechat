@@ -18,23 +18,25 @@ from domain_manager import domain_rotation_manager
 
 def register_email_routes(app, id_generator, get_random_color):
     """Register all email-related routes with the Flask app"""
-    
+
+    def _ensure_email_session():
+        """Ensure session identity exists and inbox is initialized."""
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
+        email_storage.create_user_inbox(session["_id"])
+
     @app.route('/<string:url_addition>/email', methods=["GET"])
     def email_inbox(url_addition):
         """Main email inbox page"""
         if url_addition != app.config["path"]:
             return ('', 404)
-        
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
-        
-        # Initialize inbox for user
-        email_storage.create_user_inbox(session["_id"])
-        
+
+        _ensure_email_session()
+
         # Get emails
         emails = email_storage.get_emails(session["_id"])
-        
+
         return render_template("email_inbox.html",
                               hostname=app.config["hostname"],
                               path=app.config["path"],
@@ -46,14 +48,10 @@ def register_email_routes(app, id_generator, get_random_color):
         """Email inbox with JavaScript enabled"""
         if url_addition != app.config["path"]:
             return ('', 404)
-        
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
-        
-        email_storage.create_user_inbox(session["_id"])
+
+        _ensure_email_session()
         emails = email_storage.get_emails(session["_id"])
-        
+
         return render_template("email_inbox.html",
                               hostname=app.config["hostname"],
                               path=app.config["path"],
@@ -156,11 +154,9 @@ def register_email_routes(app, id_generator, get_random_color):
         """Email composition and sending with rate limiting"""
         if url_addition != app.config["path"]:
             return ('', 404)
-        
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
-        
+
+        _ensure_email_session()
+
         if request.method == "POST":
             # Check rate limit before allowing send
             allowed, error_msg = burner_manager.check_send_rate_limit(session["_id"])
@@ -217,3 +213,68 @@ def register_email_routes(app, id_generator, get_random_color):
                              hostname=app.config["hostname"],
                              path=app.config["path"],
                              send_limit_status=burner_manager.get_send_limit_status(session["_id"]))
+
+    @app.route('/<string:url_addition>/email/view/<string:email_id>', methods=["GET"])
+    def email_view(url_addition, email_id):
+        """View a single email by ID."""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        _ensure_email_session()
+        email = email_storage.get_email(session["_id"], email_id)
+        if email is None:
+            return ('', 404)
+
+        return render_template("email_view.html",
+                              hostname=app.config["hostname"],
+                              path=app.config["path"],
+                              email=email)
+
+    @app.route('/<string:url_addition>/email/edit/<string:email_id>', methods=["GET", "POST"])
+    def email_edit(url_addition, email_id):
+        """Edit an email in raw mode."""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        _ensure_email_session()
+        email = email_storage.get_email(session["_id"], email_id)
+        if email is None:
+            return ('', 404)
+
+        if request.method == "POST":
+            raw_email = request.form.get("raw_email", "")
+            if not raw_email.strip():
+                return render_template("email_edit.html",
+                                      hostname=app.config["hostname"],
+                                      path=app.config["path"],
+                                      email=email,
+                                      raw_email=EmailComposer.format_raw_email(email),
+                                      error="Raw email content cannot be empty."), 400
+
+            updated_email = EmailComposer.parse_raw_email(raw_email)
+            # Preserve mailbox metadata not represented in raw headers/body.
+            updated_email["sent"] = email.get("sent", False)
+
+            if not email_storage.update_email(session["_id"], email_id, updated_email):
+                return ('', 404)
+
+            return redirect(url_for("email_view", url_addition=url_addition, email_id=email_id))
+
+        return render_template("email_edit.html",
+                              hostname=app.config["hostname"],
+                              path=app.config["path"],
+                              email=email,
+                              raw_email=EmailComposer.format_raw_email(email))
+
+    @app.route('/<string:url_addition>/email/delete/<string:email_id>', methods=["POST"])
+    def email_delete(url_addition, email_id):
+        """Delete an email from the current user's inbox."""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        _ensure_email_session()
+        deleted = email_storage.delete_email(session["_id"], email_id)
+        if not deleted:
+            return ('', 404)
+
+        return redirect(url_for("email_inbox", url_addition=url_addition))

@@ -126,6 +126,12 @@
     before modifying headers. Improper formatting may cause issues.
   </div>
 
+  {% if error %}
+  <div class="warning">
+    {{ error }}
+  </div>
+  {% endif %}
+
   <div class="info">
     ℹ️ <strong>Format:</strong> Separate headers from body with a blank line. Each header should be on 
     its own line in the format "Header-Name: Value". Common headers include From, To, Subject, CC, BCC, 

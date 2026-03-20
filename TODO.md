@@ -18,6 +18,7 @@
 - [x] Structured logging / APM via `monitoring.py`
 - [x] Test suite for `simple_chat_routes.py` (31 tests)
 - [x] Fixed `datetime.utcnow()` deprecation – use `datetime.now(timezone.utc)`
+- [x] Restored email inbox action routes (`/email/view/<id>`, `/email/edit/<id>`, `/email/delete/<id>`) with integration tests
 
 ---
 

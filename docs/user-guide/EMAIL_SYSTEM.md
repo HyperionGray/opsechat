@@ -6,6 +6,16 @@ The OpSec Email System provides an encrypted, anonymous email platform integrate
 
 **NEW:** Real email capabilities with SMTP/IMAP support and automated domain management!
 
+## Implementation Status Update (2026-03-20)
+
+The inbox action links are now fully implemented end-to-end:
+
+- `/{path}/email/view/{email_id}` - view one message with full headers
+- `/{path}/email/edit/{email_id}` - raw-mode edit (headers + body)
+- `/{path}/email/delete/{email_id}` - delete one message (POST)
+
+Route behavior is covered by integration tests in `tests/test_email_routes.py`.
+
 ## ⚠️ Security Notice
 
 **FOR SECURITY RESEARCH AND AUTHORIZED TESTING ONLY**
