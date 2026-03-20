@@ -22,7 +22,7 @@ from http_mail_system import (
     http_mail_storage,
     MAX_MAIL_MESSAGE_LENGTH,
 )
-from email_system import email_storage as _global_email_storage, EmailComposer
+from email_system import email_storage as _global_email_storage, burner_manager, EmailComposer
 from app_factory import create_app
 
 
@@ -257,6 +257,39 @@ class TestHttpMailRoutes:
         )
         assert r.status_code == 400
 
+    def test_send_message_body_empty_after_sanitize_fails(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "X", "body": "<<<>>>", "sender": "bob"},
+        )
+        assert r.status_code == 400
+
+    def test_send_message_form_fallback_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        data = r.get_json()
+        addr = data["address"]
+        read_key = data["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Form subject",
+                "body": "Form body",
+                "sender": "form-user",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        ).get_json()
+        assert any(msg["body"] == "Form body" for msg in inbox["messages"])
+
     def test_send_to_nonexistent_mailbox(self):
         r = self.client.post(
             f"/{self.path}/mail/doesnotexist/send",
@@ -433,6 +466,9 @@ class TestEmailRoutesExtended:
         self.app.config["path"] = "secpath"
         self.app.config["hostname"] = "localhost"
         self.client = self.app.test_client()
+        burner_manager.burner_addresses.clear()
+        burner_manager.user_burners.clear()
+        burner_manager.send_limits.clear()
 
         # Set up a session with a known user_id
         with self.client.session_transaction() as sess:
@@ -455,6 +491,9 @@ class TestEmailRoutesExtended:
         # Clean up global state
         if "testuser99" in _global_email_storage.emails:
             _global_email_storage.emails["testuser99"] = []
+        burner_manager.burner_addresses.clear()
+        burner_manager.user_burners.clear()
+        burner_manager.send_limits.clear()
 
     def test_view_email_returns_200(self):
         r = self.client.get(f"/secpath/email/view/{self.email_id}")
@@ -494,3 +533,18 @@ class TestEmailRoutesExtended:
     def test_burner_wrong_path_404(self):
         r = self.client.post("/wrongpath/email/burner", data={"action": "generate"})
         assert r.status_code == 404
+
+    def test_burner_expire_rejects_other_users_burner(self):
+        other_email = burner_manager.generate_burner_email("other-user")
+        r = self.client.post(f"/secpath/email/burner/expire/{other_email}")
+        assert r.status_code == 403
+        assert burner_manager.get_user_for_burner(other_email) == "other-user"
+
+    def test_burner_rotate_rejects_other_users_old_email(self):
+        other_email = burner_manager.generate_burner_email("other-user")
+        r = self.client.post(
+            "/secpath/email/burner",
+            data={"action": "rotate", "old_email": other_email},
+        )
+        assert r.status_code == 403
+        assert burner_manager.get_user_for_burner(other_email) == "other-user"

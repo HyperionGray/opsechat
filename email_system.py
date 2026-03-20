@@ -275,7 +275,10 @@ class BurnerEmailManager:
     def expire_burner(self, email: str) -> bool:
         """Immediately expire a burner email"""
         if email in self.burner_addresses:
+            user_id = self.burner_addresses[email]['user_id']
             del self.burner_addresses[email]
+            if user_id in self.user_burners and email in self.user_burners[user_id]:
+                self.user_burners[user_id].remove(email)
             return True
         return False
     
@@ -289,15 +292,27 @@ class BurnerEmailManager:
     def cleanup_expired(self) -> None:
         """Remove expired burner addresses"""
         now = datetime.datetime.now()
-        expired = [email for email, info in self.burner_addresses.items() 
-                   if info['expires_at'] <= now]
-        for email in expired:
+        expired = [
+            (email, info['user_id'])
+            for email, info in self.burner_addresses.items()
+            if info['expires_at'] <= now
+        ]
+        for email, user_id in expired:
             del self.burner_addresses[email]
-            # Also remove from user_burners
-            user_id = self.burner_addresses.get(email, {}).get('user_id')
             if user_id and user_id in self.user_burners:
                 if email in self.user_burners[user_id]:
                     self.user_burners[user_id].remove(email)
+
+    def get_user_stats(self, user_id: str) -> Dict:
+        """Get burner and send-limit stats for a specific user."""
+        active_burners = self.get_user_burners(user_id)
+        send_status = self.get_send_limit_status(user_id)
+        return {
+            'active_burners': len(active_burners),
+            'sends_used': send_status.get('sends_used', 0),
+            'sends_remaining': send_status.get('sends_remaining', self.max_sends_per_hour),
+            'max_sends_per_hour': send_status.get('max_sends_per_hour', self.max_sends_per_hour),
+        }
     
     def _format_time_remaining(self, time_delta: datetime.timedelta) -> str:
         """Format time remaining in human-readable format"""
