@@ -15,7 +15,7 @@
  * Each file is focused and maintainable (all < 200 lines)
  * 
  * This file is kept for backward compatibility. All tests now run from the new files.
- * Original file preserved as: tests/e2e.spec.js.deprecated
+ * The original monolithic file has been removed; use git history if needed.
  */
 
 const { test } = require('@playwright/test');
