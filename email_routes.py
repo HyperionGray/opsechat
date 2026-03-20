@@ -11,9 +11,6 @@ This module contains Flask routes for email functionality including:
 
 from flask import render_template, request, session, jsonify, redirect, url_for
 from email_system import email_storage, burner_manager, EmailComposer, EmailValidator
-from email_security_tools import spoofing_tester, phishing_simulator
-from email_transport import transport_manager
-from domain_manager import domain_rotation_manager
 
 
 def register_email_routes(app, id_generator, get_random_color):
@@ -195,8 +192,7 @@ def register_email_routes(app, id_generator, get_random_color):
             # Record the send (for rate limiting)
             burner_manager.record_sent_email(session["_id"])
             
-            # In a real implementation, this would use transport_manager to send
-            # For now, just store in local inbox as sent
+            # In this mode, store the outgoing message in the local in-memory inbox.
             email_data = {
                 'to': to_addr,
                 'from': session.get('email_address', 'anonymous@opsechat.onion'),

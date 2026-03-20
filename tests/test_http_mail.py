@@ -115,6 +115,21 @@ class TestHttpMailStorage:
         self.storage.cleanup_empty_old_mailboxes()
         assert self.storage.get_mailbox(mb.address) is not None
 
+    def test_rotate_mailbox_key_success(self):
+        mb = self.storage.create_mailbox()
+        old_key = mb.read_key
+        new_key = self.storage.rotate_mailbox_key(mb.address, old_key)
+        assert new_key is not None
+        assert len(new_key) == 32
+        assert new_key != old_key
+        assert mb.get_messages(old_key) is None
+        assert mb.get_messages(new_key) is not None
+
+    def test_rotate_mailbox_key_wrong_key_fails(self):
+        mb = self.storage.create_mailbox()
+        new_key = self.storage.rotate_mailbox_key(mb.address, "wrongkey")
+        assert new_key is None
+
 
 # ===========================================================================
 # HttpMailbox unit tests
@@ -164,6 +179,22 @@ class TestHttpMailbox:
     def test_delete_nonexistent_message(self):
         result = self.mailbox.delete_message("secretkey123456789012345678901", "fakeid")
         assert result is False
+
+    def test_rotate_read_key_success_revokes_old_key(self):
+        self.mailbox.add_message("Subj", "Body", "alice")
+        old_key = "secretkey123456789012345678901"
+        new_key = self.mailbox.rotate_read_key(old_key)
+        assert new_key is not None
+        assert len(new_key) == 32
+        assert new_key != old_key
+        assert self.mailbox.get_messages(old_key) is None
+        assert self.mailbox.get_messages(new_key) is not None
+
+    def test_rotate_read_key_wrong_key_fails(self):
+        old_key = "secretkey123456789012345678901"
+        new_key = self.mailbox.rotate_read_key("wrongkey")
+        assert new_key is None
+        assert self.mailbox.get_messages(old_key) is not None
 
     def test_message_expiry(self):
         self.mailbox.add_message("Old", "Old body", "bob")
@@ -421,6 +452,52 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.get_json()["messages"][0]["sender"] == "anonymous"
+
+    def test_rotate_key_correct_key(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        old_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "A", "body": "B", "sender": "alice"},
+        )
+
+        rotate = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
+            json={"read_key": old_key},
+            headers={"Accept": "application/json"},
+        )
+        assert rotate.status_code == 200
+        payload = rotate.get_json()
+        assert payload["success"] is True
+        assert "new_read_key" in payload
+        new_key = payload["new_read_key"]
+        assert new_key != old_key
+
+        old_read = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={old_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert old_read.status_code == 403
+
+        new_read = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={new_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert new_read.status_code == 200
+        assert len(new_read.get_json()["messages"]) == 1
+
+    def test_rotate_key_wrong_key_denied(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        rotate = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
+            json={"read_key": "wrongkey"},
+            headers={"Accept": "application/json"},
+        )
+        assert rotate.status_code == 403
 
 
 # ===========================================================================

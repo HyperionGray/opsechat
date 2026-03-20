@@ -100,6 +100,18 @@ class HttpMailbox:
                     return True
         return False
 
+    def rotate_read_key(self, current_read_key: str) -> Optional[str]:
+        """Rotate the mailbox read key after verifying current key.
+
+        Returns the new key on success, or None if verification fails.
+        """
+        if not secrets.compare_digest(current_read_key, self.read_key):
+            return None
+        new_key = _generate_id(24)  # 24 bytes -> 32 URL-safe chars
+        with self.lock:
+            self.read_key = new_key
+        return new_key
+
     def _expire_old_messages(self) -> None:
         """Remove messages older than MAIL_EXPIRY_HOURS."""
         cutoff = datetime.datetime.now() - datetime.timedelta(hours=MAIL_EXPIRY_HOURS)
@@ -150,6 +162,14 @@ class HttpMailStorage:
                 msg.overwrite()
             del self._mailboxes[address]
             return True
+
+    def rotate_mailbox_key(self, address: str, current_read_key: str) -> Optional[str]:
+        """Rotate mailbox read key after verifying the current key."""
+        with self._lock:
+            mailbox = self._mailboxes.get(address)
+        if mailbox is None:
+            return None
+        return mailbox.rotate_read_key(current_read_key)
 
     def cleanup_empty_old_mailboxes(self) -> None:
         """Remove mailboxes with no messages that are older than 48 hours."""

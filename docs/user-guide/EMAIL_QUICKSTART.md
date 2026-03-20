@@ -4,6 +4,8 @@
 
 OpSechat now supports **real email sending and receiving** via SMTP/IMAP, along with automated domain purchasing for burner email rotation.
 
+For SMTP-free usage, OpSecChat also includes **HTTP Mail** (`/{path}/mail`) with mailbox addresses and private read keys. See [HTTP_MAIL.md](HTTP_MAIL.md) for full details.
+
 ## Quick Setup
 
 ### 1. Configure SMTP (For Sending Emails)
