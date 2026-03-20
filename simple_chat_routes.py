@@ -53,6 +53,7 @@ class ChatRoom:
         self.users = {}
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
+        self.next_message_id = 1
         # Auto-generated shared encryption key for the room
         self.room_key = base64.b64encode(secrets.token_bytes(32)).decode('utf-8')
     
@@ -64,6 +65,7 @@ class ChatRoom:
         """Add a message to the room"""
         with self.lock:
             msg = {
+                "id": self.next_message_id,
                 "message": message_text,
                 "user_id": user_id,
                 "username": username,
@@ -71,6 +73,7 @@ class ChatRoom:
                 "timestamp": datetime.datetime.now()
             }
             self.messages.append(msg)
+            self.next_message_id += 1
             
             # Track user
             if user_id not in self.users:
@@ -99,11 +102,20 @@ class ChatRoom:
             
             self.messages = new_messages
     
-    def get_messages(self):
-        """Get all current messages"""
+    def get_messages(self, since_id=None):
+        """Get current messages, optionally after a specific message id"""
         self.cleanup_old_messages()
         with self.lock:
-            return self.messages.copy()
+            if since_id is None:
+                return self.messages.copy()
+            return [msg for msg in self.messages if msg["id"] > since_id]
+
+    def get_last_message_id(self):
+        """Get the latest message id for incremental synchronization."""
+        with self.lock:
+            if not self.messages:
+                return 0
+            return self.messages[-1]["id"]
     
     def get_user_count(self):
         """Get count of active users (seen in last 5 minutes)"""
@@ -377,12 +389,24 @@ def register_simple_chat_routes(app):
             return jsonify({"success": True})
         
         else:  # GET
-            messages = room.get_messages()
+            since_id_raw = request.args.get("since_id")
+            since_id = None
+            if since_id_raw is not None:
+                try:
+                    since_id = int(since_id_raw)
+                except (ValueError, TypeError):
+                    return jsonify({"error": "since_id must be a non-negative integer"}), 400
+                if since_id < 0:
+                    return jsonify({"error": "since_id must be a non-negative integer"}), 400
+
+            messages = room.get_messages(since_id=since_id)
             user_count = room.get_user_count()
+            last_message_id = room.get_last_message_id()
             
             return jsonify({
                 "messages": [
                     {
+                        "id": msg["id"],
                         "username": msg["username"],
                         "color": msg["color"],
                         "message": msg["message"],
@@ -392,6 +416,7 @@ def register_simple_chat_routes(app):
                     for msg in messages
                 ],
                 "user_count": user_count,
+                "last_message_id": last_message_id,
                 "my_username": session.get("username"),
                 "my_color": session.get("color")
             })

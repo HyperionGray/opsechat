@@ -29,6 +29,42 @@ Previously, users had to manually share encryption keys. Now, each chat room aut
 
 ---
 
+## Chat Incremental Sync API
+
+### What Changed
+Chat polling now supports incremental message retrieval so clients can fetch only new messages instead of downloading full room history every 2 seconds.
+
+### API Behavior
+- `GET /chat/room/{room_id}/messages` returns the full current room state.
+- `GET /chat/room/{room_id}/messages?since_id={message_id}` returns only messages with IDs greater than `since_id`.
+- Every response now includes:
+  - `last_message_id`: highest message ID currently in the room
+  - `messages[].id`: stable per-room message ID
+
+### Why This Matters
+- Reduces response payload size for active rooms
+- Improves browser rendering performance on long-running sessions
+- Provides a cleaner primitive for future real-time transport upgrades
+
+### Example
+```bash
+# Initial fetch
+GET /chat/room/abc123/messages
+{
+  "messages": [{"id": 1, ...}, {"id": 2, ...}],
+  "last_message_id": 2
+}
+
+# Incremental fetch
+GET /chat/room/abc123/messages?since_id=2
+{
+  "messages": [{"id": 3, ...}],
+  "last_message_id": 3
+}
+```
+
+---
+
 ## 💬 Direct Messages (DM)
 
 ### Purpose

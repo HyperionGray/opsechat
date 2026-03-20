@@ -187,8 +187,45 @@ class TestChatMessagesEndpoint:
         resp = self.client.get(f"/chat/room/{self.room_id}/messages")
         data = resp.get_json()
         msg = data["messages"][0]
-        for field in ("username", "color", "message", "timestamp", "is_mine"):
+        for field in ("id", "username", "color", "message", "timestamp", "is_mine"):
             assert field in msg, f"Missing field: {field}"
+
+    def test_get_messages_since_id_returns_only_new_messages(self):
+        self.client.post(
+            f"/chat/room/{self.room_id}/messages",
+            json={"message": "first"},
+        )
+        self.client.post(
+            f"/chat/room/{self.room_id}/messages",
+            json={"message": "second"},
+        )
+        initial = self.client.get(f"/chat/room/{self.room_id}/messages").get_json()
+        first_id = initial["messages"][0]["id"]
+
+        self.client.post(
+            f"/chat/room/{self.room_id}/messages",
+            json={"message": "third"},
+        )
+
+        incremental = self.client.get(
+            f"/chat/room/{self.room_id}/messages?since_id={first_id}"
+        )
+        data = incremental.get_json()
+        payload_messages = [msg["message"] for msg in data["messages"]]
+        assert incremental.status_code == 200
+        assert payload_messages == ["second", "third"]
+        assert data["last_message_id"] >= data["messages"][-1]["id"]
+
+    def test_get_messages_invalid_since_id_rejected(self):
+        non_numeric = self.client.get(
+            f"/chat/room/{self.room_id}/messages?since_id=abc"
+        )
+        assert non_numeric.status_code == 400
+
+        negative = self.client.get(
+            f"/chat/room/{self.room_id}/messages?since_id=-5"
+        )
+        assert negative.status_code == 400
 
 
 # ===========================================================================
