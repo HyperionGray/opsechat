@@ -43,6 +43,32 @@ RATE_LIMITS = {
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
 
+
+def calculate_backoff_schedule(retry_after: int, attempts: int = 4, cap_seconds: int = 300) -> list:
+    """Return exponential backoff guidance for clients retrying throttled calls."""
+    base_delay = max(int(retry_after), 1)
+    return [min(base_delay * (2 ** attempt), cap_seconds) for attempt in range(attempts)]
+
+
+def make_rate_limit_response(message: str, retry_after: int):
+    """
+    Build a standardized JSON 429 response with retry guidance.
+
+    Includes the Retry-After header so HTTP clients and browsers can perform
+    protocol-compliant backoff behavior automatically.
+    """
+    retry_after = max(int(retry_after), 1)
+    response = jsonify({
+        "error": message,
+        "retry_after": retry_after,
+        "backoff_schedule_seconds": calculate_backoff_schedule(retry_after),
+        "backoff_hint": "Use exponential backoff with jitter before retrying."
+    })
+    response.status_code = 429
+    response.headers["Retry-After"] = str(retry_after)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
 # Room class to manage chat state
 class ChatRoom:
     """Manages a single chat room with message expiry and memory overwriting"""
@@ -254,6 +280,26 @@ def generate_secure_dm_id():
 
 def register_simple_chat_routes(app):
     """Register simple chat routes with the Flask app"""
+
+    @app.errorhandler(429)
+    def chat_rate_limit_handler(error):
+        """
+        Return structured JSON for chat-related 429s, including Flask-Limiter.
+        """
+        if not request.path.startswith("/chat"):
+            return error
+
+        retry_after = 60
+        if hasattr(error, "get_response"):
+            base_response = error.get_response()
+            header_value = base_response.headers.get("Retry-After")
+            if header_value and str(header_value).isdigit():
+                retry_after = int(header_value)
+
+        return make_rate_limit_response(
+            f"Rate limit exceeded. Try again in {retry_after} seconds.",
+            retry_after
+        )
     
     @app.route('/chat')
     def chat_index():
@@ -279,9 +325,10 @@ def register_simple_chat_routes(app):
 
         allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Try again in {retry_after} seconds."
-            }), 429
+            return make_rate_limit_response(
+                f"Rate limit exceeded. Try again in {retry_after} seconds.",
+                retry_after
+            )
 
         room_id = generate_secure_room_id(32)
         
@@ -332,9 +379,10 @@ def register_simple_chat_routes(app):
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
             if not allowed:
-                return jsonify({
-                    "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds."
-                }), 429
+                return make_rate_limit_response(
+                    f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds.",
+                    retry_after
+                )
             
             # Get message from request
             data = request.get_json()
@@ -409,9 +457,10 @@ def register_simple_chat_routes(app):
         # Check rate limit for DMs
         allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds."
-            }), 429
+            return make_rate_limit_response(
+                f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds.",
+                retry_after
+            )
         
         data = request.get_json()
         if not data or "room_id" not in data or "message" not in data:

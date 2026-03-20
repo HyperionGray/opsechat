@@ -21,6 +21,8 @@ from simple_chat_routes import (
     dm_lock,
     rooms_lock,
     MAX_MESSAGE_LENGTH,
+    _rate_limit_lock,
+    _rate_limit_store,
 )
 from app_factory import create_app
 
@@ -47,6 +49,11 @@ def _clear_dms():
         direct_messages.clear()
 
 
+def _clear_rate_limits():
+    with _rate_limit_lock:
+        _rate_limit_store.clear()
+
+
 # ===========================================================================
 # /chat/create
 # ===========================================================================
@@ -54,6 +61,7 @@ def _clear_dms():
 class TestChatCreateEndpoint:
     def setup_method(self):
         _clear_rooms()
+        _clear_rate_limits()
         self.app = _fresh_app()
         self.client = self.app.test_client()
 
@@ -85,6 +93,20 @@ class TestChatCreateEndpoint:
         resp = self.client.get("/chat/room/nonexistent-room-id-12345678")
         assert resp.status_code == 404
 
+    def test_create_room_rate_limit_returns_retry_after_header(self):
+        for _ in range(3):
+            ok = self.client.post("/chat/create")
+            assert ok.status_code == 200
+
+        blocked = self.client.post("/chat/create")
+        assert blocked.status_code == 429
+        data = blocked.get_json()
+        assert isinstance(data["retry_after"], int)
+        assert data["retry_after"] >= 1
+        assert blocked.headers.get("Retry-After") == str(data["retry_after"])
+        assert isinstance(data["backoff_schedule_seconds"], list)
+        assert len(data["backoff_schedule_seconds"]) == 4
+
 
 # ===========================================================================
 # /chat/room/<id>/messages
@@ -93,6 +115,7 @@ class TestChatCreateEndpoint:
 class TestChatMessagesEndpoint:
     def setup_method(self):
         _clear_rooms()
+        _clear_rate_limits()
         self.app = _fresh_app()
         self.client = self.app.test_client()
         # Create a room for each test
@@ -190,6 +213,26 @@ class TestChatMessagesEndpoint:
         for field in ("username", "color", "message", "timestamp", "is_mine"):
             assert field in msg, f"Missing field: {field}"
 
+    def test_message_rate_limit_returns_structured_backoff(self):
+        for i in range(30):
+            ok = self.client.post(
+                f"/chat/room/{self.room_id}/messages",
+                json={"message": f"msg {i} enough spaces for plain text"},
+            )
+            assert ok.status_code == 200
+
+        blocked = self.client.post(
+            f"/chat/room/{self.room_id}/messages",
+            json={"message": "this should be blocked now"},
+        )
+        assert blocked.status_code == 429
+        data = blocked.get_json()
+        assert "Rate limit exceeded" in data["error"]
+        assert isinstance(data["retry_after"], int)
+        assert data["retry_after"] >= 1
+        assert blocked.headers.get("Retry-After") == str(data["retry_after"])
+        assert data["backoff_schedule_seconds"][0] == data["retry_after"]
+
 
 # ===========================================================================
 # /chat/room/<id>/key  (automated key exchange)
@@ -198,6 +241,7 @@ class TestChatMessagesEndpoint:
 class TestRoomKeyEndpoint:
     def setup_method(self):
         _clear_rooms()
+        _clear_rate_limits()
         self.app = _fresh_app()
         self.client = self.app.test_client()
 
@@ -243,6 +287,7 @@ class TestDMEndpoints:
     def setup_method(self):
         _clear_rooms()
         _clear_dms()
+        _clear_rate_limits()
         self.app = _fresh_app()
         self.client = self.app.test_client()
         # Create a room to reference in DMs

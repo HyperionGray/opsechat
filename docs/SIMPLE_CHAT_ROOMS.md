@@ -142,6 +142,24 @@ POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
 
+#### Rate-Limit Response Format
+Write endpoints return HTTP `429` with machine-readable retry guidance:
+
+```json
+{
+  "error": "Rate limit exceeded. Try again in 12 seconds.",
+  "retry_after": 12,
+  "backoff_schedule_seconds": [12, 24, 48, 96],
+  "backoff_hint": "Use exponential backoff with jitter before retrying."
+}
+```
+
+HTTP response headers include:
+- `Retry-After: <seconds>`
+- `Cache-Control: no-store`
+
+This allows clients and automation to retry safely without hammering the API.
+
 ### Encryption Implementation
 
 The E2E encryption uses native Web Crypto API:
