@@ -263,6 +263,7 @@
 - [x] Randomized usernames with color distinction
 - [x] Room-based chat (create/join rooms)
 - [x] Direct Messages (DM) for sharing room URLs — 1-minute expiry
+- [x] One-time DM burn-after-read behavior (first view deletes message in-memory)
 - [x] Rate limiting: 10 creates/min, 30 messages/min, 5 DMs/min (per session)
 - [x] CLI script for easy room creation (`chat-room.py`)
 - [x] Comprehensive documentation in `docs/SIMPLE_CHAT_ROOMS.md`

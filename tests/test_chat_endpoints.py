@@ -272,6 +272,19 @@ class TestDMEndpoints:
         assert "message" in data
         assert "room_id" in data
 
+    def test_dm_is_burned_after_first_read(self):
+        resp = self.client.post(
+            "/chat/dm/send",
+            json={"room_id": self.room_id, "message": "single view"},
+        )
+        dm_id = resp.get_json()["dm_id"]
+
+        first_view = self.client.get(f"/chat/dm/{dm_id}")
+        assert first_view.status_code == 200
+
+        second_view = self.client.get(f"/chat/dm/{dm_id}")
+        assert second_view.status_code == 404
+
     def test_dm_has_expiry_field(self):
         resp = self.client.post(
             "/chat/dm/send",
@@ -297,6 +310,8 @@ class TestDMEndpoints:
             }
         view_resp = self.client.get("/chat/dm/test-expired")
         assert view_resp.status_code == 404
+        with dm_lock:
+            assert "test-expired" not in direct_messages
 
     def test_nonexistent_dm_returns_404(self):
         resp = self.client.get("/chat/dm/does-not-exist-at-all")

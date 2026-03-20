@@ -14,6 +14,7 @@ OpSecChat now includes a simple, security-focused web-based chat room system des
 - **Randomized Usernames**: Color-coded for easy visual distinction
 - **Text-Only**: No media, images, or file sharing
 - **In-Memory Storage**: Zero disk writes
+- **Ephemeral Direct Messages**: Share room links with one-time, burn-after-read DMs
 - **Tor Ready**: Works seamlessly with Tor hidden services
 
 ## Quick Start
@@ -141,6 +142,19 @@ GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
+
+#### Send/View Direct Message
+```
+POST /chat/dm/send
+Body: {"room_id": "...", "message": "..."}
+
+GET /chat/dm/<dm_id>
+```
+
+DM behavior:
+- Expires after 60 seconds if unread
+- Burns after the first successful read
+- Message and room ID fields are overwritten before in-memory deletion
 
 ### Encryption Implementation
 

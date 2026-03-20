@@ -463,18 +463,26 @@ def register_simple_chat_routes(app):
             # Check if expired
             age = (datetime.datetime.now() - dm["timestamp"]).total_seconds()
             if age > 60:
+                # Expired DMs are immediately wiped and removed when accessed.
+                dm["message"] = "X" * len(dm["message"])
+                dm["room_id"] = "X" * len(dm["room_id"])
+                del direct_messages[dm_id]
                 return jsonify({"error": "DM expired"}), 404
-            
-            # Mark as read
-            dm["read"] = True
-            
-            return jsonify({
+
+            response_data = {
                 "dm_id": dm["dm_id"],
                 "sender_name": dm["sender_name"],
                 "room_id": dm["room_id"],
                 "message": dm["message"],
                 "expires_in": max(0, 60 - int(age))
-            })
+            }
+
+            # Burn-after-read behavior: one successful read removes DM data.
+            dm["message"] = "X" * len(dm["message"])
+            dm["room_id"] = "X" * len(dm["room_id"])
+            del direct_messages[dm_id]
+
+            return jsonify(response_data)
     
     @app.route('/chat/room/<string:room_id>/key', methods=['GET'])
     def get_room_key(room_id):
