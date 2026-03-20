@@ -104,6 +104,10 @@ def create_app():
     # Register review routes (existing function-based registration)
     register_review_routes(app, id_generator, get_random_color, 
                           add_review_wrapper, get_reviews, get_review_stats)
+
+    # Register HTTP mail routes (email over HTTP, no SMTP/IMAP)
+    from http_mail_routes import register_http_mail_routes
+    register_http_mail_routes(app)
     
     # Health check endpoint
     from monitoring import get_health_status

@@ -217,3 +217,133 @@ def register_email_routes(app, id_generator, get_random_color):
                              hostname=app.config["hostname"],
                              path=app.config["path"],
                              send_limit_status=burner_manager.get_send_limit_status(session["_id"]))
+
+    # ------------------------------------------------------------------
+    # View a single email
+    # ------------------------------------------------------------------
+
+    @app.route('/<string:url_addition>/email/view/<string:email_id>', methods=["GET"])
+    def email_view(url_addition, email_id):
+        """View a specific email"""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        if "_id" not in session:
+            _ensure_session()
+
+        email = email_storage.get_email(session["_id"], email_id)
+
+        email = email_storage.get_email(session["_id"], email_id)
+        if email is None:
+            return render_template("email_inbox.html",
+                                   hostname=app.config["hostname"],
+                                   path=app.config["path"],
+                                   emails=email_storage.get_emails(session["_id"]),
+                                   script_enabled=False,
+                                   error="Email not found"), 404
+
+        return render_template("email_view.html",
+                               hostname=app.config["hostname"],
+                               path=app.config["path"],
+                               email=email)
+
+    # ------------------------------------------------------------------
+    # Edit a single email (raw mode)
+    # ------------------------------------------------------------------
+
+    @app.route('/<string:url_addition>/email/edit/<string:email_id>',
+               methods=["GET", "POST"])
+    def email_edit(url_addition, email_id):
+        """Edit an email in raw mode"""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
+
+        email = email_storage.get_email(session["_id"], email_id)
+        if email is None:
+            return ('', 404)
+
+        if request.method == "POST":
+            raw_content = request.form.get("raw_email", "").strip()
+            try:
+                updated = EmailComposer.parse_raw_email(raw_content)
+            except Exception:
+                return render_template("email_edit.html",
+                                       hostname=app.config["hostname"],
+                                       path=app.config["path"],
+                                       email=email,
+                                       raw_email=raw_content,
+                                       error="Failed to parse email — check format"), 400
+            email_storage.update_email(session["_id"], email_id, updated)
+            return redirect(url_for("email_view",
+                                    url_addition=url_addition,
+                                    email_id=email_id))
+
+        # GET — render editor with current raw content
+        raw_email = EmailComposer.format_raw_email(email)
+        return render_template("email_edit.html",
+                               hostname=app.config["hostname"],
+                               path=app.config["path"],
+                               email=email,
+                               raw_email=raw_email)
+
+    # ------------------------------------------------------------------
+    # Delete a single email
+    # ------------------------------------------------------------------
+
+    @app.route('/<string:url_addition>/email/delete/<string:email_id>',
+               methods=["POST"])
+    def email_delete(url_addition, email_id):
+        """Delete a specific email"""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        if "_id" not in session:
+            return ('', 401)
+
+        email_storage.delete_email(session["_id"], email_id)
+        return redirect(url_for("email_inbox", url_addition=url_addition))
+
+    # ------------------------------------------------------------------
+    # Burner email POST actions (generate / rotate)
+    # ------------------------------------------------------------------
+
+    @app.route('/<string:url_addition>/email/burner', methods=["POST"])
+    def email_burner_post(url_addition):
+        """Handle burner email generation and rotation"""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
+
+        action = request.form.get("action", "generate")
+
+        if action == "generate":
+            burner_manager.generate_burner_email(session["_id"])
+        elif action == "rotate":
+            old_email = request.form.get("old_email", "")
+            burner_manager.rotate_burner(session["_id"], old_email or None)
+
+        return redirect(url_for("email_burner", url_addition=url_addition))
+
+    # ------------------------------------------------------------------
+    # Expire (immediately delete) a specific burner address
+    # ------------------------------------------------------------------
+
+    @app.route('/<string:url_addition>/email/burner/expire/<path:burner_email>',
+               methods=["POST"])
+    def email_burner_expire(url_addition, burner_email):
+        """Immediately expire a burner email address"""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        if "_id" not in session:
+            return ('', 401)
+
+        burner_manager.expire_burner(burner_email)
+        return redirect(url_for("email_burner", url_addition=url_addition))
