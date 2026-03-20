@@ -20,21 +20,26 @@ import secrets
 import threading
 import socket
 import json
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 
 # Message storage (in-memory only)
 class ChatServer:
     MAX_MESSAGE_LENGTH = 1000  # Prevent b64 encoded images
-    MESSAGE_LIFETIME = 180  # 3 minutes in seconds
+    MESSAGE_LIFETIME = 240  # 4 minutes in seconds
+    MAX_HISTORY_MESSAGES = 500  # Server-side cap to prevent unbounded RAM growth
+    RATE_LIMIT_WINDOW_SECONDS = 10
+    MAX_MESSAGES_PER_WINDOW = 8
     
     def __init__(self, host='127.0.0.1', port=5555):
         self.host = host
         self.port = port
         self.messages: List[Dict[str, Any]] = []
         self.clients: Dict[socket.socket, str] = {}
+        self.user_message_times: Dict[str, List[datetime.datetime]] = {}
         self.lock = threading.Lock()
         self.server_socket = None
         self.running = False
+        self.shutdown_event = threading.Event()
         
         # Start cleanup thread
         self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
@@ -49,9 +54,17 @@ class ChatServer:
     
     def _cleanup_loop(self):
         """Continuously clean up old messages"""
-        while True:
-            time.sleep(10)  # Check every 10 seconds
+        while not self.shutdown_event.is_set():
+            self.shutdown_event.wait(timeout=10)  # Check every 10 seconds
+            if self.shutdown_event.is_set():
+                break
             self._cleanup_old_messages()
+
+    @staticmethod
+    def _overwrite_message(msg: Dict[str, Any]):
+        """Overwrite message fields before deletion to reduce memory remanence."""
+        msg['message'] = 'X' * len(msg.get('message', ''))
+        msg['username'] = 'X' * len(msg.get('username', ''))
     
     def _cleanup_old_messages(self):
         """Remove and overwrite messages older than MESSAGE_LIFETIME"""
@@ -66,32 +79,55 @@ class ChatServer:
                     new_messages.append(msg)
                 else:
                     # Overwrite message data before deletion (security)
-                    msg['message'] = 'X' * len(msg['message'])
-                    msg['username'] = 'X' * len(msg['username'])
+                    self._overwrite_message(msg)
             
             self.messages = new_messages
     
-    def add_message(self, username: str, message: str) -> bool:
+    def add_message(self, username: str, message: str) -> Tuple[bool, Optional[str]]:
         """Add a message to the chat (with validation)"""
         # Validate message
         if not message or len(message) > self.MAX_MESSAGE_LENGTH:
-            return False
+            return False, f"Message must be 1-{self.MAX_MESSAGE_LENGTH} characters."
         
         # Check for potential b64 encoded data (rough heuristic)
         if len(message) > 500 and message.replace('=', '').isalnum():
-            return False  # Likely b64 encoded image/video
+            return False, "Message looks like encoded binary data and was rejected."
         
         # Strip any HTML/special chars
         message = message.replace('<', '').replace('>', '').replace('&', '')
+        if not message.strip():
+            return False, "Message is empty after sanitization."
         
         with self.lock:
+            now = datetime.datetime.now()
+            window_start = now - datetime.timedelta(seconds=self.RATE_LIMIT_WINDOW_SECONDS)
+            recent_timestamps = [
+                ts for ts in self.user_message_times.get(username, []) if ts >= window_start
+            ]
+            if len(recent_timestamps) >= self.MAX_MESSAGES_PER_WINDOW:
+                self.user_message_times[username] = recent_timestamps
+                return (
+                    False,
+                    f"Rate limit: max {self.MAX_MESSAGES_PER_WINDOW} messages per "
+                    f"{self.RATE_LIMIT_WINDOW_SECONDS} seconds."
+                )
+
             self.messages.append({
                 'username': username,
                 'message': message,
-                'timestamp': datetime.datetime.now()
+                'timestamp': now
             })
+
+            # Track message activity for rate limiting
+            recent_timestamps.append(now)
+            self.user_message_times[username] = recent_timestamps
+
+            # Enforce server-side message cap for predictable memory usage
+            while len(self.messages) > self.MAX_HISTORY_MESSAGES:
+                oldest = self.messages.pop(0)
+                self._overwrite_message(oldest)
         
-        return True
+        return True, None
     
     def get_messages(self, since: datetime.datetime = None) -> List[Dict[str, Any]]:
         """Get messages (optionally since a specific time)"""
@@ -113,7 +149,10 @@ class ChatServer:
             welcome = {
                 'type': 'welcome',
                 'username': username,
-                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
+                'message': (
+                    f"Welcome! You are {username}. "
+                    f"Messages burn in {self.MESSAGE_LIFETIME // 60} minutes."
+                )
             }
             client_socket.send((json.dumps(welcome) + '\n').encode())
             
@@ -144,9 +183,16 @@ class ChatServer:
                                 msg_obj = json.loads(line)
                                 if msg_obj.get('type') == 'message':
                                     message = msg_obj.get('message', '')
-                                    if self.add_message(username, message):
+                                    success, error_message = self.add_message(username, message)
+                                    if success:
                                         # Broadcast to all clients
                                         self.broadcast_message(username, message)
+                                    else:
+                                        self.send_server_event(
+                                            client_socket,
+                                            event_type='error',
+                                            message=error_message or "Message rejected."
+                                        )
                             except json.JSONDecodeError:
                                 pass
                 
@@ -157,10 +203,25 @@ class ChatServer:
             with self.lock:
                 if client_socket in self.clients:
                     del self.clients[client_socket]
+                self.user_message_times.pop(username, None)
             try:
                 client_socket.close()
             except (OSError, socket.error):
                 pass
+
+    def send_server_event(self, client_socket: socket.socket, event_type: str, message: str):
+        """Send a one-off event (error/info) to a specific client."""
+        event = {
+            'type': event_type,
+            'message': message,
+            'timestamp': datetime.datetime.now().isoformat()
+        }
+        try:
+            client_socket.send((json.dumps(event) + '\n').encode())
+        except (OSError, socket.error):
+            with self.lock:
+                if client_socket in self.clients:
+                    del self.clients[client_socket]
     
     def broadcast_message(self, username: str, message: str):
         """Broadcast a message to all connected clients"""
@@ -222,6 +283,7 @@ class ChatServer:
     def stop(self):
         """Stop the chat server"""
         self.running = False
+        self.shutdown_event.set()
         
         # Close all client connections
         with self.lock:
@@ -242,9 +304,9 @@ class ChatServer:
         # Overwrite and clear messages (security)
         with self.lock:
             for msg in self.messages:
-                msg['message'] = 'X' * len(msg['message'])
-                msg['username'] = 'X' * len(msg['username'])
+                self._overwrite_message(msg)
             self.messages.clear()
+            self.user_message_times.clear()
         
         print("\n[*] Server stopped. All messages overwritten and cleared.")
 

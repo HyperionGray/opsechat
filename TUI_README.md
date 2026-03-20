@@ -15,6 +15,8 @@ This is a serious privacy and opsec tool for serious privacy and opsec people. I
 ✅ **Zero Disk** - Nothing touches disk except the application code  
 ✅ **Tor Integration** - Full support for Tor hidden services (.onion)  
 ✅ **SOCKS Proxy** - Client supports connecting via Tor SOCKS proxy  
+✅ **Anti-Spam Rate Limiting** - Per-user message throttling on server  
+✅ **Server History Cap** - Bounded in-memory message history  
 
 ## Quick Start
 
@@ -135,7 +137,9 @@ sudo systemctl start tor
 
 - **Max message length**: 1000 characters
 - **Message lifetime**: 4 minutes (240 seconds)
+- **Rate limit**: 8 messages per 10 seconds (per username/session)
 - **Max chat history**: 200 messages in client (memory management)
+- **Max server history**: 500 messages retained in RAM
 - **No images**: Text only, no exceptions
 - **No video**: Text only, no exceptions
 - **No b64 encoding**: Large base64-like strings are rejected
