@@ -68,21 +68,32 @@ else:
 ### CLI Commands
 
 ```bash
-# Check available cheap domains
-python -c "from domain_manager import domain_rotation_manager; \
-    print(domain_rotation_manager.search_cheap_domains(tlds=['xyz', 'club', 'online']))"
+# Configure API credentials and budget
+python domain_rotation_cli.py config
 
-# Get current budget status
-python -c "from domain_manager import domain_rotation_manager; \
-    print(f'Budget: ${domain_rotation_manager.budget_manager.monthly_budget}'); \
-    print(f'Spent: ${domain_rotation_manager.budget_manager.get_month_spending()}'); \
-    print(f'Remaining: ${domain_rotation_manager.budget_manager.get_remaining_budget()}')"
+# Check configured status and budget usage
+python domain_rotation_cli.py status
 
-# Rotate to new domain
-python -c "from domain_manager import domain_rotation_manager; \
-    result = domain_rotation_manager.rotate_to_new_domain(); \
-    print(result)"
+# Search for available cheap domains
+python domain_rotation_cli.py search
+
+# Rotate to a new domain (prompts before purchase)
+python domain_rotation_cli.py rotate
+
+# List locally tracked owned domains
+python domain_rotation_cli.py list
+
+# Remove expired domains from local state
+python domain_rotation_cli.py prune
 ```
+
+### State Persistence
+
+`domain_rotation_cli.py` stores domain state in `~/.opsechat/domain_config.json`.
+
+- Datetimes are stored as ISO-8601 strings for portability.
+- On load, datetimes are parsed back into Python `datetime` objects.
+- `prune` removes expired domains from local state and updates the active domain if needed.
 
 ### Automated Rotation
 
