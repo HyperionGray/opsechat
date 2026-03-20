@@ -138,13 +138,21 @@
 **Estimated:** 2-3 days
 
 ### 8. Comprehensive Testing
-- [ ] Write tests for new features:
-  - [ ] Signup/login flow tests
-  - [ ] Key management tests
-  - [ ] Dashboard navigation tests
-  - [ ] Policy acceptance tests
-  - [ ] Spam filtering tests
-  - [ ] Rate limiting tests
+- [x] Unit tests for `ChatRoom` class (messages, expiry, key generation, memory overwrite)
+- [x] Unit tests for DM system (send, view, expiry, cleanup, memory overwrite)
+- [x] Unit tests for secure ID generation (room IDs, DM IDs)
+- [x] Unit tests for username/color generation
+- [x] Unit tests for room cleanup (inactive > 1 hour)
+- [x] API integration tests (create room, messages, key exchange, DM send/view)
+- [x] Security headers tests (CSP, X-Frame-Options, Referrer-Policy, Server)
+- [x] Message sanitization tests (XSS, length limits)
+- [x] Per-session rate limiting tests (Flask-Limiter + in-memory sliding window)
+- [x] Health endpoint tests
+- [ ] Signup/login flow tests (blocked: auth not yet implemented)
+- [ ] Key management UI tests (blocked: UI not yet implemented)
+- [ ] Dashboard navigation tests (blocked: dashboard not yet implemented)
+- [ ] Policy acceptance tests (blocked: legal pages not yet implemented)
+- [ ] Spam filtering tests (blocked: spam filter not yet implemented)
 - [ ] Load testing
   - [ ] Set up load testing framework (Locust or k6)
   - [ ] Create test scenarios
@@ -153,16 +161,15 @@
   - [ ] Optimize bottlenecks
 - [ ] Security testing
   - [ ] Code review for vulnerabilities
-  - [ ] Dependency scanning (already done with Amazon Q)
+  - [ ] Dependency scanning (partially done with Amazon Q)
   - [ ] Configuration review
   - [ ] Penetration testing
   - [ ] Consider third-party security audit
 - [ ] Integration tests
-  - [ ] Set up automated test environment
-  - [ ] Docker-based test infrastructure
-  - [ ] CI/CD integration
-  - [ ] Automated smoke tests
-**Estimated:** 8-12 days
+  - [ ] Docker-based test infrastructure (test in container, not just host)
+  - [ ] CI/CD pipeline integration for Python tests
+  - [ ] Automated smoke tests post-deploy
+**Estimated:** 3-5 days remaining (load + security + blocked items)
 
 ---
 
@@ -247,17 +254,35 @@
 
 ## COMPLETED ✅
 
-### Simple Chat Rooms (NEW - March 2026)
+### Capabilities Assessment & Tests (NEW - March 2026)
+- [x] 56 new unit + integration tests in `tests/test_simple_chat.py`
+  - [x] `ChatRoom` class: message lifecycle, auto-expiry, memory overwriting, unique keys
+  - [x] DM system: send, view, expiry, cleanup, memory overwrite
+  - [x] Secure ID generation: room IDs and DM IDs (uniqueness, length, URL-safety)
+  - [x] Random username and color generation (format, variance)
+  - [x] Room cleanup logic (inactive > 1 hour)
+  - [x] `/chat/create` API endpoint
+  - [x] `/chat/room/<id>/messages` GET + POST endpoint
+  - [x] `/chat/room/<id>/key` automated key exchange endpoint
+  - [x] `/chat/dm/send` and `/chat/dm/<id>` DM endpoints
+  - [x] Security headers (CSP, X-Frame-Options, Referrer-Policy, Server suppression)
+  - [x] Message sanitization and length limits
+- [x] Updated TODO.md to reflect March 2026 state
+
+### Simple Chat Rooms (March 2026)
 - [x] Simple web-based chat room system
 - [x] E2E encryption using Web Crypto API
+- [x] Automated key exchange (room generates 256-bit AES key, no manual sharing)
+- [x] Non-discoverable room IDs (32-byte `secrets.token_urlsafe`)
 - [x] Terminal-style UI with minimal JavaScript
-- [x] 3-minute message auto-delete
-- [x] Memory overwriting on deletion
+- [x] 3-minute message auto-delete with memory overwriting
 - [x] Randomized usernames with color distinction
 - [x] Room-based chat (create/join rooms)
+- [x] Direct Messages (DM) for sharing room URLs — 1-minute expiry
+- [x] Rate limiting: 10 creates/min, 30 messages/min, 5 DMs/min (per session)
 - [x] CLI script for easy room creation (`chat-room.py`)
 - [x] Comprehensive documentation in `docs/SIMPLE_CHAT_ROOMS.md`
-- [x] E2E tests for new chat functionality
+- [x] E2E Playwright tests for new chat functionality
 - [x] Tor hidden service support
 
 ### Repository Assessment
@@ -277,7 +302,7 @@
 - [x] Containerization (Docker/Podman)
 - [x] AWS deployment templates
 - [x] Systemd quadlet support
-- [x] 59 passing unit tests
+- [x] 67+ passing unit tests (11 rate/health + 56 chat feature tests)
 
 ### Documentation (Exists but Needs Organization)
 - [x] README.md
@@ -327,10 +352,10 @@
 
 ### Time Estimates Summary
 - **CRITICAL items:** 32-44 days
-- **HIGH items:** 23-28 days  
+- **HIGH items:** 20-25 days (testing partially done)
 - **MEDIUM items:** 14-21 days
 - **LOW items:** 4-6 days
-- **TOTAL:** 73-99 days (single developer)
+- **TOTAL:** ~70-96 days (single developer)
 
 With 2-3 developers working in parallel: **6-8 weeks**
 
@@ -350,5 +375,6 @@ Before announcing production launch, verify:
 ---
 
 **Created:** February 23, 2026  
+**Last Updated:** March 18, 2026  
 **Next Review:** After Phase 1 completion  
 **Production Target:** April 6, 2026 (6 weeks)
