@@ -101,6 +101,12 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_stale_mailbox_reference_cannot_accept_new_messages_after_destroy(self):
+        mb = self.storage.create_mailbox()
+        self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert mb.add_message("late", "message", "sender") is None
+        assert mb.message_count() == 0
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -254,6 +260,38 @@ class TestHttpMailRoutes:
         r = self.client.post(
             f"/{self.path}/mail/{addr}/send",
             json={"subject": "X", "body": "", "sender": "bob"},
+        )
+        assert r.status_code == 400
+
+    def test_send_message_with_form_address_override(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        payload = r.get_json()
+        addr = payload["address"]
+        read_key = payload["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Form Subject",
+                "body": "Form Body",
+                "sender": "form-user",
+            },
+        )
+        assert r.status_code == 200
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        data = inbox.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["subject"] == "Form Subject"
+
+    def test_send_message_with_form_address_override_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "Form Subject", "body": "Form Body", "sender": "form-user"},
         )
         assert r.status_code == 400
 
