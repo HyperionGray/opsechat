@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpSecChat - {{ title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='legal_policy.css') }}">
+</head>
+<body>
+    <main class="container">
+        <header class="header">
+            <h1>{{ title }}</h1>
+            <nav class="nav-links" aria-label="Legal policy navigation">
+                <a href="/terms" {% if active_slug == 'terms' %}aria-current="page"{% endif %}>Terms</a>
+                <a href="/privacy" {% if active_slug == 'privacy' %}aria-current="page"{% endif %}>Privacy</a>
+                <a href="/aup" {% if active_slug == 'aup' %}aria-current="page"{% endif %}>AUP</a>
+                <a href="/chat">Chat</a>
+            </nav>
+        </header>
+        <section class="content" aria-label="{{ title }} document">
+            <pre>{{ content }}</pre>
+        </section>
+    </main>
+</body>
+</html>

@@ -77,8 +77,7 @@ These are development and testing utilities that help during development:
 - **`comprehensive_functionality_test.py`** - Full functional test suite
 
 ### Main Application Files
-- **`runserver.py`** - Main entry point (legacy monolithic)
-- **`runserver_refactored.py`** - Refactored version (blueprint-based)
+- **`runserver.py`** - Main entry point (app factory + modular routes)
 - **`app_factory.py`** - Flask app factory pattern
 - **`chat-room.py`** - Standalone chat room creator
 - **`tui-server.py`** - Terminal UI server
@@ -93,6 +92,7 @@ These are development and testing utilities that help during development:
 - **`security_routes.py`** - Security testing tools
 - **`landing_routes.py`** - Landing pages
 - **`review_routes.py`** - User review system
+- **`legal_routes.py`** - Terms, privacy, and acceptable use routes
 
 ### Core Modules
 - **`utils.py`** - Shared utility functions

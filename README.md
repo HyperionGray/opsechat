@@ -11,6 +11,7 @@
 - 🌐 **Domain Rotation CLI** - Easy burner email domain management
 - 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
 - ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use
+- ⚖️ **Legal Policy Pages** - Built-in `/terms`, `/privacy`, and `/aup` routes
 - 🚀 **Production Deployment** - Robust systemd units with auto-restart
 
 📖 **Full Details:** [New Features Guide](docs/NEW_FEATURES.md)

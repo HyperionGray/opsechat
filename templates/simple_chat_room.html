@@ -137,6 +137,21 @@
         .encryption-status.enabled {
             color: #0f0;
         }
+
+        .legal-links {
+            margin-left: 20px;
+            font-size: 0.85em;
+        }
+
+        .legal-links a {
+            color: #0ff;
+            text-decoration: none;
+            margin-left: 8px;
+        }
+
+        .legal-links a:hover {
+            text-decoration: underline;
+        }
         
         ::-webkit-scrollbar {
             width: 10px;
@@ -168,6 +183,11 @@
                     <input type="checkbox" id="encryptionToggle" aria-label="Toggle end-to-end encryption">
                     <span id="encryptionStatus" class="encryption-status">Encryption: OFF</span>
                 </label>
+            </span>
+            <span class="legal-links" aria-label="Legal policy links">
+                <a href="/terms" target="_blank" rel="noopener noreferrer">Terms</a>
+                <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy</a>
+                <a href="/aup" target="_blank" rel="noopener noreferrer">AUP</a>
             </span>
         </div>
     </div>

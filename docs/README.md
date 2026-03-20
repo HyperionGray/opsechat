@@ -57,6 +57,7 @@ Legal documents and policies.
 
 - [Acceptable Use Policy](legal/ACCEPTABLE_USE_POLICY.md) - AUP (requires legal review)
 - [Terms of Service](legal/TERMS_OF_SERVICE.md) - ToS (requires legal review)
+- [Privacy Policy](legal/PRIVACY_POLICY.md) - Privacy handling and retention model (draft)
 
 ### 🔧 Implementation
 Implementation details and summaries of major features.
@@ -67,6 +68,7 @@ Implementation details and summaries of major features.
 - [CI/CD Implementation](implementation/CI_CD_IMPLEMENTATION_SUMMARY.md) - CI/CD setup
 - [Containerization Summary](implementation/CONTAINERIZATION_SUMMARY.md) - Container implementation
 - [jQuery Security Update](implementation/JQUERY_SECURITY_UPDATE.md) - jQuery 3.7.1 update
+- [Legal Policy Routes](implementation/LEGAL_POLICY_ROUTES.md) - `/terms`, `/privacy`, `/aup` implementation
 - [Changelog](implementation/CHANGELOG.md) - Version history
 - [PR Summaries](implementation/PR_SUMMARY.md) - Pull request summaries
 
