@@ -10,6 +10,7 @@ Usage:
     python domain_rotation_cli.py search        # Search for available cheap domains
     python domain_rotation_cli.py rotate        # Rotate to a new domain
     python domain_rotation_cli.py status        # Show budget status
+    python domain_rotation_cli.py prune         # Remove expired domains from local state
     python domain_rotation_cli.py config        # Configure API credentials
 """
 
@@ -107,29 +108,21 @@ def get_manager():
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+    manager.load_state(config)
+    manager.reset_budget_if_new_cycle()
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    config.update(manager.to_state())
     save_config(config)
 
 
 def list_domains():
     """List owned domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Owned Domains ===\n")
     
@@ -151,7 +144,7 @@ def list_domains():
 
 def search_domains():
     """Search for available cheap domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
     print("Searching for domains under $5...\n")
@@ -215,7 +208,7 @@ def rotate_domain():
 
 def show_status():
     """Show current status"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Domain Rotation Status ===\n")
     
@@ -226,11 +219,30 @@ def show_status():
     print(f"  Monthly: ${budget_status['monthly_budget']}")
     print(f"  Spent: ${budget_status['current_spending']}")
     print(f"  Remaining: ${budget_status['remaining']}")
+    print(f"  Cycle: {budget_status['budget_cycle']}")
     print(f"\nDomains Owned: {budget_status['domains_owned']}")
     
     if manager.active_domain:
         print(f"\n✅ Current burner email domain: {manager.active_domain}")
         print(f"   Configure your email system to use: user@{manager.active_domain}")
+
+
+def prune_domains():
+    """Remove expired domains from locally persisted state"""
+    manager, config = get_manager()
+
+    print("\n=== Prune Expired Domains ===\n")
+    removed = manager.prune_expired_domains()
+    save_manager_state(manager, config)
+
+    if not removed:
+        print("No expired domains found.")
+        return
+
+    print("Removed expired domains:")
+    for domain in removed:
+        print(f"  - {domain}")
+    print(f"\nRemaining domains: {len(manager.get_owned_domains())}")
 
 
 def main():
@@ -245,12 +257,13 @@ Examples:
   python domain_rotation_cli.py search     # Search for available domains
   python domain_rotation_cli.py rotate     # Rotate to a new domain
   python domain_rotation_cli.py list       # List owned domains
+  python domain_rotation_cli.py prune      # Prune expired local records
         """
     )
     
     parser.add_argument(
         'command',
-        choices=['config', 'status', 'search', 'rotate', 'list'],
+        choices=['config', 'status', 'search', 'rotate', 'list', 'prune'],
         help='Command to execute'
     )
     
@@ -266,6 +279,8 @@ Examples:
         rotate_domain()
     elif args.command == 'list':
         list_domains()
+    elif args.command == 'prune':
+        prune_domains()
 
 
 if __name__ == '__main__':

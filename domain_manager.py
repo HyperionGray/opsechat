@@ -2,17 +2,18 @@
 Domain management and API integration
 Supports automated domain purchasing for burner email rotation
 """
+from abc import ABC, abstractmethod
 import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
 
-class DomainAPIClient:
+class DomainAPIClient(ABC):
     """
     Base class for domain registrar API clients
     """
@@ -21,17 +22,20 @@ class DomainAPIClient:
         self.api_key = api_key
         self.api_secret = api_secret
     
+    @abstractmethod
     def search_domain(self, domain: str) -> Dict:
         """Search if domain is available"""
-        raise NotImplementedError
+        pass
     
+    @abstractmethod
     def purchase_domain(self, domain: str, years: int = 1) -> Dict:
         """Purchase domain"""
-        raise NotImplementedError
+        pass
     
+    @abstractmethod
     def get_pricing(self, tld: str) -> Dict:
         """Get pricing for TLD"""
-        raise NotImplementedError
+        pass
 
 
 class PorkbunAPIClient(DomainAPIClient):
@@ -134,10 +138,80 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+        self.budget_cycle = self._current_budget_cycle()
+
+    @staticmethod
+    def _current_budget_cycle(now: Optional[datetime] = None) -> str:
+        now = now or datetime.now(timezone.utc)
+        return now.strftime("%Y-%m")
+
+    @staticmethod
+    def _parse_datetime(value: Any) -> Optional[datetime]:
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _serialize_datetime(value: Any) -> Optional[str]:
+        parsed = DomainRotationManager._parse_datetime(value)
+        if not parsed:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.isoformat()
+
+    @staticmethod
+    def _normalize_domain_record(record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        domain = record.get("domain")
+        if not isinstance(domain, str) or not domain:
+            return None
+
+        try:
+            price = float(record.get("price", 0.0))
+        except (TypeError, ValueError):
+            price = 0.0
+
+        purchased_at = DomainRotationManager._parse_datetime(record.get("purchased_at"))
+        expires_at = DomainRotationManager._parse_datetime(record.get("expires_at"))
+
+        if not purchased_at:
+            purchased_at = datetime.now(timezone.utc)
+        if not expires_at:
+            expires_at = purchased_at + timedelta(days=365)
+
+        if purchased_at.tzinfo is None:
+            purchased_at = purchased_at.replace(tzinfo=timezone.utc)
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+        return {
+            "domain": domain,
+            "price": price,
+            "purchased_at": purchased_at,
+            "expires_at": expires_at,
+        }
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+
+    def reset_budget_if_new_cycle(self, now: Optional[datetime] = None) -> bool:
+        """
+        Reset spending when entering a new monthly budget cycle.
+        Returns True when a reset occurs.
+        """
+        current_cycle = self._current_budget_cycle(now)
+        if self.budget_cycle != current_cycle:
+            self.current_spending = 0.0
+            self.budget_cycle = current_cycle
+            logger.info(f"Budget cycle advanced to {current_cycle}; spending reset.")
+            return True
+        return False
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -191,6 +265,8 @@ class DomainRotationManager:
         if not self.api_client:
             logger.error("No API client configured")
             return False
+
+        self.reset_budget_if_new_cycle()
         
         # Check budget
         if self.current_spending + price > self.monthly_budget:
@@ -202,12 +278,13 @@ class DomainRotationManager:
         result = self.api_client.purchase_domain(domain, years=1)
         
         if result.get("success"):
+            now = datetime.now(timezone.utc)
             self.current_spending += price
             self.owned_domains.append({
                 "domain": domain,
                 "price": price,
-                "purchased_at": datetime.now(),
-                "expires_at": datetime.now() + timedelta(days=365)
+                "purchased_at": now,
+                "expires_at": now + timedelta(days=365)
             })
             
             # Set as active if no active domain
@@ -250,16 +327,101 @@ class DomainRotationManager:
     
     def get_owned_domains(self) -> List[Dict]:
         """Get list of owned domains"""
-        return self.owned_domains
+        return list(self.owned_domains)
     
     def get_budget_status(self) -> Dict:
         """Get budget information"""
+        self.reset_budget_if_new_cycle()
         return {
             "monthly_budget": self.monthly_budget,
             "current_spending": self.current_spending,
             "remaining": self.monthly_budget - self.current_spending,
-            "domains_owned": len(self.owned_domains)
+            "domains_owned": len(self.owned_domains),
+            "budget_cycle": self.budget_cycle,
         }
+
+    def prune_expired_domains(self, now: Optional[datetime] = None) -> List[str]:
+        """
+        Remove expired domains from local state.
+        Returns a list of removed domain names.
+        """
+        now = now or datetime.now(timezone.utc)
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+
+        removed_domains: List[str] = []
+        kept_domains: List[Dict] = []
+
+        for record in self.owned_domains:
+            normalized = self._normalize_domain_record(record)
+            if not normalized:
+                continue
+            if normalized["expires_at"] < now:
+                removed_domains.append(normalized["domain"])
+                continue
+            kept_domains.append(normalized)
+
+        self.owned_domains = kept_domains
+
+        if self.active_domain and self.active_domain in removed_domains:
+            self.active_domain = self.owned_domains[-1]["domain"] if self.owned_domains else None
+
+        return removed_domains
+
+    def to_state(self) -> Dict[str, Any]:
+        """
+        Return JSON-serializable manager state for persistence.
+        """
+        serialized_domains: List[Dict[str, Any]] = []
+        for record in self.owned_domains:
+            normalized = self._normalize_domain_record(record)
+            if not normalized:
+                continue
+            serialized_domains.append({
+                "domain": normalized["domain"],
+                "price": normalized["price"],
+                "purchased_at": self._serialize_datetime(normalized["purchased_at"]),
+                "expires_at": self._serialize_datetime(normalized["expires_at"]),
+            })
+
+        return {
+            "current_spending": float(self.current_spending),
+            "owned_domains": serialized_domains,
+            "active_domain": self.active_domain,
+            "budget_cycle": self.budget_cycle,
+        }
+
+    def load_state(self, state: Optional[Dict[str, Any]]) -> None:
+        """
+        Load manager state from persisted JSON-compatible dictionary.
+        Invalid records are ignored.
+        """
+        if not state:
+            return
+
+        try:
+            self.current_spending = float(state.get("current_spending", 0.0))
+        except (TypeError, ValueError):
+            self.current_spending = 0.0
+
+        loaded_domains: List[Dict[str, Any]] = []
+        for record in state.get("owned_domains", []):
+            if not isinstance(record, dict):
+                continue
+            normalized = self._normalize_domain_record(record)
+            if normalized:
+                loaded_domains.append(normalized)
+
+        self.owned_domains = loaded_domains
+
+        active = state.get("active_domain")
+        self.active_domain = active if isinstance(active, str) and active else None
+
+        budget_cycle = state.get("budget_cycle")
+        if isinstance(budget_cycle, str) and budget_cycle:
+            self.budget_cycle = budget_cycle
+        else:
+            self.budget_cycle = self._current_budget_cycle()
 
 
 # Global domain rotation manager

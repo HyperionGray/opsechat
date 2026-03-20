@@ -2,6 +2,7 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +175,69 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_state_round_trip_serialization(self):
+        """Manager state should be JSON-safe and restorable"""
+        manager = DomainRotationManager(monthly_budget=20.0)
+        now = datetime.now(timezone.utc)
+        manager.current_spending = 3.5
+        manager.active_domain = "active.xyz"
+        manager.owned_domains = [{
+            "domain": "active.xyz",
+            "price": 3.5,
+            "purchased_at": now,
+            "expires_at": now + timedelta(days=365),
+        }]
+
+        state = manager.to_state()
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(state["owned_domains"][0]["expires_at"], str)
+
+        restored = DomainRotationManager(monthly_budget=20.0)
+        restored.load_state(state)
+
+        assert restored.current_spending == pytest.approx(3.5)
+        assert restored.active_domain == "active.xyz"
+        assert restored.owned_domains[0]["domain"] == "active.xyz"
+        assert isinstance(restored.owned_domains[0]["purchased_at"], datetime)
+
+    def test_prune_expired_domains_updates_active(self):
+        """Pruning should remove expired records and keep active domain valid"""
+        manager = DomainRotationManager(monthly_budget=20.0)
+        now = datetime.now(timezone.utc)
+        manager.owned_domains = [
+            {
+                "domain": "old.xyz",
+                "price": 1.0,
+                "purchased_at": now - timedelta(days=370),
+                "expires_at": now - timedelta(days=1),
+            },
+            {
+                "domain": "new.xyz",
+                "price": 2.0,
+                "purchased_at": now - timedelta(days=5),
+                "expires_at": now + timedelta(days=360),
+            },
+        ]
+        manager.active_domain = "old.xyz"
+
+        removed = manager.prune_expired_domains(now=now)
+
+        assert removed == ["old.xyz"]
+        assert manager.active_domain == "new.xyz"
+        assert [d["domain"] for d in manager.owned_domains] == ["new.xyz"]
+
+    def test_budget_cycle_reset_on_purchase(self):
+        """Purchases should auto-reset spend when month cycle changes"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.purchase_domain.return_value = {"success": True}
+
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        manager.current_spending = 45.0
+        manager.budget_cycle = "1999-01"  # force stale cycle
+
+        success = manager.purchase_domain_if_budget_allows("fresh.xyz", 5.0)
+
+        assert success is True
+        assert manager.current_spending == pytest.approx(5.0)
+        assert manager.budget_cycle != "1999-01"

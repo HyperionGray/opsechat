@@ -10,6 +10,9 @@
 - [x] Rate limiting on chat/create, chat/messages, and dm/send endpoints
 - [x] `/health` endpoint returning JSON status with version and uptime
 - [x] Domain rotation CLI and `domain_manager.py`
+- [x] Domain rotation state persistence hardened (JSON-safe datetime serialization)
+- [x] Domain rotation maintenance command (`python domain_rotation_cli.py prune`)
+- [x] Monthly domain budget cycle now auto-resets spending
 - [x] Simple web-based chat rooms (`simple_chat_routes.py`)
 - [x] TUI server (`tui-server.py`) and client
 - [x] In-memory message expiry with memory overwriting (3-min chat, 1-min DM)
