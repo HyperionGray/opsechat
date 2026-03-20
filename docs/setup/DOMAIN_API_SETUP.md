@@ -81,16 +81,17 @@ Porkbun offers cheap domains and a simple API, making it ideal for burner email 
 
 ### Namecheap
 
-While not directly integrated, Namecheap offers competitive pricing and API access.
+Namecheap is supported for API-based availability checks, pricing lookups, and purchases.
 
 #### Getting Started
 - Website: [namecheap.com](https://namecheap.com)
 - API Documentation: [namecheap.com/support/api](https://www.namecheap.com/support/api/)
 - Pricing: .com domains ~$8.88/year, .xyz ~$1.98/year
+- Ensure your API client IP is whitelisted in Namecheap settings
 
 #### Integration Notes
-- Requires custom API client implementation
-- More complex API than Porkbun
+- Requires contact profile details for automated purchases
+- XML API is more complex than Porkbun
 - Good for high-volume usage
 
 ### GoDaddy
@@ -307,4 +308,4 @@ Enterprise-focused with comprehensive API.
 - Registrar review forums
 - API integration examples and tutorials
 
-This guide should provide everything needed to set up automated domain rotation for burner emails in opsechat. Start with Porkbun for the easiest setup and lowest costs.
+This guide should provide everything needed to set up automated domain rotation for burner emails in opsechat. Start with Porkbun for the fastest setup, or use Namecheap if it better fits your registrar strategy.
