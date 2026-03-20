@@ -148,7 +148,23 @@ class DomainRotationManager:
         random_name = ''.join(random.choice(chars) for _ in range(length))
         return f"{random_name}.{tld}"
     
-    def find_cheap_available_domain(self, max_price: float = 5.0, 
+    def _coerce_price(self, raw_price) -> Optional[float]:
+        """Normalize registrar price values to float."""
+        if raw_price is None:
+            return None
+        if isinstance(raw_price, (int, float)):
+            return float(raw_price)
+        if isinstance(raw_price, str):
+            normalized = raw_price.strip().replace("$", "").replace("€", "")
+            try:
+                return float(normalized)
+            except ValueError:
+                logger.warning(f"Could not parse domain price: {raw_price}")
+                return None
+        logger.warning(f"Unsupported price type: {type(raw_price)}")
+        return None
+
+    def find_cheap_available_domain(self, max_price: float = 5.0,
                                    max_attempts: int = 10) -> Optional[Dict]:
         """
         Find a cheap available domain
@@ -168,12 +184,10 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
-                
+                price = self._coerce_price(result.get("price"))
+                if price is None:
+                    continue
+
                 if price <= max_price:
                     return {
                         "domain": domain,
@@ -220,13 +234,13 @@ class DomainRotationManager:
             logger.error(f"Failed to purchase domain: {result.get('message')}")
             return False
     
-    def rotate_domain(self) -> Optional[str]:
+    def rotate_domain(self, max_price: float = 5.0, max_attempts: int = 10) -> Optional[str]:
         """
         Rotate to a new domain
         Finds and purchases a new cheap domain
         """
         # Find cheap domain
-        domain_info = self.find_cheap_available_domain()
+        domain_info = self.find_cheap_available_domain(max_price=max_price, max_attempts=max_attempts)
         
         if not domain_info:
             logger.error("Could not find available cheap domain")
@@ -243,6 +257,75 @@ class DomainRotationManager:
             return self.active_domain
         
         return None
+
+    # Compatibility helpers used in docs/examples and external scripts.
+    def generate_random_domain_name(self, length: int = 8, tld: str = "xyz") -> str:
+        return self.generate_random_domain(tld=tld, length=length)
+
+    def search_cheap_domains(self, max_price: float = 5.0, max_attempts: int = 10,
+                             limit: int = 5) -> List[Dict]:
+        """Return up to `limit` available cheap domain candidates."""
+        results: List[Dict] = []
+        seen = set()
+        attempts_per_result = max(1, max_attempts)
+
+        for _ in range(max(0, limit)):
+            domain_info = self.find_cheap_available_domain(
+                max_price=max_price,
+                max_attempts=attempts_per_result
+            )
+            if not domain_info:
+                break
+            if domain_info["domain"] in seen:
+                continue
+            seen.add(domain_info["domain"])
+            results.append(domain_info)
+
+        return results
+
+    def rotate_to_new_domain(self, max_price: float = 5.0, max_attempts: int = 10) -> Dict:
+        """
+        Compatibility wrapper that returns structured rotation result data.
+        """
+        domain_info = self.find_cheap_available_domain(max_price=max_price, max_attempts=max_attempts)
+        if not domain_info:
+            return {
+                "success": False,
+                "error": "Could not find available cheap domain"
+            }
+
+        success = self.purchase_domain_if_budget_allows(
+            domain_info["domain"],
+            domain_info["price"]
+        )
+        if not success:
+            return {
+                "success": False,
+                "error": "Purchase failed or budget exceeded",
+                "domain": domain_info["domain"],
+                "cost": domain_info["price"]
+            }
+
+        self.active_domain = domain_info["domain"]
+        return {
+            "success": True,
+            "domain": self.active_domain,
+            "cost": domain_info["price"]
+        }
+
+    # Budget compatibility methods for older integration examples.
+    @property
+    def budget_manager(self):
+        return self
+
+    def set_monthly_budget(self, amount: float):
+        self.monthly_budget = max(0.0, float(amount))
+
+    def get_month_spending(self) -> float:
+        return self.current_spending
+
+    def get_remaining_budget(self) -> float:
+        return self.monthly_budget - self.current_spending
     
     def get_active_domain(self) -> Optional[str]:
         """Get currently active domain"""

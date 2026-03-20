@@ -174,3 +174,52 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_find_cheap_available_domain_parses_currency_price(self):
+        """Currency-prefixed price strings should be parsed safely."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test789.xyz",
+            "price": "$1.99",
+        }
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=2.0, max_attempts=1)
+
+        assert result is not None
+        assert result["price"] == 1.99
+
+    def test_rotate_to_new_domain_returns_structured_result(self):
+        """Compatibility rotation method should return success payload."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test900.xyz",
+            "price": 1.25,
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "test900.xyz",
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=10.0)
+        result = manager.rotate_to_new_domain(max_price=2.0, max_attempts=1)
+
+        assert result["success"] is True
+        assert result["domain"] == "test900.xyz"
+        assert result["cost"] == 1.25
+
+    def test_search_cheap_domains_respects_limit(self):
+        """Compatibility search method should cap result count."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.side_effect = [
+            {"available": True, "domain": "a1.xyz", "price": 1.00},
+            {"available": True, "domain": "b2.xyz", "price": 1.10},
+            {"available": True, "domain": "c3.xyz", "price": 1.20},
+        ]
+        manager = DomainRotationManager(mock_client)
+
+        results = manager.search_cheap_domains(max_price=2.0, max_attempts=1, limit=2)
+
+        assert len(results) == 2
