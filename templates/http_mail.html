@@ -49,7 +49,7 @@
   .error-box { background: #300; border-color: #f00; color: #f00; padding: 15px; margin: 15px 0; border: 1px solid; }
 
   label { display: block; color: #0f0; margin-bottom: 4px; }
-  input[type=text], textarea {
+  input[type=text], textarea, select {
     width: 100%; background: #111; color: #0f0;
     border: 1px solid #0f0; padding: 8px;
     font-family: 'Courier New', monospace; font-size: 14px;
@@ -234,6 +234,31 @@
              value="{{ inbox_read_key or '' }}"
              placeholder="Your private read key">
     </div>
+    <div class="form-group">
+      <label for="read-search">Search (subject/body/sender contains):</label>
+      <input type="text" id="read-search" name="_search"
+             value="{{ inbox_search or '' }}"
+             placeholder="optional">
+    </div>
+    <div class="form-group">
+      <label for="read-sender-filter">Sender contains:</label>
+      <input type="text" id="read-sender-filter" name="_sender"
+             value="{{ inbox_sender or '' }}"
+             placeholder="optional">
+    </div>
+    <div class="form-group">
+      <label for="read-limit">Max messages:</label>
+      <input type="text" id="read-limit" name="_limit"
+             value="{{ inbox_limit or '' }}"
+             placeholder="optional (1-200)">
+    </div>
+    <div class="form-group">
+      <label for="read-sort">Sort:</label>
+      <select id="read-sort" name="_sort">
+        <option value="desc" {% if (inbox_sort or 'desc') == 'desc' %}selected{% endif %}>Newest first</option>
+        <option value="asc" {% if inbox_sort == 'asc' %}selected{% endif %}>Oldest first</option>
+      </select>
+    </div>
     <button type="button" onclick="fetchInbox()">Open Inbox</button>
   </form>
 
@@ -302,6 +327,23 @@
     {% endif %}
   })();
 
+  // Keep compose action synced even when JS is optional.
+  (function() {
+    var composeAddressInput = document.getElementById('compose-address-input');
+    var composeForm = document.getElementById('compose-form');
+    if (!composeAddressInput || !composeForm) return;
+
+    updateComposeAction();
+    composeAddressInput.addEventListener('input', updateComposeAction);
+    composeForm.addEventListener('submit', function(e) {
+      updateComposeAction();
+      if (!composeAddressInput.value.trim()) {
+        e.preventDefault();
+        alert('Please enter a recipient mailbox address.');
+      }
+    });
+  })();
+
   // Create mailbox via fetch
   function createMailbox() {
     var btn = document.getElementById('create-btn');
@@ -346,14 +388,23 @@
   function fetchInbox() {
     var address = document.getElementById('read-address').value.trim();
     var readKey = document.getElementById('read-key-input').value.trim();
+    var search = document.getElementById('read-search').value.trim();
+    var sender = document.getElementById('read-sender-filter').value.trim();
+    var limit = document.getElementById('read-limit').value.trim();
+    var sort = document.getElementById('read-sort').value;
 
     if (!address || !readKey) {
       alert('Please enter both mailbox address and read key.');
       return;
     }
 
+    var params = ['key=' + encodeURIComponent(readKey)];
+    if (search) params.push('q=' + encodeURIComponent(search));
+    if (sender) params.push('sender=' + encodeURIComponent(sender));
+    if (limit) params.push('limit=' + encodeURIComponent(limit));
+    if (sort) params.push('sort=' + encodeURIComponent(sort));
     var url = '/{{ path }}/mail/' + encodeURIComponent(address) +
-              '/inbox?key=' + encodeURIComponent(readKey);
+              '/inbox?' + params.join('&');
 
     fetch(url, {headers: {'Accept': 'application/json'}})
     .then(function(r) {

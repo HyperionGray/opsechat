@@ -179,6 +179,27 @@ class TestHttpMailbox:
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
 
+    def test_add_message_to_destroyed_mailbox_returns_none(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Nope", "Nope", "nobody")
+        assert msg_id is None
+
+    def test_get_messages_supports_filters_limit_and_sort(self):
+        self.mailbox.add_message("Alpha Report", "first body", "alice")
+        self.mailbox.add_message("Beta", "second body", "bob")
+        self.mailbox.add_message("Gamma", "contains ALPHA token", "carol")
+
+        msgs = self.mailbox.get_messages(
+            "secretkey123456789012345678901",
+            search="alpha",
+            sender="car",
+            limit=1,
+            newest_first=True,
+        )
+        assert msgs is not None
+        assert len(msgs) == 1
+        assert msgs[0]["subject"] == "Gamma"
+
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -263,6 +284,30 @@ class TestHttpMailRoutes:
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
         assert r.status_code == 404
+
+    def test_send_message_via_form_fallback_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Hello",
+                "body": "Body via form route",
+                "sender": "alice",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+    def test_send_message_via_form_fallback_missing_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "Hello", "body": "Body", "sender": "alice"},
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required" in r.data
 
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -421,6 +466,47 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.get_json()["messages"][0]["sender"] == "anonymous"
+
+    def test_inbox_supports_query_sender_limit_and_sort(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Alpha first", "body": "body one", "sender": "alice"},
+        )
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Beta second", "body": "body two", "sender": "bob"},
+        )
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Gamma", "body": "contains alpha", "sender": "charlie"},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&q=alpha&sender=char&limit=1&sort=desc",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["filters"]["q"] == "alpha"
+        assert data["filters"]["sender"] == "char"
+        assert data["filters"]["limit"] == 1
+        assert data["filters"]["sort"] == "desc"
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["sender"] == "charlie"
+
+    def test_inbox_invalid_limit_returns_400(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&limit=abc",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
 
 
 # ===========================================================================
