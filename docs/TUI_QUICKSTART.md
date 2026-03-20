@@ -48,6 +48,7 @@ You should see:
 [*] OpSecChat TUI Server running on 127.0.0.1:5555
 [*] Messages burn after 240 seconds
 [*] Max message length: 1000 chars
+[*] Rate limit: 8 messages/30s per user
 [*] Press Ctrl+C to stop
 ```
 
@@ -140,6 +141,7 @@ The client automatically detects `.onion` and uses Tor SOCKS proxy.
 
 ### ✅ Security Features
 - **Message Validation** - Max 1000 chars
+- **Rate Limiting** - 8 messages per 30 seconds per user
 - **Secure Deletion** - Overwrite before delete
 - **No Configuration Files** - Ephemeral by design
 - **No Logs** - Zero persistence
