@@ -11,6 +11,7 @@
 - [x] `/health` endpoint returning JSON status with version and uptime
 - [x] Domain rotation CLI and `domain_manager.py`
 - [x] Simple web-based chat rooms (`simple_chat_routes.py`)
+- [x] Room presence tracking (`/chat/room/<id>/presence`) with active-user updates on join/read/write
 - [x] TUI server (`tui-server.py`) and client
 - [x] In-memory message expiry with memory overwriting (3-min chat, 1-min DM)
 - [x] Automated E2E encryption key exchange (`/chat/room/<id>/key`)
