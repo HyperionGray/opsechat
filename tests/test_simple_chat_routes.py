@@ -114,6 +114,25 @@ class TestChatRoom:
         room.cleanup_old_messages()
         assert room.get_messages() == []
 
+    def test_touch_user_counts_without_messages(self):
+        room = ChatRoom("test-room")
+        room.touch_user("u1", "Alice", [255, 0, 0])
+        assert room.get_user_count() == 1
+        active_users = room.get_active_users()
+        assert len(active_users) == 1
+        assert active_users[0]["username"] == "Alice"
+
+    def test_touch_user_expires_from_active_count(self):
+        import datetime
+
+        room = ChatRoom("test-room")
+        room.touch_user("u1", "Alice", [255, 0, 0])
+        with room.lock:
+            room.users["u1"]["last_seen"] -= datetime.timedelta(minutes=10)
+
+        assert room.get_user_count() == 0
+        assert room.get_active_users() == []
+
 
 # ---------------------------------------------------------------------------
 # Rate-limit helper
@@ -177,6 +196,12 @@ class TestChatRoutes:
         assert data["messages"] == []
         assert isinstance(data["user_count"], int)
 
+    def test_get_messages_marks_reader_as_active(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.get(f"/chat/room/{room_id}/messages")
+        assert response.status_code == 200
+        assert response.get_json()["user_count"] >= 1
+
     def test_post_message_success(self, client):
         room_id = client.post("/chat/create").get_json()["room_id"]
         response = client.post(
@@ -235,6 +260,24 @@ class TestChatRoutes:
 
     def test_get_room_key_nonexistent_room(self, client):
         response = client.get("/chat/room/no-such-room/key")
+        assert response.status_code == 404
+
+    def test_room_presence_endpoint_returns_active_users(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        # Visiting the room should establish presence.
+        client.get(f"/chat/room/{room_id}")
+
+        response = client.get(f"/chat/room/{room_id}/presence")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["room_id"] == room_id
+        assert data["active_user_count"] >= 1
+        assert isinstance(data["active_users"], list)
+        assert "username" in data["active_users"][0]
+        assert "color" in data["active_users"][0]
+
+    def test_room_presence_endpoint_nonexistent_room(self, client):
+        response = client.get("/chat/room/no-such-room/presence")
         assert response.status_code == 404
 
 

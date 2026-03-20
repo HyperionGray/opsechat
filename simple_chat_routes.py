@@ -16,8 +16,8 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Global room storage (in-memory only)
@@ -59,6 +59,27 @@ class ChatRoom:
     def get_room_key(self):
         """Get the room's shared encryption key (for automatic key exchange)"""
         return self.room_key
+
+    def _touch_user_locked(self, user_id, username, color):
+        """Track/update active user metadata. Lock must already be held."""
+        now = datetime.datetime.now()
+        user = self.users.get(user_id)
+        if user is None:
+            self.users[user_id] = {
+                "username": username,
+                "color": color,
+                "last_seen": now,
+            }
+            return
+
+        user["username"] = username
+        user["color"] = color
+        user["last_seen"] = now
+
+    def touch_user(self, user_id, username, color):
+        """Mark a user as active without requiring a message post."""
+        with self.lock:
+            self._touch_user_locked(user_id, username, color)
     
     def add_message(self, user_id, username, color, message_text):
         """Add a message to the room"""
@@ -71,16 +92,7 @@ class ChatRoom:
                 "timestamp": datetime.datetime.now()
             }
             self.messages.append(msg)
-            
-            # Track user
-            if user_id not in self.users:
-                self.users[user_id] = {
-                    "username": username,
-                    "color": color,
-                    "last_seen": datetime.datetime.now()
-                }
-            else:
-                self.users[user_id]["last_seen"] = datetime.datetime.now()
+            self._touch_user_locked(user_id, username, color)
     
     def cleanup_old_messages(self):
         """Remove messages older than 3 minutes and overwrite memory"""
@@ -112,6 +124,19 @@ class ChatRoom:
             active_users = sum(1 for u in self.users.values() 
                              if (now - u["last_seen"]).total_seconds() < 300)
             return active_users
+
+    def get_active_users(self):
+        """Get active users seen in the last 5 minutes."""
+        with self.lock:
+            now = datetime.datetime.now()
+            return [
+                {
+                    "username": u["username"],
+                    "color": u["color"],
+                }
+                for u in self.users.values()
+                if (now - u["last_seen"]).total_seconds() < 300
+            ]
 
 
 def cleanup_old_rooms():
@@ -252,6 +277,17 @@ def generate_secure_dm_id():
     return secrets.token_urlsafe(16)
 
 
+def ensure_chat_session():
+    """Ensure an authenticated ephemeral chat session exists."""
+    if "_id" not in session:
+        session["_id"] = generate_secure_dm_id()
+    if "username" not in session:
+        session["username"] = generate_random_username()
+    if "color" not in session:
+        session["color"] = get_random_color_rgb()
+    return session["_id"], session["username"], session["color"]
+
+
 def register_simple_chat_routes(app):
     """Register simple chat routes with the Flask app"""
     
@@ -262,7 +298,7 @@ def register_simple_chat_routes(app):
         try:
             with open('VERSION', 'r') as f:
                 version = f.read().strip()
-        except:
+        except OSError:
             version = '0.8.0-alpha'  # fallback
         
         return render_template("simple_chat_index.html", version=version)
@@ -272,12 +308,9 @@ def register_simple_chat_routes(app):
     def chat_create():
         """Create a new chat room with cryptographically secure ID"""
         # Ensure session exists for rate limiting
-        if "_id" not in session:
-            session["_id"] = generate_secure_dm_id()
-            session["username"] = generate_random_username()
-            session["color"] = get_random_color_rgb()
+        session_id, _, _ = ensure_chat_session()
 
-        allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
+        allowed, retry_after = check_rate_limit(session_id, "chat_create")
         if not allowed:
             return jsonify({
                 "error": f"Rate limit exceeded. Try again in {retry_after} seconds."
@@ -301,17 +334,16 @@ def register_simple_chat_routes(app):
             if room_id not in chat_rooms:
                 return render_template("simple_chat_error.html", 
                                      error="Room not found or expired"), 404
+            room = chat_rooms[room_id]
         
-        # Initialize user session
-        if "_id" not in session:
-            session["_id"] = generate_secure_dm_id()
-            session["username"] = generate_random_username()
-            session["color"] = get_random_color_rgb()
+        # Initialize user session and mark user as present in room.
+        user_id, username, color = ensure_chat_session()
+        room.touch_user(user_id, username, color)
         
         return render_template("simple_chat_room.html", 
                              room_id=room_id,
-                             username=session["username"],
-                             color=session["color"])
+                             username=username,
+                             color=color)
     
     @app.route('/chat/room/<string:room_id>/messages', methods=['GET', 'POST'])
     @limiter.limit("60 per minute", methods=["POST"])
@@ -321,16 +353,14 @@ def register_simple_chat_routes(app):
             if room_id not in chat_rooms:
                 return jsonify({"error": "Room not found"}), 404
             room = chat_rooms[room_id]
+
+        # Track user presence for both readers and writers.
+        user_id, username, color = ensure_chat_session()
+        room.touch_user(user_id, username, color)
         
         if request.method == 'POST':
-            # Ensure user has session
-            if "_id" not in session:
-                session["_id"] = generate_secure_dm_id()
-                session["username"] = generate_random_username()
-                session["color"] = get_random_color_rgb()
-
             # Check rate limit before processing message
-            allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
+            allowed, retry_after = check_rate_limit(user_id, "chat_message")
             if not allowed:
                 return jsonify({
                     "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds."
@@ -368,9 +398,9 @@ def register_simple_chat_routes(app):
             
             # Add message to room
             room.add_message(
-                session["_id"],
-                session["username"],
-                session["color"],
+                user_id,
+                username,
+                color,
                 message_text
             )
             
@@ -387,27 +417,41 @@ def register_simple_chat_routes(app):
                         "color": msg["color"],
                         "message": msg["message"],
                         "timestamp": msg["timestamp"].isoformat(),
-                        "is_mine": msg["user_id"] == session.get("_id")
+                        "is_mine": msg["user_id"] == user_id
                     }
                     for msg in messages
                 ],
                 "user_count": user_count,
-                "my_username": session.get("username"),
-                "my_color": session.get("color")
+                "my_username": username,
+                "my_color": color
             })
+
+    @app.route('/chat/room/<string:room_id>/presence', methods=['GET'])
+    def chat_room_presence(room_id):
+        """Return current active user presence for a room."""
+        with rooms_lock:
+            if room_id not in chat_rooms:
+                return jsonify({"error": "Room not found"}), 404
+            room = chat_rooms[room_id]
+
+        user_id, username, color = ensure_chat_session()
+        room.touch_user(user_id, username, color)
+        active_users = room.get_active_users()
+        return jsonify({
+            "room_id": room_id,
+            "active_user_count": len(active_users),
+            "active_users": active_users,
+        })
     
     @app.route('/chat/dm/send', methods=['POST'])
     @limiter.limit("20 per hour; 5 per minute")
     def send_dm():
         """Send a direct message (for sharing room IDs) - expires in 1 minute"""
         # Initialize user session if needed
-        if "_id" not in session:
-            session["_id"] = generate_secure_dm_id()
-            session["username"] = generate_random_username()
-            session["color"] = get_random_color_rgb()
+        user_id, username, _ = ensure_chat_session()
 
         # Check rate limit for DMs
-        allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
+        allowed, retry_after = check_rate_limit(user_id, "dm_send")
         if not allowed:
             return jsonify({
                 "error": f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds."
@@ -436,8 +480,8 @@ def register_simple_chat_routes(app):
         with dm_lock:
             direct_messages[dm_id] = {
                 "dm_id": dm_id,
-                "sender_id": session["_id"],
-                "sender_name": session["username"],
+                "sender_id": user_id,
+                "sender_name": username,
                 "room_id": room_id,
                 "message": message,
                 "timestamp": datetime.datetime.now(),

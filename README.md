@@ -29,6 +29,7 @@ OpSecChat now includes both **Web-Based Chat Rooms** and **Terminal UI (TUI)** f
 - ✅ **Terminal-Style UI** - Clean, minimal interface with no flashy elements
 - ✅ **Messages Burn** - Auto-delete after 3 minutes with memory overwriting
 - ✅ **Randomized Usernames** - Color-coded for easy distinction
+- ✅ **Presence Tracking** - Active user counts include readers and joiners
 - ✅ **Text Only** - No images, videos, or media sharing (500 char limit)
 - ✅ **In-Memory Only** - Zero disk writes
 - ✅ **Tor Ready** - Works seamlessly with Tor hidden services

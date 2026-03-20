@@ -12,6 +12,7 @@ OpSecChat now includes a simple, security-focused web-based chat room system des
 - **3-Minute Message Expiry**: Messages automatically delete after 3 minutes
 - **Memory Overwriting**: Deleted messages are overwritten in memory
 - **Randomized Usernames**: Color-coded for easy visual distinction
+- **Room Presence Tracking**: Active-user counts include readers and joiners, not only message senders
 - **Text-Only**: No media, images, or file sharing
 - **In-Memory Storage**: Zero disk writes
 - **Tor Ready**: Works seamlessly with Tor hidden services
@@ -141,6 +142,22 @@ GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
+
+#### Room Presence
+```
+GET /chat/room/<room_id>/presence
+Response:
+{
+  "room_id": "...",
+  "active_user_count": 2,
+  "active_users": [
+    {"username": "SilentWolf0423", "color": [85, 170, 255]}
+  ]
+}
+```
+
+Presence is refreshed on room join, message polling, and message posting. This provides
+more accurate active-user counts for passive participants who are reading but not sending.
 
 ### Encryption Implementation
 
