@@ -6,7 +6,7 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -138,6 +138,33 @@ class DomainRotationManager:
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+
+    @staticmethod
+    def _parse_price(value: Any) -> Optional[float]:
+        """Parse registrar price values into a float."""
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            cleaned = value.replace("$", "").replace("€", "").strip()
+            if not cleaned:
+                return None
+            try:
+                return float(cleaned)
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _parse_datetime(value: Any) -> Optional[datetime]:
+        """Convert supported datetime representations to datetime."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return None
+        return None
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -168,12 +195,9 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
-                
+                price = self._parse_price(result.get("price"))
+                if price is None:
+                    continue
                 if price <= max_price:
                     return {
                         "domain": domain,
@@ -260,6 +284,83 @@ class DomainRotationManager:
             "remaining": self.monthly_budget - self.current_spending,
             "domains_owned": len(self.owned_domains)
         }
+
+    def export_state(self) -> Dict[str, Any]:
+        """
+        Export domain rotation state in a JSON-serializable format.
+        """
+        serialized_domains: List[Dict[str, Any]] = []
+        for domain_info in self.owned_domains:
+            serialized = dict(domain_info)
+            for key in ("purchased_at", "expires_at"):
+                parsed = self._parse_datetime(serialized.get(key))
+                if parsed is not None:
+                    serialized[key] = parsed.isoformat()
+            serialized_domains.append(serialized)
+
+        return {
+            "current_spending": self.current_spending,
+            "owned_domains": serialized_domains,
+            "active_domain": self.active_domain,
+        }
+
+    def import_state(self, state: Dict[str, Any]):
+        """
+        Import previously saved domain rotation state.
+        """
+        raw_spending = state.get("current_spending", 0.0)
+        try:
+            self.current_spending = float(raw_spending)
+        except (TypeError, ValueError):
+            self.current_spending = 0.0
+
+        active_domain = state.get("active_domain")
+        self.active_domain = active_domain if isinstance(active_domain, str) else None
+
+        normalized_domains: List[Dict[str, Any]] = []
+        raw_domains = state.get("owned_domains", [])
+        if isinstance(raw_domains, list):
+            for entry in raw_domains:
+                if not isinstance(entry, dict):
+                    continue
+                normalized = dict(entry)
+                for key in ("purchased_at", "expires_at"):
+                    parsed = self._parse_datetime(normalized.get(key))
+                    if parsed is not None:
+                        normalized[key] = parsed
+                normalized_domains.append(normalized)
+
+        self.owned_domains = normalized_domains
+
+    def prune_expired_domains(self, now: Optional[datetime] = None) -> List[str]:
+        """
+        Remove expired domains from managed state.
+        Returns the list of removed domain names.
+        """
+        current_time = now or datetime.now()
+        kept_domains: List[Dict[str, Any]] = []
+        removed_domains: List[str] = []
+
+        for domain_info in self.owned_domains:
+            expires_at = self._parse_datetime(domain_info.get("expires_at"))
+            domain_name = domain_info.get("domain")
+            if expires_at and expires_at <= current_time:
+                if isinstance(domain_name, str):
+                    removed_domains.append(domain_name)
+                continue
+            kept_domains.append(domain_info)
+
+        self.owned_domains = kept_domains
+
+        if self.active_domain and self.active_domain in removed_domains:
+            self.active_domain = None
+            for domain_info in reversed(self.owned_domains):
+                candidate = domain_info.get("domain")
+                if isinstance(candidate, str):
+                    self.active_domain = candidate
+                    break
+
+        return removed_domains
 
 
 # Global domain rotation manager
