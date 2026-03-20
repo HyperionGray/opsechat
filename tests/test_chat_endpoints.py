@@ -12,6 +12,7 @@ Related GitHub issues: #109 (initial chat/email plan), #112 (release push),
 import datetime
 import os
 import sys
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -272,6 +273,22 @@ class TestDMEndpoints:
         assert "message" in data
         assert "room_id" in data
 
+    def test_dm_is_single_view_and_deleted_after_read(self):
+        resp = self.client.post(
+            "/chat/dm/send",
+            json={"room_id": self.room_id, "message": "one-time invite"},
+        )
+        dm_id = resp.get_json()["dm_id"]
+
+        first_view = self.client.get(f"/chat/dm/{dm_id}")
+        assert first_view.status_code == 200
+
+        second_view = self.client.get(f"/chat/dm/{dm_id}")
+        assert second_view.status_code == 404
+
+        with dm_lock:
+            assert dm_id not in direct_messages
+
     def test_dm_has_expiry_field(self):
         resp = self.client.post(
             "/chat/dm/send",
@@ -298,6 +315,28 @@ class TestDMEndpoints:
         view_resp = self.client.get("/chat/dm/test-expired")
         assert view_resp.status_code == 404
 
+    def test_expired_dm_is_wiped_and_deleted_on_access(self):
+        original_message = "old invite"
+        original_room_id = self.room_id
+        dm_ref = {
+            "dm_id": "expired-on-read",
+            "sender_id": "u1",
+            "sender_name": "Alice",
+            "room_id": original_room_id,
+            "message": original_message,
+            "timestamp": datetime.datetime.now() - datetime.timedelta(seconds=90),
+            "read": False,
+        }
+        with dm_lock:
+            direct_messages["expired-on-read"] = dm_ref
+
+        view_resp = self.client.get("/chat/dm/expired-on-read")
+        assert view_resp.status_code == 404
+        with dm_lock:
+            assert "expired-on-read" not in direct_messages
+        assert dm_ref["message"] == "X" * len(original_message)
+        assert dm_ref["room_id"] == "X" * len(original_room_id)
+
     def test_nonexistent_dm_returns_404(self):
         resp = self.client.get("/chat/dm/does-not-exist-at-all")
         assert resp.status_code == 404
@@ -312,3 +351,33 @@ class TestDMEndpoints:
             json={"room_id": self.room_id, "message": "x" * 201},
         )
         assert resp.status_code == 400
+
+
+class TestRateLimitResponseMetadata:
+    def setup_method(self):
+        _clear_rooms()
+        _clear_dms()
+        self.app = _fresh_app()
+        self.client = self.app.test_client()
+
+    def test_chat_create_includes_retry_after_header_and_field(self):
+        with patch("simple_chat_routes.check_rate_limit", return_value=(False, 17)):
+            resp = self.client.post("/chat/create")
+
+        assert resp.status_code == 429
+        data = resp.get_json()
+        assert data["retry_after"] == 17
+        assert resp.headers.get("Retry-After") == "17"
+
+    def test_dm_send_includes_retry_after_header_and_field(self):
+        room_id = self.client.post("/chat/create").get_json()["room_id"]
+        with patch("simple_chat_routes.check_rate_limit", return_value=(False, 11)):
+            resp = self.client.post(
+                "/chat/dm/send",
+                json={"room_id": room_id, "message": "invite"},
+            )
+
+        assert resp.status_code == 429
+        data = resp.get_json()
+        assert data["retry_after"] == 11
+        assert resp.headers.get("Retry-After") == "11"

@@ -30,7 +30,7 @@ email_routes.py             - Email compose with rate limiting
 templates/*                 - Security warnings, automated key fetch
 quadlets/*                  - Enhanced systemd configuration
 domain_rotation_cli.py      - NEW: Domain management CLI
-test_new_features.py        - NEW: Test suite (6 tests)
+tests/test_chat*.py         - Chat unit/integration/security test modules
 docs/NEW_FEATURES.md        - NEW: Complete documentation
 ```
 
@@ -362,7 +362,7 @@ systemctl --user restart opsechat-app
 - **README**: [README.md](../README.md)
 
 ### Testing
-- **Run tests**: `python test_new_features.py`
+- **Run tests**: `pytest tests/test_chatroom.py tests/test_chat_ids.py tests/test_chat_endpoints.py tests/test_security_headers.py`
 - **Security scan**: CodeQL (automated)
 - **Manual testing**: See docs/NEW_FEATURES.md
 

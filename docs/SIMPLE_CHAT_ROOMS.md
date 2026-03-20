@@ -10,10 +10,12 @@ OpSecChat now includes a simple, security-focused web-based chat room system des
 - **E2E Encryption**: Optional end-to-end encryption using Web Crypto API
 - **Terminal-Style UI**: Clean, minimal interface with no flashy elements
 - **3-Minute Message Expiry**: Messages automatically delete after 3 minutes
+- **Single-View Direct Messages**: DM links are returned once, then securely wiped
 - **Memory Overwriting**: Deleted messages are overwritten in memory
 - **Randomized Usernames**: Color-coded for easy visual distinction
 - **Text-Only**: No media, images, or file sharing
 - **In-Memory Storage**: Zero disk writes
+- **Backoff-Aware Rate Limits**: 429 responses include `retry_after` and `Retry-After`
 - **Tor Ready**: Works seamlessly with Tor hidden services
 
 ## Quick Start
@@ -112,6 +114,11 @@ This prevents memory forensics from recovering deleted messages.
 - All message data is overwritten before room deletion
 - No persistent storage - everything is in-memory
 
+### Direct Message Expiry and Single-View Behavior
+- DMs expire after **60 seconds**
+- A DM is removed immediately after the first successful read
+- Expired/read DMs are wiped in memory before deletion
+
 ### Username Randomization
 - Usernames are server-generated and non-reusable
 - Format: `[Adjective][Noun][4-digit-number]`
@@ -141,6 +148,21 @@ GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
+
+#### Direct Messages
+```
+POST /chat/dm/send
+Body: {"room_id": "...", "message": "..."}
+Response: {"success": true, "dm_id": "...", "dm_url": "/chat/dm/...", "expires_in": 60}
+
+GET /chat/dm/<dm_id>
+Response: {"dm_id": "...", "sender_name": "...", "room_id": "...", "message": "...", "expires_in": ...}
+```
+
+#### Rate-Limit Backoff Metadata
+- Write endpoints return HTTP `429` with:
+  - JSON field: `retry_after` (seconds)
+  - Header: `Retry-After` (seconds)
 
 ### Encryption Implementation
 

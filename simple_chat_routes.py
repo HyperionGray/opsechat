@@ -43,6 +43,25 @@ RATE_LIMITS = {
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
 
+
+def _wipe_dm_data(dm_data):
+    """Best-effort in-memory wipe of sensitive DM fields before deletion."""
+    for key in ("dm_id", "sender_id", "sender_name", "room_id", "message"):
+        value = dm_data.get(key)
+        if isinstance(value, str):
+            dm_data[key] = "X" * len(value)
+
+
+def _rate_limited_response(error_message: str, retry_after: int):
+    """Return consistent 429 JSON + Retry-After header for backoff-aware clients."""
+    response = jsonify({
+        "error": error_message,
+        "retry_after": max(int(retry_after), 1),
+    })
+    response.status_code = 429
+    response.headers["Retry-After"] = str(max(int(retry_after), 1))
+    return response
+
 # Room class to manage chat state
 class ChatRoom:
     """Manages a single chat room with message expiry and memory overwriting"""
@@ -150,8 +169,7 @@ def cleanup_old_dms():
         for dm_id in expired_dms:
             # Overwrite message before deletion
             dm = direct_messages[dm_id]
-            dm["message"] = "X" * len(dm["message"])
-            dm["room_id"] = "X" * len(dm["room_id"])
+            _wipe_dm_data(dm)
             del direct_messages[dm_id]
 
 
@@ -279,9 +297,10 @@ def register_simple_chat_routes(app):
 
         allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Try again in {retry_after} seconds."
-            }), 429
+            return _rate_limited_response(
+                f"Rate limit exceeded. Try again in {retry_after} seconds.",
+                retry_after,
+            )
 
         room_id = generate_secure_room_id(32)
         
@@ -332,9 +351,13 @@ def register_simple_chat_routes(app):
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
             if not allowed:
-                return jsonify({
-                    "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds."
-                }), 429
+                return _rate_limited_response(
+                    (
+                        "Rate limit exceeded. Maximum 30 messages per minute. "
+                        f"Try again in {retry_after} seconds."
+                    ),
+                    retry_after,
+                )
             
             # Get message from request
             data = request.get_json()
@@ -409,9 +432,13 @@ def register_simple_chat_routes(app):
         # Check rate limit for DMs
         allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds."
-            }), 429
+            return _rate_limited_response(
+                (
+                    "Rate limit exceeded. Maximum 5 DMs per minute. "
+                    f"Try again in {retry_after} seconds."
+                ),
+                retry_after,
+            )
         
         data = request.get_json()
         if not data or "room_id" not in data or "message" not in data:
@@ -463,18 +490,22 @@ def register_simple_chat_routes(app):
             # Check if expired
             age = (datetime.datetime.now() - dm["timestamp"]).total_seconds()
             if age > 60:
+                _wipe_dm_data(dm)
+                del direct_messages[dm_id]
                 return jsonify({"error": "DM expired"}), 404
-            
-            # Mark as read
-            dm["read"] = True
-            
-            return jsonify({
+
+            # Return DM exactly once, then securely wipe and remove it.
+            response_payload = {
                 "dm_id": dm["dm_id"],
                 "sender_name": dm["sender_name"],
                 "room_id": dm["room_id"],
                 "message": dm["message"],
                 "expires_in": max(0, 60 - int(age))
-            })
+            }
+            dm["read"] = True
+            _wipe_dm_data(dm)
+            del direct_messages[dm_id]
+            return jsonify(response_payload)
     
     @app.route('/chat/room/<string:room_id>/key', methods=['GET'])
     def get_room_key(room_id):

@@ -82,7 +82,7 @@
   - [x] Implement per-session/IP limits (Flask-Limiter)
   - [x] Add per-endpoint throttling (`/chat/create`, `/chat/*/messages`, `/chat/dm/send`)
   - [ ] Configure reasonable thresholds (review after load testing)
-  - [ ] Add backoff/retry logic
+  - [x] Add backoff/retry metadata (`retry_after` JSON + `Retry-After` header)
 - [ ] Integrate second domain registrar API
   - [ ] Choose registrar (Namecheap recommended)
   - [ ] Implement API client
@@ -239,7 +239,11 @@
 ## COMPLETED ✅
 
 ### Capabilities Assessment & Tests (NEW - March 2026)
-- [x] 56 new unit + integration tests in `tests/test_simple_chat.py`
+- [x] 56+ unit + integration tests across split modules:
+  - [x] `tests/test_chatroom.py`
+  - [x] `tests/test_chat_ids.py`
+  - [x] `tests/test_chat_endpoints.py`
+  - [x] `tests/test_security_headers.py`
   - [x] `ChatRoom` class: message lifecycle, auto-expiry, memory overwriting, unique keys
   - [x] DM system: send, view, expiry, cleanup, memory overwrite
   - [x] Secure ID generation: room IDs and DM IDs (uniqueness, length, URL-safety)
