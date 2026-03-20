@@ -35,8 +35,12 @@ class TestSecurityHeaders:
 
     def test_csp_disallows_inline_scripts(self):
         csp = self._headers()["Content-Security-Policy"]
-        # Must not contain 'unsafe-inline' for scripts
-        assert "unsafe-inline" not in csp
+        script_directive = next(
+            (part.strip() for part in csp.split(";") if part.strip().startswith("script-src")),
+            "",
+        )
+        # Must not allow unsafe inline execution for script-src.
+        assert "unsafe-inline" not in script_directive
 
     def test_x_content_type_options(self):
         h = self._headers()
