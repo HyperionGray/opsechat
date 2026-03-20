@@ -139,18 +139,49 @@ class HttpMailStorage:
             return self._mailboxes.get(address)
 
     def delete_mailbox(self, address: str, read_key: str) -> bool:
-        """Delete entire mailbox after verifying read_key."""
+        """Delete entire mailbox after verifying read_key.
+
+        Concurrency notes:
+        - We remove the mailbox from the global store under `self._lock`.
+        - We then overwrite and clear messages under the per-mailbox lock
+          to avoid races with concurrent send/add operations.
+
+        Checklist (follow-ups outside this class):
+        - [ ] Ensure HttpMailbox exposes a `lock` used by all writers.
+        - [ ] Ensure add_message (or equivalent) checks a `destroyed` flag.
+        """
+        # First, look up and authenticate the mailbox under the global lock.
         with self._lock:
             mailbox = self._mailboxes.get(address)
             if mailbox is None:
                 return False
             if not secrets.compare_digest(read_key, mailbox.read_key):
                 return False
+            # Remove the mailbox from the global mapping while still holding
+            # the storage lock so no new lookups can obtain it.
+            del self._mailboxes[address]
+
+        # Now that the mailbox is no longer globally reachable, safely
+        # overwrite and clear its messages under the per-mailbox lock.
+        # This avoids data races on `mailbox.messages` with concurrent sends.
+        lock = getattr(mailbox, "lock", None)
+        if lock is not None:
+            with lock:
+                for msg in mailbox.messages:
+                    msg.overwrite()
+                # Clear the list so message objects can be GC'ed.
+                mailbox.messages.clear()
+                # Mark as destroyed so writers can refuse future sends.
+                setattr(mailbox, "destroyed", True)
+        else:
+            # Fallback: no explicit mailbox lock available; still perform
+            # overwrite/clear to maintain best-effort data scrubbing.
             for msg in mailbox.messages:
                 msg.overwrite()
-            del self._mailboxes[address]
-            return True
+            mailbox.messages.clear()
+            setattr(mailbox, "destroyed", True)
 
+        return True
     def cleanup_empty_old_mailboxes(self) -> None:
         """Remove mailboxes with no messages that are older than 48 hours."""
         cutoff = datetime.datetime.now() - datetime.timedelta(hours=48)
