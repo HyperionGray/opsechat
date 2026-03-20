@@ -90,6 +90,7 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox(mb.address, mb.read_key)
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
+        assert mb.add_message("late", "write", "sender") is None
 
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
@@ -179,6 +180,12 @@ class TestHttpMailbox:
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
 
+    def test_add_message_rejected_when_destroyed(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Late", "Body", "eve")
+        assert msg_id is None
+        assert self.mailbox.message_count() == 0
+
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -247,6 +254,51 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_direct_route_with_form(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        payload = r.get_json()
+        addr = payload["address"]
+        read_key = payload["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"address": addr, "subject": "No JS", "body": "Hello form", "sender": "bob"},
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert len(inbox.get_json()["messages"]) == 1
+
+    def test_send_message_direct_route_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "No addr", "body": "Hello"},
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required." in r.data
+
+    def test_read_inbox_via_direct_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        payload = r.get_json()
+        addr = payload["address"]
+        read_key = payload["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Test", "body": "Hello", "sender": "alice"},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/inbox?address={addr}&key={read_key}",
+            follow_redirects=True,
+        )
+        assert r.status_code == 200
+        assert b"Hello" in r.data
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -493,4 +545,10 @@ class TestEmailRoutesExtended:
 
     def test_burner_wrong_path_404(self):
         r = self.client.post("/wrongpath/email/burner", data={"action": "generate"})
+        assert r.status_code == 404
+
+    def test_view_email_without_session_does_not_error(self):
+        with self.client.session_transaction() as sess:
+            sess.clear()
+        r = self.client.get(f"/secpath/email/view/{self.email_id}")
         assert r.status_code == 404
