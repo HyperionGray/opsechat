@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpSecChat Key Management</title>
+    <meta name="description" content="Manage your PGP keys locally in the browser for OpSecChat.">
+</head>
+<body>
+    <main>
+        <h1>OpSecChat Key Management</h1>
+        <p>
+            Manage encryption keys locally in your browser.
+            Your private key is never sent to this server.
+        </p>
+
+        <section aria-labelledby="security-notes-heading">
+            <h2 id="security-notes-heading">Security Notes</h2>
+            <ul>
+                <li>Your private key stays in your browser.</li>
+                <li>Back up your private key before clearing browser storage.</li>
+                <li>Use strong passphrases for private keys.</li>
+                <li>Share only public keys with trusted contacts.</li>
+            </ul>
+        </section>
+
+        <section aria-labelledby="generate-heading">
+            <h2 id="generate-heading">Generate a New Key Pair</h2>
+            <label for="generate-name">Name</label>
+            <input id="generate-name" type="text" placeholder="Your name">
+
+            <label for="generate-email">Email</label>
+            <input id="generate-email" type="email" placeholder="you@example.com">
+
+            <label for="generate-passphrase">Passphrase (optional)</label>
+            <input id="generate-passphrase" type="password" placeholder="Passphrase">
+
+            <button id="generate-key-btn" type="button">Generate Key Pair</button>
+        </section>
+
+        <section aria-labelledby="own-keys-heading">
+            <h2 id="own-keys-heading">Your Keys</h2>
+
+            <label for="own-public-key">Public Key</label>
+            <textarea id="own-public-key" rows="10" readonly></textarea>
+
+            <label for="own-private-key">Private Key</label>
+            <textarea id="own-private-key" rows="10" readonly></textarea>
+
+            <div>
+                <button id="download-public-key-btn" type="button">Download Public Key</button>
+                <button id="download-private-key-btn" type="button">Download Private Key</button>
+            </div>
+        </section>
+
+        <section aria-labelledby="import-private-heading">
+            <h2 id="import-private-heading">Import Private Key</h2>
+
+            <label for="import-private-key-text">Private Key (ASCII-armored)</label>
+            <textarea id="import-private-key-text" rows="10"></textarea>
+
+            <label for="import-private-passphrase">Passphrase (if encrypted)</label>
+            <input id="import-private-passphrase" type="password" placeholder="Passphrase">
+
+            <div>
+                <button id="import-private-key-btn" type="button">Import Private Key</button>
+                <button id="clear-private-key-btn" type="button">Clear Private Key</button>
+            </div>
+        </section>
+
+        <section aria-labelledby="import-public-heading">
+            <h2 id="import-public-heading">Import Public Keys for Recipients</h2>
+
+            <label for="public-key-label">Label</label>
+            <input id="public-key-label" type="text" placeholder="alice, team, ops">
+
+            <label for="public-key-text">Public Key (ASCII-armored)</label>
+            <textarea id="public-key-text" rows="10"></textarea>
+
+            <div>
+                <button id="add-public-key-btn" type="button">Add Public Key</button>
+                <button id="clear-public-keys-btn" type="button">Clear All Public Keys</button>
+            </div>
+
+            <h3>Stored Recipient Keys</h3>
+            <ul id="public-keys-list"></ul>
+        </section>
+
+        <section aria-labelledby="status-heading">
+            <h2 id="status-heading">Status</h2>
+            <p id="key-status" role="status" aria-live="polite">Ready.</p>
+        </section>
+    </main>
+
+    <footer>
+        <p>OpSecChat {{ version|default('0.8.0-alpha') }}</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='openpgp.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='pgp-manager.js') }}"></script>
+    <script src="{{ url_for('static', filename='key-management.js') }}"></script>
+</body>
+</html>

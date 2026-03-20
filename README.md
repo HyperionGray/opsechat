@@ -239,6 +239,7 @@ Features
 ### Chat System
 - **Simple Web Chat Rooms** - Create secure chat rooms with one command (`python chat-room.py`)
 - **E2E Encryption** - Optional encryption using Web Crypto API (simple, reviewable JavaScript)
+- **Browser Key Management** - Manage PGP keys locally at `/keys` (generate/import/export/delete)
 - **Terminal-Style UI** - Clean, minimal interface focused on security over aesthetics
 - As chat happens inside the Tor network via ephemeral hidden services, everything is encrypted and attribution of chatters is virtually impossible
 - *Nothing* touches disk except the app, everything happens in-memory, no chat, image, video, or ANYTHING caching to storage.
