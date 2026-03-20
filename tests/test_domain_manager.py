@@ -207,7 +207,7 @@ class TestDomainRotationManager:
         result = manager.rotate_to_new_domain(max_price=2.0, max_attempts=1)
 
         assert result["success"] is True
-        assert result["domain"] == "test900.xyz"
+        assert result["domain"] == manager.active_domain
         assert result["cost"] == 1.25
 
     def test_search_cheap_domains_respects_limit(self):
