@@ -59,14 +59,16 @@ Key endpoints used by opsechat:
 - `pricing/get` - Get TLD pricing
 - `domain/listAll` - List owned domains
 
-## Other Registrars (Future Support)
+## Additional Registrars
 
-The opsechat domain manager is designed to be extensible. Future registrar support may include:
+The opsechat domain manager now supports multiple providers and can use automatic
+provider selection in the CLI.
 
-### Namecheap
+### Namecheap (Integrated)
 - API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
-- Cheap TLDs: .xyz, .club, .online
+- Supports domain availability checks, pricing lookup, and domain purchases
+- Purchases require contact profile fields in CLI config
+- Supports sandbox API endpoint for integration testing
 
 ### Namesilo
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)
@@ -106,6 +108,9 @@ For container deployments, you can set:
 # In docker-compose.yml or quadlet
 Environment=PORKBUN_API_KEY=pk1_xxxxx
 Environment=PORKBUN_API_SECRET=sk1_xxxxx
+Environment=NAMECHEAP_API_USER=your_api_user
+Environment=NAMECHEAP_API_KEY=your_namecheap_api_key
+Environment=NAMECHEAP_CLIENT_IP=x.x.x.x
 Environment=DOMAIN_MONTHLY_BUDGET=50.0
 ```
 
@@ -196,9 +201,9 @@ podman-compose logs opsechat | grep "Your service is available"
 # 3. Open in Tor Browser
 # Navigate to: http://xxxxx.onion/randompath/email/config
 
-# 4. Configure Porkbun API
-# - API Key: pk1_your_api_key_here
-# - API Secret: sk1_your_secret_here
+# 4. Configure registrar API in CLI or app config
+# - Provider: auto | porkbun | namecheap
+# - Porkbun API Key/Secret or Namecheap API credentials
 # - Monthly Budget: 20.00
 
 # 5. Generate burner email

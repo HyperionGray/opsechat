@@ -4,7 +4,11 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient,
+    DomainRotationManager,
+    MultiRegistrarClient,
+    NamecheapAPIClient,
+    PorkbunAPIClient,
 )
 
 
@@ -174,3 +178,93 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client XML handling."""
+
+    @patch("domain_manager.requests.Session")
+    def test_search_domain_available(self, mock_session_class):
+        """Test Namecheap availability parsing."""
+        xml_response = """<?xml version="1.0" encoding="UTF-8"?>
+<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+  <CommandResponse Type="namecheap.domains.check">
+    <DomainCheckResult Domain="test123.xyz" Available="true"/>
+  </CommandResponse>
+</ApiResponse>"""
+
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = xml_response
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_user="api_user",
+            api_key="api_key",
+            client_ip="127.0.0.1",
+            username="api_user",
+            use_sandbox=True,
+        )
+
+        with patch.object(client, "get_pricing", return_value={"registration": 1.99}):
+            result = client.search_domain("test123.xyz")
+
+        assert result["available"] is True
+        assert result["domain"] == "test123.xyz"
+        assert result["price"] == 1.99
+        assert result["registrar"] == "namecheap"
+
+    @patch("domain_manager.requests.Session")
+    def test_purchase_domain_requires_contact_profile(self, mock_session_class):
+        """Namecheap purchase should fail clearly without contact data."""
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_user="api_user",
+            api_key="api_key",
+            client_ip="127.0.0.1",
+            username="api_user",
+            use_sandbox=True,
+            default_contact={},
+        )
+
+        result = client.purchase_domain("example.xyz")
+        assert result["success"] is False
+        assert "contact profile" in result["message"]
+
+
+class TestMultiRegistrarClient:
+    """Test registrar fallback and routing."""
+
+    def test_prefers_cheapest_available_registrar(self):
+        """Auto client should choose lowest priced available registrar."""
+        expensive_client = Mock(spec=DomainAPIClient)
+        expensive_client.name = "porkbun"
+        expensive_client.search_domain.return_value = {
+            "domain": "abc.xyz",
+            "available": True,
+            "price": 3.99,
+            "registrar": "porkbun",
+        }
+        expensive_client.purchase_domain.return_value = {"success": True, "registrar": "porkbun"}
+
+        cheap_client = Mock(spec=DomainAPIClient)
+        cheap_client.name = "namecheap"
+        cheap_client.search_domain.return_value = {
+            "domain": "abc.xyz",
+            "available": True,
+            "price": 1.99,
+            "registrar": "namecheap",
+        }
+        cheap_client.purchase_domain.return_value = {"success": True, "registrar": "namecheap"}
+
+        client = MultiRegistrarClient([expensive_client, cheap_client])
+
+        search_result = client.search_domain("abc.xyz")
+        purchase_result = client.purchase_domain("abc.xyz")
+
+        assert search_result["registrar"] == "namecheap"
+        assert purchase_result["registrar"] == "namecheap"
+        cheap_client.purchase_domain.assert_called_once()
