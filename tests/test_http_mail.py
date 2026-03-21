@@ -21,6 +21,7 @@ from http_mail_system import (
     HttpMessage,
     http_mail_storage,
     MAX_MAIL_MESSAGE_LENGTH,
+    MAX_MESSAGES_PER_MAILBOX,
 )
 from email_system import email_storage as _global_email_storage, EmailComposer
 from app_factory import create_app
@@ -101,6 +102,14 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_delete_mailbox_marks_destroyed_and_rejects_new_messages(self):
+        mb = self.storage.create_mailbox()
+        mb.add_message("subj", "body", "sender")
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert mb.destroyed is True
+        assert mb.message_count() == 0
+        assert mb.add_message("after", "delete", "sender") is None
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -178,6 +187,22 @@ class TestHttpMailbox:
         assert self.mailbox.message_count() == 0
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
+
+    def test_destroyed_mailbox_rejects_new_messages(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Subj", "Body", "alice")
+        assert msg_id is None
+        assert self.mailbox.message_count() == 0
+
+    def test_mailbox_capacity_overwrites_oldest_message(self):
+        for idx in range(MAX_MESSAGES_PER_MAILBOX + 1):
+            self.mailbox.add_message(f"subj-{idx}", f"body-{idx}", "alice")
+
+        msgs = self.mailbox.get_messages("secretkey123456789012345678901")
+        assert len(msgs) == MAX_MESSAGES_PER_MAILBOX
+        subjects = [m["subject"] for m in msgs]
+        assert "subj-0" not in subjects
+        assert f"subj-{MAX_MESSAGES_PER_MAILBOX}" in subjects
 
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
@@ -263,6 +288,55 @@ class TestHttpMailRoutes:
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
         assert r.status_code == 404
+
+    def test_send_message_form_fallback_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Form subject",
+                "body": "Form body",
+                "sender": "form-user",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        inbox = r.get_json()["messages"]
+        assert len(inbox) == 1
+        assert inbox[0]["subject"] == "Form subject"
+
+    def test_send_message_json_fallback_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            json={"address": addr, "subject": "Hi", "body": "Body", "sender": "json-user"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        payload = r.get_json()
+        assert payload["success"] is True
+        assert payload["address"] == addr
+        assert "msg_id" in payload
+
+    def test_send_message_fallback_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            json={"body": "Body"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
 
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
