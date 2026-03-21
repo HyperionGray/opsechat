@@ -2,6 +2,7 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -112,6 +113,37 @@ class TestDomainRotationManager:
         assert result is not None
         assert result["domain"].endswith((".xyz", ".club", ".online", ".site", ".website"))
         assert result["price"] <= 5.0
+
+    def test_find_cheap_available_domain_parses_currency_price(self):
+        """Test currency-style price parsing for domain search results."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "moneytest.xyz",
+            "price": "$4.50"
+        }
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["domain"] == "moneytest.xyz"
+        assert result["price"] == 4.5
+
+    def test_find_cheap_available_domain_skips_invalid_price(self):
+        """Test invalid prices are skipped without crashing."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.side_effect = [
+            {"available": True, "domain": "badprice.xyz", "price": "not-a-number"},
+            {"available": True, "domain": "goodprice.xyz", "price": "1.99"}
+        ]
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=2)
+
+        assert result is not None
+        assert result["domain"] == "goodprice.xyz"
+        assert result["price"] == 1.99
     
     def test_purchase_domain_if_budget_allows_success(self):
         """Test domain purchase within budget"""
@@ -155,6 +187,42 @@ class TestDomainRotationManager:
         assert status["current_spending"] == 10.0
         assert status["remaining"] == 40.0
         assert status["domains_owned"] == 1
+
+    def test_budget_auto_reset_on_new_month(self):
+        """Test budget auto-resets when month period changes."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 15.0
+        manager.budget_period = "2000-01"
+
+        status = manager.get_budget_status()
+
+        assert status["current_spending"] == 0.0
+        assert status["remaining"] == 50.0
+        assert status["budget_period"] != "2000-01"
+
+    def test_serialize_and_load_state(self):
+        """Test manager state serialization and deserialization."""
+        manager = DomainRotationManager(monthly_budget=25.0)
+        now = datetime.now()
+        expiry = now + timedelta(days=365)
+        manager.current_spending = 7.5
+        manager.active_domain = "saved.xyz"
+        manager.owned_domains = [{
+            "domain": "saved.xyz",
+            "price": 7.5,
+            "purchased_at": now,
+            "expires_at": expiry
+        }]
+
+        state = manager.serialize_state()
+        reloaded = DomainRotationManager(monthly_budget=25.0)
+        reloaded.load_state(state)
+
+        assert reloaded.current_spending == 7.5
+        assert reloaded.active_domain == "saved.xyz"
+        assert len(reloaded.owned_domains) == 1
+        assert isinstance(reloaded.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(reloaded.owned_domains[0]["expires_at"], datetime)
     
     def test_rotate_domain(self):
         """Test domain rotation"""
