@@ -25,6 +25,12 @@ This file tracks what needs to be done for the TUI chat system.
 - [x] Add urwid dependency to `requirements.txt`
 - [x] Basic testing and validation
 - [x] Create TUI_README.md documentation
+- [x] Add inline slash commands:
+  - [x] `/help` command
+  - [x] `/status` command
+  - [x] `/users` command
+  - [x] `/quit` command
+- [x] Add connection/user status indicator in TUI header
 
 ## 🔄 IN PROGRESS (Phase 2: Tor Integration)
 
@@ -70,9 +76,9 @@ This file tracks what needs to be done for the TUI chat system.
 
 ### User Experience
 - [ ] Add status indicators
-  - [ ] Connection status
+  - [x] Connection status
   - [ ] Server health
-  - [ ] Number of connected users
+  - [x] Number of connected users
   - [ ] Time until message burn
 - [ ] Improve error handling
   - [ ] Better error messages

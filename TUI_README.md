@@ -15,6 +15,8 @@ This is a serious privacy and opsec tool for serious privacy and opsec people. I
 ✅ **Zero Disk** - Nothing touches disk except the application code  
 ✅ **Tor Integration** - Full support for Tor hidden services (.onion)  
 ✅ **SOCKS Proxy** - Client supports connecting via Tor SOCKS proxy  
+✅ **Inline Commands** - `/help`, `/status`, `/users`, `/quit`  
+✅ **Live Status Bar** - Connection state and connected user count in header  
 
 ## Quick Start
 
@@ -81,6 +83,15 @@ The client will automatically use Tor SOCKS proxy if:
 - Your username is randomly assigned (e.g., `PhantomRaven4523`)
 - Messages automatically disappear after 4 minutes
 
+### 5. Inline Commands
+
+The TUI supports built-in slash commands:
+
+- `/help` - Show available commands
+- `/status` - Show server status (uptime, users, in-memory message count)
+- `/users` - Show connected user count
+- `/quit` - Gracefully disconnect from the server
+
 ## Privacy & Security Features
 
 ### In-Memory Only
@@ -139,6 +150,14 @@ sudo systemctl start tor
 - **No images**: Text only, no exceptions
 - **No video**: Text only, no exceptions
 - **No b64 encoding**: Large base64-like strings are rejected
+
+## Status Indicator
+
+The client header includes live runtime context:
+
+- Connection state: `Disconnected`, `Connecting`, or `Connected`
+- Connected user count (when available from server)
+- Transport mode: `Direct` or `Tor`
 
 ## Architecture
 

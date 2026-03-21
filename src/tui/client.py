@@ -58,6 +58,8 @@ class ChatClient:
         self.username = "Unknown"
         self.running = False
         self.message_buffer = ""
+        self.connection_state = "Disconnected"
+        self.connected_users = None
         
         # UI components
         self.messages_walker = urwid.SimpleFocusListWalker([])
@@ -69,28 +71,13 @@ class ChatClient:
     
     def build_ui(self):
         """Build the terminal UI"""
+        self.header_text = urwid.Text([], align='center')
+
         # Header
         header = urwid.AttrMap(
-            urwid.Text([
-                ('title', 'OpSecChat TUI - Privacy First'),
-                ' | ',
-                ('info', 'Messages burn in 4 min'),
-                ' | ',
-                ('warn', 'Text only - No images/video')
-            ], align='center'),
+            self.header_text,
             'header'
         )
-        
-        # Footer with instructions
-        footer_text = [
-            ('info', 'Enter'),
-            ': Send | ',
-            ('info', 'Ctrl+C'),
-            ': Quit | ',
-            ('warn', 'Your username: '),
-            ('username', self.username)
-        ]
-        footer = urwid.AttrMap(urwid.Text(footer_text), 'footer')
         
         # Messages area
         messages_frame = urwid.LineBox(
@@ -113,7 +100,7 @@ class ChatClient:
         self.frame = urwid.Frame(
             body=body,
             header=header,
-            footer=footer
+            footer=urwid.AttrMap(urwid.Text(''), 'footer')
         )
         
         # Color scheme
@@ -130,6 +117,9 @@ class ChatClient:
             ('system_message', 'yellow', 'black'),
             ('timestamp', 'dark gray', 'black'),
         ]
+
+        self.update_header()
+        self.update_footer()
     
     def add_message(self, username, message, is_system=False):
         """Add a message to the display"""
@@ -155,6 +145,9 @@ class ChatClient:
     def connect(self):
         """Connect to the chat server"""
         try:
+            self.connection_state = "Connecting"
+            self.update_header()
+
             if self.use_tor:
                 self.add_message("System", f"Connecting via Tor to {self.host}:{self.port}...", is_system=True)
             else:
@@ -162,10 +155,15 @@ class ChatClient:
             
             self.socket = create_socket_connection(self.host, self.port, self.use_tor, self.tor_port)
             self.running = True
+            self.connection_state = "Connected"
+            self.update_header()
             
             # Start receive thread
             receive_thread = threading.Thread(target=self.receive_messages, daemon=True)
             receive_thread.start()
+
+            # Request a fresh status snapshot once connected.
+            self.send_command("status")
             
             return True
         except ImportError as e:
@@ -185,6 +183,8 @@ class ChatClient:
                 if not data:
                     self.add_message("System", "Disconnected from server", is_system=True)
                     self.running = False
+                    self.connection_state = "Disconnected"
+                    self.update_header()
                     break
                 
                 buffer += data
@@ -201,6 +201,8 @@ class ChatClient:
                 if self.running:
                     self.add_message("System", f"Connection error: {e}", is_system=True)
                 self.running = False
+                self.connection_state = "Disconnected"
+                self.update_header()
                 break
     
     def handle_server_message(self, msg):
@@ -217,6 +219,33 @@ class ChatClient:
             username = msg.get('username', 'Unknown')
             message = msg.get('message', '')
             self.add_message(username, message)
+        elif msg_type == 'system':
+            message = msg.get('message', '')
+            if message:
+                self.add_message("System", message, is_system=True)
+        elif msg_type == 'status':
+            self.connected_users = msg.get('connected_users')
+            self.update_header()
+            message = msg.get('message')
+            if message:
+                self.add_message("System", message, is_system=True)
+
+    def update_header(self):
+        """Update the header with current connection/runtime status."""
+        users_display = self.connected_users if self.connected_users is not None else "?"
+        via_text = "Tor" if self.use_tor else "Direct"
+        header_text = [
+            ('title', 'OpSecChat TUI - Privacy First'),
+            ' | ',
+            ('info', f'Status: {self.connection_state}'),
+            ' | ',
+            ('info', f'Users: {users_display}'),
+            ' | ',
+            ('info', via_text),
+            ' | ',
+            ('warn', 'Text only - No images/video')
+        ]
+        self.header_text.set_text(header_text)
     
     def update_footer(self):
         """Update the footer with current username"""
@@ -225,15 +254,55 @@ class ChatClient:
             ': Send | ',
             ('info', 'Ctrl+C'),
             ': Quit | ',
+            ('info', '/help /status /users /quit'),
+            ' | ',
             ('warn', 'Your username: '),
             ('username', self.username)
         ]
         footer = urwid.AttrMap(urwid.Text(footer_text), 'footer')
         self.frame.footer = footer
+
+    def send_command(self, command):
+        """Send a slash-command request to the server."""
+        if not command or not self.socket:
+            return False
+
+        try:
+            command_obj = {
+                'type': 'command',
+                'command': command.strip().lower()
+            }
+            self.socket.send((json.dumps(command_obj) + '\n').encode())
+            return True
+        except Exception as e:
+            self.add_message("System", f"Failed to send command: {e}", is_system=True)
+            return False
+
+    def _handle_command_input(self, raw_message):
+        """Parse and execute slash commands from input."""
+        command = raw_message[1:].strip().lower()
+        if not command:
+            self.add_message("System", "Empty command. Try /help.", is_system=True)
+            return
+
+        if command in {'quit', 'exit'}:
+            self.send_command('quit')
+            self.running = False
+            self.connection_state = "Disconnected"
+            self.update_header()
+            self.add_message("System", "Disconnecting...", is_system=True)
+            raise urwid.ExitMainLoop()
+
+        if not self.send_command(command):
+            self.add_message("System", "Command failed to send.", is_system=True)
     
     def send_message(self, message):
         """Send a message to the server"""
         if not message or not self.socket:
+            return
+
+        if message.startswith('/'):
+            self._handle_command_input(message)
             return
         
         # Validate message
@@ -284,6 +353,8 @@ class ChatClient:
     def cleanup(self):
         """Clean up resources"""
         self.running = False
+        self.connection_state = "Disconnected"
+        self.update_header()
         if self.socket:
             try:
                 self.socket.close()
