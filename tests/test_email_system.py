@@ -242,6 +242,36 @@ class TestBurnerEmailManager:
         
         assert result is True
         assert email not in manager.burner_addresses
+
+    def test_expire_burner_updates_user_index(self):
+        """Expiring burner should remove it from user_burners index."""
+        manager = BurnerEmailManager()
+        email = manager.generate_burner_email("user1")
+
+        assert email in manager.user_burners["user1"]
+        manager.expire_burner(email)
+
+        assert "user1" not in manager.user_burners
+
+    def test_expire_burner_rejects_non_owner(self):
+        """Users cannot expire burners they do not own."""
+        manager = BurnerEmailManager()
+        email = manager.generate_burner_email("owner")
+
+        result = manager.expire_burner(email, user_id="attacker")
+
+        assert result is False
+        assert email in manager.burner_addresses
+
+    def test_rotate_burner_rejects_non_owner(self):
+        """Rotation with a foreign old_email should fail."""
+        manager = BurnerEmailManager()
+        foreign_email = manager.generate_burner_email("owner")
+
+        result = manager.rotate_burner("attacker", foreign_email)
+
+        assert result is None
+        assert foreign_email in manager.burner_addresses
     
     def test_custom_domain(self):
         """Test setting custom domain for burners"""
@@ -276,3 +306,29 @@ class TestBurnerEmailManager:
         
         assert len(burners) == 1
         assert burners[0]['email'] == active_email
+
+    def test_cleanup_expired_removes_user_index_entries(self):
+        """Expired burners should be removed from per-user index as well."""
+        manager = BurnerEmailManager()
+        email = manager.generate_burner_email("user1")
+        manager.burner_addresses[email]['expires_at'] = (
+            datetime.datetime.now() - datetime.timedelta(minutes=5)
+        )
+
+        manager.cleanup_expired()
+
+        assert email not in manager.burner_addresses
+        assert "user1" not in manager.user_burners
+
+    def test_get_user_stats_shape(self):
+        """Stats endpoint data should include burner and send counters."""
+        manager = BurnerEmailManager()
+        manager.generate_burner_email("user1")
+        manager.record_sent_email("user1")
+
+        stats = manager.get_user_stats("user1")
+
+        assert stats["active_burners"] == 1
+        assert stats["sends_used"] == 1
+        assert "sends_remaining" in stats
+        assert "total_time_remaining_seconds" in stats

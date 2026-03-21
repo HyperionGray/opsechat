@@ -22,7 +22,7 @@ from http_mail_system import (
     http_mail_storage,
     MAX_MAIL_MESSAGE_LENGTH,
 )
-from email_system import email_storage as _global_email_storage, EmailComposer
+from email_system import email_storage as _global_email_storage, EmailComposer, burner_manager
 from app_factory import create_app
 
 
@@ -114,6 +114,12 @@ class TestHttpMailStorage:
         mb.add_message("subj", "body", "sender")
         self.storage.cleanup_empty_old_mailboxes()
         assert self.storage.get_mailbox(mb.address) is not None
+
+    def test_destroyed_mailbox_rejects_stale_reference(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert mb.add_message("subj", "body", "sender") is None
+        assert mb.get_messages(mb.read_key) is None
 
 
 # ===========================================================================
@@ -455,6 +461,13 @@ class TestEmailRoutesExtended:
         # Clean up global state
         if "testuser99" in _global_email_storage.emails:
             _global_email_storage.emails["testuser99"] = []
+        burner_manager.user_burners.pop("testuser99", None)
+        burner_manager.user_burners.pop("otheruser", None)
+        burner_manager.send_limits.pop("testuser99", None)
+        burner_manager.send_limits.pop("otheruser", None)
+        for burner, info in list(burner_manager.burner_addresses.items()):
+            if info.get("user_id") in {"testuser99", "otheruser"}:
+                burner_manager.burner_addresses.pop(burner, None)
 
     def test_view_email_returns_200(self):
         r = self.client.get(f"/secpath/email/view/{self.email_id}")
@@ -494,3 +507,31 @@ class TestEmailRoutesExtended:
     def test_burner_wrong_path_404(self):
         r = self.client.post("/wrongpath/email/burner", data={"action": "generate"})
         assert r.status_code == 404
+
+    def test_email_view_without_session_is_404_not_500(self):
+        with self.client.session_transaction() as sess:
+            sess.clear()
+        r = self.client.get(f"/secpath/email/view/{self.email_id}")
+        assert r.status_code == 404
+
+    def test_burner_expire_rejects_other_users_address(self):
+        foreign_burner = burner_manager.generate_burner_email("otheruser")
+        r = self.client.post(f"/secpath/email/burner/expire/{foreign_burner}")
+        assert r.status_code == 404
+        assert foreign_burner in burner_manager.burner_addresses
+
+    def test_burner_rotate_rejects_other_users_address(self):
+        foreign_burner = burner_manager.generate_burner_email("otheruser")
+        r = self.client.post(
+            "/secpath/email/burner",
+            data={"action": "rotate", "old_email": foreign_burner},
+        )
+        assert r.status_code == 404
+        assert foreign_burner in burner_manager.burner_addresses
+
+    def test_burner_list_alias_route_works(self):
+        r = self.client.get("/secpath/email/burner/list")
+        assert r.status_code == 200
+        data = r.get_json()
+        assert "burners" in data
+        assert "stats" in data
