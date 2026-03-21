@@ -172,6 +172,20 @@ When limit exceeded:
 
 ---
 
+## HTTP Mail robustness updates
+
+### What changed
+- Added a non-JavaScript compose endpoint: `POST /<path>/mail/send`
+- Added mailbox lifecycle hardening so destroyed mailboxes reject all new writes
+- Added tests for no-JS compose flow and destroyed-mailbox write rejection
+
+### Why this matters
+- Compose now works even if JavaScript is disabled
+- Races around mailbox destruction are handled safely by mailbox-level write guards
+- Behavior is covered by automated tests
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose
