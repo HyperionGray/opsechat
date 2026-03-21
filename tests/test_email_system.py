@@ -208,6 +208,15 @@ class TestBurnerEmailManager:
         
         manager.cleanup_expired()
         assert email not in manager.burner_addresses
+
+    def test_cleanup_expired_removes_user_index_entries(self):
+        manager = BurnerEmailManager()
+        email = manager.generate_burner_email("user1")
+        manager.burner_addresses[email]['expires_at'] = datetime.datetime.now() - datetime.timedelta(hours=1)
+
+        manager.cleanup_expired()
+
+        assert "user1" not in manager.user_burners
     
     def test_get_user_burners(self):
         """Test retrieving all active burners for a user"""

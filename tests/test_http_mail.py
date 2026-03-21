@@ -101,6 +101,12 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_add_message_after_destroy_returns_none(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert mb.add_message("late", "message", "alice") is None
+        assert mb.message_count() == 0
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -256,6 +262,40 @@ class TestHttpMailRoutes:
             json={"subject": "X", "body": "", "sender": "bob"},
         )
         assert r.status_code == 400
+
+    def test_send_message_form_nojs_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "From form",
+                "body": "No-JS compose path",
+                "sender": "formuser",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        data = r.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["subject"] == "From form"
+        assert data["messages"][0]["sender"] == "formuser"
+
+    def test_send_message_form_nojs_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "X", "body": "Y"},
+        )
+        assert r.status_code == 400
+        assert b"Mailbox address is required" in r.data
 
     def test_send_to_nonexistent_mailbox(self):
         r = self.client.post(
