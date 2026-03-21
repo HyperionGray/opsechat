@@ -2,6 +2,25 @@
 
 This guide covers the new features added in the final push for OpSecHat production readiness.
 
+## HTTP Mail Hardening and Compose Fallback
+
+### What Changed
+
+The HTTP Mail subsystem now has stronger lifecycle guarantees and a no-JavaScript compose fallback:
+
+- Destroyed mailboxes now reject writes reliably, even from stale in-memory references.
+- Added `POST /<path>/mail/send` for compose forms that provide address in payload.
+- Compose UI now updates action targets consistently when the address field changes.
+- Added route and storage tests for destroyed-mailbox behavior and fallback posting.
+
+### Why It Matters
+
+- Prevents race-condition style writes to mailboxes that have already been destroyed.
+- Improves usability when JavaScript is limited or disabled.
+- Makes HTTP Mail behavior more predictable for API and UI clients.
+
+---
+
 ## 🔑 Automated Key Exchange
 
 ### What Changed

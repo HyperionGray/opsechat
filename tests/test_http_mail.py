@@ -19,6 +19,7 @@ from http_mail_system import (
     HttpMailStorage,
     HttpMailbox,
     HttpMessage,
+    MailboxDestroyedError,
     http_mail_storage,
     MAX_MAIL_MESSAGE_LENGTH,
 )
@@ -101,6 +102,14 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_delete_mailbox_marks_stale_handle_destroyed(self):
+        mb = self.storage.create_mailbox()
+        mb.add_message("Subject", "Body", "alice")
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert mb.destroyed is True
+        with pytest.raises(MailboxDestroyedError):
+            mb.add_message("After", "Delete", "bob")
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -179,6 +188,11 @@ class TestHttpMailbox:
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
 
+    def test_add_message_after_destroy_raises(self):
+        self.mailbox.destroyed = True
+        with pytest.raises(MailboxDestroyedError):
+            self.mailbox.add_message("A", "B", "c")
+
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -247,6 +261,50 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_form_fallback_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Fallback",
+                "body": "Form route works",
+                "sender": "webform",
+            },
+        )
+        assert r.status_code == 200
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        messages = inbox.get_json()["messages"]
+        assert len(messages) == 1
+        assert messages[0]["subject"] == "Fallback"
+
+    def test_send_message_form_fallback_missing_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "X", "body": "Y"},
+        )
+        assert r.status_code == 400
+
+    def test_send_to_destroyed_mailbox_returns_410(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        mailbox = http_mail_storage.get_mailbox(addr)
+        mailbox.destroyed = True
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Hi", "body": "Hello there", "sender": "bob"},
+        )
+        assert r.status_code == 410
+        assert "destroyed" in r.get_json()["error"].lower()
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")

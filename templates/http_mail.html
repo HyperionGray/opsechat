@@ -300,6 +300,15 @@
     {% else %}
       showSection('create');
     {% endif %}
+
+    var composeAddressInput = document.getElementById('compose-address-input');
+    var composeForm = document.getElementById('compose-form');
+    if (composeAddressInput && composeForm) {
+      composeAddressInput.addEventListener('input', updateComposeAction);
+      composeAddressInput.addEventListener('change', updateComposeAction);
+      composeForm.addEventListener('submit', updateComposeAction);
+      updateComposeAction();
+    }
   })();
 
   // Create mailbox via fetch
@@ -339,6 +348,8 @@
     var form = document.getElementById('compose-form');
     if (addr) {
       form.action = '/{{ path }}/mail/' + encodeURIComponent(addr) + '/send';
+    } else {
+      form.action = '/{{ path }}/mail/send';
     }
   }
 
