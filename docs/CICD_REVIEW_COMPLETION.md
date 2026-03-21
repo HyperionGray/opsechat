@@ -41,7 +41,6 @@ src/amazon_q/
 ```
 tests/
 ├── e2e.spec.js (25 lines) - Deprecation notice
-├── e2e.spec.js.deprecated - Original preserved
 ├── landing-page.e2e.spec.js (88 lines)
 ├── chat-interface.e2e.spec.js (165 lines)
 ├── email-burner.e2e.spec.js (78 lines)
@@ -49,6 +48,8 @@ tests/
 ├── user-workflow.e2e.spec.js (91 lines)
 └── error-validation.e2e.spec.js (98 lines)
 ```
+
+The historical `e2e.spec.js.deprecated` archive file was later removed during repository cleanup because all coverage remains in the focused files above.
 
 **Benefits:**
 - 96% reduction in main file size

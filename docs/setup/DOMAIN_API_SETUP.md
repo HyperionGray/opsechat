@@ -237,6 +237,11 @@ Enterprise-focused with comprehensive API.
 - Check registrar account for actual spending
 - Consider API rate limits affecting purchases
 
+**CLI list/status fails after restart**
+- Upgrade to latest code and run commands again (`status`, `list`)
+- Domain state now stores timestamps as ISO-8601 and auto-parses older entries
+- If old state is badly malformed, remove `~/.opsechat/domain_config.json` and reconfigure
+
 ## Best Practices
 
 ### Cost Optimization
@@ -289,6 +294,11 @@ Enterprise-focused with comprehensive API.
    - Keep record of API credentials (securely)
    - Document budget and usage patterns
    - Maintain registrar account recovery information
+
+4. **Understand Budget Periods**
+   - Budget accounting is tracked by calendar month (`YYYY-MM`)
+   - Spending auto-resets when a new month starts
+   - `python domain_rotation_cli.py status` shows the active budget period
 
 ## Support and Resources
 

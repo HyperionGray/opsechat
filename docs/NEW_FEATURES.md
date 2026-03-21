@@ -284,7 +284,16 @@ After rotating domains, update your email configuration:
 - Set monthly budget to prevent overspending
 - CLI tracks spending automatically
 - Prevents purchases that would exceed budget
-- Resets monthly (manual reset required)
+- Resets automatically when a new month begins
+
+### Reliability Improvements (2026-03)
+
+Domain rotation persistence and budget handling were hardened:
+
+- **Persistent state is now JSON-safe**: owned domain timestamps are saved as ISO-8601 strings and parsed on load.
+- **CLI listing is backward-compatible**: mixed state formats no longer crash `list` output.
+- **Automatic monthly rollover**: spending resets when a new month starts, with the active budget period tracked as `YYYY-MM`.
+- **Price parsing is resilient**: search results now normalize currency-formatted values (for example `$4.50`) and skip invalid price values safely.
 
 ---
 
