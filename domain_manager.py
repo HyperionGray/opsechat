@@ -6,7 +6,7 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -134,6 +134,7 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+        self.last_budget_reset = datetime.now()
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
@@ -172,7 +173,7 @@ class DomainRotationManager:
                 
                 if isinstance(price, str):
                     # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
+                    price = self._safe_float(price.replace("$", "").replace("€", ""), 999.0)
                 
                 if price <= max_price:
                     return {
@@ -191,6 +192,9 @@ class DomainRotationManager:
         if not self.api_client:
             logger.error("No API client configured")
             return False
+
+        # Budget is monthly and should reset when month changes.
+        self.maybe_reset_monthly_budget()
         
         # Check budget
         if self.current_spending + price > self.monthly_budget:
@@ -254,12 +258,144 @@ class DomainRotationManager:
     
     def get_budget_status(self) -> Dict:
         """Get budget information"""
+        self.maybe_reset_monthly_budget()
         return {
             "monthly_budget": self.monthly_budget,
             "current_spending": self.current_spending,
             "remaining": self.monthly_budget - self.current_spending,
-            "domains_owned": len(self.owned_domains)
+            "domains_owned": len(self.owned_domains),
+            "last_budget_reset": self.last_budget_reset
         }
+
+    @staticmethod
+    def _parse_datetime(value: Any) -> Optional[datetime]:
+        """Best-effort parser for persisted datetime values."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _to_iso(value: Any) -> Optional[str]:
+        """Convert datetime-like values to ISO-8601 strings."""
+        parsed = DomainRotationManager._parse_datetime(value)
+        return parsed.isoformat() if parsed else None
+
+    @staticmethod
+    def _safe_float(value: Any, default: float = 0.0) -> float:
+        """Convert values to float without raising on malformed input."""
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def maybe_reset_monthly_budget(self, current_time: Optional[datetime] = None) -> bool:
+        """
+        Reset current spending when crossing into a new calendar month.
+        Returns True if a reset occurred.
+        """
+        now = current_time or datetime.now()
+        if (
+            self.last_budget_reset.year != now.year
+            or self.last_budget_reset.month != now.month
+        ):
+            logger.info("Resetting monthly budget counter for new month")
+            self.current_spending = 0.0
+            self.last_budget_reset = now
+            return True
+        return False
+
+    def cleanup_expired_domains(self, current_time: Optional[datetime] = None) -> int:
+        """
+        Remove expired domains from local state.
+        Returns the number of removed domains.
+        """
+        now = current_time or datetime.now()
+        kept_domains: List[Dict] = []
+        removed = 0
+
+        for domain in self.owned_domains:
+            expires_at = self._parse_datetime(domain.get("expires_at"))
+            if expires_at and expires_at < now:
+                removed += 1
+                continue
+            kept_domains.append(domain)
+
+        self.owned_domains = kept_domains
+
+        if self.active_domain and not any(
+            d.get("domain") == self.active_domain for d in self.owned_domains
+        ):
+            self.active_domain = self.owned_domains[-1]["domain"] if self.owned_domains else None
+
+        return removed
+
+    def export_state(self) -> Dict[str, Any]:
+        """Export manager state to a JSON-serializable dictionary."""
+        domains: List[Dict[str, Any]] = []
+        for domain in self.owned_domains:
+            domain_name = domain.get("domain")
+            if not domain_name:
+                continue
+            domains.append(
+                {
+                    "domain": domain_name,
+                    "price": self._safe_float(domain.get("price", 0.0), 0.0),
+                    "purchased_at": self._to_iso(domain.get("purchased_at")),
+                    "expires_at": self._to_iso(domain.get("expires_at")),
+                }
+            )
+
+        return {
+            "monthly_budget": self._safe_float(self.monthly_budget, 50.0),
+            "current_spending": self._safe_float(self.current_spending, 0.0),
+            "active_domain": self.active_domain,
+            "last_budget_reset": self.last_budget_reset.isoformat(),
+            "owned_domains": domains,
+        }
+
+    def load_state(self, state: Dict[str, Any]):
+        """Load persisted manager state from a dictionary."""
+        if not state:
+            return
+
+        self.monthly_budget = self._safe_float(
+            state.get("monthly_budget", self.monthly_budget), self.monthly_budget
+        )
+        self.current_spending = self._safe_float(state.get("current_spending", 0.0), 0.0)
+        self.active_domain = state.get("active_domain")
+
+        last_reset = self._parse_datetime(state.get("last_budget_reset"))
+        if last_reset:
+            self.last_budget_reset = last_reset
+
+        loaded_domains: List[Dict[str, Any]] = []
+        for raw_domain in state.get("owned_domains", []):
+            domain_name = raw_domain.get("domain")
+            if not domain_name:
+                continue
+
+            purchased_at = self._parse_datetime(raw_domain.get("purchased_at")) or datetime.now()
+            expires_at = self._parse_datetime(raw_domain.get("expires_at")) or (
+                purchased_at + timedelta(days=365)
+            )
+
+            loaded_domains.append(
+                {
+                    "domain": domain_name,
+                    "price": self._safe_float(raw_domain.get("price", 0.0), 0.0),
+                    "purchased_at": purchased_at,
+                    "expires_at": expires_at,
+                }
+            )
+
+        self.owned_domains = loaded_domains
+        self.cleanup_expired_domains()
+        self.maybe_reset_monthly_budget()
 
 
 # Global domain rotation manager

@@ -1,8 +1,8 @@
 """
 Tests for domain management module
 """
-import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -174,3 +174,68 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_export_state_is_json_serializable(self):
+        """State export should convert datetimes to ISO strings."""
+        manager = DomainRotationManager(monthly_budget=25.0)
+        manager.current_spending = 3.5
+        manager.last_budget_reset = datetime(2026, 3, 1, 10, 0, 0)
+        manager.owned_domains = [
+            {
+                "domain": "alpha.xyz",
+                "price": 1.99,
+                "purchased_at": datetime(2026, 3, 2, 8, 30, 0),
+                "expires_at": datetime(2027, 3, 2, 8, 30, 0),
+            }
+        ]
+        manager.active_domain = "alpha.xyz"
+
+        state = manager.export_state()
+
+        assert state["monthly_budget"] == 25.0
+        assert state["current_spending"] == 3.5
+        assert state["active_domain"] == "alpha.xyz"
+        assert state["owned_domains"][0]["purchased_at"] == "2026-03-02T08:30:00"
+        assert state["owned_domains"][0]["expires_at"] == "2027-03-02T08:30:00"
+
+    def test_load_state_parses_dates_and_prunes_expired(self):
+        """Loading should parse ISO dates and drop expired domains."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.load_state(
+            {
+                "monthly_budget": 40.0,
+                "current_spending": 6.0,
+                "active_domain": "expired.xyz",
+                "last_budget_reset": "2026-03-01T00:00:00",
+                "owned_domains": [
+                    {
+                        "domain": "expired.xyz",
+                        "price": 1.0,
+                        "purchased_at": "2025-01-01T00:00:00",
+                        "expires_at": "2025-12-31T23:59:59",
+                    },
+                    {
+                        "domain": "valid.xyz",
+                        "price": 2.0,
+                        "purchased_at": "2026-03-03T12:00:00",
+                        "expires_at": "2027-03-03T12:00:00",
+                    },
+                ],
+            }
+        )
+
+        assert manager.monthly_budget == 40.0
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["domain"] == "valid.xyz"
+        assert manager.active_domain == "valid.xyz"
+
+    def test_budget_resets_on_month_boundary(self):
+        """Spending should reset once a new month starts."""
+        manager = DomainRotationManager(monthly_budget=10.0)
+        manager.current_spending = 7.0
+        manager.last_budget_reset = datetime(2026, 2, 28, 23, 0, 0)
+
+        reset = manager.maybe_reset_monthly_budget(datetime(2026, 3, 1, 0, 0, 0))
+
+        assert reset is True
+        assert manager.current_spending == 0.0

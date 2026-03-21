@@ -117,11 +117,32 @@ Opsechat includes budget controls to prevent accidental overspending:
 
 - **Monthly Budget**: Maximum amount to spend per month
 - **Domain Price Limit**: Maximum price per domain (default: $5)
-- **Current Spending**: Tracked in-memory (resets on restart)
+- **Current Spending**: Persisted in local domain manager state
+- **Monthly Reset**: Spending automatically resets on calendar month boundary
 
 View budget status:
 ```
 http://yourservice.onion/{path}/email/config
+```
+
+### CLI State Management
+
+For CLI-based operations (`domain_rotation_cli.py`), manager state is stored in:
+
+```
+~/.opsechat/domain_config.json
+```
+
+The CLI now persists:
+- owned domains
+- active domain
+- current spending
+- last budget reset timestamp
+
+You can also remove expired local records with:
+
+```bash
+python domain_rotation_cli.py cleanup
 ```
 
 ## Domain Rotation Workflow
@@ -135,7 +156,7 @@ http://yourservice.onion/{path}/email/config
 
 ### API Key Storage
 
-⚠️ **Important**: API keys are stored in-memory only. They are NOT persisted to disk. After restart, you must reconfigure.
+⚠️ **Important**: CLI API keys are persisted in `~/.opsechat/domain_config.json` with file mode `0600`. Keep the host secure and avoid sharing this account.
 
 For persistent configuration:
 - Use environment variables in your deployment
@@ -151,7 +172,7 @@ All domains purchased through the API will use registrar privacy protection (Por
 - Always set a monthly budget
 - Start with a low budget for testing ($10-20)
 - Monitor spending in the config page
-- Budget resets on application restart (intentional for ephemeral deployments)
+- Budget resets automatically each new calendar month
 
 ## Troubleshooting
 
@@ -162,7 +183,7 @@ Solution: Configure the domain API in email config page
 ### "Budget exceeded"
 
 Solution: 
-1. Wait for budget reset (restart application)
+1. Wait for the next calendar month (automatic reset)
 2. Increase monthly budget
 3. Check current spending in config page
 

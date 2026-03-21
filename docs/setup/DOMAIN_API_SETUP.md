@@ -112,9 +112,9 @@ Enterprise-focused with comprehensive API.
 ### API Key Security
 
 **Storage:**
-- API keys are stored in memory only
-- Never written to disk or logs
-- Cleared when application restarts
+- Web-session API keys are typically in-memory
+- CLI credentials are stored at `~/.opsechat/domain_config.json` with mode `0600`
+- Never write API keys to logs
 
 **Access:**
 - Keys only accessible to authenticated users
@@ -191,8 +191,19 @@ Enterprise-focused with comprehensive API.
 
 3. **Cleanup**
    - Let expired domains lapse naturally
-   - No manual cleanup required
+   - Optional: run `python domain_rotation_cli.py cleanup` to remove expired local state entries
    - Monitor for any stuck domains
+
+### CLI Quick Reference
+
+```bash
+python domain_rotation_cli.py config   # Set API credentials and budget
+python domain_rotation_cli.py status   # View budget and active domain
+python domain_rotation_cli.py search   # Look for cheap available domains
+python domain_rotation_cli.py rotate   # Purchase and activate a new domain
+python domain_rotation_cli.py list     # List locally tracked domains
+python domain_rotation_cli.py cleanup  # Remove expired local domain entries
+```
 
 ## Troubleshooting
 
