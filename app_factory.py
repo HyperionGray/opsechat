@@ -6,6 +6,7 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
+from pathlib import Path
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
@@ -21,6 +22,20 @@ except ModuleNotFoundError:
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
+
+    def _scan_templates_for_inline_assets() -> list:
+        """Return template files that contain inline <script>/<style> tags."""
+        template_dir = Path(app.root_path) / "templates"
+        if not template_dir.exists():
+            return []
+        offenders = []
+        for template_path in template_dir.glob("*.html"):
+            content = template_path.read_text(encoding="utf-8", errors="ignore")
+            has_inline_script = "<script>" in content
+            has_inline_style = "<style>" in content
+            if has_inline_script or has_inline_style:
+                offenders.append(template_path.name)
+        return offenders
     
     # Set secret key for sessions
     app.secret_key = id_generator(size=64)
@@ -32,6 +47,13 @@ def create_app():
     chatters = []
     chatlines = []
     reviews = []
+
+    inline_template_offenders = _scan_templates_for_inline_assets()
+    if inline_template_offenders:
+        app.logger.warning(
+            "CSP template audit: inline script/style tags found in templates: %s",
+            ", ".join(sorted(inline_template_offenders)),
+        )
     
     # Register function-based routes
     from chat_routes import register_chat_routes
@@ -82,8 +104,6 @@ def create_app():
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"

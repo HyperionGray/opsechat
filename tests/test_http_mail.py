@@ -4,7 +4,7 @@ Tests for the HTTP mail system (email over HTTP, no SMTP/IMAP).
 Covers:
 - HttpMailStorage: create mailbox, send, read (default deny), delete, destroy
 - http_mail_routes: all REST endpoints via Flask test client
-- Missing email_routes: view, edit, delete, burner POST, expire
+- Extended email_routes coverage: view, edit, delete, burner POST, expire
 """
 
 import datetime
@@ -179,6 +179,22 @@ class TestHttpMailbox:
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
 
+    def test_add_message_to_destroyed_mailbox_returns_none(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Subj", "Body", "alice")
+        assert msg_id is None
+
+    def test_rotate_read_key_success_invalidates_old_key(self):
+        old_key = "secretkey123456789012345678901"
+        new_key = self.mailbox.rotate_read_key(old_key)
+        assert new_key is not None
+        assert len(new_key) == 32
+        assert new_key != old_key
+        assert self.mailbox.get_messages(old_key) is None
+
+    def test_rotate_read_key_wrong_key(self):
+        assert self.mailbox.rotate_read_key("wrongkey") is None
+
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -263,6 +279,17 @@ class TestHttpMailRoutes:
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
         assert r.status_code == 404
+
+    def test_send_message_via_form_address_endpoint(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"_address_override": addr, "subject": "Hi", "body": "Hello form"},
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
 
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -383,6 +410,47 @@ class TestHttpMailRoutes:
 
         r = self.client.post(
             f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": "badkey"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 403
+
+    def test_rotate_read_key_correct_key(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        old_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
+            json={"read_key": old_key},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["success"] is True
+        assert "new_read_key" in data
+        assert data["new_read_key"] != old_key
+
+        # Old key should no longer work
+        old_key_result = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={old_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert old_key_result.status_code == 403
+
+        # New key should work
+        new_key_result = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={data['new_read_key']}",
+            headers={"Accept": "application/json"},
+        )
+        assert new_key_result.status_code == 200
+
+    def test_rotate_read_key_wrong_key(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
             json={"read_key": "badkey"},
             headers={"Accept": "application/json"},
         )

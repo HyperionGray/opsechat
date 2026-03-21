@@ -7,9 +7,11 @@ and read back using a private read_key (default deny).
 Routes registered under /<path>/mail/:
   GET  /<path>/mail                        - Main UI (create mailbox form)
   POST /<path>/mail/new                    - Create a new mailbox
+  POST /<path>/mail/send                   - Send a message (address in payload/form)
   POST /<path>/mail/<address>/send         - Send a message to a mailbox (no auth)
   GET  /<path>/mail/<address>/inbox        - Read inbox (requires ?key=<read_key>)
   POST /<path>/mail/<address>/delete/<id>  - Delete a message (requires read_key in form)
+  POST /<path>/mail/<address>/rotate-key   - Rotate read_key (requires current read_key)
   POST /<path>/mail/<address>/destroy      - Delete entire mailbox (requires read_key in form)
 """
 
@@ -73,6 +75,33 @@ def register_http_mail_routes(app):
     # Send a message to a mailbox (no authentication required)
     # ------------------------------------------------------------------
 
+    @app.route('/<string:url_addition>/mail/send', methods=["POST"])
+    def http_mail_send_form_address(url_addition):
+        """Form-friendly send endpoint where recipient address is in payload."""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+
+        if request.is_json:
+            data = request.get_json() or {}
+            address = (data.get("address") or "").strip()
+            is_json = True
+        else:
+            address = request.form.get("_address_override", "").strip()
+            is_json = False
+
+        if not address:
+            if is_json:
+                return jsonify({"error": "Recipient mailbox address is required"}), 400
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Recipient mailbox address is required",
+                                   compose_address=""), 400
+
+        return http_mail_send(url_addition, address)
+
     @app.route('/<string:url_addition>/mail/<string:address>/send', methods=["POST"])
     def http_mail_send(url_addition, address):
         if url_addition != app.config["path"]:
@@ -109,6 +138,9 @@ def register_http_mail_routes(app):
         sender = _sanitize(sender, 64) or "anonymous"
 
         msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        if not msg_id:
+            # Mailbox was concurrently destroyed after lookup and before write.
+            return jsonify({"error": "Mailbox unavailable"}), 410
 
         if request.is_json:
             return jsonify({"success": True, "msg_id": msg_id})
@@ -195,6 +227,37 @@ def register_http_mail_routes(app):
                                 url_addition=url_addition,
                                 address=address,
                                 key=read_key))
+
+    # ------------------------------------------------------------------
+    # Rotate mailbox read key (requires current read_key)
+    # ------------------------------------------------------------------
+
+    @app.route('/<string:url_addition>/mail/<string:address>/rotate-key', methods=["POST"])
+    def http_mail_rotate_key(url_addition, address):
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+
+        mailbox = http_mail_storage.get_mailbox(address)
+        if mailbox is None:
+            return jsonify({"error": "Mailbox not found"}), 404
+
+        if request.is_json:
+            read_key = (request.get_json() or {}).get("read_key", "")
+        else:
+            read_key = request.form.get("read_key", "")
+
+        new_read_key = mailbox.rotate_read_key(read_key)
+        if new_read_key is None:
+            return jsonify({"error": "Invalid read key or mailbox not found"}), 403
+
+        if request.is_json:
+            return jsonify({"success": True, "new_read_key": new_read_key})
+
+        return redirect(url_for("http_mail_inbox",
+                                url_addition=url_addition,
+                                address=address,
+                                key=new_read_key))
 
     # ------------------------------------------------------------------
     # Destroy entire mailbox (requires read_key in POST body)
