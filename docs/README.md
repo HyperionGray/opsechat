@@ -39,6 +39,7 @@ Documentation for end users and operators.
 
 - [Email System](user-guide/EMAIL_SYSTEM.md) - Comprehensive email documentation
 - [Email Quick Start](user-guide/EMAIL_QUICKSTART.md) - Quick email setup guide
+- [HTTP Mail Guide](user-guide/HTTP_MAIL.md) - SMTP/IMAP-free mailbox messaging
 - [PGP Usage](user-guide/PGP_USAGE.md) - PGP encryption guide
 - [PGP Test Examples](user-guide/PGP_TEST_EXAMPLE.md) - PGP testing examples
 - [Testing Guide](user-guide/TESTING.md) - How to run tests
@@ -97,5 +98,5 @@ When adding new documentation:
 
 ---
 
-**Last Updated:** February 23, 2026  
+**Last Updated:** March 21, 2026  
 **Maintained by:** OpSecChat Team

@@ -36,6 +36,66 @@ def register_http_mail_routes(app):
         text = re.sub(r'[<>&"\']', '', text)
         return text[:max_len]
 
+    def _render_http_mail(**kwargs):
+        return render_template(
+            "http_mail.html",
+            path=app.config["path"],
+            hostname=app.config.get("hostname", ""),
+            max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+            **kwargs,
+        )
+
+    def _handle_send_to_mailbox(address: str):
+        mailbox = http_mail_storage.get_mailbox(address)
+        if mailbox is None:
+            if request.is_json:
+                return jsonify({"error": "Mailbox not found"}), 404
+            return _render_http_mail(
+                error="Mailbox not found",
+                compose_address=address,
+            ), 404
+
+        # Accept JSON or form data
+        if request.is_json:
+            data = request.get_json() or {}
+            subject = data.get("subject", "").strip()
+            body = data.get("body", "").strip()
+            sender = data.get("sender", "anonymous").strip()
+        else:
+            subject = request.form.get("subject", "").strip()
+            body = request.form.get("body", "").strip()
+            sender = request.form.get("sender", "anonymous").strip()
+
+        if not body:
+            if request.is_json:
+                return jsonify({"error": "Message body is required"}), 400
+            return _render_http_mail(
+                error="Message body is required",
+                compose_address=address,
+            ), 400
+
+        subject = _sanitize(subject, 200) or "(no subject)"
+        body = _sanitize(body, MAX_MAIL_MESSAGE_LENGTH)
+        sender = _sanitize(sender, 64) or "anonymous"
+
+        try:
+            msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        except RuntimeError:
+            if request.is_json:
+                return jsonify({"error": "Mailbox is no longer available"}), 410
+            return _render_http_mail(
+                error="Mailbox is no longer available",
+                compose_address=address,
+            ), 410
+
+        if request.is_json:
+            return jsonify({"success": True, "msg_id": msg_id})
+
+        return _render_http_mail(
+            success="Message sent.",
+            compose_address=address,
+        )
+
     # ------------------------------------------------------------------
     # Main UI — create or access mailbox
     # ------------------------------------------------------------------
@@ -73,52 +133,28 @@ def register_http_mail_routes(app):
     # Send a message to a mailbox (no authentication required)
     # ------------------------------------------------------------------
 
+    @app.route('/<string:url_addition>/mail/send', methods=["POST"])
+    def http_mail_send_with_address(url_addition):
+        """Form-only fallback route for non-JavaScript compose submissions."""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+
+        address = request.form.get("_address_override", "").strip()
+        if not address:
+            return _render_http_mail(
+                error="Recipient mailbox address is required",
+                compose_address="",
+            ), 400
+
+        return _handle_send_to_mailbox(address)
+
     @app.route('/<string:url_addition>/mail/<string:address>/send', methods=["POST"])
     def http_mail_send(url_addition, address):
         if url_addition != app.config["path"]:
             return ('', 404)
         _ensure_session()
-
-        mailbox = http_mail_storage.get_mailbox(address)
-        if mailbox is None:
-            return jsonify({"error": "Mailbox not found"}), 404
-
-        # Accept JSON or form data
-        if request.is_json:
-            data = request.get_json() or {}
-            subject = data.get("subject", "").strip()
-            body = data.get("body", "").strip()
-            sender = data.get("sender", "anonymous").strip()
-        else:
-            subject = request.form.get("subject", "").strip()
-            body = request.form.get("body", "").strip()
-            sender = request.form.get("sender", "anonymous").strip()
-
-        if not body:
-            if request.is_json:
-                return jsonify({"error": "Message body is required"}), 400
-            return render_template("http_mail.html",
-                                   path=app.config["path"],
-                                   hostname=app.config.get("hostname", ""),
-                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
-                                   error="Message body is required",
-                                   compose_address=address), 400
-
-        subject = _sanitize(subject, 200) or "(no subject)"
-        body = _sanitize(body, MAX_MAIL_MESSAGE_LENGTH)
-        sender = _sanitize(sender, 64) or "anonymous"
-
-        msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
-
-        if request.is_json:
-            return jsonify({"success": True, "msg_id": msg_id})
-
-        return render_template("http_mail.html",
-                               path=app.config["path"],
-                               hostname=app.config.get("hostname", ""),
-                               max_message_length=MAX_MAIL_MESSAGE_LENGTH,
-                               success="Message sent.",
-                               compose_address=address)
+        return _handle_send_to_mailbox(address)
 
     # ------------------------------------------------------------------
     # Read inbox (requires read_key)
