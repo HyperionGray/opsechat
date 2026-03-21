@@ -41,7 +41,7 @@ src/amazon_q/
 ```
 tests/
 ├── e2e.spec.js (25 lines) - Deprecation notice
-├── e2e.spec.js.deprecated - Original preserved
+├── (legacy monolithic suite retained in git history)
 ├── landing-page.e2e.spec.js (88 lines)
 ├── chat-interface.e2e.spec.js (165 lines)
 ├── email-burner.e2e.spec.js (78 lines)
