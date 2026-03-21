@@ -12,6 +12,7 @@ import os
 import sys
 
 import pytest
+import http_mail_system
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -69,6 +70,28 @@ class TestHttpMailStorage:
     def test_unique_addresses(self):
         addresses = {self.storage.create_mailbox().address for _ in range(50)}
         assert len(addresses) == 50
+
+    def test_create_mailbox_retries_address_collision(self, monkeypatch):
+        self.storage._mailboxes["COLLISION123"] = HttpMailbox(
+            address="COLLISION123",
+            read_key="legacy-read-key"
+        )
+
+        original_generate_id = http_mail_system._generate_id
+        call_count = {"address_calls": 0}
+
+        def fake_generate_id(nbytes):
+            if nbytes == 9:
+                call_count["address_calls"] += 1
+                if call_count["address_calls"] <= 2:
+                    return "COLLISION123"
+                return "UNIQUEADDR12"
+            return original_generate_id(nbytes)
+
+        monkeypatch.setattr(http_mail_system, "_generate_id", fake_generate_id)
+        mailbox = self.storage.create_mailbox()
+        assert mailbox.address == "UNIQUEADDR12"
+        assert self.storage.get_mailbox("UNIQUEADDR12") is mailbox
 
     def test_get_mailbox_returns_correct_mailbox(self):
         mb = self.storage.create_mailbox()
@@ -179,6 +202,12 @@ class TestHttpMailbox:
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
 
+    def test_add_message_rejected_for_destroyed_mailbox(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Subj", "Body", "alice")
+        assert msg_id is None
+        assert self.mailbox.message_count() == 0
+
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -263,6 +292,41 @@ class TestHttpMailRoutes:
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
         assert r.status_code == 404
+
+    def test_send_message_form_nojs_route(self):
+        create = self.client.post(f"/{self.path}/mail/new")
+        addr = create.get_json()["address"]
+        read_key = create.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Form Subject",
+                "body": "Form body",
+                "sender": "form-sender",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        data = inbox.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["subject"] == "Form Subject"
+        assert data["messages"][0]["body"] == "Form body"
+        assert data["messages"][0]["sender"] == "form-sender"
+
+    def test_send_message_form_nojs_missing_address_fails(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "Subj", "body": "Body"},
+        )
+        assert r.status_code == 400
+        assert b"Mailbox address is required" in r.data
 
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")

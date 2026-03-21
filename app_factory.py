@@ -5,8 +5,9 @@ This module handles Flask application creation and configuration,
 extracted from runserver.py to improve code organization.
 """
 
-import os
-from flask import Flask, jsonify
+import re
+import secrets
+from flask import Flask, jsonify, g
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -16,6 +17,23 @@ except ModuleNotFoundError:
         # This keeps containerized installs working even if rate_limiter.py
         # was not included in the image build.
         return app
+
+
+_SCRIPT_OPEN_TAG_RE = re.compile(r"<script(?![^>]*\bnonce=)([^>]*)>", re.IGNORECASE)
+_STYLE_OPEN_TAG_RE = re.compile(r"<style(?![^>]*\bnonce=)([^>]*)>", re.IGNORECASE)
+
+
+def _inject_csp_nonces(html: str, nonce: str) -> str:
+    """Attach CSP nonces to inline script/style tags in rendered HTML."""
+    html = _SCRIPT_OPEN_TAG_RE.sub(
+        lambda m: f'<script nonce="{nonce}"{m.group(1)}>',
+        html,
+    )
+    html = _STYLE_OPEN_TAG_RE.sub(
+        lambda m: f'<style nonce="{nonce}"{m.group(1)}>',
+        html,
+    )
+    return html
 
 
 def create_app():
@@ -67,23 +85,31 @@ def create_app():
     def add_review_wrapper(user_id, rating, review_text):
         return add_review(reviews, user_id, rating, review_text)
     
+    @app.before_request
+    def set_csp_nonce():
+        # Per-request nonce lets existing inline template blocks run without
+        # opening CSP globally with 'unsafe-inline'.
+        g.csp_nonce = secrets.token_urlsafe(16)
+
     # Add security headers after every response
     @app.after_request
     def add_security_headers(response):
         response.headers["Server"] = ""
         response.headers["Date"] = ""
-        # Content Security Policy: restrict resources to same origin, block inline scripts
+        nonce = getattr(g, "csp_nonce", "")
+        # Content Security Policy: same-origin plus per-request nonces for
+        # inline scripts/styles used by existing templates.
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self'; "
-            "style-src 'self'; "
+            f"script-src 'self' 'nonce-{nonce}'; "
+            f"style-src 'self' 'nonce-{nonce}'; "
             "img-src 'self' data:; "
             "font-src 'self'; "
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
+        if response.mimetype == "text/html" and nonce:
+            response.set_data(_inject_csp_nonces(response.get_data(as_text=True), nonce))
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
