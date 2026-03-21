@@ -1,44 +1,39 @@
 #!/usr/bin/env node
 
 /**
- * Simple test script to verify that the CI fix works
- * This script tests the mock server startup and basic connectivity
+ * Archived CI investigation script.
+ * Kept under bak/tools to avoid root-level clutter.
  */
 
 const { spawn } = require('child_process');
 const http = require('http');
 
 async function testServerStartup() {
-  console.log('🧪 Testing mock server startup...');
-  
+  console.log('Testing mock server startup...');
+
   return new Promise((resolve, reject) => {
-    // Start the mock server
     const serverProcess = spawn('python3', ['tests/mock_server.py'], {
       stdio: ['pipe', 'pipe', 'pipe']
     });
 
     let serverReady = false;
-    let output = '';
 
     serverProcess.stdout.on('data', (data) => {
       const text = data.toString();
-      output += text;
       console.log('Server output:', text.trim());
-      
+
       if (text.includes('Mock server starting on') || text.includes('Running on')) {
-        console.log('✅ Server appears to be starting...');
-        
-        // Wait a moment then test connectivity
+        console.log('Server appears to be starting...');
         setTimeout(() => {
           testConnectivity()
             .then(() => {
-              console.log('✅ Server connectivity test passed!');
+              console.log('Server connectivity test passed.');
               serverReady = true;
               serverProcess.kill();
               resolve(true);
             })
             .catch((err) => {
-              console.error('❌ Server connectivity test failed:', err.message);
+              console.error('Server connectivity test failed:', err.message);
               serverProcess.kill();
               reject(err);
             });
@@ -56,7 +51,6 @@ async function testServerStartup() {
       }
     });
 
-    // Timeout after 30 seconds
     setTimeout(() => {
       if (!serverReady) {
         serverProcess.kill();
@@ -90,13 +84,12 @@ async function testConnectivity() {
 
 async function main() {
   try {
-    console.log('🚀 Starting CI fix validation test...');
+    console.log('Starting CI fix validation test...');
     await testServerStartup();
-    console.log('🎉 All tests passed! The CI fix should work.');
+    console.log('All tests passed.');
     process.exit(0);
   } catch (error) {
-    console.error('💥 Test failed:', error.message);
-    console.log('This indicates the CI fix may need additional work.');
+    console.error('Test failed:', error.message);
     process.exit(1);
   }
 }
