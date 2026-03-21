@@ -8,6 +8,7 @@
 - 🔑 **Automated Key Exchange** - No manual key sharing needed
 - 💬 **Direct Messages** - Ephemeral DM feature for sharing room IDs (1-min expiry)
 - 🔒 **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
+- **HTTP Mail Hardening** - Destroyed mailboxes now reject stale writes safely
 - 🌐 **Domain Rotation CLI** - Easy burner email domain management
 - 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
 - ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use
@@ -292,7 +293,7 @@ For Amazon Q setup instructions, see [Amazon Q Setup Guide](docs/setup/AMAZON_Q_
 6. Compose and send emails: `http://yourservice.onion/{path}/email/compose`
 7. View your inbox: `http://yourservice.onion/{path}/email`
 
-For full documentation, see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md).
+For full documentation, see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md) and [HTTP Mail Guide](docs/user-guide/HTTP_MAIL.md).
 
 Security & Code Quality
 =======================

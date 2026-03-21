@@ -8,6 +8,8 @@
 - Removed push/PR triggers from scheduled workflows
 - Added concurrency controls to prevent duplicate runs
 - Created comprehensive documentation
+- Documented CI checks and label-triggered workflow usage in docs
+- Added manual workflow trigger instructions for maintainers
 
 ## Still To Do
 
@@ -36,9 +38,9 @@
 - [ ] Consider adding more comprehensive security checks to the CI baseline if needed
 
 ### 4. Documentation Updates
-- [ ] Update repository README or contributing guide to mention the new CI workflow
-- [ ] Document the label-based triggering system for team members
-- [ ] Add instructions on how to manually trigger scheduled workflows if needed
+- [x] Update repository README or contributing guide to mention the new CI workflow
+- [x] Document the label-based triggering system for team members
+- [x] Add instructions on how to manually trigger scheduled workflows if needed
 
 ### 5. Monitoring
 - [ ] Monitor CI run times over the next week to ensure they're faster

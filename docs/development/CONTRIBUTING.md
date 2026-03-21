@@ -78,6 +78,26 @@ By participating in this project, you agree to maintain a respectful and inclusi
 - Test in Tor Browser when making UI changes
 - Test security-critical features thoroughly
 
+### CI checks and automation workflows
+
+- The primary required workflow is `.github/workflows/ci.yml` with jobs:
+  - `python-tests`
+  - `playwright-e2e`
+  - `security-baseline`
+- Keep changes compatible with all three checks before opening a PR.
+- Label-triggered automation is also enabled:
+  - `auto-llm-pr-review.yml` runs for labeled/synchronized PR events.
+  - `auto-llm-issue-review.yml` runs when issues are labeled.
+
+### Manually triggering workflows
+
+Some scheduled and label-triggered workflows also support manual execution:
+
+1. Open **GitHub Actions** in the repository.
+2. Select the workflow (for example, `Daily Continuous Progress` or an LLM review workflow).
+3. Click **Run workflow**.
+4. Provide optional inputs (such as PR/issue number or trigger label) when requested.
+
 ## Security Considerations
 
 This is a security-focused project. When contributing:
