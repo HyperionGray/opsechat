@@ -19,6 +19,7 @@ from http_mail_system import (
     HttpMailStorage,
     HttpMailbox,
     HttpMessage,
+    MailboxDestroyedError,
     http_mail_storage,
     MAX_MAIL_MESSAGE_LENGTH,
 )
@@ -90,6 +91,21 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox(mb.address, mb.read_key)
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
+
+    def test_delete_mailbox_marks_recently_destroyed(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.was_destroyed_recently(mb.address) is False
+        result = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert result is True
+        assert self.storage.was_destroyed_recently(mb.address) is True
+
+    def test_destroyed_mailbox_rejects_new_messages(self):
+        mb = self.storage.create_mailbox()
+        stale_ref = self.storage.get_mailbox(mb.address)
+        assert stale_ref is not None
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        with pytest.raises(MailboxDestroyedError):
+            stale_ref.add_message("x", "y", "z")
 
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
@@ -387,6 +403,64 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 403
+
+    def test_send_to_destroyed_mailbox_returns_410(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        destroy = self.client.post(
+            f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": read_key},
+            headers={"Accept": "application/json"},
+        )
+        assert destroy.status_code == 200
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Hi", "body": "Hello", "sender": "bob"},
+        )
+        assert r.status_code == 410
+        assert r.get_json()["error"] == "Mailbox has been destroyed"
+
+    def test_read_destroyed_mailbox_returns_410(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        destroy = self.client.post(
+            f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": read_key},
+            headers={"Accept": "application/json"},
+        )
+        assert destroy.status_code == 200
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 410
+        assert r.get_json()["error"] == "Mailbox has been destroyed"
+
+    def test_destroy_already_destroyed_mailbox_returns_410(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        first = self.client.post(
+            f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": read_key},
+            headers={"Accept": "application/json"},
+        )
+        assert first.status_code == 200
+
+        second = self.client.post(
+            f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": read_key},
+            headers={"Accept": "application/json"},
+        )
+        assert second.status_code == 410
+        assert second.get_json()["error"] == "Mailbox has already been destroyed"
 
     def test_message_body_sanitized(self):
         r = self.client.post(f"/{self.path}/mail/new")

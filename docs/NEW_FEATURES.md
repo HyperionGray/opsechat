@@ -172,6 +172,30 @@ When limit exceeded:
 
 ---
 
+## HTTP Mail: Explicit Destroy Semantics
+
+### What Changed
+HTTP mailboxes now have explicit post-destruction behavior:
+
+- Destroyed mailboxes are marked non-writable immediately.
+- Concurrent or stale writers are rejected safely.
+- Recently destroyed addresses return `410 Gone` so clients can distinguish
+  intentional destruction from a never-existing address.
+
+### Why It Matters
+Before this update, mailbox deletion removed the address, but clients could only
+observe generic not-found or auth-style errors. The new behavior improves both:
+
+1. Correctness under concurrency (no post-destroy writes via stale references)
+2. Client UX (clear `404` vs `410` semantics)
+
+### API Behavior
+- Unknown address: `404 Not Found`
+- Recently destroyed address: `410 Gone`
+- Repeated destroy on same address: `410 Gone`
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose
