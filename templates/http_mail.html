@@ -333,15 +333,6 @@
     });
   }
 
-  // Update compose form action when address changes
-  function updateComposeAction() {
-    var addr = document.getElementById('compose-address-input').value.trim();
-    var form = document.getElementById('compose-form');
-    if (addr) {
-      form.action = '/{{ path }}/mail/' + encodeURIComponent(addr) + '/send';
-    }
-  }
-
   // Fetch inbox via JS
   function fetchInbox() {
     var address = document.getElementById('read-address').value.trim();
