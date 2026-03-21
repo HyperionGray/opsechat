@@ -1,5 +1,39 @@
 # Changelog - Automation Consolidation
 
+## 2026-03-21 - HTTP Mail Hardening and Noscript Send Flow
+
+### Summary
+Completed unfinished HTTP Mail behavior, added a missing no-JavaScript send flow, fixed a latent email route bug, and removed a stale duplicate test file.
+
+### Added
+1. **HTTP Mail noscript compose endpoint**:
+   - `POST /<path>/mail/send` now accepts mailbox address in form/json payload and routes to the existing send logic.
+   - This makes the existing compose form action work even when JavaScript is disabled.
+
+2. **Destroyed mailbox write protection**:
+   - `HttpMailbox` now tracks a `destroyed` state.
+   - `add_message()` refuses writes after mailbox destruction (returns `None`).
+   - Send route now returns `410` if a mailbox is no longer available during send.
+
+### Fixed
+1. **Email route session helper bug**:
+   - Added local `_ensure_session()` in `email_routes.py` so `/email/view/<id>` does not reference an undefined function when session is missing.
+   - Removed duplicate email lookup line in `email_view`.
+
+2. **Concurrency safety completion**:
+   - `delete_mailbox()` now marks mailbox state as destroyed under mailbox lock before clearing messages.
+   - Removed the in-code unchecked follow-up checklist in favor of implemented behavior.
+
+### Tests
+- Expanded `tests/test_http_mail.py` coverage for:
+  - Destroyed mailbox behavior (`add_message` refusal after destroy)
+  - Noscript form sender route (`/<path>/mail/send`)
+  - Missing-address validation for form sender route
+  - Email view route behavior when session is absent
+
+### Cleanup
+- Removed unreferenced duplicate file: `tests/mock_server_refactored.py`
+
 ## 2026-03-01 - Workflow Consolidation
 
 ### Summary
