@@ -232,8 +232,6 @@ def register_email_routes(app, id_generator, get_random_color):
             _ensure_session()
 
         email = email_storage.get_email(session["_id"], email_id)
-
-        email = email_storage.get_email(session["_id"], email_id)
         if email is None:
             return render_template("email_inbox.html",
                                    hostname=app.config["hostname"],

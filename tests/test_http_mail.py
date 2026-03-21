@@ -4,7 +4,7 @@ Tests for the HTTP mail system (email over HTTP, no SMTP/IMAP).
 Covers:
 - HttpMailStorage: create mailbox, send, read (default deny), delete, destroy
 - http_mail_routes: all REST endpoints via Flask test client
-- Missing email_routes: view, edit, delete, burner POST, expire
+- email_routes: view, edit, delete, burner POST, expire
 """
 
 import datetime
@@ -101,6 +101,13 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_held_mailbox_refuses_writes_after_destroy(self):
+        mb = self.storage.create_mailbox()
+        held_ref = self.storage.get_mailbox(mb.address)
+        assert held_ref is not None
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert held_ref.add_message("post", "destroy", "sender") is None
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -128,6 +135,10 @@ class TestHttpMailbox:
         msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
         assert msg_id
         assert len(msg_id) == 16
+
+    def test_add_message_returns_none_when_destroyed(self):
+        self.mailbox.destroyed = True
+        assert self.mailbox.add_message("Hello", "Body text", "alice") is None
 
     def test_get_messages_correct_key(self):
         self.mailbox.add_message("Subj", "Body", "alice")
@@ -197,6 +208,21 @@ class TestHttpMailbox:
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
 
+    def test_get_messages_supports_query_sender_limit(self):
+        self.mailbox.add_message("First Alert", "body one", "alice")
+        self.mailbox.add_message("Status", "body two", "bob")
+        self.mailbox.add_message("Second Alert", "body three", "alice")
+
+        msgs = self.mailbox.get_messages(
+            "secretkey123456789012345678901",
+            query="alert",
+            sender="alice",
+            limit=1,
+            newest_first=True,
+        )
+        assert len(msgs) == 1
+        assert msgs[0]["subject"] == "Second Alert"
+
 
 # ===========================================================================
 # HTTP mail route integration tests
@@ -247,6 +273,38 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_via_generic_send_route_form(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Via Generic Route",
+                "body": "Form post works",
+                "sender": "carol",
+            },
+        )
+        assert r.status_code == 200
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        messages = inbox.get_json()["messages"]
+        assert len(messages) == 1
+        assert messages[0]["subject"] == "Via Generic Route"
+
+    def test_generic_send_route_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            json={"subject": "x", "body": "y"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -422,9 +480,58 @@ class TestHttpMailRoutes:
         )
         assert r.get_json()["messages"][0]["sender"] == "anonymous"
 
+    def test_inbox_query_filters_sender_and_text(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Alert Notice", "body": "first", "sender": "alice"},
+        )
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Routine", "body": "second", "sender": "bob"},
+        )
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Status", "body": "alert details", "sender": "alice"},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&sender=alice&q=alert&order=desc",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert len(data["messages"]) == 2
+        assert data["messages"][0]["sender"] == "alice"
+        assert data["filters"]["sender"] == "alice"
+        assert data["filters"]["q"] == "alert"
+        assert data["filters"]["order"] == "desc"
+
+    def test_inbox_query_limit_and_order(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(f"/{self.path}/mail/{addr}/send", json={"subject": "one", "body": "1", "sender": "a"})
+        self.client.post(f"/{self.path}/mail/{addr}/send", json={"subject": "two", "body": "2", "sender": "a"})
+        self.client.post(f"/{self.path}/mail/{addr}/send", json={"subject": "three", "body": "3", "sender": "a"})
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&limit=2&order=desc",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        messages = r.get_json()["messages"]
+        assert len(messages) == 2
+        assert messages[0]["subject"] == "three"
+        assert messages[1]["subject"] == "two"
+
 
 # ===========================================================================
-# Missing email route tests (view, edit, delete, burner POST, expire)
+# Email route tests (view, edit, delete, burner POST, expire)
 # ===========================================================================
 
 class TestEmailRoutesExtended:

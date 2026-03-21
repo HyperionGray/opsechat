@@ -234,6 +234,32 @@
              value="{{ inbox_read_key or '' }}"
              placeholder="Your private read key">
     </div>
+    <div class="form-group">
+      <label for="read-query">Search (subject/body/sender):</label>
+      <input type="text" id="read-query" name="_q"
+             value="{{ inbox_query or '' }}"
+             placeholder="optional keyword search">
+    </div>
+    <div class="form-group">
+      <label for="read-sender">Sender Filter (exact handle):</label>
+      <input type="text" id="read-sender" name="_sender"
+             value="{{ inbox_sender or '' }}"
+             placeholder="optional sender filter">
+    </div>
+    <div class="form-group">
+      <label for="read-limit">Max Messages:</label>
+      <input type="text" id="read-limit" name="_limit"
+             value="{{ inbox_limit or '' }}"
+             placeholder="optional (1-200)">
+    </div>
+    <div class="form-group">
+      <label for="read-order">Sort Order:</label>
+      <select id="read-order" name="_order"
+              style="width:100%;background:#111;color:#0f0;border:1px solid #0f0;padding:8px;font-family:'Courier New', monospace;font-size:14px;">
+        <option value="asc" {% if (inbox_order or 'asc') == 'asc' %}selected{% endif %}>Oldest first</option>
+        <option value="desc" {% if inbox_order == 'desc' %}selected{% endif %}>Newest first</option>
+      </select>
+    </div>
     <button type="button" onclick="fetchInbox()">Open Inbox</button>
   </form>
 
@@ -333,19 +359,14 @@
     });
   }
 
-  // Update compose form action when address changes
-  function updateComposeAction() {
-    var addr = document.getElementById('compose-address-input').value.trim();
-    var form = document.getElementById('compose-form');
-    if (addr) {
-      form.action = '/{{ path }}/mail/' + encodeURIComponent(addr) + '/send';
-    }
-  }
-
   // Fetch inbox via JS
   function fetchInbox() {
     var address = document.getElementById('read-address').value.trim();
     var readKey = document.getElementById('read-key-input').value.trim();
+    var query = document.getElementById('read-query').value.trim();
+    var sender = document.getElementById('read-sender').value.trim();
+    var limit = document.getElementById('read-limit').value.trim();
+    var order = document.getElementById('read-order').value;
 
     if (!address || !readKey) {
       alert('Please enter both mailbox address and read key.');
@@ -354,6 +375,10 @@
 
     var url = '/{{ path }}/mail/' + encodeURIComponent(address) +
               '/inbox?key=' + encodeURIComponent(readKey);
+    if (query) url += '&q=' + encodeURIComponent(query);
+    if (sender) url += '&sender=' + encodeURIComponent(sender);
+    if (limit) url += '&limit=' + encodeURIComponent(limit);
+    if (order) url += '&order=' + encodeURIComponent(order);
 
     fetch(url, {headers: {'Accept': 'application/json'}})
     .then(function(r) {
