@@ -3,6 +3,7 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime, timedelta
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -174,3 +175,70 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_state_round_trip_serialization(self):
+        """State should persist as JSON-safe payload and reload correctly."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        purchased_at = datetime.now() - timedelta(days=2)
+        expires_at = purchased_at + timedelta(days=365)
+        manager.current_spending = 4.25
+        manager.active_domain = "persisted.xyz"
+        manager.owned_domains = [{
+            "domain": "persisted.xyz",
+            "price": 4.25,
+            "purchased_at": purchased_at,
+            "expires_at": expires_at,
+        }]
+
+        state = manager.serialize_state()
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(state["owned_domains"][0]["expires_at"], str)
+
+        reloaded = DomainRotationManager(monthly_budget=10.0)
+        reloaded.load_state(state)
+
+        assert reloaded.current_spending == pytest.approx(4.25)
+        assert reloaded.active_domain == "persisted.xyz"
+        assert len(reloaded.owned_domains) == 1
+        assert isinstance(reloaded.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(reloaded.owned_domains[0]["expires_at"], datetime)
+
+    def test_budget_resets_when_month_rolls_over(self):
+        """Monthly budget spend should reset when entering a new month."""
+        manager = DomainRotationManager(monthly_budget=20.0)
+        now = datetime.now()
+        previous_month_start = (now.replace(day=1) - timedelta(days=1)).replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        )
+        manager.budget_period_start = previous_month_start
+        manager.current_spending = 12.0
+
+        status = manager.get_budget_status()
+
+        assert status["current_spending"] == 0.0
+        assert manager.current_spending == 0.0
+        assert manager.budget_period_start.month == now.month
+
+    def test_load_state_parses_string_values(self):
+        """Config values stored as strings should still restore correctly."""
+        manager = DomainRotationManager()
+        state = {
+            "monthly_budget": "35",
+            "current_spending": "$4.99",
+            "owned_domains": [{
+                "domain": "example.xyz",
+                "price": "$1.99",
+                "purchased_at": "2026-03-01T10:00:00",
+                "expires_at": "2027-03-01T10:00:00",
+            }],
+            "active_domain": "example.xyz",
+            "budget_period_start": "2026-03-01T00:00:00",
+        }
+
+        manager.load_state(state)
+
+        assert manager.monthly_budget == pytest.approx(35.0)
+        assert manager.current_spending == pytest.approx(4.99)
+        assert manager.active_domain == "example.xyz"
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["price"] == pytest.approx(1.99)

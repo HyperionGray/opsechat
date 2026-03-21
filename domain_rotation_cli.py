@@ -18,6 +18,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from datetime import datetime
 from getpass import getpass
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
@@ -107,24 +108,31 @@ def get_manager():
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+
+    manager.load_state(config)
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    config.update(manager.serialize_state())
     save_config(config)
+
+
+def _format_timestamp(value, date_only=False):
+    """Format datetime values loaded from state or in-memory objects."""
+    if isinstance(value, datetime):
+        dt = value
+    elif isinstance(value, str):
+        try:
+            dt = datetime.fromisoformat(value)
+        except ValueError:
+            return value
+    else:
+        return "unknown"
+
+    return dt.strftime('%Y-%m-%d') if date_only else dt.strftime('%Y-%m-%d %H:%M')
 
 
 def list_domains():
@@ -144,8 +152,8 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_timestamp(domain.get('purchased_at'))}")
+        print(f"   Expires: {_format_timestamp(domain.get('expires_at'), date_only=True)}")
         print()
 
 
@@ -226,6 +234,7 @@ def show_status():
     print(f"  Monthly: ${budget_status['monthly_budget']}")
     print(f"  Spent: ${budget_status['current_spending']}")
     print(f"  Remaining: ${budget_status['remaining']}")
+    print(f"  Window Start: {_format_timestamp(budget_status.get('budget_period_start'), date_only=True)}")
     print(f"\nDomains Owned: {budget_status['domains_owned']}")
     
     if manager.active_domain:
