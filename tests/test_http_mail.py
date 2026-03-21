@@ -19,6 +19,7 @@ from http_mail_system import (
     HttpMailStorage,
     HttpMailbox,
     HttpMessage,
+    MailboxDestroyedError,
     http_mail_storage,
     MAX_MAIL_MESSAGE_LENGTH,
 )
@@ -91,6 +92,13 @@ class TestHttpMailStorage:
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
 
+    def test_destroyed_mailbox_rejects_new_messages(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert mb.destroyed is True
+        with pytest.raises(MailboxDestroyedError):
+            mb.add_message("subj", "body", "sender")
+
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
         result = self.storage.delete_mailbox(mb.address, "wrongkey")
@@ -100,6 +108,21 @@ class TestHttpMailStorage:
     def test_delete_nonexistent_mailbox(self):
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
+
+    def test_rotate_read_key_success(self):
+        mb = self.storage.create_mailbox()
+        original = mb.read_key
+        new_key = self.storage.rotate_read_key(mb.address, original)
+        assert new_key is not None
+        assert new_key != original
+        assert mb.get_messages(original) is None
+        assert mb.get_messages(new_key) == []
+
+    def test_rotate_read_key_wrong_key_fails(self):
+        mb = self.storage.create_mailbox()
+        original = mb.read_key
+        assert self.storage.rotate_read_key(mb.address, "wrong") is None
+        assert mb.read_key == original
 
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
@@ -388,6 +411,46 @@ class TestHttpMailRoutes:
         )
         assert r.status_code == 403
 
+    def test_rotate_read_key_success(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        data = r.get_json()
+        addr = data["address"]
+        old_key = data["read_key"]
+
+        rotate = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
+            json={"read_key": old_key},
+            headers={"Accept": "application/json"},
+        )
+        assert rotate.status_code == 200
+        rotate_data = rotate.get_json()
+        assert rotate_data["success"] is True
+        assert "new_read_key" in rotate_data
+        assert rotate_data["new_read_key"] != old_key
+
+        old_read = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={old_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert old_read.status_code == 403
+
+        new_read = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={rotate_data['new_read_key']}",
+            headers={"Accept": "application/json"},
+        )
+        assert new_read.status_code == 200
+
+    def test_rotate_read_key_wrong_key(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        rotate = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
+            json={"read_key": "wrong"},
+            headers={"Accept": "application/json"},
+        )
+        assert rotate.status_code == 403
+
     def test_message_body_sanitized(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
@@ -463,6 +526,12 @@ class TestEmailRoutesExtended:
 
     def test_view_nonexistent_email_returns_404(self):
         r = self.client.get("/secpath/email/view/doesnotexist")
+        assert r.status_code == 404
+
+    def test_view_email_without_session_does_not_error(self):
+        with self.client.session_transaction() as sess:
+            sess.clear()
+        r = self.client.get(f"/secpath/email/view/{self.email_id}")
         assert r.status_code == 404
 
     def test_edit_email_get_returns_200(self):

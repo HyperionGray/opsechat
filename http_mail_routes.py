@@ -10,12 +10,17 @@ Routes registered under /<path>/mail/:
   POST /<path>/mail/<address>/send         - Send a message to a mailbox (no auth)
   GET  /<path>/mail/<address>/inbox        - Read inbox (requires ?key=<read_key>)
   POST /<path>/mail/<address>/delete/<id>  - Delete a message (requires read_key in form)
+  POST /<path>/mail/<address>/rotate-key   - Rotate read key (requires current read_key)
   POST /<path>/mail/<address>/destroy      - Delete entire mailbox (requires read_key in form)
 """
 
 import re
 from flask import render_template, request, session, jsonify, redirect, url_for
-from http_mail_system import http_mail_storage, MAX_MAIL_MESSAGE_LENGTH
+from http_mail_system import (
+    http_mail_storage,
+    MAX_MAIL_MESSAGE_LENGTH,
+    MailboxDestroyedError,
+)
 from utils import id_generator, get_random_color
 
 
@@ -108,7 +113,10 @@ def register_http_mail_routes(app):
         body = _sanitize(body, MAX_MAIL_MESSAGE_LENGTH)
         sender = _sanitize(sender, 64) or "anonymous"
 
-        msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        try:
+            msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        except MailboxDestroyedError:
+            return jsonify({"error": "Mailbox has been destroyed"}), 410
 
         if request.is_json:
             return jsonify({"success": True, "msg_id": msg_id})
@@ -195,6 +203,40 @@ def register_http_mail_routes(app):
                                 url_addition=url_addition,
                                 address=address,
                                 key=read_key))
+
+    # ------------------------------------------------------------------
+    # Rotate read key (requires current read_key)
+    # ------------------------------------------------------------------
+
+    @app.route('/<string:url_addition>/mail/<string:address>/rotate-key', methods=["POST"])
+    def http_mail_rotate_key(url_addition, address):
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+
+        mailbox = http_mail_storage.get_mailbox(address)
+        if mailbox is None:
+            return jsonify({"error": "Mailbox not found"}), 404
+
+        if request.is_json:
+            read_key = (request.get_json() or {}).get("read_key", "")
+        else:
+            read_key = request.form.get("read_key", "")
+
+        new_key = http_mail_storage.rotate_read_key(address, read_key)
+        if new_key is None:
+            return jsonify({"error": "Invalid read key"}), 403
+
+        if request.is_json:
+            return jsonify({"success": True, "address": address, "new_read_key": new_key})
+
+        return render_template("http_mail.html",
+                               path=app.config["path"],
+                               hostname=app.config.get("hostname", ""),
+                               max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                               inbox_address=address,
+                               inbox_read_key=new_key,
+                               success="Read key rotated. Save the new key now.")
 
     # ------------------------------------------------------------------
     # Destroy entire mailbox (requires read_key in POST body)
