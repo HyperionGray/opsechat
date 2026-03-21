@@ -263,6 +263,9 @@ Features
   - **Quick Rotation** - One-click generation and rotation to new addresses
   - **Instant Copy** - Copy burner emails to clipboard with one click
   - **Smart Stats Dashboard** - Track active burners and total time remaining
+- **HTTP Mail (No SMTP/IMAP)** - Temporary in-memory mailboxes with private read keys and JSON APIs
+  - **Inbox Filtering/Pagination** - Filter by sender/subject and paginate results for automation tooling
+  - **Form-Compatible Send Endpoint** - `/mail/send` route supports non-JS compose fallback
 - **Automated Domain Purchasing** - Porkbun API integration for cheap domain rotation (.xyz, .club, etc.) - see [Domain Registrar API](docs/setup/DOMAIN_REGISTRAR_API.md)
 - **Budget Management** - Configurable monthly spending limits for domain purchases
 - **Spoofing Detection** - Test emails for spoofing attempts (unicode lookalikes, typosquatting, homographs)
