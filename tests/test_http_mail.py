@@ -101,6 +101,20 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_delete_mailbox_stale_reference_refuses_new_messages(self):
+        mb = self.storage.create_mailbox()
+        stale_ref = self.storage.get_mailbox(mb.address)
+        assert stale_ref is not None
+
+        deleted = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert deleted is True
+
+        # Stale in-memory references should not permit post-destroy writes.
+        msg_id = stale_ref.add_message("subject", "body", "sender")
+        assert msg_id is None
+        assert stale_ref.get_messages(mb.read_key) == []
+        assert stale_ref.message_count() == 0
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -196,6 +210,13 @@ class TestHttpMailbox:
         assert "Secret" not in msg.subject
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
+
+    def test_destroy_mailbox_blocks_future_writes(self):
+        self.mailbox.destroy()
+        msg_id = self.mailbox.add_message("Post destroy", "Body", "sender")
+        assert msg_id is None
+        assert self.mailbox.get_messages("secretkey123456789012345678901") == []
+        assert self.mailbox.message_count() == 0
 
 
 # ===========================================================================

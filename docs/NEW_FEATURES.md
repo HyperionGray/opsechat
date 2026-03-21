@@ -172,6 +172,25 @@ When limit exceeded:
 
 ---
 
+## 📬 HTTP Mailbox Destroy Hardening
+
+### What Changed
+The email-over-HTTP mailbox lifecycle now enforces a true destroyed state:
+- Destroyed mailboxes are scrubbed and marked `destroyed` atomically
+- Stale in-memory references can no longer accept new messages
+- Reads against a destroyed mailbox reference return an empty inbox
+- Race windows during send now return `410 Gone` instead of silently accepting data
+
+### Why It Matters
+This closes a subtle concurrency gap where code holding an old mailbox object
+could still append messages after the mailbox was deleted from global storage.
+
+### Validation
+- Added unit tests for stale-reference behavior in `tests/test_http_mail.py`
+- Verified destroyed mailboxes reject writes and report zero message count
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose
