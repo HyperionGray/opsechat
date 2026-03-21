@@ -172,6 +172,32 @@ When limit exceeded:
 
 ---
 
+## 📨 HTTP Mail Hard-Delete Safety
+
+### What Changed
+The HTTP mail subsystem now enforces mailbox destruction semantics even when
+other code still holds an in-memory reference to a deleted mailbox object.
+
+### Why This Matters
+Previously, a mailbox removed from global storage could still accept writes
+through a stale object reference in edge concurrency cases. That created a
+small but real gap between "mailbox deleted" and "all writes rejected."
+
+### Implementation Details
+- Mailboxes now track a `destroyed` flag.
+- `add_message()` rejects writes after destruction.
+- `delete_message()` and reads handle destroyed state safely.
+- `delete_mailbox()` always scrubs message content and marks mailbox destroyed.
+- Route handling now returns a clear error if a destroyed mailbox is targeted.
+
+### Validation
+New tests cover:
+- rejecting stale writes after mailbox destruction
+- sending to a destroyed mailbox address after deletion
+- email view route behavior when session state is missing
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose
