@@ -1,6 +1,6 @@
 # Rate Limiting and Backoff
 
-Last updated: 2026-03-16
+Last updated: 2026-03-21
 
 ## Overview
 
@@ -69,3 +69,28 @@ Response headers include:
 4. Automatically retries the blocked message once the backoff expires.
 
 This avoids repeated hammering while giving users predictable feedback.
+
+## Health Endpoint Visibility
+
+`GET /health` now includes a `rate_limiting` section with:
+
+- effective configured limits (`chat_create`, `chat_message`, `dm_send`)
+- `active_clients`: number of client sessions currently tracked by the in-memory limiter
+- `active_endpoint_windows`: number of active per-endpoint windows currently retained
+
+Example snippet:
+
+```json
+{
+  "rate_limiting": {
+    "status": "ok",
+    "limits": {
+      "chat_create": {"max_requests": 3, "window_seconds": 60},
+      "chat_message": {"max_requests": 30, "window_seconds": 60},
+      "dm_send": {"max_requests": 5, "window_seconds": 60}
+    },
+    "active_clients": 2,
+    "active_endpoint_windows": 3
+  }
+}
+```

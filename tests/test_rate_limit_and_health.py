@@ -105,6 +105,7 @@ def test_health_endpoint_returns_json_with_required_fields():
     assert data.get("status") == "healthy"
     assert "version" in data
     assert "active_rooms" in data
+    assert "rate_limiting" in data
 
 
 def test_health_endpoint_active_rooms_is_integer():
@@ -113,3 +114,32 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_rate_limiting_has_expected_shape():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    data = response.get_json()
+
+    rate_limiting = data["rate_limiting"]
+    assert rate_limiting["status"] in {"ok", "unavailable"}
+    assert isinstance(rate_limiting["limits"], dict)
+    assert isinstance(rate_limiting["active_clients"], int)
+    assert isinstance(rate_limiting["active_endpoint_windows"], int)
+
+    if rate_limiting["status"] == "ok":
+        for endpoint in ("chat_create", "chat_message", "dm_send"):
+            assert endpoint in rate_limiting["limits"]
+            assert "max_requests" in rate_limiting["limits"][endpoint]
+            assert "window_seconds" in rate_limiting["limits"][endpoint]
+
+
+def test_health_endpoint_rate_limiting_tracks_active_clients():
+    _clear_store()
+    client = _test_app.test_client()
+    create = client.post("/chat/create", json={})
+    assert create.status_code == 200
+
+    health = client.get("/health")
+    data = health.get_json()
+    assert data["rate_limiting"]["active_clients"] >= 1

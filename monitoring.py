@@ -324,6 +324,13 @@ def _read_version() -> str:
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
     active_rooms = 0
+    rate_limiting: Dict[str, Any] = {
+        "status": "unavailable",
+        "limits": {},
+        "active_clients": 0,
+        "active_endpoint_windows": 0,
+    }
+
     try:
         from simple_chat_routes import chat_rooms, rooms_lock
         with rooms_lock:
@@ -332,12 +339,25 @@ def get_health_status() -> Dict[str, Any]:
         # Keep health endpoint resilient even when chat subsystem is unavailable.
         active_rooms = 0
 
+    try:
+        from simple_chat_routes import get_rate_limit_status
+        rate_limiting = get_rate_limit_status()
+    except Exception:
+        # Keep health endpoint resilient even when limiter subsystem is unavailable.
+        rate_limiting = {
+            "status": "unavailable",
+            "limits": {},
+            "active_clients": 0,
+            "active_endpoint_windows": 0,
+        }
+
     return {
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
         'active_rooms': active_rooms,
+        'rate_limiting': rate_limiting,
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',

@@ -323,6 +323,29 @@ def cleanup_rate_limits():
             del _rate_limit_store[sid]
 
 
+def get_rate_limit_status() -> dict:
+    """
+    Return a lightweight snapshot of current rate limiting state.
+
+    Used by operational endpoints (for example /health) to expose
+    effective limits and current in-memory tracker pressure.
+    """
+    with _rate_limit_lock:
+        active_clients = len(_rate_limit_store)
+        active_endpoint_windows = sum(
+            len(endpoint_windows) for endpoint_windows in _rate_limit_store.values()
+        )
+
+    return {
+        "status": "ok",
+        "limits": {
+            endpoint: config.copy() for endpoint, config in RATE_LIMITS.items()
+        },
+        "active_clients": active_clients,
+        "active_endpoint_windows": active_endpoint_windows,
+    }
+
+
 # Background cleanup thread
 def cleanup_loop():
     """Continuously clean up old messages and rooms"""
