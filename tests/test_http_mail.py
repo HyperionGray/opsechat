@@ -307,12 +307,10 @@ class TestHttpMailRoutes:
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
 
+        mailbox = http_mail_storage.get_mailbox(addr)
+        assert mailbox is not None
         for i in range(MAX_MESSAGES_PER_MAILBOX):
-            sent = self.client.post(
-                f"/{self.path}/mail/{addr}/send",
-                json={"subject": f"s{i}", "body": f"b{i}", "sender": "bulk"},
-            )
-            assert sent.status_code == 200
+            mailbox.add_message(subject=f"s{i}", body=f"b{i}", sender_handle="bulk")
 
         overflow = self.client.post(
             f"/{self.path}/mail/{addr}/send",
