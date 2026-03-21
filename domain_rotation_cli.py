@@ -19,10 +19,46 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
-from domain_manager import PorkbunAPIClient, DomainRotationManager
+from datetime import datetime
+from domain_manager import DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _serialize_domain_record(record):
+    """Serialize domain metadata for JSON storage."""
+    serialized = dict(record)
+    for key in ("purchased_at", "expires_at"):
+        value = serialized.get(key)
+        if isinstance(value, datetime):
+            serialized[key] = value.isoformat()
+    return serialized
+
+
+def _deserialize_domain_record(record):
+    """Deserialize persisted domain metadata from JSON storage."""
+    deserialized = dict(record)
+    for key in ("purchased_at", "expires_at"):
+        value = deserialized.get(key)
+        if isinstance(value, str):
+            try:
+                deserialized[key] = datetime.fromisoformat(value)
+            except ValueError:
+                pass
+    return deserialized
+
+
+def _format_datetime(value, fmt):
+    """Format datetime-like values while tolerating persisted strings."""
+    if isinstance(value, datetime):
+        return value.strftime(fmt)
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value).strftime(fmt)
+        except ValueError:
+            return value
+    return "unknown"
 
 
 def load_config():
@@ -102,17 +138,20 @@ def get_manager():
         print("Run: python domain_rotation_cli.py config")
         sys.exit(1)
     
-    client = PorkbunAPIClient(config['api_key'], config['api_secret'])
-    manager = DomainRotationManager(
-        api_client=client,
-        monthly_budget=config.get('monthly_budget', 50.0)
+    manager = DomainRotationManager(monthly_budget=config.get('monthly_budget', 50.0))
+    manager.configure(
+        api_key=config['api_key'],
+        secret_key=config['api_secret'],
+        monthly_budget=config.get('monthly_budget', 50.0),
     )
     
     # Load saved state
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = [
+            _deserialize_domain_record(record) for record in config['owned_domains']
+        ]
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +161,9 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = [
+        _serialize_domain_record(record) for record in manager.owned_domains
+    ]
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -144,8 +185,8 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_datetime(domain.get('purchased_at'), '%Y-%m-%d %H:%M')}")
+        print(f"   Expires: {_format_datetime(domain.get('expires_at'), '%Y-%m-%d')}")
         print()
 
 

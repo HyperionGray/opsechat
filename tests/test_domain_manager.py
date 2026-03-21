@@ -174,3 +174,36 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_and_get_config(self):
+        """Test manager configuration helper and config output."""
+        manager = DomainRotationManager()
+        config = manager.configure(
+            api_key="pk1_1234567890",
+            secret_key="sk1_1234567890",
+            monthly_budget=25.0,
+        )
+
+        assert config["configured"] is True
+        assert config["registrar"] == "porkbun"
+        assert config["api_key_configured"] is True
+        assert config["api_key_suffix"] == "7890"
+        assert config["monthly_budget"] == 25.0
+
+    def test_rotate_domain_with_details(self):
+        """Structured rotation response should include success details."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "cheap123.xyz",
+            "price": "$2.99",
+        }
+        mock_client.purchase_domain.return_value = {"success": True}
+
+        manager = DomainRotationManager(mock_client, monthly_budget=10.0)
+        result = manager.rotate_domain_with_details(max_price=5.0)
+
+        assert result["success"] is True
+        assert result["domain"].endswith(".xyz")
+        assert result["price"] == 2.99
+        assert result["budget"]["domains_owned"] == 1

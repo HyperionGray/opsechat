@@ -2,6 +2,12 @@
 
 This guide explains how to set up domain registrar APIs for the burner email domain rotation feature in opsechat.
 
+## Recent Improvements
+
+- The `/email/config` page now applies domain API settings directly to the live domain rotation manager.
+- The `Rotate to New Domain` button now triggers a fully wired server-side domain rotation flow.
+- `domain_rotation_cli.py` now persists purchased-domain metadata safely (timestamps are serialized/deserialized), so purchases can be listed after restart.
+
 ## Overview
 
 Opsechat supports automated domain purchasing for rotating burner email addresses. This provides guerrillamail-style functionality with your own domains, enhancing anonymity and avoiding shared-domain blocklists.
@@ -130,6 +136,19 @@ http://yourservice.onion/{path}/email/config
 2. **Generate Burner**: Creates email with current domain
 3. **Auto-Rotate**: When domain is flagged/old, rotate to new domain
 4. **Manual Rotate**: Force rotation via email config page
+
+### CLI Workflow
+
+Use the CLI for terminal-driven operations:
+
+```bash
+python domain_rotation_cli.py config
+python domain_rotation_cli.py search
+python domain_rotation_cli.py rotate
+python domain_rotation_cli.py list
+```
+
+The CLI stores state at `~/.opsechat/domain_config.json` with secure file permissions.
 
 ## Security Considerations
 
