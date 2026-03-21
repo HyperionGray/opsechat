@@ -21,6 +21,9 @@ from http_mail_system import (
     HttpMessage,
     http_mail_storage,
     MAX_MAIL_MESSAGE_LENGTH,
+    MAX_MESSAGES_PER_MAILBOX,
+    MailboxFullError,
+    MailboxUnavailableError,
 )
 from email_system import email_storage as _global_email_storage, EmailComposer
 from app_factory import create_app
@@ -101,6 +104,12 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_delete_mailbox_marks_instance_destroyed(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        with pytest.raises(MailboxUnavailableError):
+            mb.add_message("Subj", "Body", "alice")
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -179,6 +188,17 @@ class TestHttpMailbox:
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
 
+    def test_add_message_rejects_destroyed_mailbox(self):
+        self.mailbox.destroyed = True
+        with pytest.raises(MailboxUnavailableError):
+            self.mailbox.add_message("Subj", "Body", "alice")
+
+    def test_add_message_enforces_capacity_limit(self):
+        for i in range(MAX_MESSAGES_PER_MAILBOX):
+            self.mailbox.add_message(f"s{i}", f"b{i}", "alice")
+        with pytest.raises(MailboxFullError):
+            self.mailbox.add_message("overflow", "body", "alice")
+
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -247,6 +267,59 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_form_without_javascript(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        payload = r.get_json()
+        addr = payload["address"]
+        read_key = payload["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "No JS",
+                "body": "Fallback form send works",
+                "sender": "carol",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent" in r.data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        data = inbox.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["subject"] == "No JS"
+        assert data["messages"][0]["sender"] == "carol"
+
+    def test_send_message_form_missing_address_fails(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 400
+        assert b"Mailbox address is required" in r.data
+
+    def test_send_message_rejects_when_mailbox_is_full(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        for i in range(MAX_MESSAGES_PER_MAILBOX):
+            sent = self.client.post(
+                f"/{self.path}/mail/{addr}/send",
+                json={"subject": f"s{i}", "body": f"b{i}", "sender": "bulk"},
+            )
+            assert sent.status_code == 200
+
+        overflow = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "overflow", "body": "overflow", "sender": "bulk"},
+        )
+        assert overflow.status_code == 429
+        assert overflow.get_json()["error"] == "Mailbox is full"
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
