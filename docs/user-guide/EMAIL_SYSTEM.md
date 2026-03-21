@@ -20,6 +20,29 @@ Misuse of these features may be illegal in your jurisdiction. Always obtain prop
 
 ## Core Features
 
+### 0. HTTP Mail (No SMTP/IMAP Required)
+
+HTTP Mail provides a lightweight mailbox model over HTTP:
+- Create mailbox: `POST /{path}/mail/new`
+- Send message: `POST /{path}/mail/{address}/send`
+- Read inbox: `GET /{path}/mail/{address}/inbox?key={read_key}`
+- Delete message: `POST /{path}/mail/{address}/delete/{msg_id}`
+- Destroy mailbox: `POST /{path}/mail/{address}/destroy`
+
+Inbox reads now support pagination parameters for API clients:
+- `limit` (optional): number of messages to return, `1..200`
+- `offset` (optional): starting index, `0+`
+
+JSON inbox responses include:
+- `total_messages`
+- `returned_messages`
+- `limit`
+- `offset`
+- `has_more`
+
+Mailbox destruction is lifecycle-safe: once destroyed, stale mailbox
+references cannot accept new messages.
+
 ### 1. Real Email Integration (NEW!)
 
 #### SMTP Email Sending

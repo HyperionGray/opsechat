@@ -36,6 +36,30 @@ def register_http_mail_routes(app):
         text = re.sub(r'[<>&"\']', '', text)
         return text[:max_len]
 
+    def _parse_pagination_params():
+        """Parse and validate optional inbox pagination params."""
+        limit_raw = request.args.get("limit")
+        offset_raw = request.args.get("offset", "0")
+
+        try:
+            offset = int(offset_raw)
+        except (TypeError, ValueError):
+            return None, None, "Invalid offset: must be a non-negative integer"
+
+        if offset < 0:
+            return None, None, "Invalid offset: must be a non-negative integer"
+
+        limit = None
+        if limit_raw not in (None, ""):
+            try:
+                limit = int(limit_raw)
+            except (TypeError, ValueError):
+                return None, None, "Invalid limit: must be an integer between 1 and 200"
+            if limit < 1 or limit > 200:
+                return None, None, "Invalid limit: must be an integer between 1 and 200"
+
+        return limit, offset, None
+
     # ------------------------------------------------------------------
     # Main UI — create or access mailbox
     # ------------------------------------------------------------------
@@ -109,6 +133,15 @@ def register_http_mail_routes(app):
         sender = _sanitize(sender, 64) or "anonymous"
 
         msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        if msg_id is None:
+            if request.is_json:
+                return jsonify({"error": "Mailbox no longer accepts new messages"}), 410
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Mailbox no longer accepts new messages",
+                                   compose_address=address), 410
 
         if request.is_json:
             return jsonify({"success": True, "msg_id": msg_id})
@@ -152,8 +185,33 @@ def register_http_mail_routes(app):
                                    max_message_length=MAX_MAIL_MESSAGE_LENGTH,
                                    error="Invalid read key — access denied"), 403
 
+        limit, offset, pagination_error = _parse_pagination_params()
+        if pagination_error:
+            if request.headers.get("Accept", "").startswith("application/json"):
+                return jsonify({"error": pagination_error}), 400
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error=pagination_error), 400
+
+        total_messages = len(messages)
+        if limit is None:
+            page_messages = messages[offset:]
+        else:
+            page_messages = messages[offset:offset + limit]
+        has_more = (offset + len(page_messages)) < total_messages
+
         if request.headers.get("Accept", "").startswith("application/json"):
-            return jsonify({"address": address, "messages": messages})
+            return jsonify({
+                "address": address,
+                "messages": page_messages,
+                "total_messages": total_messages,
+                "returned_messages": len(page_messages),
+                "offset": offset,
+                "limit": limit,
+                "has_more": has_more,
+            })
 
         return render_template("http_mail.html",
                                path=app.config["path"],
@@ -161,7 +219,11 @@ def register_http_mail_routes(app):
                                max_message_length=MAX_MAIL_MESSAGE_LENGTH,
                                inbox_address=address,
                                inbox_read_key=read_key,
-                               messages=messages)
+                               messages=page_messages,
+                               total_messages=total_messages,
+                               pagination_offset=offset,
+                               pagination_limit=limit,
+                               pagination_has_more=has_more)
 
     # ------------------------------------------------------------------
     # Delete a single message (requires read_key in POST body)

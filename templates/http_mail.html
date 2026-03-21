@@ -241,6 +241,13 @@
   {% if messages is defined %}
   <div id="inbox-messages" style="margin-top:20px;">
     <h3>Messages ({{ messages|length }})</h3>
+    {% if total_messages is defined %}
+    <p style="color:#888; margin-top:6px;">
+      Showing {{ messages|length }} of {{ total_messages }}
+      {% if pagination_offset is defined %}(offset {{ pagination_offset }}){% endif %}
+      {% if pagination_has_more %}- more messages available{% endif %}
+    </p>
+    {% endif %}
     {% if messages|length == 0 %}
     <p style="color:#888; margin-top:10px;">No messages in this mailbox.</p>
     {% else %}
