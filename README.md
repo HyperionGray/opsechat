@@ -268,6 +268,7 @@ Features
 - **Spoofing Detection** - Test emails for spoofing attempts (unicode lookalikes, typosquatting, homographs)
 - **Phishing Simulation** - Gamified training with scoring and achievements
 - **Security Research Tools** - For authorized penetration testing and awareness training
+- **HTTP Mail** - SMTP/IMAP-free inboxes with default-deny read keys and no-JS compose support (see [HTTP Mail Guide](docs/user-guide/HTTP_MAIL.md))
 - **Plain Text Only** - HTML and images are shown as text for security analysis
 - JavaScript optional throughout
 
