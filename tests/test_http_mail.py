@@ -90,6 +90,17 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox(mb.address, mb.read_key)
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
+        assert mb.destroyed is True
+
+    def test_delete_mailbox_scrubs_existing_messages(self):
+        mb = self.storage.create_mailbox()
+        mb.add_message("secret-subject", "secret-body", "secret-sender")
+        assert mb.message_count() == 1
+
+        result = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert result is True
+        assert mb.destroyed is True
+        assert mb.message_count() == 0
 
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
@@ -128,6 +139,11 @@ class TestHttpMailbox:
         msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
         assert msg_id
         assert len(msg_id) == 16
+
+    def test_add_message_to_destroyed_mailbox_raises(self):
+        self.mailbox.destroy()
+        with pytest.raises(RuntimeError):
+            self.mailbox.add_message("Hello", "Body text", "alice")
 
     def test_get_messages_correct_key(self):
         self.mailbox.add_message("Subj", "Body", "alice")
@@ -263,6 +279,19 @@ class TestHttpMailRoutes:
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
         assert r.status_code == 404
+
+    def test_send_to_destroyed_mailbox_returns_410(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        payload = r.get_json()
+        addr = payload["address"]
+        mailbox = http_mail_storage.get_mailbox(addr)
+        mailbox.destroyed = True
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 410
 
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -493,4 +522,9 @@ class TestEmailRoutesExtended:
 
     def test_burner_wrong_path_404(self):
         r = self.client.post("/wrongpath/email/burner", data={"action": "generate"})
+        assert r.status_code == 404
+
+    def test_view_email_without_session_returns_404_not_500(self):
+        client_without_session = self.app.test_client()
+        r = client_without_session.get(f"/secpath/email/view/{self.email_id}")
         assert r.status_code == 404
