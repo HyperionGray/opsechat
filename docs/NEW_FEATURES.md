@@ -2,6 +2,34 @@
 
 This guide covers the new features added in the final push for OpSecHat production readiness.
 
+## HTTP Mail Lifecycle Hardening (March 2026)
+
+### What Changed
+- Added a no-JavaScript send fallback endpoint: `POST /<path>/mail/send`
+- Hardened mailbox lifecycle handling so destroyed mailboxes reject late writes
+- Centralized secure mailbox destruction in the mailbox model itself
+
+### Why It Matters
+- The HTTP Mail compose form now has a server-side fallback path even if JavaScript does not rewrite the action URL.
+- Concurrent edge cases are safer: if a mailbox is destroyed while a sender still holds a stale reference, writes are refused instead of silently re-creating state.
+- Message data scrubbing is handled in one place for more predictable destruction semantics.
+
+### API Behavior Updates
+- `POST /<path>/mail/send`
+  - Form fields: `_address_override`, `subject`, `body`, `sender`
+  - Returns `400` if no mailbox address is provided
+- `POST /<path>/mail/<address>/send`
+  - Returns `410` when mailbox becomes unavailable during a destruction race
+  - Returns `404` when mailbox does not exist
+
+### Test Coverage Added
+- Deleted/destroyed mailbox rejects future `add_message` writes
+- No-JS fallback route successfully sends mail
+- No-JS fallback route validates missing address input
+- Route returns `410` when writing to destroyed mailbox state
+
+---
+
 ## 🔑 Automated Key Exchange
 
 ### What Changed

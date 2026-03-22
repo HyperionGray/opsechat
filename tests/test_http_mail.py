@@ -91,6 +91,13 @@ class TestHttpMailStorage:
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
 
+    def test_deleted_mailbox_rejects_late_writes(self):
+        mb = self.storage.create_mailbox()
+        deleted = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert deleted is True
+        assert mb.add_message("Subj", "Body", "sender") is None
+        assert mb.get_messages(mb.read_key) == []
+
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
         result = self.storage.delete_mailbox(mb.address, "wrongkey")
@@ -197,6 +204,12 @@ class TestHttpMailbox:
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
 
+    def test_destroy_blocks_new_writes(self):
+        self.mailbox.destroy()
+        msg_id = self.mailbox.add_message("After", "Destroy", "sender")
+        assert msg_id is None
+        assert self.mailbox.message_count() == 0
+
 
 # ===========================================================================
 # HTTP mail route integration tests
@@ -247,6 +260,38 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_nojs_fallback_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        payload = r.get_json()
+        addr = payload["address"]
+        read_key = payload["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "NoJS",
+                "body": "fallback works",
+                "sender": "alice",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert inbox.status_code == 200
+        assert len(inbox.get_json()["messages"]) == 1
+
+    def test_send_message_nojs_missing_address_fails(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "X", "body": "Y"},
+        )
+        assert r.status_code == 400
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -387,6 +432,17 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 403
+
+    def test_send_to_destroyed_mailbox_returns_410(self):
+        mb = http_mail_storage.create_mailbox()
+        mb.destroy()
+
+        r = self.client.post(
+            f"/{self.path}/mail/{mb.address}/send",
+            json={"subject": "X", "body": "Y", "sender": "z"},
+        )
+        assert r.status_code == 410
+        assert http_mail_storage.delete_mailbox(mb.address, mb.read_key) is True
 
     def test_message_body_sanitized(self):
         r = self.client.post(f"/{self.path}/mail/new")

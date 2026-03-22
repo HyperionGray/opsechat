@@ -82,8 +82,7 @@ def create_app():
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
+        # CSP intentionally disallows inline script/style execution.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
@@ -121,14 +120,7 @@ def create_app():
     def index():
         return ('', 200)
     
-    # CHANGELOG (AI assistant):
-    # - Made rate_limiter import optional with a no-op fallback to prevent
-    #   ModuleNotFoundError in containerized installs that omit rate_limiter.py.
-    #
-    # Remaining checklist (non-blocking for runtime):
-    # - Update container/Podman build configuration to ensure rate_limiter.py
-    #   is included in the image (e.g., COPY list or packaging config).
-    # - Once packaging reliably includes rate_limiter.py, consider removing
-    #   the fallback or turning it into an explicit configuration option.
+    # rate_limiter import is optional with a no-op fallback to prevent
+    # ModuleNotFoundError in containerized installs that omit rate_limiter.py.
     
     return app
