@@ -197,6 +197,11 @@ class TestHttpMailbox:
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
 
+    def test_add_message_after_mailbox_destroy_fails(self):
+        self.mailbox.destroyed = True
+        with pytest.raises(ValueError):
+            self.mailbox.add_message("Subj", "Body", "alice")
+
 
 # ===========================================================================
 # HTTP mail route integration tests
@@ -247,6 +252,40 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_form_fallback_with_address_override(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Via fallback",
+                "body": "Fallback body",
+                "sender": "carol",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent" in r.data
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        data = r.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["subject"] == "Via fallback"
+
+    def test_send_message_fallback_missing_address_fails(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "No address", "body": "Body"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
+        assert r.get_json()["error"] == "Mailbox address is required"
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -309,6 +348,49 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 404
+
+    def test_read_inbox_supports_query_sender_and_limit_filters(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Project status", "body": "Milestone alpha", "sender": "alice"},
+        )
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Off topic", "body": "Nothing useful", "sender": "bob"},
+        )
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Project status 2", "body": "Milestone beta", "sender": "alice"},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&q=milestone&sender=alice&limit=1",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["sender"] == "alice"
+        assert "milestone" in data["messages"][0]["body"].lower()
+        assert data["filters"]["q"] == "milestone"
+        assert data["filters"]["sender"] == "alice"
+        assert data["filters"]["limit"] == 1
+
+    def test_read_inbox_invalid_limit_returns_400(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&limit=notanumber",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
+        assert r.get_json()["error"] == "Invalid limit value"
 
     def test_delete_message_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -421,6 +503,14 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.get_json()["messages"][0]["sender"] == "anonymous"
+
+    def test_http_mail_template_uses_static_assets_no_inline_handlers(self):
+        r = self.client.get(f"/{self.path}/mail")
+        html = r.data.decode("utf-8")
+        assert "<style>" not in html
+        assert "onclick=" not in html
+        assert "http_mail.css" in html
+        assert "http_mail.js" in html
 
 
 # ===========================================================================

@@ -16,7 +16,6 @@ Design:
 
 import datetime
 import secrets
-import string
 import threading
 from typing import Dict, List, Optional
 
@@ -65,28 +64,53 @@ class HttpMailbox:
         self.messages: List[HttpMessage] = []
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
+        self.destroyed = False
 
     def add_message(self, subject: str, body: str, sender_handle: str) -> str:
         """Add a message; returns the new message ID."""
-        msg_id = _generate_id(12)  # 12 bytes → 16 URL-safe chars
-        msg = HttpMessage(
-            msg_id=msg_id,
-            subject=subject,
-            body=body,
-            sender_handle=sender_handle,
-            timestamp=datetime.datetime.now(),
-        )
         with self.lock:
+            if self.destroyed:
+                raise ValueError("Mailbox has been destroyed")
+            msg_id = _generate_id(12)  # 12 bytes → 16 URL-safe chars
+            msg = HttpMessage(
+                msg_id=msg_id,
+                subject=subject,
+                body=body,
+                sender_handle=sender_handle,
+                timestamp=datetime.datetime.now(),
+            )
             self.messages.append(msg)
         return msg_id
 
-    def get_messages(self, read_key: str) -> Optional[List[Dict]]:
+    def get_messages(
+        self,
+        read_key: str,
+        query: str = "",
+        sender: str = "",
+        limit: Optional[int] = None,
+    ) -> Optional[List[Dict]]:
         """Return messages if read_key matches, else None (default deny)."""
         if not secrets.compare_digest(read_key, self.read_key):
             return None
         self._expire_old_messages()
         with self.lock:
-            return [m.to_dict() for m in self.messages]
+            messages = [m.to_dict() for m in self.messages]
+
+        if sender:
+            sender_fold = sender.casefold()
+            messages = [m for m in messages if m["sender"].casefold() == sender_fold]
+
+        if query:
+            query_fold = query.casefold()
+            messages = [
+                m for m in messages
+                if query_fold in m["subject"].casefold() or query_fold in m["body"].casefold()
+            ]
+
+        if limit is not None:
+            messages = messages[:max(0, limit)]
+
+        return messages
 
     def delete_message(self, read_key: str, msg_id: str) -> bool:
         """Delete a message by ID after verifying read_key. Returns True on success."""
@@ -145,10 +169,6 @@ class HttpMailStorage:
         - We remove the mailbox from the global store under `self._lock`.
         - We then overwrite and clear messages under the per-mailbox lock
           to avoid races with concurrent send/add operations.
-
-        Checklist (follow-ups outside this class):
-        - [ ] Ensure HttpMailbox exposes a `lock` used by all writers.
-        - [ ] Ensure add_message (or equivalent) checks a `destroyed` flag.
         """
         # First, look up and authenticate the mailbox under the global lock.
         with self._lock:
@@ -167,19 +187,18 @@ class HttpMailStorage:
         lock = getattr(mailbox, "lock", None)
         if lock is not None:
             with lock:
+                mailbox.destroyed = True
                 for msg in mailbox.messages:
                     msg.overwrite()
                 # Clear the list so message objects can be GC'ed.
                 mailbox.messages.clear()
-                # Mark as destroyed so writers can refuse future sends.
-                setattr(mailbox, "destroyed", True)
         else:
             # Fallback: no explicit mailbox lock available; still perform
             # overwrite/clear to maintain best-effort data scrubbing.
+            mailbox.destroyed = True
             for msg in mailbox.messages:
                 msg.overwrite()
             mailbox.messages.clear()
-            setattr(mailbox, "destroyed", True)
 
         return True
     def cleanup_empty_old_mailboxes(self) -> None:
