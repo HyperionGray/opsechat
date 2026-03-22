@@ -340,6 +340,43 @@ class EmailTransportManager:
             'imap': self.imap_transport is not None
         }
 
+    def get_config(self) -> Dict[str, Dict]:
+        """Return non-secret transport configuration details."""
+        smtp_cfg: Dict[str, Optional[object]] = {
+            "server": None,
+            "port": None,
+            "username": None,
+            "use_tls": None,
+        }
+        imap_cfg: Dict[str, Optional[object]] = {
+            "server": None,
+            "port": None,
+            "username": None,
+            "use_ssl": None,
+        }
+
+        if self.smtp_transport:
+            smtp_cfg = {
+                "server": self.smtp_transport.smtp_server,
+                "port": self.smtp_transport.smtp_port,
+                "username": self.smtp_transport.username,
+                "use_tls": self.smtp_transport.use_tls,
+            }
+
+        if self.imap_transport:
+            imap_cfg = {
+                "server": self.imap_transport.imap_server,
+                "port": self.imap_transport.imap_port,
+                "username": self.imap_transport.username,
+                "use_ssl": self.imap_transport.use_ssl,
+            }
+
+        return {
+            "smtp": smtp_cfg,
+            "imap": imap_cfg,
+            "status": self.is_configured(),
+        }
+
 
 # Global transport manager
 transport_manager = EmailTransportManager()

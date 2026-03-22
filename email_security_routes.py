@@ -85,59 +85,75 @@ def create_email_security_blueprint(id_generator, get_random_color):
         message = None
         current_config = transport_manager.get_config()
         domain_config = domain_rotation_manager.get_config()
+        config_status = transport_manager.is_configured()
+        budget_status = domain_rotation_manager.get_budget_status()
+        active_domain = domain_rotation_manager.get_active_domain()
         
         if request.method == "POST":
-            config_type = request.form.get("config_type")
+            config_type = request.form.get("config_type") or request.form.get("action")
             
-            if config_type == "smtp":
-                smtp_config = {
-                    "smtp_server": request.form.get("smtp_server", "").strip(),
-                    "smtp_port": int(request.form.get("smtp_port", 587)),
-                    "smtp_username": request.form.get("smtp_username", "").strip(),
-                    "smtp_password": request.form.get("smtp_password", "").strip(),
-                    "use_tls": request.form.get("use_tls") == "on"
-                }
-                
+            if config_type in {"smtp", "configure_smtp"}:
                 try:
-                    transport_manager.configure_smtp(**smtp_config)
-                    message = {"type": "success", "text": "SMTP configuration saved successfully"}
+                    success = transport_manager.configure_smtp(
+                        smtp_server=request.form.get("smtp_server", "").strip(),
+                        smtp_port=int(request.form.get("smtp_port", 587)),
+                        username=request.form.get("smtp_username", "").strip(),
+                        password=request.form.get("smtp_password", "").strip(),
+                        use_tls=request.form.get("use_tls") in {"on", "true", "1"},
+                    )
+                    if success:
+                        message = {"type": "success", "text": "SMTP configuration saved successfully"}
+                    else:
+                        message = {"type": "error", "text": "SMTP configuration test failed"}
                 except Exception as e:
                     message = {"type": "error", "text": f"SMTP configuration failed: {str(e)}"}
             
-            elif config_type == "imap":
-                imap_config = {
-                    "imap_server": request.form.get("imap_server", "").strip(),
-                    "imap_port": int(request.form.get("imap_port", 993)),
-                    "imap_username": request.form.get("imap_username", "").strip(),
-                    "imap_password": request.form.get("imap_password", "").strip(),
-                    "use_ssl": request.form.get("use_ssl") == "on"
-                }
-                
+            elif config_type in {"imap", "configure_imap"}:
                 try:
-                    transport_manager.configure_imap(**imap_config)
-                    message = {"type": "success", "text": "IMAP configuration saved successfully"}
+                    success = transport_manager.configure_imap(
+                        imap_server=request.form.get("imap_server", "").strip(),
+                        imap_port=int(request.form.get("imap_port", 993)),
+                        username=request.form.get("imap_username", "").strip(),
+                        password=request.form.get("imap_password", "").strip(),
+                        use_ssl=request.form.get("use_ssl") in {"on", "true", "1"},
+                    )
+                    if success:
+                        message = {"type": "success", "text": "IMAP configuration saved successfully"}
+                    else:
+                        message = {"type": "error", "text": "IMAP configuration test failed"}
                 except Exception as e:
                     message = {"type": "error", "text": f"IMAP configuration failed: {str(e)}"}
             
-            elif config_type == "domain":
-                domain_config_data = {
-                    "api_key": request.form.get("porkbun_api_key", "").strip(),
-                    "secret_key": request.form.get("porkbun_secret_key", "").strip(),
-                    "monthly_budget": float(request.form.get("monthly_budget", 10.0))
-                }
-                
+            elif config_type in {"domain", "configure_domain_api"}:
                 try:
-                    domain_rotation_manager.configure(**domain_config_data)
+                    api_key = request.form.get("api_key", "").strip() or request.form.get("porkbun_api_key", "").strip()
+                    secret_key = request.form.get("api_secret", "").strip() or request.form.get("porkbun_secret_key", "").strip()
+                    monthly_budget = float(request.form.get("monthly_budget", request.form.get("domain_budget", 10.0)))
+                    domain_rotation_manager.configure(
+                        api_key=api_key,
+                        secret_key=secret_key,
+                        monthly_budget=monthly_budget,
+                        provider="porkbun",
+                    )
                     message = {"type": "success", "text": "Domain configuration saved successfully"}
                 except Exception as e:
                     message = {"type": "error", "text": f"Domain configuration failed: {str(e)}"}
+
+            current_config = transport_manager.get_config()
+            domain_config = domain_rotation_manager.get_config()
+            config_status = transport_manager.is_configured()
+            budget_status = domain_rotation_manager.get_budget_status()
+            active_domain = domain_rotation_manager.get_active_domain()
         
         return render_template("email_config.html",
                               hostname=app.config["hostname"],
                               path=app.config["path"],
                               message=message,
                               current_config=current_config,
-                              domain_config=domain_config)
+                              domain_config=domain_config,
+                              config_status=config_status,
+                              budget_status=budget_status,
+                              active_domain=active_domain)
 
     @email_security_bp.route('/<string:url_addition>/email/send', methods=["POST"])
     def email_send_api(url_addition):
@@ -176,14 +192,14 @@ def create_email_security_blueprint(id_generator, get_random_color):
             return jsonify({"success": False, "error": "No session"})
         
         try:
-            result = transport_manager.receive_emails()
+            emails = transport_manager.receive_emails()
             
             # Store received emails
-            if result["success"] and result["emails"]:
-                for email_data in result["emails"]:
+            if emails:
+                for email_data in emails:
                     email_storage.add_email(session["_id"], email_data)
             
-            return jsonify(result)
+            return jsonify({"success": True, "emails": emails, "count": len(emails)})
         except Exception as e:
             logging.exception("Error in email_receive_api")
             return jsonify({"success": False, "error": "Failed to receive emails"})
@@ -199,8 +215,14 @@ def create_email_security_blueprint(id_generator, get_random_color):
             return jsonify({"success": False, "error": "No session"})
         
         try:
-            result = domain_rotation_manager.rotate_domain()
-            return jsonify(result)
+            active_domain = domain_rotation_manager.rotate_domain()
+            if not active_domain:
+                return jsonify({"success": False, "error": "Could not rotate domain"}), 400
+            return jsonify({
+                "success": True,
+                "active_domain": active_domain,
+                "budget_status": domain_rotation_manager.get_budget_status(),
+            })
         except Exception as e:
             logging.exception("Error in email_domain_rotate")
             return jsonify({"success": False, "error": "Failed to rotate domain"})

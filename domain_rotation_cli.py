@@ -19,10 +19,46 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _parse_datetime(value):
+    if isinstance(value, datetime):
+        return value
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+
+
+def _serialize_owned_domains(domains):
+    serialized = []
+    for entry in domains:
+        row = dict(entry)
+        purchased = row.get("purchased_at")
+        expires = row.get("expires_at")
+        if isinstance(purchased, datetime):
+            row["purchased_at"] = purchased.isoformat()
+        if isinstance(expires, datetime):
+            row["expires_at"] = expires.isoformat()
+        serialized.append(row)
+    return serialized
+
+
+def _deserialize_owned_domains(domains):
+    hydrated = []
+    for entry in domains or []:
+        row = dict(entry)
+        row["purchased_at"] = _parse_datetime(row.get("purchased_at"))
+        row["expires_at"] = _parse_datetime(row.get("expires_at"))
+        hydrated.append(row)
+    return hydrated
 
 
 def load_config():
@@ -112,7 +148,7 @@ def get_manager():
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = _deserialize_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +158,7 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = _serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -142,10 +178,16 @@ def list_domains():
     
     for i, domain in enumerate(domains, 1):
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
+        provider = domain.get("provider", "unknown")
+        purchased = domain.get("purchased_at")
+        expires = domain.get("expires_at")
+        purchased_str = purchased.strftime('%Y-%m-%d %H:%M') if isinstance(purchased, datetime) else "unknown"
+        expires_str = expires.strftime('%Y-%m-%d') if isinstance(expires, datetime) else "unknown"
         print(f"{i}. {domain['domain']}{active}")
+        print(f"   Provider: {provider}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {purchased_str}")
+        print(f"   Expires: {expires_str}")
         print()
 
 
@@ -161,7 +203,8 @@ def search_domains():
         domain_info = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
         
         if domain_info:
-            print(f"  ✅ Found: {domain_info['domain']} - ${domain_info['price']}")
+            provider = domain_info.get("provider", "unknown")
+            print(f"  ✅ Found: {domain_info['domain']} - ${domain_info['price']} ({provider})")
         else:
             print(f"  ❌ No cheap domain found in this attempt")
     
@@ -192,7 +235,8 @@ def rotate_domain():
         print("❌ Could not find an available cheap domain within budget.")
         return
     
-    print(f"\nFound: {domain_info['domain']} for ${domain_info['price']}")
+    provider = domain_info.get("provider", "unknown")
+    print(f"\nFound: {domain_info['domain']} for ${domain_info['price']} via {provider}")
     
     confirm = input("\nProceed with purchase? (yes/no): ").strip().lower()
     
@@ -203,7 +247,8 @@ def rotate_domain():
     print("\nPurchasing domain...")
     success = manager.purchase_domain_if_budget_allows(
         domain_info['domain'],
-        domain_info['price']
+        domain_info['price'],
+        provider=domain_info.get("provider"),
     )
     
     if success:
