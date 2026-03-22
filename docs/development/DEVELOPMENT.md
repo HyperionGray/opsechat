@@ -60,6 +60,7 @@ opsechat/
 │   ├── development/      # Developer resources
 │   └── assessment/       # Code reviews and assessments
 ├── scripts/               # Utility scripts
+│   └── debug/            # CI and local debug helpers
 ├── aws/                   # AWS deployment templates
 └── quadlets/              # Systemd quadlet files
 ```
@@ -75,6 +76,11 @@ These are development and testing utilities that help during development:
 - **`review_performance.py`** - Performance benchmarking tool
 - **`usability_assessment.py`** - UI/UX testing helper
 - **`comprehensive_functionality_test.py`** - Full functional test suite
+
+### Debug Helpers
+- **`scripts/debug/test_runserver_helpers.sh`** - Focused helper-test runner
+- **`scripts/debug/test_ci_fix.js`** - Mock server startup/connectivity check
+- **`scripts/debug/test_server.js`** - Manual mock server endpoint smoke test
 
 ### Main Application Files
 - **`runserver.py`** - Main entry point (legacy monolithic)
