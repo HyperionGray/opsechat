@@ -5,7 +5,7 @@ Welcome to the OpSecChat documentation. All documentation has been organized int
 ## Quick Links
 
 - **[Main README](../README.md)** - Start here for project overview
-- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes (TODO)
+- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes
 - **[Security](../SECURITY.md)** - Security information and best practices
 - **[License](../LICENSE.md)** - MIT License
 
@@ -67,6 +67,7 @@ Implementation details and summaries of major features.
 - [CI/CD Implementation](implementation/CI_CD_IMPLEMENTATION_SUMMARY.md) - CI/CD setup
 - [Containerization Summary](implementation/CONTAINERIZATION_SUMMARY.md) - Container implementation
 - [jQuery Security Update](implementation/JQUERY_SECURITY_UPDATE.md) - jQuery 3.7.1 update
+- [HTTP Mail Hardening Update](implementation/HTTP_MAIL_HARDENING_2026-03-22.md) - Mailbox destruction safety and no-JS fallback send route
 - [Changelog](implementation/CHANGELOG.md) - Version history
 - [PR Summaries](implementation/PR_SUMMARY.md) - Pull request summaries
 
