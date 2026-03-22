@@ -235,7 +235,9 @@
              placeholder="Your private read key">
     </div>
     <button type="button" onclick="fetchInbox()">Open Inbox</button>
+    <button type="button" onclick="fetchStatus()">Check Mailbox Status</button>
   </form>
+  <div id="mailbox-status" style="margin-top:12px;"></div>
 
   <!-- Inbox messages rendered from server (non-JS fallback) -->
   {% if messages is defined %}
@@ -368,6 +370,40 @@
       document.getElementById('js-inbox-messages').innerHTML =
         '<div class="error-box">⚠️ ' + err.message + '</div>';
     });
+  }
+
+  function fetchStatus() {
+    var address = document.getElementById('read-address').value.trim();
+    var readKey = document.getElementById('read-key-input').value.trim();
+    var statusBox = document.getElementById('mailbox-status');
+
+    if (!address || !readKey) {
+      statusBox.innerHTML = '<div class="error-box">Please enter both mailbox address and read key.</div>';
+      return;
+    }
+
+    var url = '/{{ path }}/mail/' + encodeURIComponent(address) +
+              '/status?key=' + encodeURIComponent(readKey);
+
+    fetch(url, {headers: {'Accept': 'application/json'}})
+      .then(function(r) {
+        if (r.status === 403) throw new Error('Invalid read key');
+        if (r.status === 404) throw new Error('Mailbox not found');
+        return r.json();
+      })
+      .then(function(data) {
+        statusBox.innerHTML =
+          '<div class="info">' +
+          '<strong>Mailbox status:</strong><br>' +
+          'Address: <code>' + esc(data.address) + '</code><br>' +
+          'Messages: <strong>' + esc(data.message_count) + '</strong><br>' +
+          'Age: ' + esc(data.mailbox_age_seconds) + ' seconds<br>' +
+          'Expiry policy: ' + esc(data.message_expiry_hours) + ' hours' +
+          '</div>';
+      })
+      .catch(function(err) {
+        statusBox.innerHTML = '<div class="error-box">' + esc(err.message) + '</div>';
+      });
   }
 
   function renderInbox(messages, address, readKey) {

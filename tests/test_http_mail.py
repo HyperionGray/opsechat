@@ -101,6 +101,17 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_destroyed_mailbox_rejects_stale_writes(self):
+        mb = self.storage.create_mailbox()
+        stale_ref = mb
+        deleted = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert deleted is True
+
+        # Stale references should not accept new writes after destruction.
+        msg_id = stale_ref.add_message("late", "payload", "sender")
+        assert msg_id is None
+        assert stale_ref.message_count() == 0
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -306,6 +317,42 @@ class TestHttpMailRoutes:
     def test_read_inbox_nonexistent_mailbox(self):
         r = self.client.get(
             f"/{self.path}/mail/doesnotexist/inbox?key=anykey",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 404
+
+    def test_mailbox_status_correct_key(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "A", "body": "B", "sender": "alice"},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/status?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["address"] == addr
+        assert data["message_count"] == 1
+        assert data["message_expiry_hours"] == 24
+
+    def test_mailbox_status_wrong_key_forbidden(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/status?key=wrongkey",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 403
+
+    def test_mailbox_status_nonexistent_mailbox(self):
+        r = self.client.get(
+            f"/{self.path}/mail/nope/status?key=anykey",
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 404

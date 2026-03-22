@@ -65,18 +65,21 @@ class HttpMailbox:
         self.messages: List[HttpMessage] = []
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
+        self.destroyed = False
 
-    def add_message(self, subject: str, body: str, sender_handle: str) -> str:
-        """Add a message; returns the new message ID."""
-        msg_id = _generate_id(12)  # 12 bytes → 16 URL-safe chars
-        msg = HttpMessage(
-            msg_id=msg_id,
-            subject=subject,
-            body=body,
-            sender_handle=sender_handle,
-            timestamp=datetime.datetime.now(),
-        )
+    def add_message(self, subject: str, body: str, sender_handle: str) -> Optional[str]:
+        """Add a message; returns the new message ID, or None if mailbox is destroyed."""
         with self.lock:
+            if self.destroyed:
+                return None
+            msg_id = _generate_id(12)  # 12 bytes → 16 URL-safe chars
+            msg = HttpMessage(
+                msg_id=msg_id,
+                subject=subject,
+                body=body,
+                sender_handle=sender_handle,
+                timestamp=datetime.datetime.now(),
+            )
             self.messages.append(msg)
         return msg_id
 
@@ -86,6 +89,8 @@ class HttpMailbox:
             return None
         self._expire_old_messages()
         with self.lock:
+            if self.destroyed:
+                return []
             return [m.to_dict() for m in self.messages]
 
     def delete_message(self, read_key: str, msg_id: str) -> bool:
@@ -93,12 +98,35 @@ class HttpMailbox:
         if not secrets.compare_digest(read_key, self.read_key):
             return False
         with self.lock:
+            if self.destroyed:
+                return False
             for i, msg in enumerate(self.messages):
                 if msg.msg_id == msg_id:
                     msg.overwrite()
                     del self.messages[i]
                     return True
         return False
+
+    def get_status(self, read_key: str) -> Optional[Dict]:
+        """Return mailbox metadata if read_key matches, else None."""
+        if not secrets.compare_digest(read_key, self.read_key):
+            return None
+        self._expire_old_messages()
+        with self.lock:
+            timestamps = [msg.timestamp for msg in self.messages]
+            oldest = min(timestamps).isoformat() if timestamps else None
+            newest = max(timestamps).isoformat() if timestamps else None
+            now = datetime.datetime.now()
+            return {
+                "address": self.address,
+                "created_at": self.created_at.isoformat(),
+                "mailbox_age_seconds": int((now - self.created_at).total_seconds()),
+                "message_count": len(self.messages),
+                "oldest_message_at": oldest,
+                "newest_message_at": newest,
+                "message_expiry_hours": MAIL_EXPIRY_HOURS,
+                "destroyed": self.destroyed,
+            }
 
     def _expire_old_messages(self) -> None:
         """Remove messages older than MAIL_EXPIRY_HOURS."""
@@ -145,10 +173,6 @@ class HttpMailStorage:
         - We remove the mailbox from the global store under `self._lock`.
         - We then overwrite and clear messages under the per-mailbox lock
           to avoid races with concurrent send/add operations.
-
-        Checklist (follow-ups outside this class):
-        - [ ] Ensure HttpMailbox exposes a `lock` used by all writers.
-        - [ ] Ensure add_message (or equivalent) checks a `destroyed` flag.
         """
         # First, look up and authenticate the mailbox under the global lock.
         with self._lock:
@@ -164,22 +188,13 @@ class HttpMailStorage:
         # Now that the mailbox is no longer globally reachable, safely
         # overwrite and clear its messages under the per-mailbox lock.
         # This avoids data races on `mailbox.messages` with concurrent sends.
-        lock = getattr(mailbox, "lock", None)
-        if lock is not None:
-            with lock:
-                for msg in mailbox.messages:
-                    msg.overwrite()
-                # Clear the list so message objects can be GC'ed.
-                mailbox.messages.clear()
-                # Mark as destroyed so writers can refuse future sends.
-                setattr(mailbox, "destroyed", True)
-        else:
-            # Fallback: no explicit mailbox lock available; still perform
-            # overwrite/clear to maintain best-effort data scrubbing.
+        with mailbox.lock:
             for msg in mailbox.messages:
                 msg.overwrite()
+            # Clear the list so message objects can be GC'ed.
             mailbox.messages.clear()
-            setattr(mailbox, "destroyed", True)
+            # Mark as destroyed so stale references can reject writes.
+            mailbox.destroyed = True
 
         return True
     def cleanup_empty_old_mailboxes(self) -> None:
@@ -188,7 +203,7 @@ class HttpMailStorage:
         with self._lock:
             stale = [
                 addr for addr, mb in self._mailboxes.items()
-                if mb.created_at < cutoff and len(mb.messages) == 0
+                if mb.created_at < cutoff and mb.message_count() == 0
             ]
             for addr in stale:
                 del self._mailboxes[addr]
