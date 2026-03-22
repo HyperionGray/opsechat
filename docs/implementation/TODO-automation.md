@@ -13,7 +13,7 @@
 
 ### 1. Branch Protection Rules (IMPORTANT)
 - [ ] Update branch protection settings in GitHub to require the new `ci.yml` jobs:
-  - `python-tests` 
+  - `python-tests`
   - `playwright-e2e`
   - `security-baseline`
 - [ ] Remove old workflow requirements from branch protection if they exist
