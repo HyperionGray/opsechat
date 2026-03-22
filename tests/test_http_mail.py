@@ -101,6 +101,17 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_delete_mailbox_scrubs_stale_handle_and_blocks_writes(self):
+        mb = self.storage.create_mailbox()
+        assert mb.add_message("Subj", "Body", "alice")
+
+        result = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert result is True
+        assert mb.destroyed is True
+        assert mb.message_count() == 0
+        assert mb.add_message("After", "Delete", "mallory") is None
+        assert mb.get_messages(mb.read_key) == []
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -247,6 +258,41 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_generic_route_with_form_address(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        payload = r.get_json()
+        addr = payload["address"]
+        read_key = payload["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Form Subject",
+                "body": "Form Body",
+                "sender": "eve",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        msgs = inbox.get_json()["messages"]
+        assert len(msgs) == 1
+        assert msgs[0]["subject"] == "Form Subject"
+
+    def test_send_message_generic_route_missing_address_fails(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            json={"subject": "Hi", "body": "Missing address", "sender": "eve"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
+        assert "address" in r.get_json()["error"].lower()
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")

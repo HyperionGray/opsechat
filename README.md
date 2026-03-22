@@ -271,6 +271,15 @@ Features
 - **Plain Text Only** - HTML and images are shown as text for security analysis
 - JavaScript optional throughout
 
+### HTTP Mail (Email over HTTP, no SMTP/IMAP)
+- **Ephemeral mailbox model** - Create mailbox address + private read key
+- **Default deny reads** - Inbox access requires the read key
+- **No-JS compose support** - Form-based sending now works via `POST /{path}/mail/send`
+- **Lifecycle hardening** - Destroyed mailboxes reject stale-handle writes
+- **In-memory only** - Messages expire and are scrubbed before deletion
+
+For full endpoint and usage details, see [HTTP Mail Guide](docs/user-guide/HTTP_MAIL.md).
+
 ### Amazon Q Code Review Integration (NEW!)
 - **Automated Code Reviews** - Amazon Q Developer integration for comprehensive code analysis
 - **Security Scanning** - CodeWhisperer-powered vulnerability detection
@@ -291,6 +300,7 @@ For Amazon Q setup instructions, see [Amazon Q Setup Guide](docs/setup/AMAZON_Q_
 5. Configure Porkbun API for domain rotation (optional): Add API credentials and budget (see [Domain API Setup Guide](docs/setup/DOMAIN_API_SETUP.md))
 6. Compose and send emails: `http://yourservice.onion/{path}/email/compose`
 7. View your inbox: `http://yourservice.onion/{path}/email`
+8. Optional lightweight HTTP mail flow: `http://yourservice.onion/{path}/mail`
 
 For full documentation, see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md).
 

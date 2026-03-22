@@ -339,6 +339,8 @@
     var form = document.getElementById('compose-form');
     if (addr) {
       form.action = '/{{ path }}/mail/' + encodeURIComponent(addr) + '/send';
+    } else {
+      form.action = '/{{ path }}/mail/send';
     }
   }
 
@@ -467,6 +469,15 @@
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#x27;');
   }
+
+  // Keep compose action aligned with address input for JS-enabled clients.
+  (function bindComposeAddressSync() {
+    var input = document.getElementById('compose-address-input');
+    if (!input) return;
+    input.addEventListener('input', updateComposeAction);
+    input.addEventListener('change', updateComposeAction);
+    updateComposeAction();
+  })();
 </script>
 </body>
 </html>
