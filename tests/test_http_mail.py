@@ -4,7 +4,6 @@ Tests for the HTTP mail system (email over HTTP, no SMTP/IMAP).
 Covers:
 - HttpMailStorage: create mailbox, send, read (default deny), delete, destroy
 - http_mail_routes: all REST endpoints via Flask test client
-- Missing email_routes: view, edit, delete, burner POST, expire
 """
 
 import datetime
@@ -101,6 +100,11 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_deleted_mailbox_reference_rejects_new_messages(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert mb.add_message("subj", "body", "sender") is None
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -178,6 +182,11 @@ class TestHttpMailbox:
         assert self.mailbox.message_count() == 0
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
+
+    def test_add_message_rejected_when_mailbox_destroyed(self):
+        self.mailbox.destroyed = True
+        assert self.mailbox.add_message("Subj", "Body", "alice") is None
+        assert self.mailbox.message_count() == 0
 
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
@@ -263,6 +272,45 @@ class TestHttpMailRoutes:
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
         assert r.status_code == 404
+
+    def test_send_message_form_fallback_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Fallback Subject",
+                "body": "Fallback Body",
+                "sender": "fallback-user",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        messages = r.get_json()["messages"]
+        assert len(messages) == 1
+        assert messages[0]["subject"] == "Fallback Subject"
+        assert messages[0]["sender"] == "fallback-user"
+
+    def test_send_message_form_fallback_missing_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": "",
+                "subject": "Fallback Subject",
+                "body": "Fallback Body",
+                "sender": "fallback-user",
+            },
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required" in r.data
 
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")

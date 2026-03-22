@@ -7,6 +7,7 @@ and read back using a private read_key (default deny).
 Routes registered under /<path>/mail/:
   GET  /<path>/mail                        - Main UI (create mailbox form)
   POST /<path>/mail/new                    - Create a new mailbox
+  POST /<path>/mail/send                   - Form fallback send (uses _address_override)
   POST /<path>/mail/<address>/send         - Send a message to a mailbox (no auth)
   GET  /<path>/mail/<address>/inbox        - Read inbox (requires ?key=<read_key>)
   POST /<path>/mail/<address>/delete/<id>  - Delete a message (requires read_key in form)
@@ -81,7 +82,14 @@ def register_http_mail_routes(app):
 
         mailbox = http_mail_storage.get_mailbox(address)
         if mailbox is None:
-            return jsonify({"error": "Mailbox not found"}), 404
+            if request.is_json:
+                return jsonify({"error": "Mailbox not found"}), 404
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Mailbox not found",
+                                   compose_address=address), 404
 
         # Accept JSON or form data
         if request.is_json:
@@ -109,6 +117,15 @@ def register_http_mail_routes(app):
         sender = _sanitize(sender, 64) or "anonymous"
 
         msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        if msg_id is None:
+            if request.is_json:
+                return jsonify({"error": "Mailbox no longer accepts messages"}), 410
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Mailbox no longer accepts messages",
+                                   compose_address=address), 410
 
         if request.is_json:
             return jsonify({"success": True, "msg_id": msg_id})
@@ -119,6 +136,30 @@ def register_http_mail_routes(app):
                                max_message_length=MAX_MAIL_MESSAGE_LENGTH,
                                success="Message sent.",
                                compose_address=address)
+
+    # ------------------------------------------------------------------
+    # Send fallback route for non-JS form submissions.
+    # The HTML compose form posts here and supplies mailbox address in
+    # `_address_override`; this keeps compose functional without JavaScript.
+    # ------------------------------------------------------------------
+
+    @app.route('/<string:url_addition>/mail/send', methods=["POST"])
+    def http_mail_send_form(url_addition):
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+
+        address = request.form.get("_address_override", "").strip()
+        if not address:
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Recipient mailbox address is required",
+                                   compose_address=""), 400
+
+        # Reuse the main send handler so validation/limits stay identical.
+        return http_mail_send(url_addition, address)
 
     # ------------------------------------------------------------------
     # Read inbox (requires read_key)
