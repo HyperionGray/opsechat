@@ -1,5 +1,46 @@
 # Changelog - Automation Consolidation
 
+## 2026-03-22 - HTTP Mail Hardening + CSP Cleanup
+
+### Summary
+Completed unfinished HTTP-mail implementation details from the recent email-over-HTTP direction:
+- Added a no-JS compose endpoint and form fallback flow
+- Finished mailbox-destruction safety semantics (`destroyed` guard on writers)
+- Removed inline CSS/JS from HTTP mail template for strict CSP compatibility
+
+### Added
+1. **No-JS fallback send route**
+   - `POST /<path>/mail/send`
+   - Accepts mailbox address from form field (`_address_override` / `address`)
+   - Returns clear 400 error when address is missing
+
+2. **Static assets for HTTP mail**
+   - `static/http_mail.css`
+   - `static/http_mail.js`
+   - Replaces inline `<style>`, inline `<script>`, and inline event handlers in `templates/http_mail.html`
+
+3. **Expanded test coverage**
+   - New tests for fallback form route and missing-address validation
+   - New tests for destroyed-mailbox write refusal and route-level 410 response
+
+### Modified
+1. **`http_mail_system.py`**
+   - Added `destroyed` mailbox state
+   - `add_message()` now refuses writes after destruction
+   - `delete_message()` and reads respect destroyed state
+   - Completed mailbox destroy path to mark mailbox destroyed under lock before cleanup
+   - Removed stale in-code checklist comments that were left as unfinished follow-ups
+
+2. **`http_mail_routes.py`**
+   - Added reusable helpers for rendering and JSON negotiation
+   - Added `/mail/send` fallback endpoint
+   - Improved HTML + JSON error handling consistency
+   - Returns **410 Gone** if write attempted against a destroyed mailbox reference
+
+3. **`templates/http_mail.html`**
+   - Switched to external JS/CSS includes
+   - Replaced inline handlers/styles with class/id driven structure for CSP compliance
+
 ## 2026-03-01 - Workflow Consolidation
 
 ### Summary
