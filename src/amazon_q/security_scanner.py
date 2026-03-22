@@ -6,7 +6,7 @@ This module provides security analysis using CodeWhisperer and pattern matching.
 
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Any
 from .utils import get_source_files
 
@@ -59,7 +59,7 @@ def perform_security_scan(repo_path: str, codewhisperer_client=None) -> Dict[str
             'security_issues': security_issues,
             'severity_breakdown': severity_breakdown,
             'risk_score': risk_score,
-            'scan_timestamp': datetime.utcnow().isoformat() + 'Z',
+            'scan_timestamp': datetime.now(timezone.utc).isoformat(),
             'scanner': 'local_heuristic_scanner'
         }
         
@@ -71,7 +71,7 @@ def perform_security_scan(repo_path: str, codewhisperer_client=None) -> Dict[str
             'security_issues': [],
             'severity_breakdown': {'high': 0, 'medium': 0, 'low': 0},
             'risk_score': 100,
-            'scan_timestamp': datetime.utcnow().isoformat() + 'Z',
+            'scan_timestamp': datetime.now(timezone.utc).isoformat(),
             'scanner': 'error',
             'error': str(e)
         }

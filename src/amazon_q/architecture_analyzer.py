@@ -7,7 +7,7 @@ This module provides architecture, dependency, and design pattern analysis.
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Any
 from .utils import get_source_files
@@ -46,7 +46,7 @@ def analyze_architecture(repo_path: str) -> Dict[str, Any]:
             'dependencies': dependency_analysis,
             'patterns': pattern_analysis,
             'architecture_score': architecture_score,
-            'analysis_timestamp': datetime.utcnow().isoformat() + 'Z',
+            'analysis_timestamp': datetime.now(timezone.utc).isoformat(),
             'analyzer': 'local_heuristic_architecture'
         }
         
@@ -57,7 +57,7 @@ def analyze_architecture(repo_path: str) -> Dict[str, Any]:
             'dependencies': {},
             'patterns': {},
             'architecture_score': 0,
-            'analysis_timestamp': datetime.utcnow().isoformat() + 'Z',
+            'analysis_timestamp': datetime.now(timezone.utc).isoformat(),
             'analyzer': 'error',
             'error': str(e)
         }

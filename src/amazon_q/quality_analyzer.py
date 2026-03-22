@@ -6,7 +6,7 @@ This module provides code quality metrics and issue detection.
 
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from .utils import get_source_files
@@ -99,7 +99,7 @@ def analyze_code_quality(repo_path: str, custom_rules: Optional[Dict] = None, be
             'metrics': quality_metrics,
             'issues': quality_issues,
             'total_files_analyzed': len(source_files),
-            'analysis_timestamp': datetime.utcnow().isoformat() + 'Z',
+            'analysis_timestamp': datetime.now(timezone.utc).isoformat(),
             'analyzer': 'local_heuristic_quality'
         }
         
@@ -109,7 +109,7 @@ def analyze_code_quality(repo_path: str, custom_rules: Optional[Dict] = None, be
             'metrics': {},
             'issues': [],
             'total_files_analyzed': 0,
-            'analysis_timestamp': datetime.utcnow().isoformat() + 'Z',
+            'analysis_timestamp': datetime.now(timezone.utc).isoformat(),
             'analyzer': 'error',
             'error': str(e)
         }
