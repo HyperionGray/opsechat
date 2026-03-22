@@ -422,6 +422,122 @@ class TestHttpMailRoutes:
         )
         assert r.get_json()["messages"][0]["sender"] == "anonymous"
 
+    def test_send_message_form_fallback_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Fallback",
+                "body": "Form send works",
+                "sender": "form-user",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        messages = r.get_json()["messages"]
+        assert len(messages) == 1
+        assert messages[0]["subject"] == "Fallback"
+
+    def test_send_message_form_fallback_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "No address", "body": "X"},
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required" in r.data
+
+    def test_read_inbox_json_supports_limit_offset(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        for idx in range(3):
+            self.client.post(
+                f"/{self.path}/mail/{addr}/send",
+                json={"subject": f"S{idx}", "body": f"Body {idx}", "sender": "alice"},
+            )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&limit=2&offset=1",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["total_messages"] == 3
+        assert data["limit"] == 2
+        assert data["offset"] == 1
+        assert data["has_more"] is False
+        assert [m["subject"] for m in data["messages"]] == ["S1", "S2"]
+
+    def test_read_inbox_json_include_body_false_hides_body(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Hidden body", "body": "secret", "sender": "alice"},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&include_body=false",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        msg = r.get_json()["messages"][0]
+        assert "body" not in msg
+
+    def test_read_inbox_json_invalid_limit_returns_400(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&limit=0",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
+        assert "limit must be >=" in r.get_json()["error"]
+
+    def test_mailbox_status_endpoint(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "A", "body": "B", "sender": "alice"},
+        )
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "C", "body": "D", "sender": "alice"},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/status?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["message_count"] == 2
+        assert data["oldest_message_at"] is not None
+        assert data["newest_message_at"] is not None
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/status?key=wrong",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 403
+
 
 # ===========================================================================
 # Missing email route tests (view, edit, delete, burner POST, expire)

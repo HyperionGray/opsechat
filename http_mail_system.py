@@ -39,14 +39,16 @@ class HttpMessage:
         self.sender_handle = sender_handle
         self.timestamp = timestamp
 
-    def to_dict(self) -> Dict:
-        return {
+    def to_dict(self, include_body: bool = True) -> Dict:
+        data = {
             "id": self.msg_id,
             "subject": self.subject,
-            "body": self.body,
             "sender": self.sender_handle,
             "timestamp": self.timestamp.isoformat(),
         }
+        if include_body:
+            data["body"] = self.body
+        return data
 
     def overwrite(self) -> None:
         """Overwrite message content in memory before deletion."""
@@ -64,6 +66,7 @@ class HttpMailbox:
         self.read_key = read_key
         self.messages: List[HttpMessage] = []
         self.created_at = datetime.datetime.now()
+        self.destroyed = False
         self.lock = threading.Lock()
 
     def add_message(self, subject: str, body: str, sender_handle: str) -> str:
@@ -77,16 +80,27 @@ class HttpMailbox:
             timestamp=datetime.datetime.now(),
         )
         with self.lock:
+            if self.destroyed:
+                raise RuntimeError("Mailbox has been destroyed")
             self.messages.append(msg)
         return msg_id
 
-    def get_messages(self, read_key: str) -> Optional[List[Dict]]:
+    def get_messages(self, read_key: str, limit: Optional[int] = None,
+                     offset: int = 0, include_body: bool = True,
+                     newest_first: bool = False) -> Optional[List[Dict]]:
         """Return messages if read_key matches, else None (default deny)."""
         if not secrets.compare_digest(read_key, self.read_key):
             return None
         self._expire_old_messages()
         with self.lock:
-            return [m.to_dict() for m in self.messages]
+            view = list(self.messages)
+            if newest_first:
+                view = list(reversed(view))
+            if offset:
+                view = view[offset:]
+            if limit is not None:
+                view = view[:limit]
+            return [m.to_dict(include_body=include_body) for m in view]
 
     def delete_message(self, read_key: str, msg_id: str) -> bool:
         """Delete a message by ID after verifying read_key. Returns True on success."""
@@ -117,6 +131,23 @@ class HttpMailbox:
         with self.lock:
             return len(self.messages)
 
+    def get_status(self, read_key: str) -> Optional[Dict]:
+        """Return mailbox metadata if read_key matches, else None."""
+        if not secrets.compare_digest(read_key, self.read_key):
+            return None
+        self._expire_old_messages()
+        with self.lock:
+            total = len(self.messages)
+            oldest = self.messages[0].timestamp.isoformat() if total else None
+            newest = self.messages[-1].timestamp.isoformat() if total else None
+            return {
+                "message_count": total,
+                "created_at": self.created_at.isoformat(),
+                "oldest_message_at": oldest,
+                "newest_message_at": newest,
+                "destroyed": self.destroyed,
+            }
+
 
 class HttpMailStorage:
     """Global in-memory store for all HTTP mailboxes."""
@@ -145,10 +176,6 @@ class HttpMailStorage:
         - We remove the mailbox from the global store under `self._lock`.
         - We then overwrite and clear messages under the per-mailbox lock
           to avoid races with concurrent send/add operations.
-
-        Checklist (follow-ups outside this class):
-        - [ ] Ensure HttpMailbox exposes a `lock` used by all writers.
-        - [ ] Ensure add_message (or equivalent) checks a `destroyed` flag.
         """
         # First, look up and authenticate the mailbox under the global lock.
         with self._lock:
