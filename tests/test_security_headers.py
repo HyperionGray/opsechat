@@ -6,6 +6,7 @@ X-Content-Type-Options, and Server header suppression.
 """
 
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,6 +19,8 @@ def _fresh_app():
     app = create_app()
     app.config["TESTING"] = True
     app.config["SECRET_KEY"] = "pytest-secret"
+    app.config["path"] = "secpath"
+    app.config["hostname"] = "localhost"
     return app
 
 
@@ -52,3 +55,15 @@ class TestSecurityHeaders:
     def test_server_header_stripped(self):
         h = self._headers()
         assert h.get("Server", "") == ""
+
+    def test_csp_includes_request_nonce(self):
+        csp = self._headers("/secpath/mail")["Content-Security-Policy"]
+        assert "script-src 'self' 'nonce-" in csp
+
+    def test_inline_script_nonce_matches_header(self):
+        response = self.client.get("/secpath/mail")
+        csp = response.headers["Content-Security-Policy"]
+        match = re.search(r"script-src 'self' 'nonce-([^']+)'", csp)
+        assert match is not None
+        nonce = match.group(1)
+        assert f'nonce="{nonce}"'.encode() in response.data

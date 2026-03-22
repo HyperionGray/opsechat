@@ -10,6 +10,7 @@
 - 🔒 **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
 - 🌐 **Domain Rotation CLI** - Easy burner email domain management
 - 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
+- 📬 **HTTP Mail Key Rotation** - Rotate mailbox read keys without recreating inboxes
 - ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use
 - 🚀 **Production Deployment** - Robust systemd units with auto-restart
 
@@ -256,6 +257,8 @@ Features
 ### Email System (NEW - REAL EMAIL SUPPORT!)
 - **Real SMTP/IMAP Integration** - Send and receive actual emails via configured email servers (see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md))
 - **Encrypted Email Inbox** - In-memory email storage with PGP support
+- **HTTP Mailboxes (No SMTP/IMAP Required)** - Create mailbox addresses with private read keys for default-deny inbox access
+- **Read Key Rotation** - Rotate `/mail/<address>/rotate-key` credentials while preserving existing messages
 - **Raw Mode Editing** - Full control over email headers for security testing
 - **Modern Burner Email System** - Guerrillamail-style rotating anonymous email addresses with:
   - **Multi-Burner Management** - Keep multiple active burner emails simultaneously

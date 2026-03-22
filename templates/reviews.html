@@ -363,7 +363,7 @@
 </div>
 
 {% if script_enabled %}
-<script>
+<script nonce="{{ csp_nonce }}">
 $(document).ready(function() {
   // Auto-refresh reviews every 30 seconds
   setInterval(function() {

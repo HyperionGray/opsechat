@@ -91,6 +91,13 @@ class TestHttpMailStorage:
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
 
+    def test_deleted_mailbox_object_rejects_future_writes(self):
+        mb = self.storage.create_mailbox()
+        assert mb.add_message("before", "exists", "alice")
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert mb.add_message("after", "blocked", "alice") is None
+        assert mb.get_messages(mb.read_key) is None
+
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
         result = self.storage.delete_mailbox(mb.address, "wrongkey")
@@ -384,6 +391,47 @@ class TestHttpMailRoutes:
         r = self.client.post(
             f"/{self.path}/mail/{addr}/destroy",
             json={"read_key": "badkey"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 403
+
+    def test_rotate_read_key_changes_authorization(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        old_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
+            json={"read_key": old_key},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["success"] is True
+        assert data["read_key"] != old_key
+        assert len(data["read_key"]) == 32
+
+        # Old key is no longer valid.
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={old_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 403
+
+        # New key can read inbox.
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={data['read_key']}",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+
+    def test_rotate_read_key_wrong_key_denied(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
+            json={"read_key": "not-the-key"},
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 403
