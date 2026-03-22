@@ -269,6 +269,7 @@ Features
 - **Phishing Simulation** - Gamified training with scoring and achievements
 - **Security Research Tools** - For authorized penetration testing and awareness training
 - **Plain Text Only** - HTML and images are shown as text for security analysis
+- **HTTP Mail Owner Status API** - Lightweight mailbox metadata endpoint at `/<path>/mail/<address>/status?key=<read_key>`
 - JavaScript optional throughout
 
 ### Amazon Q Code Review Integration (NEW!)
