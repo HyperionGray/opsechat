@@ -19,6 +19,7 @@ from http_mail_system import (
     HttpMailStorage,
     HttpMailbox,
     HttpMessage,
+    MailboxDestroyedError,
     http_mail_storage,
     MAX_MAIL_MESSAGE_LENGTH,
 )
@@ -100,6 +101,17 @@ class TestHttpMailStorage:
     def test_delete_nonexistent_mailbox(self):
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
+
+    def test_destroyed_mailbox_rejects_stale_reference_writes(self):
+        mb = self.storage.create_mailbox()
+        mailbox_ref = self.storage.get_mailbox(mb.address)
+        assert mailbox_ref is not None
+
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert mailbox_ref.destroyed is True
+
+        with pytest.raises(MailboxDestroyedError):
+            mailbox_ref.add_message("subject", "body", "sender")
 
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
@@ -197,6 +209,11 @@ class TestHttpMailbox:
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
 
+    def test_add_message_destroyed_mailbox_raises(self):
+        self.mailbox.destroyed = True
+        with pytest.raises(MailboxDestroyedError):
+            self.mailbox.add_message("subj", "body", "sender")
+
 
 # ===========================================================================
 # HTTP mail route integration tests
@@ -257,12 +274,60 @@ class TestHttpMailRoutes:
         )
         assert r.status_code == 400
 
+    def test_send_message_form_fallback_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "From Form",
+                "body": "Hello from no-JS fallback",
+                "sender": "plain-form-user",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        msgs = r.get_json()["messages"]
+        assert len(msgs) == 1
+        assert msgs[0]["subject"] == "From Form"
+        assert msgs[0]["body"] == "Hello from no-JS fallback"
+        assert msgs[0]["sender"] == "plain-form-user"
+
+    def test_send_message_form_fallback_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "No address", "body": "x"},
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required" in r.data
+
     def test_send_to_nonexistent_mailbox(self):
         r = self.client.post(
             f"/{self.path}/mail/doesnotexist/send",
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
         assert r.status_code == 404
+
+    def test_send_to_destroyed_mailbox_returns_410(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        mailbox = http_mail_storage.get_mailbox(addr)
+        assert mailbox is not None
+        mailbox.destroyed = True
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 410
 
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
