@@ -2,8 +2,8 @@ deadenv/
 deadenv/*
 
 # BISH build artifacts
-.bish-index
-.bish.sqlite
+**/.bish-index
+**/.bish.sqlite
 
 # Python
 __pycache__/

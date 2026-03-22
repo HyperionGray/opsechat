@@ -172,6 +172,28 @@ When limit exceeded:
 
 ---
 
+## HTTP Mail Destruction Hardening
+
+### What changed
+- Mailbox objects now have an explicit destroyed state.
+- Message writes are rejected after mailbox destruction, even if a stale in-memory reference still exists.
+- Destroy now scrubs all message content first, then tombstones the mailbox instance.
+
+### Why it matters
+The storage layer already removed destroyed mailboxes from the global map. This update closes a race-window edge case where an already-fetched mailbox object could still receive a late write.
+
+### Behavior
+- `HttpMailbox.add_message(...)` returns `None` if the mailbox has been destroyed.
+- Reads and deletes against destroyed mailbox objects are denied.
+- Route-level send now returns `410 Gone` if a mailbox becomes unavailable during send handling.
+
+### Test coverage
+New tests verify:
+- A destroyed mailbox object rejects new writes.
+- A mailbox reference kept after global deletion cannot be used to add messages.
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

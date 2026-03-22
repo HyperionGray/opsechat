@@ -101,6 +101,12 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_deleted_mailbox_object_rejects_writes(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert mb.add_message("after", "destroy", "sender") is None
+        assert mb.message_count() == 0
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -196,6 +202,11 @@ class TestHttpMailbox:
         assert "Secret" not in msg.subject
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
+
+    def test_destroyed_mailbox_rejects_add_and_read(self):
+        self.mailbox.destroy()
+        assert self.mailbox.add_message("Subj", "Body", "alice") is None
+        assert self.mailbox.get_messages("secretkey123456789012345678901") is None
 
 
 # ===========================================================================
