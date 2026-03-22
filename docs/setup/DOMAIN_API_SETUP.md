@@ -190,9 +190,12 @@ Enterprise-focused with comprehensive API.
    - Revoke old keys in registrar dashboard
 
 3. **Cleanup**
-   - Let expired domains lapse naturally
-   - No manual cleanup required
-   - Monitor for any stuck domains
+   - Let expired domains lapse naturally at the registrar
+   - Prune expired local CLI state entries:
+     ```bash
+     python domain_rotation_cli.py cleanup
+     ```
+   - Monitor for any stale local state entries
 
 ## Troubleshooting
 

@@ -2,6 +2,7 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +175,68 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_export_state_serializes_datetimes(self):
+        """Exported state should be JSON-safe."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        now = datetime.now()
+        manager.current_spending = 3.25
+        manager.active_domain = "active.xyz"
+        manager.owned_domains = [{
+            "domain": "active.xyz",
+            "price": 3.25,
+            "purchased_at": now,
+            "expires_at": now + timedelta(days=365),
+        }]
+
+        state = manager.export_state()
+
+        assert state["current_spending"] == 3.25
+        assert state["active_domain"] == "active.xyz"
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(state["owned_domains"][0]["expires_at"], str)
+
+    def test_import_state_parses_datetimes(self):
+        """Imported ISO datetime strings should round-trip to datetime objects."""
+        now = datetime.now()
+        manager = DomainRotationManager(monthly_budget=50.0)
+
+        manager.import_state({
+            "current_spending": "4.5",
+            "active_domain": "test.xyz",
+            "owned_domains": [{
+                "domain": "test.xyz",
+                "price": 2.5,
+                "purchased_at": now.isoformat(),
+                "expires_at": (now + timedelta(days=1)).isoformat(),
+            }]
+        })
+
+        assert manager.current_spending == 4.5
+        assert manager.active_domain == "test.xyz"
+        assert isinstance(manager.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(manager.owned_domains[0]["expires_at"], datetime)
+
+    def test_prune_expired_domains_updates_active_domain(self):
+        """Expired domains are removed and active domain is reassigned."""
+        now = datetime.now()
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.active_domain = "expired.xyz"
+        manager.owned_domains = [
+            {
+                "domain": "expired.xyz",
+                "price": 1.0,
+                "expires_at": now - timedelta(days=1),
+            },
+            {
+                "domain": "fresh.xyz",
+                "price": 2.0,
+                "expires_at": now + timedelta(days=10),
+            },
+        ]
+
+        removed = manager.prune_expired_domains(now=now)
+
+        assert removed == 1
+        assert len(manager.owned_domains) == 1
+        assert manager.active_domain == "fresh.xyz"
