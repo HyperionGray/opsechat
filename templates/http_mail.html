@@ -185,7 +185,7 @@
         id="compose-form">
     <div class="form-group">
       <label for="compose-address-input">Recipient Mailbox Address:</label>
-      <input type="text" id="compose-address-input" name="_address_override"
+      <input type="text" id="compose-address-input" name="address"
              value="{{ compose_address or '' }}"
              placeholder="e.g. aBcDeFgHiJkL">
       <p class="hint">This is the short address the recipient shared with you.</p>
@@ -221,20 +221,28 @@
     Without the correct read key, no messages are revealed (default deny).
   </p>
 
-  <form method="GET" id="read-form">
+  <form method="GET" action="/{{ path }}/mail/inbox" id="read-form">
     <div class="form-group">
       <label for="read-address">Mailbox Address:</label>
-      <input type="text" id="read-address" name="_read_address"
+      <input type="text" id="read-address" name="address"
              value="{{ inbox_address or '' }}"
              placeholder="e.g. aBcDeFgHiJkL">
     </div>
     <div class="form-group">
       <label for="read-key-input">Read Key:</label>
-      <input type="text" id="read-key-input" name="_read_key"
+      <input type="text" id="read-key-input" name="key"
              value="{{ inbox_read_key or '' }}"
              placeholder="Your private read key">
     </div>
-    <button type="button" onclick="fetchInbox()">Open Inbox</button>
+    <div class="form-group">
+      <label for="read-limit">Max Messages (optional):</label>
+      <input type="text" id="read-limit" name="limit"
+             value="{{ inbox_limit or '' }}"
+             placeholder="e.g. 20">
+      <p class="hint">If set, only the most recent N messages are returned (1-200).</p>
+    </div>
+    <button type="button" onclick="fetchInbox()">Open Inbox (JS)</button>
+    <noscript><button type="submit">Open Inbox</button></noscript>
   </form>
 
   <!-- Inbox messages rendered from server (non-JS fallback) -->
@@ -333,19 +341,11 @@
     });
   }
 
-  // Update compose form action when address changes
-  function updateComposeAction() {
-    var addr = document.getElementById('compose-address-input').value.trim();
-    var form = document.getElementById('compose-form');
-    if (addr) {
-      form.action = '/{{ path }}/mail/' + encodeURIComponent(addr) + '/send';
-    }
-  }
-
   // Fetch inbox via JS
   function fetchInbox() {
     var address = document.getElementById('read-address').value.trim();
     var readKey = document.getElementById('read-key-input').value.trim();
+    var limit = document.getElementById('read-limit').value.trim();
 
     if (!address || !readKey) {
       alert('Please enter both mailbox address and read key.');
@@ -354,6 +354,9 @@
 
     var url = '/{{ path }}/mail/' + encodeURIComponent(address) +
               '/inbox?key=' + encodeURIComponent(readKey);
+    if (limit) {
+      url += '&limit=' + encodeURIComponent(limit);
+    }
 
     fetch(url, {headers: {'Accept': 'application/json'}})
     .then(function(r) {
