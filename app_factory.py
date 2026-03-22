@@ -82,8 +82,8 @@ def create_app():
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
+        # Note: keep CSP strict (no unsafe-inline). Legacy templates with inline
+        # JS/CSS should be migrated to static assets as separate maintenance work.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
