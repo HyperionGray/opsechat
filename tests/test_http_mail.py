@@ -283,6 +283,43 @@ class TestHttpMailRoutes:
         assert len(data["messages"]) == 1
         assert data["messages"][0]["subject"] == "Test"
 
+    def test_read_inbox_pagination_desc_limit_offset(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        for subject in ["One", "Two", "Three"]:
+            self.client.post(
+                f"/{self.path}/mail/{addr}/send",
+                json={"subject": subject, "body": f"Body {subject}", "sender": "alice"},
+            )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&order=desc&limit=2&offset=1",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert [m["subject"] for m in data["messages"]] == ["Two", "One"]
+        assert data["total_messages"] == 3
+        assert data["returned_messages"] == 2
+        assert data["offset"] == 1
+        assert data["limit"] == 2
+        assert data["order"] == "desc"
+        assert data["has_more"] is False
+
+    def test_read_inbox_invalid_pagination_returns_400(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&limit=0",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
+        assert "error" in r.get_json()
+
     def test_read_inbox_wrong_key_is_denied(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]

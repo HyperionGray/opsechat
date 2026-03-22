@@ -88,6 +88,37 @@ class HttpMailbox:
         with self.lock:
             return [m.to_dict() for m in self.messages]
 
+    def get_messages_page(
+        self,
+        read_key: str,
+        *,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        newest_first: bool = False,
+    ) -> Optional[Dict]:
+        """Return paginated messages when read_key is valid, else None."""
+        messages = self.get_messages(read_key)
+        if messages is None:
+            return None
+
+        ordered = list(reversed(messages)) if newest_first else messages
+        total = len(ordered)
+
+        start = max(0, offset)
+        if limit is None:
+            page = ordered[start:]
+        else:
+            page = ordered[start:start + limit]
+
+        return {
+            "messages": page,
+            "total_messages": total,
+            "returned_messages": len(page),
+            "offset": start,
+            "limit": limit,
+            "has_more": (start + len(page)) < total,
+        }
+
     def delete_message(self, read_key: str, msg_id: str) -> bool:
         """Delete a message by ID after verifying read_key. Returns True on success."""
         if not secrets.compare_digest(read_key, self.read_key):

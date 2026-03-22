@@ -36,6 +36,37 @@ def register_http_mail_routes(app):
         text = re.sub(r'[<>&"\']', '', text)
         return text[:max_len]
 
+    def _wants_json() -> bool:
+        accept = request.headers.get("Accept", "")
+        return "application/json" in accept.lower()
+
+    def _parse_pagination_params():
+        """Parse and validate optional inbox pagination query params."""
+        raw_limit = request.args.get("limit", "")
+        raw_offset = request.args.get("offset", "0")
+        order = request.args.get("order", "asc").strip().lower()
+
+        if order not in {"asc", "desc"}:
+            return None, None, None, "Invalid order. Use 'asc' or 'desc'."
+
+        limit = None
+        if raw_limit != "":
+            try:
+                limit = int(raw_limit)
+            except ValueError:
+                return None, None, None, "Invalid limit. Must be an integer."
+            if limit <= 0 or limit > 200:
+                return None, None, None, "Invalid limit. Use 1-200."
+
+        try:
+            offset = int(raw_offset)
+        except ValueError:
+            return None, None, None, "Invalid offset. Must be an integer."
+        if offset < 0:
+            return None, None, None, "Invalid offset. Must be >= 0."
+
+        return limit, offset, order, None
+
     # ------------------------------------------------------------------
     # Main UI — create or access mailbox
     # ------------------------------------------------------------------
@@ -132,7 +163,7 @@ def register_http_mail_routes(app):
 
         mailbox = http_mail_storage.get_mailbox(address)
         if mailbox is None:
-            if request.headers.get("Accept", "").startswith("application/json"):
+            if _wants_json():
                 return jsonify({"error": "Mailbox not found"}), 404
             return render_template("http_mail.html",
                                    path=app.config["path"],
@@ -141,10 +172,25 @@ def register_http_mail_routes(app):
                                    error="Mailbox not found"), 404
 
         read_key = request.args.get("key", "")
-        messages = mailbox.get_messages(read_key)
+        limit, offset, order, pagination_error = _parse_pagination_params()
+        if pagination_error:
+            if _wants_json():
+                return jsonify({"error": pagination_error}), 400
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error=pagination_error), 400
 
-        if messages is None:
-            if request.headers.get("Accept", "").startswith("application/json"):
+        page = mailbox.get_messages_page(
+            read_key,
+            limit=limit,
+            offset=offset,
+            newest_first=(order == "desc"),
+        )
+
+        if page is None:
+            if _wants_json():
                 return jsonify({"error": "Invalid read key"}), 403
             return render_template("http_mail.html",
                                    path=app.config["path"],
@@ -152,8 +198,17 @@ def register_http_mail_routes(app):
                                    max_message_length=MAX_MAIL_MESSAGE_LENGTH,
                                    error="Invalid read key — access denied"), 403
 
-        if request.headers.get("Accept", "").startswith("application/json"):
-            return jsonify({"address": address, "messages": messages})
+        if _wants_json():
+            return jsonify({
+                "address": address,
+                "messages": page["messages"],
+                "total_messages": page["total_messages"],
+                "returned_messages": page["returned_messages"],
+                "offset": page["offset"],
+                "limit": page["limit"],
+                "order": order,
+                "has_more": page["has_more"],
+            })
 
         return render_template("http_mail.html",
                                path=app.config["path"],
@@ -161,7 +216,7 @@ def register_http_mail_routes(app):
                                max_message_length=MAX_MAIL_MESSAGE_LENGTH,
                                inbox_address=address,
                                inbox_read_key=read_key,
-                               messages=messages)
+                               messages=page["messages"])
 
     # ------------------------------------------------------------------
     # Delete a single message (requires read_key in POST body)
