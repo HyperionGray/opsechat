@@ -13,14 +13,6 @@ Experimental file transfer utilities that were developed but are not integrated 
 - `repair_send.py` - Repair mechanism for failed transfers
 - `bench_pvrt.py` - Benchmarking tool
 
-### `transfer_sdk/`
-A comprehensive file transfer SDK with multiple transport protocols and integrity checking. This appears to be experimental/development code for a robust file transfer system. Key components include:
-- Transport implementations (QUIC, UDP, TCP, WebSocket)
-- Integrity checking (sender/receiver daemons)
-- Blob management and streaming
-- Protocol serialization and encoding
-- Various receiver/sender daemons
-
 ## Why These Were Moved
 
 These directories were moved to `bak/` during repository organization because:
@@ -32,7 +24,7 @@ These directories were moved to `bak/` during repository organization because:
 ## If You Need These
 
 If you need to use or integrate these tools:
-1. Move them back to the root directory: `git mv bak/tools tools` or `git mv bak/transfer_sdk transfer_sdk`
+1. Move them back to the root directory: `git mv bak/tools tools`
 2. Update the main documentation to explain their purpose
 3. Add tests if needed
 4. Ensure they integrate properly with the main application
