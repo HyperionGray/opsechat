@@ -129,6 +129,11 @@ class TestHttpMailbox:
         assert msg_id
         assert len(msg_id) == 16
 
+    def test_add_message_returns_none_when_destroyed(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
+        assert msg_id is None
+
     def test_get_messages_correct_key(self):
         self.mailbox.add_message("Subj", "Body", "alice")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -146,6 +151,18 @@ class TestHttpMailbox:
     def test_get_messages_empty_key_returns_none(self):
         msgs = self.mailbox.get_messages("")
         assert msgs is None
+
+    def test_get_messages_supports_limit_and_newest_first(self):
+        self.mailbox.add_message("First", "Body1", "alice")
+        self.mailbox.add_message("Second", "Body2", "alice")
+        self.mailbox.add_message("Third", "Body3", "alice")
+
+        msgs = self.mailbox.get_messages(
+            "secretkey123456789012345678901",
+            limit=2,
+            newest_first=True,
+        )
+        assert [m["subject"] for m in msgs] == ["Third", "Second"]
 
     def test_delete_message_correct_key(self):
         msg_id = self.mailbox.add_message("Subj", "Body", "alice")
@@ -248,6 +265,51 @@ class TestHttpMailRoutes:
         assert data["success"] is True
         assert "msg_id" in data
 
+    def test_send_message_without_address_in_path_json(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            json={"address": addr, "subject": "Hi", "body": "Hello there", "sender": "bob"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["success"] is True
+        assert "msg_id" in data
+
+    def test_send_message_without_address_in_path_form(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Hello",
+                "body": "Form body",
+                "sender": "form-sender",
+            },
+        )
+        assert r.status_code == 200
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert inbox.status_code == 200
+        messages = inbox.get_json()["messages"]
+        assert len(messages) == 1
+        assert messages[0]["subject"] == "Hello"
+
+    def test_send_message_without_address_fails(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            json={"subject": "No address", "body": "x"},
+        )
+        assert r.status_code == 400
+
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
@@ -282,6 +344,47 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert len(data["messages"]) == 1
         assert data["messages"][0]["subject"] == "Test"
+
+    def test_read_inbox_supports_order_and_limit(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(f"/{self.path}/mail/{addr}/send", json={"subject": "One", "body": "1", "sender": "a"})
+        self.client.post(f"/{self.path}/mail/{addr}/send", json={"subject": "Two", "body": "2", "sender": "a"})
+        self.client.post(f"/{self.path}/mail/{addr}/send", json={"subject": "Three", "body": "3", "sender": "a"})
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&order=newest&limit=2",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["order"] == "newest"
+        assert data["limit"] == 2
+        assert [m["subject"] for m in data["messages"]] == ["Three", "Two"]
+
+    def test_read_inbox_invalid_limit_returns_400(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&limit=abc",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
+
+    def test_read_inbox_invalid_order_returns_400(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&order=sideways",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
 
     def test_read_inbox_wrong_key_is_denied(self):
         r = self.client.post(f"/{self.path}/mail/new")

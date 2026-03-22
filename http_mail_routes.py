@@ -18,6 +18,8 @@ from flask import render_template, request, session, jsonify, redirect, url_for
 from http_mail_system import http_mail_storage, MAX_MAIL_MESSAGE_LENGTH
 from utils import id_generator, get_random_color
 
+MAX_INBOX_LIMIT = 200
+
 
 def register_http_mail_routes(app):
     """Register HTTP mail routes with the Flask app."""
@@ -109,6 +111,15 @@ def register_http_mail_routes(app):
         sender = _sanitize(sender, 64) or "anonymous"
 
         msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        if msg_id is None:
+            if request.is_json:
+                return jsonify({"error": "Mailbox has been destroyed"}), 410
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Mailbox has been destroyed",
+                                   compose_address=address), 410
 
         if request.is_json:
             return jsonify({"success": True, "msg_id": msg_id})
@@ -119,6 +130,29 @@ def register_http_mail_routes(app):
                                max_message_length=MAX_MAIL_MESSAGE_LENGTH,
                                success="Message sent.",
                                compose_address=address)
+
+    @app.route('/<string:url_addition>/mail/send', methods=["POST"])
+    def http_mail_send_without_address_in_path(url_addition):
+        """No-JS fallback sender route that accepts address from form/json body."""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+
+        if request.is_json:
+            address = ((request.get_json() or {}).get("address") or "").strip()
+        else:
+            address = request.form.get("_address_override", "").strip()
+
+        if not address:
+            if request.is_json:
+                return jsonify({"error": "Mailbox address is required"}), 400
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Recipient mailbox address is required"), 400
+
+        return http_mail_send(url_addition, address)
 
     # ------------------------------------------------------------------
     # Read inbox (requires read_key)
@@ -141,7 +175,39 @@ def register_http_mail_routes(app):
                                    error="Mailbox not found"), 404
 
         read_key = request.args.get("key", "")
-        messages = mailbox.get_messages(read_key)
+        raw_limit = request.args.get("limit", "").strip()
+        limit = None
+        if raw_limit:
+            try:
+                limit = int(raw_limit)
+            except ValueError:
+                if request.headers.get("Accept", "").startswith("application/json"):
+                    return jsonify({"error": "limit must be an integer"}), 400
+                return render_template("http_mail.html",
+                                       path=app.config["path"],
+                                       hostname=app.config.get("hostname", ""),
+                                       max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                       error="Invalid limit: must be an integer"), 400
+            if limit < 1 or limit > MAX_INBOX_LIMIT:
+                if request.headers.get("Accept", "").startswith("application/json"):
+                    return jsonify({"error": f"limit must be between 1 and {MAX_INBOX_LIMIT}"}), 400
+                return render_template("http_mail.html",
+                                       path=app.config["path"],
+                                       hostname=app.config.get("hostname", ""),
+                                       max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                       error=f"Invalid limit: must be 1-{MAX_INBOX_LIMIT}"), 400
+
+        order = request.args.get("order", "oldest").strip().lower()
+        if order not in ("oldest", "newest"):
+            if request.headers.get("Accept", "").startswith("application/json"):
+                return jsonify({"error": "order must be 'oldest' or 'newest'"}), 400
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Invalid order: must be 'oldest' or 'newest'"), 400
+
+        messages = mailbox.get_messages(read_key, limit=limit, newest_first=(order == "newest"))
 
         if messages is None:
             if request.headers.get("Accept", "").startswith("application/json"):
@@ -153,7 +219,7 @@ def register_http_mail_routes(app):
                                    error="Invalid read key — access denied"), 403
 
         if request.headers.get("Accept", "").startswith("application/json"):
-            return jsonify({"address": address, "messages": messages})
+            return jsonify({"address": address, "messages": messages, "order": order, "limit": limit})
 
         return render_template("http_mail.html",
                                path=app.config["path"],

@@ -60,6 +60,39 @@ Supported providers:
 - Set monthly budget (default: $50)
 - System finds domains under $5
 
+### 2.5 HTTP Mail (No SMTP/IMAP Required)
+
+HTTP Mail provides a lightweight mailbox model over plain HTTP:
+
+- Create mailbox -> get a public `address` and private `read_key`
+- Anyone with `address` can send
+- Only holders of `read_key` can read/delete/destroy
+- In-memory only, auto-expiry, default-deny reads
+
+**Access:** `/{path}/mail`
+
+#### HTTP Mail Endpoints
+
+- `POST /{path}/mail/new` -> create mailbox
+- `POST /{path}/mail/{address}/send` -> send directly to an address
+- `POST /{path}/mail/send` -> no-JS fallback; provide address in body
+- `GET /{path}/mail/{address}/inbox?key=<read_key>` -> read inbox
+- `POST /{path}/mail/{address}/delete/{msg_id}` -> delete one message
+- `POST /{path}/mail/{address}/destroy` -> destroy mailbox and scrub messages
+
+#### Inbox Query Controls (API)
+
+`GET /{path}/mail/{address}/inbox` supports:
+
+- `order=oldest|newest` (default: `oldest`)
+- `limit=<1..200>` (optional)
+
+Example:
+
+```text
+/{path}/mail/{address}/inbox?key=<read_key>&order=newest&limit=20
+```
+
 #### Budget Management
 - Track spending across domain purchases
 - View received emails with full header information
