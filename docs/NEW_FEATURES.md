@@ -2,6 +2,31 @@
 
 This guide covers the new features added in the final push for OpSecHat production readiness.
 
+## HTTP Mail Reliability Improvements
+
+### What Changed
+The HTTP mail subsystem now handles two previously unfinished edge cases:
+
+1. **No-JS compose path works end-to-end**  
+   A dedicated fallback endpoint (`POST /<path>/mail/send`) now accepts form submissions with a mailbox address field. This makes compose work even when JavaScript is disabled.
+
+2. **Race-safe mailbox destruction**  
+   Mailboxes now track a `destroyed` state internally. If a mailbox is destroyed between lookup and append, sends are rejected instead of silently creating unreachable messages.
+
+### API Behavior
+- Existing endpoint remains:
+  - `POST /<path>/mail/<address>/send`
+- New fallback endpoint:
+  - `POST /<path>/mail/send` with form field `_address_override` (or JSON `address`)
+- New error case:
+  - `410 Gone` when a mailbox was destroyed during send
+
+### Security/Correctness Impact
+- Prevents late writes to deleted mailboxes (memory hygiene + correctness).
+- Improves functionality for strict/no-script clients.
+
+---
+
 ## 🔑 Automated Key Exchange
 
 ### What Changed
