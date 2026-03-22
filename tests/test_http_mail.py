@@ -101,6 +101,18 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_deleted_mailbox_rejects_stale_reference_writes(self):
+        mb = self.storage.create_mailbox()
+        stale_reference = self.storage.get_mailbox(mb.address)
+        assert stale_reference is not None
+
+        deleted = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert deleted is True
+
+        # Simulate a sender still holding a stale mailbox object from before destroy.
+        assert stale_reference.add_message("Subj", "Body", "sender") is None
+        assert stale_reference.message_count() == 0
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -128,6 +140,10 @@ class TestHttpMailbox:
         msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
         assert msg_id
         assert len(msg_id) == 16
+
+    def test_add_message_destroyed_mailbox_returns_none(self):
+        self.mailbox.destroyed = True
+        assert self.mailbox.add_message("Hello", "Body text", "alice") is None
 
     def test_get_messages_correct_key(self):
         self.mailbox.add_message("Subj", "Body", "alice")
@@ -263,6 +279,18 @@ class TestHttpMailRoutes:
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
         assert r.status_code == 404
+
+    def test_send_to_destroyed_mailbox_returns_410(self):
+        mailbox = http_mail_storage.create_mailbox()
+        with mailbox.lock:
+            mailbox.destroyed = True
+
+        r = self.client.post(
+            f"/{self.path}/mail/{mailbox.address}/send",
+            json={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 410
+        http_mail_storage.delete_mailbox(mailbox.address, mailbox.read_key)
 
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
