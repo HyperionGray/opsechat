@@ -91,6 +91,18 @@ class TestHttpMailStorage:
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
 
+    def test_delete_mailbox_marks_instance_destroyed(self):
+        mb = self.storage.create_mailbox()
+        mb.add_message("subj", "body", "sender")
+
+        result = self.storage.delete_mailbox(mb.address, mb.read_key)
+
+        assert result is True
+        assert mb.destroyed is True
+        # stale references cannot re-add messages after destroy
+        assert mb.add_message("late", "message", "sender") is None
+        assert mb.message_count() == 0
+
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
         result = self.storage.delete_mailbox(mb.address, "wrongkey")
@@ -128,6 +140,12 @@ class TestHttpMailbox:
         msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
         assert msg_id
         assert len(msg_id) == 16
+
+    def test_add_message_returns_none_when_destroyed(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
+        assert msg_id is None
+        assert self.mailbox.message_count() == 0
 
     def test_get_messages_correct_key(self):
         self.mailbox.add_message("Subj", "Body", "alice")
