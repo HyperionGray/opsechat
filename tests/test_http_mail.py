@@ -101,6 +101,24 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_delete_mailbox_marks_recently_destroyed(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert self.storage.is_recently_destroyed(mb.address) is True
+
+    def test_destroyed_tombstone_expires(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        self.storage._destroyed_mailboxes[mb.address] = (
+            datetime.datetime.now() - datetime.timedelta(minutes=11)
+        )
+        assert self.storage.is_recently_destroyed(mb.address) is False
+
+    def test_stale_mailbox_reference_rejects_new_messages_after_delete(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert mb.add_message("late", "body", "sender") is None
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -197,6 +215,14 @@ class TestHttpMailbox:
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
 
+    def test_destroy_rejects_future_writes(self):
+        self.mailbox.add_message("Subj", "Body", "alice")
+        self.mailbox.destroy()
+
+        assert self.mailbox.add_message("New", "Body", "alice") is None
+        assert self.mailbox.messages == []
+        assert self.mailbox.message_count() == 0
+
 
 # ===========================================================================
 # HTTP mail route integration tests
@@ -264,6 +290,26 @@ class TestHttpMailRoutes:
         )
         assert r.status_code == 404
 
+    def test_send_to_destroyed_mailbox_returns_410(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        payload = r.get_json()
+        addr = payload["address"]
+        read_key = payload["read_key"]
+
+        destroy = self.client.post(
+            f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": read_key},
+            headers={"Accept": "application/json"},
+        )
+        assert destroy.status_code == 200
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 410
+        assert "destroyed" in r.get_json()["error"].lower()
+
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
@@ -309,6 +355,26 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 404
+
+    def test_read_inbox_destroyed_mailbox_returns_410(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        payload = r.get_json()
+        addr = payload["address"]
+        read_key = payload["read_key"]
+
+        destroy = self.client.post(
+            f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": read_key},
+            headers={"Accept": "application/json"},
+        )
+        assert destroy.status_code == 200
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 410
+        assert "destroyed" in r.get_json()["error"].lower()
 
     def test_delete_message_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -387,6 +453,26 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 403
+
+    def test_destroy_mailbox_twice_returns_410(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        payload = r.get_json()
+        addr = payload["address"]
+        read_key = payload["read_key"]
+
+        first = self.client.post(
+            f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": read_key},
+            headers={"Accept": "application/json"},
+        )
+        assert first.status_code == 200
+
+        second = self.client.post(
+            f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": read_key},
+            headers={"Accept": "application/json"},
+        )
+        assert second.status_code == 410
 
     def test_message_body_sanitized(self):
         r = self.client.post(f"/{self.path}/mail/new")

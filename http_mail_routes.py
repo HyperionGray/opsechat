@@ -36,6 +36,27 @@ def register_http_mail_routes(app):
         text = re.sub(r'[<>&"\']', '', text)
         return text[:max_len]
 
+    def _mailbox_state_error(address: str, not_found_status: int = 404):
+        """Return mailbox missing/destroyed error based on request type."""
+        destroyed = http_mail_storage.is_recently_destroyed(address)
+        wants_json = request.is_json or request.headers.get("Accept", "").startswith("application/json")
+
+        if destroyed:
+            message = "Mailbox has been destroyed"
+            status = 410
+        else:
+            message = "Mailbox not found"
+            status = not_found_status
+
+        if wants_json:
+            return jsonify({"error": message}), status
+
+        return render_template("http_mail.html",
+                               path=app.config["path"],
+                               hostname=app.config.get("hostname", ""),
+                               max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                               error=message), status
+
     # ------------------------------------------------------------------
     # Main UI — create or access mailbox
     # ------------------------------------------------------------------
@@ -81,7 +102,7 @@ def register_http_mail_routes(app):
 
         mailbox = http_mail_storage.get_mailbox(address)
         if mailbox is None:
-            return jsonify({"error": "Mailbox not found"}), 404
+            return _mailbox_state_error(address)
 
         # Accept JSON or form data
         if request.is_json:
@@ -109,6 +130,15 @@ def register_http_mail_routes(app):
         sender = _sanitize(sender, 64) or "anonymous"
 
         msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        if msg_id is None:
+            if request.is_json:
+                return jsonify({"error": "Mailbox has been destroyed"}), 410
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Mailbox has been destroyed",
+                                   compose_address=address), 410
 
         if request.is_json:
             return jsonify({"success": True, "msg_id": msg_id})
@@ -132,13 +162,7 @@ def register_http_mail_routes(app):
 
         mailbox = http_mail_storage.get_mailbox(address)
         if mailbox is None:
-            if request.headers.get("Accept", "").startswith("application/json"):
-                return jsonify({"error": "Mailbox not found"}), 404
-            return render_template("http_mail.html",
-                                   path=app.config["path"],
-                                   hostname=app.config.get("hostname", ""),
-                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
-                                   error="Mailbox not found"), 404
+            return _mailbox_state_error(address)
 
         read_key = request.args.get("key", "")
         messages = mailbox.get_messages(read_key)
@@ -176,7 +200,7 @@ def register_http_mail_routes(app):
 
         mailbox = http_mail_storage.get_mailbox(address)
         if mailbox is None:
-            return jsonify({"error": "Mailbox not found"}), 404
+            return _mailbox_state_error(address)
 
         if request.is_json:
             read_key = (request.get_json() or {}).get("read_key", "")
@@ -214,6 +238,8 @@ def register_http_mail_routes(app):
         deleted = http_mail_storage.delete_mailbox(address, read_key)
 
         if not deleted:
+            if http_mail_storage.is_recently_destroyed(address):
+                return jsonify({"error": "Mailbox has already been destroyed"}), 410
             return jsonify({"error": "Invalid read key or mailbox not found"}), 403
 
         if request.is_json:

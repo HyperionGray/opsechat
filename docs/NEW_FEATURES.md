@@ -172,6 +172,31 @@ When limit exceeded:
 
 ---
 
+## HTTP Mail Lifecycle Hardening
+
+### What changed
+- Destroyed HTTP mailbox addresses are now tracked for a short tombstone window (10 minutes).
+- Routes return **HTTP 410 Gone** for recently destroyed addresses instead of a generic 404.
+- `HttpMailbox` now has a hard destroy state, and stale object references reject late writes.
+- Mailbox destruction always wipes in-memory messages before the mailbox is considered destroyed.
+
+### Why this matters
+- Clearer behavior for API clients and users after mailbox destruction.
+- Better safety under concurrent access (send vs destroy race windows).
+- Stronger default-deny lifecycle: once destroyed, mailbox objects cannot be reused.
+
+### Affected endpoints
+- `POST /<path>/mail/<address>/send`
+- `GET /<path>/mail/<address>/inbox`
+- `POST /<path>/mail/<address>/destroy`
+
+### Test coverage added
+- Tombstone lifecycle tests in `tests/test_http_mail.py`
+- Stale reference write-rejection tests in `tests/test_http_mail.py`
+- Route-level 410 behavior tests for send/inbox/double-destroy
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose
@@ -469,6 +494,6 @@ curl http://localhost:5001/chat/dm/{dm_id}
 
 ---
 
-**Last Updated**: March 2, 2026
+**Last Updated**: March 22, 2026
 **Version**: 0.8.0-alpha
 **Author**: OpSecHat Development Team
