@@ -47,6 +47,7 @@ Documentation for end users and operators.
 Information for developers contributing to the project.
 
 - [Development Guide](development/DEVELOPMENT.md) - **NEW!** Complete development setup and workflow
+- [Amazon Q Local Analysis](development/AMAZON_Q_LOCAL_ANALYSIS.md) - Deterministic fallback analyzer behavior and scoring
 - [Contributing Guide](development/CONTRIBUTING.md) - How to contribute
 - [Code of Conduct](development/CODE_OF_CONDUCT.md) - Community guidelines
 - [Modernization Notes](development/MODERNIZATION.md) - Upgrade notes

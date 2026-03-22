@@ -290,9 +290,15 @@ integration:
 ### Mock Mode Fallback
 
 If AWS services are unavailable, the integration automatically falls back to mock mode:
-- Provides local analysis using heuristics
+- Provides deterministic local analysis using heuristics
 - Generates comprehensive reports
 - Maintains workflow functionality
+
+Local analyzer details:
+- `src/amazon_q/security_scanner.py` (security findings + risk score)
+- `src/amazon_q/quality_analyzer.py` (quality metrics + issue detection)
+- `src/amazon_q/architecture_analyzer.py` (structure/dependency/pattern scoring)
+- Additional documentation: `docs/development/AMAZON_Q_LOCAL_ANALYSIS.md`
 
 ## Cost Management
 
