@@ -4,6 +4,8 @@
 
 The OpSec Email System provides an encrypted, anonymous email platform integrated with the opsechat Tor hidden service. This system includes **real SMTP/IMAP email integration** for sending and receiving actual emails, along with automated domain purchasing for burner email rotation.
 
+For SMTP/IMAP-free inboxes over HTTP only, see the dedicated [HTTP Mail Guide](HTTP_MAIL.md).
+
 **NEW:** Real email capabilities with SMTP/IMAP support and automated domain management!
 
 ## ⚠️ Security Notice
