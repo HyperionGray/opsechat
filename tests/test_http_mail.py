@@ -274,6 +274,40 @@ class TestHttpMailRoutes:
         assert data["success"] is True
         assert "msg_id" in data
 
+    def test_send_message_form_fallback_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        data = r.get_json()
+        addr = data["address"]
+        read_key = data["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Fallback",
+                "body": "Form send works",
+                "sender": "bob",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        messages = r.get_json()["messages"]
+        assert len(messages) == 1
+        assert messages[0]["subject"] == "Fallback"
+        assert messages[0]["body"] == "Form send works"
+
+    def test_send_message_form_fallback_missing_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "x", "body": "y", "sender": "z"},
+        )
+        assert r.status_code == 400
+
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]

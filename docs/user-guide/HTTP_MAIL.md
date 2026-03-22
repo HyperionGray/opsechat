@@ -23,6 +23,7 @@ All routes are prefixed by `/{path}/mail`.
 |---|---|---|
 | `GET` | `/` | Main HTTP Mail page |
 | `POST` | `/new` | Create mailbox (returns address/read_key) |
+| `POST` | `/send` | No-JS form send (address in `_address_override`) |
 | `POST` | `/<address>/send` | Send message to mailbox |
 | `GET` | `/<address>/inbox?key=<read_key>` | Read inbox |
 | `GET` | `/<address>/status?key=<read_key>` | Read mailbox metadata |
