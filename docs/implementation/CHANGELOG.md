@@ -11,13 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- HTTP Mail user guide (`docs/user-guide/HTTP_MAIL.md`)
 
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- HTTP Mail now supports browser/no-JS fallback flows:
+  - `POST /<path>/mail/send` using form address override
+  - `GET /<path>/mail/inbox` form redirect to canonical inbox route
+- `POST /<path>/mail/new` keeps JSON default behavior while supporting HTML responses for browser form flow
+- Email route session handling unified with shared `_ensure_session()` helper
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022
+- Hardened HTTP mailbox deletion semantics by rejecting writes to destroyed mailbox instances
 
 ## [2.0.0] - 2024-12-08
 

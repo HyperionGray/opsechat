@@ -84,8 +84,6 @@
   .msg-actions { margin-top: 10px; }
 
   #new-mailbox-result { display: none; }
-  #compose-section { display: none; }
-  #read-section { display: none; }
 
   .section-toggle { margin: 20px 0; }
   .section-toggle button { margin-bottom: 5px; }
@@ -139,26 +137,32 @@
     A unique address and secret read key will be generated.
     <strong>Save your read key</strong> — it is shown only once.
   </p>
-  <button id="create-btn" onclick="createMailbox()">Create Mailbox</button>
+  <form method="POST" action="/{{ path }}/mail/new" id="create-form">
+    <button id="create-btn" type="submit">Create Mailbox</button>
+  </form>
 
-  <div id="new-mailbox-result">
+  <div id="new-mailbox-result" {% if created_address %}style="display:block"{% endif %}>
     <div class="warn">
       ⚠️ <strong>Save these values now.</strong>
       The read key will not be shown again after you leave this page.
     </div>
     <div class="form-group">
       <div class="token-label">Your Mailbox Address (share with senders)</div>
-      <div class="token-box" id="result-address"></div>
+      <div class="token-box" id="result-address">{{ created_address or '' }}</div>
       <button onclick="copyText('result-address')">📋 Copy Address</button>
     </div>
     <div class="form-group">
       <div class="token-label">Your Read Key (keep secret — required to read messages)</div>
-      <div class="token-box" id="result-read-key"></div>
+      <div class="token-box" id="result-read-key">{{ created_read_key or '' }}</div>
       <button onclick="copyText('result-read-key')">📋 Copy Read Key</button>
     </div>
     <div class="form-group">
       <div class="token-label">Send URL (share this link with senders)</div>
-      <div class="token-box" id="result-send-url"></div>
+      <div class="token-box" id="result-send-url">{{ created_send_url or '' }}</div>
+    </div>
+    <div class="form-group">
+      <div class="token-label">Inbox URL (owner uses with read key)</div>
+      <div class="token-box" id="result-inbox-url">{{ created_inbox_url or '' }}</div>
     </div>
     <p class="hint" style="margin-top:10px;">
       To read your inbox: use the "Read My Inbox" section below with your address + read key.
@@ -221,7 +225,7 @@
     Without the correct read key, no messages are revealed (default deny).
   </p>
 
-  <form method="GET" id="read-form">
+  <form method="GET" action="/{{ path }}/mail/inbox" id="read-form">
     <div class="form-group">
       <label for="read-address">Mailbox Address:</label>
       <input type="text" id="read-address" name="_read_address"
@@ -234,7 +238,8 @@
              value="{{ inbox_read_key or '' }}"
              placeholder="Your private read key">
     </div>
-    <button type="button" onclick="fetchInbox()">Open Inbox</button>
+    <button type="submit">Open Inbox</button>
+    <button type="button" id="open-inbox-js-btn" class="btn">Open Inbox (AJAX)</button>
   </form>
 
   <!-- Inbox messages rendered from server (non-JS fallback) -->
@@ -300,6 +305,24 @@
     {% else %}
       showSection('create');
     {% endif %}
+
+    // Progressive enhancement:
+    // - Create mailbox form submits via AJAX when JS is available.
+    var createForm = document.getElementById('create-form');
+    if (createForm) {
+      createForm.addEventListener('submit', function(evt) {
+        evt.preventDefault();
+        createMailbox();
+      });
+    }
+
+    // JS inbox button supplements the normal GET form submit fallback.
+    var inboxAjaxButton = document.getElementById('open-inbox-js-btn');
+    if (inboxAjaxButton) {
+      inboxAjaxButton.addEventListener('click', function() {
+        fetchInbox();
+      });
+    }
   })();
 
   // Create mailbox via fetch
@@ -319,6 +342,8 @@
         document.getElementById('result-read-key').textContent = data.read_key;
         document.getElementById('result-send-url').textContent =
           window.location.origin + data.send_url;
+        document.getElementById('result-inbox-url').textContent =
+          window.location.origin + data.inbox_url + '?key=YOUR_READ_KEY';
         document.getElementById('new-mailbox-result').style.display = 'block';
       } else {
         alert('Error: ' + (data.error || 'Unknown error'));
@@ -331,15 +356,6 @@
       btn.disabled = false;
       btn.textContent = 'Create Mailbox';
     });
-  }
-
-  // Update compose form action when address changes
-  function updateComposeAction() {
-    var addr = document.getElementById('compose-address-input').value.trim();
-    var form = document.getElementById('compose-form');
-    if (addr) {
-      form.action = '/{{ path }}/mail/' + encodeURIComponent(addr) + '/send';
-    }
   }
 
   // Fetch inbox via JS
