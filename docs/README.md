@@ -5,7 +5,7 @@ Welcome to the OpSecChat documentation. All documentation has been organized int
 ## Quick Links
 
 - **[Main README](../README.md)** - Start here for project overview
-- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes (TODO)
+- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes
 - **[Security](../SECURITY.md)** - Security information and best practices
 - **[License](../LICENSE.md)** - MIT License
 
@@ -37,6 +37,7 @@ Installation and deployment guides for different environments.
 ### 📖 User Guide
 Documentation for end users and operators.
 
+- [HTTP Mail](user-guide/HTTP_MAIL.md) - HTTP-only mailbox system and API
 - [Email System](user-guide/EMAIL_SYSTEM.md) - Comprehensive email documentation
 - [Email Quick Start](user-guide/EMAIL_QUICKSTART.md) - Quick email setup guide
 - [PGP Usage](user-guide/PGP_USAGE.md) - PGP encryption guide
@@ -97,5 +98,5 @@ When adding new documentation:
 
 ---
 
-**Last Updated:** February 23, 2026  
+**Last Updated:** March 22, 2026  
 **Maintained by:** OpSecChat Team
