@@ -172,6 +172,32 @@ When limit exceeded:
 
 ---
 
+## 📨 HTTP Mail Key Rotation
+
+### Purpose
+HTTP Mail mailboxes now support in-place read-key rotation so users can recover quickly
+if a key is exposed, without destroying the mailbox address.
+
+### What's New
+- `POST /{path}/mail/{address}/rotate-key` endpoint
+- Rotates to a newly generated high-entropy read key
+- Old read key is invalid immediately after rotation
+- Works from both JSON API and web UI
+
+### Example
+```bash
+curl -X POST "http://localhost:5001/{path}/mail/{address}/rotate-key" \
+  -H "Content-Type: application/json" \
+  -d '{"read_key":"CURRENT_READ_KEY"}'
+```
+
+Response:
+```json
+{"success": true, "read_key": "NEW_READ_KEY"}
+```
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

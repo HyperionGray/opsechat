@@ -11,14 +11,16 @@ This module contains Flask routes for email functionality including:
 
 from flask import render_template, request, session, jsonify, redirect, url_for
 from email_system import email_storage, burner_manager, EmailComposer, EmailValidator
-from email_security_tools import spoofing_tester, phishing_simulator
-from email_transport import transport_manager
-from domain_manager import domain_rotation_manager
 
 
 def register_email_routes(app, id_generator, get_random_color):
     """Register all email-related routes with the Flask app"""
-    
+
+    def _ensure_session():
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
+
     @app.route('/<string:url_addition>/email', methods=["GET"])
     def email_inbox(url_addition):
         """Main email inbox page"""
@@ -195,7 +197,7 @@ def register_email_routes(app, id_generator, get_random_color):
             # Record the send (for rate limiting)
             burner_manager.record_sent_email(session["_id"])
             
-            # In a real implementation, this would use transport_manager to send
+            # In a real implementation, this would send over configured SMTP transport
             # For now, just store in local inbox as sent
             email_data = {
                 'to': to_addr,
@@ -228,11 +230,7 @@ def register_email_routes(app, id_generator, get_random_color):
         if url_addition != app.config["path"]:
             return ('', 404)
 
-        if "_id" not in session:
-            _ensure_session()
-
-        email = email_storage.get_email(session["_id"], email_id)
-
+        _ensure_session()
         email = email_storage.get_email(session["_id"], email_id)
         if email is None:
             return render_template("email_inbox.html",

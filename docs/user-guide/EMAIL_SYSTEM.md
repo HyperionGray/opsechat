@@ -207,6 +207,31 @@ The system integrates with existing PGP functionality:
 - **Session Isolation:** Each user gets isolated inbox
 - **No Disk Persistence:** All data in-memory unless explicitly encrypted
 
+### HTTP Mail (SMTP-Free Inboxes)
+HTTP Mail provides minimal mailboxes that do not require SMTP/IMAP setup.
+
+- **Mailbox address:** Public token for receiving messages
+- **Read key:** Private token required to read/delete/rotate key
+- **Default deny:** Wrong key returns access denied
+- **In-memory only:** Messages expire after 24 hours
+- **Key rotation:** Generate a fresh read key without recreating the mailbox
+
+#### HTTP Mail Routes
+- `GET /{path}/mail` - HTTP Mail UI
+- `POST /{path}/mail/new` - Create mailbox
+- `POST /{path}/mail/{address}/send` - Send message (no auth)
+- `GET /{path}/mail/{address}/inbox?key={read_key}` - Read inbox
+- `POST /{path}/mail/{address}/rotate-key` - Rotate read key
+- `POST /{path}/mail/{address}/delete/{msg_id}` - Delete message
+- `POST /{path}/mail/{address}/destroy` - Destroy mailbox
+
+#### Key Rotation Example
+```bash
+curl -X POST "http://localhost:5001/{path}/mail/{address}/rotate-key" \
+  -H "Content-Type: application/json" \
+  -d '{"read_key":"CURRENT_READ_KEY"}'
+```
+
 ## API Reference
 
 ### Email Storage Class
