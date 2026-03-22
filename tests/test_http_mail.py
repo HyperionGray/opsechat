@@ -91,6 +91,16 @@ class TestHttpMailStorage:
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
 
+    def test_delete_mailbox_marks_mailbox_destroyed_for_stale_references(self):
+        mb = self.storage.create_mailbox()
+        stale_reference = self.storage.get_mailbox(mb.address)
+        assert stale_reference is not None
+
+        result = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert result is True
+        assert stale_reference.destroyed is True
+        assert stale_reference.add_message("late", "write", "sender") is None
+
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
         result = self.storage.delete_mailbox(mb.address, "wrongkey")
@@ -128,6 +138,10 @@ class TestHttpMailbox:
         msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
         assert msg_id
         assert len(msg_id) == 16
+
+    def test_add_message_after_destroy_returns_none(self):
+        self.mailbox.destroyed = True
+        assert self.mailbox.add_message("Hello", "Body text", "alice") is None
 
     def test_get_messages_correct_key(self):
         self.mailbox.add_message("Subj", "Body", "alice")
@@ -309,6 +323,36 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 404
+
+    def test_mailbox_status_requires_valid_read_key(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        r = self.client.get(f"/{self.path}/mail/{addr}/status?key=bad")
+        assert r.status_code == 403
+
+    def test_mailbox_status_returns_metadata(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "A", "body": "one", "sender": "alice"},
+        )
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "B", "body": "two", "sender": "bob"},
+        )
+
+        r = self.client.get(f"/{self.path}/mail/{addr}/status?key={read_key}")
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["address"] == addr
+        assert data["destroyed"] is False
+        assert data["message_count"] == 2
+        assert data["created_at"] is not None
+        assert data["oldest_message_at"] is not None
+        assert data["newest_message_at"] is not None
 
     def test_delete_message_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
