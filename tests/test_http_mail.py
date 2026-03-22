@@ -21,6 +21,9 @@ from http_mail_system import (
     HttpMessage,
     http_mail_storage,
     MAX_MAIL_MESSAGE_LENGTH,
+    MAX_MESSAGES_PER_MAILBOX,
+    MailboxCapacityError,
+    MailboxDestroyedError,
 )
 from email_system import email_storage as _global_email_storage, EmailComposer
 from app_factory import create_app
@@ -179,6 +182,31 @@ class TestHttpMailbox:
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
 
+    def test_mailbox_capacity_limit_enforced(self):
+        for i in range(MAX_MESSAGES_PER_MAILBOX):
+            self.mailbox.add_message(f"Subj{i}", f"Body{i}", "sender")
+        with pytest.raises(MailboxCapacityError):
+            self.mailbox.add_message("overflow", "body", "sender")
+
+    def test_destroyed_mailbox_rejects_add(self):
+        self.mailbox.destroyed = True
+        with pytest.raises(MailboxDestroyedError):
+            self.mailbox.add_message("Subj", "Body", "sender")
+
+    def test_get_metadata_with_correct_key(self):
+        self.mailbox.add_message("Subj", "Body", "alice")
+        metadata = self.mailbox.get_metadata("secretkey123456789012345678901")
+        assert metadata is not None
+        assert metadata["address"] == "testaddr1"
+        assert metadata["message_count"] == 1
+        assert metadata["max_messages"] == MAX_MESSAGES_PER_MAILBOX
+        assert metadata["max_message_length"] == MAX_MAIL_MESSAGE_LENGTH
+        assert metadata["expiry_hours"] == 24
+
+    def test_get_metadata_wrong_key_returns_none(self):
+        metadata = self.mailbox.get_metadata("wrongkey")
+        assert metadata is None
+
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -232,8 +260,10 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert "send_url" in data
         assert "inbox_url" in data
+        assert "meta_url" in data
         assert data["send_url"].startswith(f"/{self.path}/mail/")
         assert data["inbox_url"].endswith("/inbox")
+        assert data["meta_url"].endswith("/meta")
 
     def test_send_message_json(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -309,6 +339,38 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 404
+
+    def test_mailbox_meta_returns_stats(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "M1", "body": "Body", "sender": "alice"},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/meta?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["address"] == addr
+        assert data["message_count"] == 1
+        assert data["max_messages"] == MAX_MESSAGES_PER_MAILBOX
+        assert data["max_message_length"] == MAX_MAIL_MESSAGE_LENGTH
+        assert data["expiry_hours"] == 24
+
+    def test_mailbox_meta_wrong_key_denied(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/meta?key=wrongkey",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 403
 
     def test_delete_message_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -387,6 +449,24 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 403
+
+    def test_send_message_returns_429_when_mailbox_full(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        mailbox = http_mail_storage.get_mailbox(addr)
+        assert mailbox is not None
+
+        for i in range(MAX_MESSAGES_PER_MAILBOX):
+            mailbox.add_message(f"s{i}", f"b{i}", "seed")
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "overflow", "body": "extra", "sender": "bob"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 429
+        data = r.get_json()
+        assert "Mailbox is full" in data["error"]
 
     def test_message_body_sanitized(self):
         r = self.client.post(f"/{self.path}/mail/new")

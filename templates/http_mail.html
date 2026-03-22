@@ -118,7 +118,8 @@
   1. Create a mailbox — you get a public <em>address</em> and a private <em>read key</em>.<br>
   2. Share the <em>address</em> with anyone who should be able to send you messages.<br>
   3. Keep the <em>read key</em> secret — only you can read your inbox.<br>
-  4. Messages expire after 24 hours. Nothing touches disk.
+  4. Messages expire after 24 hours and each mailbox holds up to
+  {{ max_messages_per_mailbox or 200 }} messages. Nothing touches disk.
 </div>
 
 <!-- ======================================================= -->
@@ -205,7 +206,10 @@
       <textarea id="compose-body" name="body"
                 placeholder="Your message here..."
                 maxlength="{{ max_message_length or 2000 }}"></textarea>
-      <p class="hint">Max {{ max_message_length or 2000 }} characters. Plain text only.</p>
+      <p class="hint">
+        Max {{ max_message_length or 2000 }} characters. Plain text only.
+        Mailboxes accept up to {{ max_messages_per_mailbox or 200 }} active messages.
+      </p>
     </div>
     <button type="submit">Send Message</button>
   </form>

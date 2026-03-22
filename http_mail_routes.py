@@ -9,13 +9,21 @@ Routes registered under /<path>/mail/:
   POST /<path>/mail/new                    - Create a new mailbox
   POST /<path>/mail/<address>/send         - Send a message to a mailbox (no auth)
   GET  /<path>/mail/<address>/inbox        - Read inbox (requires ?key=<read_key>)
+  GET  /<path>/mail/<address>/meta         - Read mailbox metadata (requires ?key=<read_key>)
   POST /<path>/mail/<address>/delete/<id>  - Delete a message (requires read_key in form)
   POST /<path>/mail/<address>/destroy      - Delete entire mailbox (requires read_key in form)
 """
 
 import re
 from flask import render_template, request, session, jsonify, redirect, url_for
-from http_mail_system import http_mail_storage, MAX_MAIL_MESSAGE_LENGTH
+from http_mail_system import (
+    http_mail_storage,
+    MAX_MAIL_MESSAGE_LENGTH,
+    MAX_MESSAGES_PER_MAILBOX,
+    MAIL_EXPIRY_HOURS,
+    MailboxCapacityError,
+    MailboxDestroyedError,
+)
 from utils import id_generator, get_random_color
 
 
@@ -48,7 +56,8 @@ def register_http_mail_routes(app):
         return render_template("http_mail.html",
                                path=app.config["path"],
                                hostname=app.config.get("hostname", ""),
-                               max_message_length=MAX_MAIL_MESSAGE_LENGTH)
+                               max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                               max_messages_per_mailbox=MAX_MESSAGES_PER_MAILBOX)
 
     # ------------------------------------------------------------------
     # Create a new mailbox
@@ -67,6 +76,7 @@ def register_http_mail_routes(app):
             "read_key": mailbox.read_key,
             "send_url": f"/{url_addition}/mail/{mailbox.address}/send",
             "inbox_url": f"/{url_addition}/mail/{mailbox.address}/inbox",
+            "meta_url": f"/{url_addition}/mail/{mailbox.address}/meta",
         })
 
     # ------------------------------------------------------------------
@@ -108,7 +118,31 @@ def register_http_mail_routes(app):
         body = _sanitize(body, MAX_MAIL_MESSAGE_LENGTH)
         sender = _sanitize(sender, 64) or "anonymous"
 
-        msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        try:
+            msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        except MailboxDestroyedError:
+            error_msg = "Mailbox has been destroyed"
+            if request.is_json:
+                return jsonify({"error": error_msg}), 410
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error=error_msg,
+                                   compose_address=address), 410
+        except MailboxCapacityError:
+            error_msg = (
+                f"Mailbox is full ({MAX_MESSAGES_PER_MAILBOX} messages max). "
+                "Delete old messages or wait for expiry."
+            )
+            if request.is_json:
+                return jsonify({"error": error_msg}), 429
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error=error_msg,
+                                   compose_address=address), 429
 
         if request.is_json:
             return jsonify({"success": True, "msg_id": msg_id})
@@ -119,6 +153,28 @@ def register_http_mail_routes(app):
                                max_message_length=MAX_MAIL_MESSAGE_LENGTH,
                                success="Message sent.",
                                compose_address=address)
+
+    # ------------------------------------------------------------------
+    # Mailbox metadata (requires read_key, JSON)
+    # ------------------------------------------------------------------
+
+    @app.route('/<string:url_addition>/mail/<string:address>/meta', methods=["GET"])
+    def http_mail_metadata(url_addition, address):
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+
+        mailbox = http_mail_storage.get_mailbox(address)
+        if mailbox is None:
+            return jsonify({"error": "Mailbox not found"}), 404
+
+        read_key = request.args.get("key", "")
+        metadata = mailbox.get_metadata(read_key)
+        if metadata is None:
+            return jsonify({"error": "Invalid read key"}), 403
+
+        metadata["expiry_hours"] = MAIL_EXPIRY_HOURS
+        return jsonify(metadata)
 
     # ------------------------------------------------------------------
     # Read inbox (requires read_key)
