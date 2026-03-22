@@ -101,6 +101,15 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_destroyed_mailbox_rejects_stale_reference_writes(self):
+        mb = self.storage.create_mailbox()
+        # Keep a stale reference while deleting through storage.
+        stale_ref = mb
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert stale_ref.destroyed is True
+        # Writes via stale references must be denied after destroy.
+        assert stale_ref.add_message("Subject", "Body", "alice") is None
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -188,6 +197,18 @@ class TestHttpMailbox:
         assert "body" in m
         assert "sender" in m
         assert "timestamp" in m
+
+    def test_get_metadata_correct_key(self):
+        self.mailbox.add_message("A", "B", "c")
+        meta = self.mailbox.get_metadata("secretkey123456789012345678901")
+        assert meta is not None
+        assert meta["address"] == "testaddr1"
+        assert meta["message_count"] == 1
+        assert "created_at" in meta
+
+    def test_get_metadata_wrong_key_returns_none(self):
+        self.mailbox.add_message("A", "B", "c")
+        assert self.mailbox.get_metadata("wrongkey") is None
 
     def test_overwrite_clears_content(self):
         msg = HttpMessage("id1", "Secret Subject", "Secret Body", "Alice",
@@ -308,6 +329,31 @@ class TestHttpMailRoutes:
             f"/{self.path}/mail/doesnotexist/inbox?key=anykey",
             headers={"Accept": "application/json"},
         )
+        assert r.status_code == 404
+
+    def test_mailbox_meta_correct_key(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Meta", "body": "Body", "sender": "alice"},
+        )
+        r = self.client.get(f"/{self.path}/mail/{addr}/meta?key={read_key}")
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["address"] == addr
+        assert data["message_count"] == 1
+        assert "created_at" in data
+
+    def test_mailbox_meta_wrong_key_is_denied(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        r = self.client.get(f"/{self.path}/mail/{addr}/meta?key=wrong")
+        assert r.status_code == 403
+
+    def test_mailbox_meta_nonexistent_mailbox(self):
+        r = self.client.get(f"/{self.path}/mail/doesnotexist/meta?key=abc")
         assert r.status_code == 404
 
     def test_delete_message_correct_key(self):

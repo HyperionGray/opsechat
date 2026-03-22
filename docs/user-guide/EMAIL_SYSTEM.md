@@ -432,6 +432,25 @@ The email system is fully integrated with the existing opsechat interface:
 - Works with or without JavaScript
 - Same Tor hidden service
 
+## HTTP Mailbox API (Email-over-HTTP)
+
+For lightweight, SMTP/IMAP-free workflows, the HTTP mailbox subsystem is
+available under `/{path}/mail`.
+
+Key endpoints:
+- `POST /{path}/mail/new`
+  - Create a mailbox and return `address` + `read_key`
+- `POST /{path}/mail/{address}/send`
+  - Post a message to a mailbox address
+- `GET /{path}/mail/{address}/inbox?key={read_key}`
+  - Read messages (default deny without the correct key)
+- `GET /{path}/mail/{address}/meta?key={read_key}`
+  - Read mailbox metadata (`address`, `created_at`, `message_count`)
+- `POST /{path}/mail/{address}/delete/{message_id}`
+  - Delete one message with `read_key`
+- `POST /{path}/mail/{address}/destroy`
+  - Destroy the mailbox and wipe message contents in memory
+
 ## Contributing
 
 When adding features to the email system:
