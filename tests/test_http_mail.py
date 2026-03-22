@@ -4,7 +4,7 @@ Tests for the HTTP mail system (email over HTTP, no SMTP/IMAP).
 Covers:
 - HttpMailStorage: create mailbox, send, read (default deny), delete, destroy
 - http_mail_routes: all REST endpoints via Flask test client
-- Missing email_routes: view, edit, delete, burner POST, expire
+- Extended email_routes coverage: view, edit, delete, burner POST flows
 """
 
 import datetime
@@ -101,6 +101,12 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_deleted_mailbox_reference_rejects_new_writes(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert mb.add_message("late", "write", "sender") is None
+        assert mb.message_count() == 0
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -128,6 +134,11 @@ class TestHttpMailbox:
         msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
         assert msg_id
         assert len(msg_id) == 16
+
+    def test_destroyed_mailbox_rejects_add(self):
+        self.mailbox.destroy()
+        assert self.mailbox.add_message("Hi", "Body", "alice") is None
+        assert self.mailbox.message_count() == 0
 
     def test_get_messages_correct_key(self):
         self.mailbox.add_message("Subj", "Body", "alice")
@@ -424,7 +435,7 @@ class TestHttpMailRoutes:
 
 
 # ===========================================================================
-# Missing email route tests (view, edit, delete, burner POST, expire)
+# Extended email route tests (view, edit, delete, burner POST)
 # ===========================================================================
 
 class TestEmailRoutesExtended:
@@ -462,6 +473,12 @@ class TestEmailRoutesExtended:
         assert b"Hello" in r.data
 
     def test_view_nonexistent_email_returns_404(self):
+        r = self.client.get("/secpath/email/view/doesnotexist")
+        assert r.status_code == 404
+
+    def test_view_email_without_session_no_nameerror(self):
+        with self.client.session_transaction() as sess:
+            sess.clear()
         r = self.client.get("/secpath/email/view/doesnotexist")
         assert r.status_code == 404
 
