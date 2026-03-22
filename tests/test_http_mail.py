@@ -101,6 +101,12 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_destroyed_mailbox_rejects_new_messages(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert mb.add_message("After destroy", "Should not store", "sender") is None
+        assert mb.message_count() == 0
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -248,6 +254,40 @@ class TestHttpMailRoutes:
         assert data["success"] is True
         assert "msg_id" in data
 
+    def test_send_message_form_with_address_override(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Form Subject",
+                "body": "Form Body",
+                "sender": "formuser",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        data = r.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["subject"] == "Form Subject"
+
+    def test_send_message_form_missing_address_fails(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "X", "body": "Y"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
+        assert r.get_json()["error"] == "Mailbox address is required"
+
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
@@ -387,6 +427,56 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 403
+
+    def test_rotate_read_key_success(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        # Ensure inbox has data that should remain readable after key rotation.
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Before rotate", "body": "Hello", "sender": "alice"},
+        )
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
+            json={"read_key": read_key},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["success"] is True
+        assert "read_key" in data
+        assert data["read_key"] != read_key
+        assert len(data["read_key"]) == 32
+
+        # Old key must immediately stop working.
+        r_old = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert r_old.status_code == 403
+
+        # New key should work.
+        r_new = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={data['read_key']}",
+            headers={"Accept": "application/json"},
+        )
+        assert r_new.status_code == 200
+        assert len(r_new.get_json()["messages"]) == 1
+
+    def test_rotate_read_key_wrong_key_fails(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
+            json={"read_key": "wrongkey"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 403
+        assert "error" in r.get_json()
 
     def test_message_body_sanitized(self):
         r = self.client.post(f"/{self.path}/mail/new")
