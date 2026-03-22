@@ -18,6 +18,11 @@ from domain_manager import domain_rotation_manager
 
 def register_email_routes(app, id_generator, get_random_color):
     """Register all email-related routes with the Flask app"""
+
+    def _ensure_session():
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
     
     @app.route('/<string:url_addition>/email', methods=["GET"])
     def email_inbox(url_addition):
@@ -25,9 +30,7 @@ def register_email_routes(app, id_generator, get_random_color):
         if url_addition != app.config["path"]:
             return ('', 404)
         
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
+        _ensure_session()
         
         # Initialize inbox for user
         email_storage.create_user_inbox(session["_id"])
@@ -47,9 +50,7 @@ def register_email_routes(app, id_generator, get_random_color):
         if url_addition != app.config["path"]:
             return ('', 404)
         
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
+        _ensure_session()
         
         email_storage.create_user_inbox(session["_id"])
         emails = email_storage.get_emails(session["_id"])
@@ -66,9 +67,7 @@ def register_email_routes(app, id_generator, get_random_color):
         if url_addition != app.config["path"]:
             return ('', 404)
         
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
+        _ensure_session()
         
         # Get active burner emails
         burner_emails = burner_manager.get_user_burners(session["_id"])
@@ -85,9 +84,7 @@ def register_email_routes(app, id_generator, get_random_color):
         if url_addition != app.config["path"]:
             return ('', 404)
         
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
+        _ensure_session()
         
         burner_emails = burner_manager.get_user_burners(session["_id"])
         
@@ -118,9 +115,7 @@ def register_email_routes(app, id_generator, get_random_color):
         if url_addition != app.config["path"]:
             return ('', 404)
         
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
+        _ensure_session()
         
         if request.method == "POST":
             # Handle configuration updates
@@ -157,9 +152,7 @@ def register_email_routes(app, id_generator, get_random_color):
         if url_addition != app.config["path"]:
             return ('', 404)
         
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
+        _ensure_session()
         
         if request.method == "POST":
             # Check rate limit before allowing send
@@ -232,8 +225,6 @@ def register_email_routes(app, id_generator, get_random_color):
             _ensure_session()
 
         email = email_storage.get_email(session["_id"], email_id)
-
-        email = email_storage.get_email(session["_id"], email_id)
         if email is None:
             return render_template("email_inbox.html",
                                    hostname=app.config["hostname"],
@@ -258,9 +249,7 @@ def register_email_routes(app, id_generator, get_random_color):
         if url_addition != app.config["path"]:
             return ('', 404)
 
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
+        _ensure_session()
 
         email = email_storage.get_email(session["_id"], email_id)
         if email is None:
@@ -317,9 +306,7 @@ def register_email_routes(app, id_generator, get_random_color):
         if url_addition != app.config["path"]:
             return ('', 404)
 
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
+        _ensure_session()
 
         action = request.form.get("action", "generate")
 

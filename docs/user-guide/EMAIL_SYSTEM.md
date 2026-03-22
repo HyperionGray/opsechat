@@ -6,6 +6,8 @@ The OpSec Email System provides an encrypted, anonymous email platform integrate
 
 **NEW:** Real email capabilities with SMTP/IMAP support and automated domain management!
 
+For the lightweight mailbox-over-HTTP mode (no SMTP/IMAP), see the dedicated [HTTP Mail guide](HTTP_MAIL.md).
+
 ## ⚠️ Security Notice
 
 **FOR SECURITY RESEARCH AND AUTHORIZED TESTING ONLY**

@@ -235,6 +235,8 @@
              placeholder="Your private read key">
     </div>
     <button type="button" onclick="fetchInbox()">Open Inbox</button>
+    <button type="button" class="danger" onclick="rotateReadKey()">Rotate Read Key</button>
+    <p class="hint">Rotate key after sharing or suspected exposure. Old key is invalidated immediately.</p>
   </form>
 
   <!-- Inbox messages rendered from server (non-JS fallback) -->
@@ -438,6 +440,36 @@
       } else {
         alert('Error: ' + (d.error || 'Could not destroy mailbox'));
       }
+    });
+  }
+
+  function rotateReadKey() {
+    var address = document.getElementById('read-address').value.trim();
+    var readKeyInput = document.getElementById('read-key-input');
+    var readKey = readKeyInput.value.trim();
+    if (!address || !readKey) {
+      alert('Enter mailbox address and current read key first.');
+      return;
+    }
+    if (!confirm('Rotate read key? The current key will stop working immediately.')) return;
+
+    fetch('/{{ path }}/mail/' + encodeURIComponent(address) + '/rotate-key', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: JSON.stringify({read_key: readKey})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.success) {
+        alert('Error: ' + (d.error || 'Could not rotate key'));
+        return;
+      }
+      readKeyInput.value = d.read_key;
+      alert('Read key rotated. Save your new key now.');
+      fetchInbox();
+    })
+    .catch(function(err) {
+      alert('Request failed: ' + err);
     });
   }
 
