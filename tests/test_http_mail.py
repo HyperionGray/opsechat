@@ -101,6 +101,11 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_stale_mailbox_reference_rejects_new_messages_after_destroy(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert mb.add_message("late", "should not persist", "racer") is None
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -178,6 +183,10 @@ class TestHttpMailbox:
         assert self.mailbox.message_count() == 0
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
+
+    def test_destroyed_mailbox_rejects_add_message(self):
+        self.mailbox.destroyed = True
+        assert self.mailbox.add_message("A", "B", "c") is None
 
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
@@ -309,6 +318,33 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 404
+
+    def test_mailbox_meta_returns_message_count(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "One", "body": "Hello", "sender": "alice"},
+        )
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Two", "body": "World", "sender": "alice"},
+        )
+
+        r = self.client.get(f"/{self.path}/mail/{addr}/meta?key={read_key}")
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["address"] == addr
+        assert data["message_count"] == 2
+        assert "created_at" in data
+
+    def test_mailbox_meta_invalid_key_denied(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        r = self.client.get(f"/{self.path}/mail/{addr}/meta?key=wrong")
+        assert r.status_code == 403
 
     def test_delete_message_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -463,6 +499,12 @@ class TestEmailRoutesExtended:
 
     def test_view_nonexistent_email_returns_404(self):
         r = self.client.get("/secpath/email/view/doesnotexist")
+        assert r.status_code == 404
+
+    def test_view_email_without_session_returns_404_not_500(self):
+        with self.client.session_transaction() as sess:
+            sess.clear()
+        r = self.client.get(f"/secpath/email/view/{self.email_id}")
         assert r.status_code == 404
 
     def test_edit_email_get_returns_200(self):
