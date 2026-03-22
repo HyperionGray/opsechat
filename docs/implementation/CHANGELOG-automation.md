@@ -23,6 +23,11 @@ Completed unfinished HTTP-mail implementation details from the recent email-over
    - New tests for fallback form route and missing-address validation
    - New tests for destroyed-mailbox write refusal and route-level 410 response
 
+4. **Repository cleanup**
+   - Removed stale duplicate files:
+     - `runserver_refactored.py` (duplicate of `runserver.py`)
+     - `tests/mock_server_refactored.py` (unreferenced stale fixture)
+
 ### Modified
 1. **`http_mail_system.py`**
    - Added `destroyed` mailbox state
