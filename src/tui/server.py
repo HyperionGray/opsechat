@@ -25,9 +25,17 @@ from typing import Dict, List, Any, Optional
 # Message storage (in-memory only)
 class ChatServer:
     MAX_MESSAGE_LENGTH = 1000  # Prevent b64 encoded images
-    MESSAGE_LIFETIME = 180  # 3 minutes in seconds
-    
-    def __init__(self, host='127.0.0.1', port=5555):
+    MESSAGE_LIFETIME = 240  # 4 minutes in seconds
+    RATE_LIMIT_MESSAGES = 8
+    RATE_LIMIT_WINDOW_SECONDS = 10
+
+    def __init__(
+        self,
+        host='127.0.0.1',
+        port=5555,
+        rate_limit_messages: Optional[int] = None,
+        rate_limit_window_seconds: Optional[int] = None,
+    ):
         self.host = host
         self.port = port
         self.messages: List[Dict[str, Any]] = []
@@ -35,10 +43,25 @@ class ChatServer:
         self.lock = threading.Lock()
         self.server_socket = None
         self.running = False
-        
-        # Start cleanup thread
-        self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
-        self.cleanup_thread.start()
+
+        self.rate_limit_messages = (
+            rate_limit_messages
+            if rate_limit_messages is not None
+            else self.RATE_LIMIT_MESSAGES
+        )
+        self.rate_limit_window_seconds = (
+            rate_limit_window_seconds
+            if rate_limit_window_seconds is not None
+            else self.RATE_LIMIT_WINDOW_SECONDS
+        )
+        self.rate_limit_messages = max(1, int(self.rate_limit_messages))
+        self.rate_limit_window_seconds = max(1, int(self.rate_limit_window_seconds))
+
+        # Per-user message timestamps for rate limiting and feedback for rejected messages.
+        self.user_message_timestamps: Dict[str, List[float]] = {}
+        self.rejection_reasons: Dict[str, str] = {}
+
+        self.cleanup_thread: Optional[threading.Thread] = None
     
     def generate_username(self) -> str:
         """Generate a random username - no user choice allowed"""
@@ -49,7 +72,7 @@ class ChatServer:
     
     def _cleanup_loop(self):
         """Continuously clean up old messages"""
-        while True:
+        while self.running:
             time.sleep(10)  # Check every 10 seconds
             self._cleanup_old_messages()
     
@@ -74,24 +97,74 @@ class ChatServer:
     def add_message(self, username: str, message: str) -> bool:
         """Add a message to the chat (with validation)"""
         # Validate message
-        if not message or len(message) > self.MAX_MESSAGE_LENGTH:
+        if not message:
+            with self.lock:
+                self.rejection_reasons[username] = "Message cannot be empty."
             return False
-        
+
+        if len(message) > self.MAX_MESSAGE_LENGTH:
+            with self.lock:
+                self.rejection_reasons[username] = (
+                    f"Message too long (max {self.MAX_MESSAGE_LENGTH} chars)."
+                )
+            return False
+
         # Check for potential b64 encoded data (rough heuristic)
         if len(message) > 500 and message.replace('=', '').isalnum():
+            with self.lock:
+                self.rejection_reasons[username] = (
+                    "Message looks like encoded/binary payload and was blocked."
+                )
             return False  # Likely b64 encoded image/video
-        
+
         # Strip any HTML/special chars
         message = message.replace('<', '').replace('>', '').replace('&', '')
-        
+        if not message.strip():
+            with self.lock:
+                self.rejection_reasons[username] = "Message became empty after sanitization."
+            return False
+
         with self.lock:
+            now_ts = time.time()
+            cutoff = now_ts - self.rate_limit_window_seconds
+
+            timestamps = self.user_message_timestamps.setdefault(username, [])
+            timestamps[:] = [ts for ts in timestamps if ts >= cutoff]
+
+            if len(timestamps) >= self.rate_limit_messages:
+                self.rejection_reasons[username] = (
+                    f"Rate limit exceeded: max {self.rate_limit_messages} messages per "
+                    f"{self.rate_limit_window_seconds} seconds."
+                )
+                return False
+
+            timestamps.append(now_ts)
             self.messages.append({
                 'username': username,
                 'message': message,
                 'timestamp': datetime.datetime.now()
             })
+            self.rejection_reasons.pop(username, None)
         
         return True
+
+    def get_rejection_reason(self, username: str) -> Optional[str]:
+        """Return the last rejection reason for a user."""
+        with self.lock:
+            return self.rejection_reasons.get(username)
+
+    def send_system_message(self, client_socket: socket.socket, message: str, level: str = 'warning'):
+        """Send a system message to a specific client."""
+        payload = {
+            'type': 'system',
+            'level': level,
+            'message': message,
+            'timestamp': datetime.datetime.now().isoformat(),
+        }
+        try:
+            client_socket.send((json.dumps(payload) + '\n').encode())
+        except (OSError, socket.error):
+            pass
     
     def get_messages(self, since: datetime.datetime = None) -> List[Dict[str, Any]]:
         """Get messages (optionally since a specific time)"""
@@ -113,7 +186,10 @@ class ChatServer:
             welcome = {
                 'type': 'welcome',
                 'username': username,
-                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
+                'message': (
+                    f'Welcome! You are {username}. Messages burn in 4 minutes. '
+                    f'Rate limit: {self.rate_limit_messages}/{self.rate_limit_window_seconds}s.'
+                )
             }
             client_socket.send((json.dumps(welcome) + '\n').encode())
             
@@ -147,6 +223,10 @@ class ChatServer:
                                     if self.add_message(username, message):
                                         # Broadcast to all clients
                                         self.broadcast_message(username, message)
+                                    else:
+                                        reason = self.get_rejection_reason(username)
+                                        if reason:
+                                            self.send_system_message(client_socket, reason)
                             except json.JSONDecodeError:
                                 pass
                 
@@ -157,6 +237,8 @@ class ChatServer:
             with self.lock:
                 if client_socket in self.clients:
                     del self.clients[client_socket]
+                self.user_message_timestamps.pop(username, None)
+                self.rejection_reasons.pop(username, None)
             try:
                 client_socket.close()
             except (OSError, socket.error):
@@ -196,10 +278,17 @@ class ChatServer:
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen(5)
         self.running = True
+
+        self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
+        self.cleanup_thread.start()
         
         print(f"[*] OpSecChat TUI Server running on {self.host}:{self.port}")
         print(f"[*] Messages burn after {self.MESSAGE_LIFETIME} seconds")
         print(f"[*] Max message length: {self.MAX_MESSAGE_LENGTH} chars")
+        print(
+            "[*] Message rate limit: "
+            f"{self.rate_limit_messages} per {self.rate_limit_window_seconds} seconds"
+        )
         print(f"[*] Press Ctrl+C to stop")
         
         try:
@@ -245,6 +334,11 @@ class ChatServer:
                 msg['message'] = 'X' * len(msg['message'])
                 msg['username'] = 'X' * len(msg['username'])
             self.messages.clear()
+            self.user_message_timestamps.clear()
+            self.rejection_reasons.clear()
+
+        if self.cleanup_thread and self.cleanup_thread.is_alive():
+            self.cleanup_thread.join(timeout=1)
         
         print("\n[*] Server stopped. All messages overwritten and cleared.")
 
@@ -300,6 +394,18 @@ def main():
     parser.add_argument('--port', type=int, default=5555, help='Port to bind to')
     parser.add_argument('--tor', action='store_true', help='Enable Tor hidden service')
     parser.add_argument('--test', action='store_true', help='Test mode (skip Tor even if --tor specified)')
+    parser.add_argument(
+        '--rate-limit-messages',
+        type=int,
+        default=ChatServer.RATE_LIMIT_MESSAGES,
+        help='Max messages allowed per rate-limit window (default: 8)',
+    )
+    parser.add_argument(
+        '--rate-limit-window',
+        type=int,
+        default=ChatServer.RATE_LIMIT_WINDOW_SECONDS,
+        help='Rate-limit window in seconds (default: 10)',
+    )
     args = parser.parse_args()
     
     # Tor integration
@@ -313,7 +419,12 @@ def main():
             print(f"[*] Clients should connect to: {hostname}")
     
     # Create and start server
-    server = ChatServer(host=args.host, port=args.port)
+    server = ChatServer(
+        host=args.host,
+        port=args.port,
+        rate_limit_messages=args.rate_limit_messages,
+        rate_limit_window_seconds=args.rate_limit_window,
+    )
     
     print("\n" + "="*60)
     if tor_info:

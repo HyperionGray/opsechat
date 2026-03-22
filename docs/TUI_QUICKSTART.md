@@ -48,6 +48,7 @@ You should see:
 [*] OpSecChat TUI Server running on 127.0.0.1:5555
 [*] Messages burn after 240 seconds
 [*] Max message length: 1000 chars
+[*] Message rate limit: 8 per 10 seconds
 [*] Press Ctrl+C to stop
 ```
 
@@ -140,6 +141,7 @@ The client automatically detects `.onion` and uses Tor SOCKS proxy.
 
 ### ✅ Security Features
 - **Message Validation** - Max 1000 chars
+- **Rate Limiting** - Per-user anti-flood protection
 - **Secure Deletion** - Overwrite before delete
 - **No Configuration Files** - Ephemeral by design
 - **No Logs** - Zero persistence
@@ -210,6 +212,16 @@ python tui-server.py --port 6666
 
 # Client
 python tui-client.py --port 6666
+```
+
+### Rate Limit Tuning
+
+```bash
+# Default is 8 messages per 10 seconds per user
+python tui-server.py --rate-limit-messages 8 --rate-limit-window 10
+
+# Stricter profile
+python tui-server.py --rate-limit-messages 4 --rate-limit-window 15
 ```
 
 ### Bind to All Interfaces
