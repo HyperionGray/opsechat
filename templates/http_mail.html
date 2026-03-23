@@ -4,99 +4,14 @@
 <title>HTTP Mail - OpSec</title>
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="{{ url_for('static', filename='http_mail.css') }}">
 </head>
-
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    background: #000;
-    color: #0f0;
-    font-family: 'Courier New', monospace;
-    font-size: 15px;
-    padding: 20px;
-    min-height: 100vh;
-  }
-
-  .header {
-    border-bottom: 2px solid #0f0;
-    padding-bottom: 10px;
-    margin-bottom: 20px;
-  }
-
-  h1 { color: #0f0; font-size: 22px; }
-  h2 { color: #0ff; font-size: 18px; margin: 20px 0 10px 0; }
-  h3 { color: #0f0; font-size: 15px; margin: 10px 0 5px 0; }
-
-  .nav { margin: 15px 0; }
-  .nav a {
-    color: #0f0; text-decoration: none;
-    margin-right: 15px; padding: 4px 10px;
-    border: 1px solid #0f0; display: inline-block; margin-bottom: 8px;
-  }
-  .nav a:hover { background: #0f0; color: #000; }
-
-  .panel {
-    border: 1px solid #0f0;
-    padding: 20px;
-    margin: 20px 0;
-    max-width: 900px;
-  }
-
-  .info { background: #003; border-color: #0ff; color: #0ff; padding: 15px; margin: 15px 0; }
-  .warn { background: #330; border-color: #f90; color: #f90; padding: 15px; margin: 15px 0; }
-  .success-box { background: #030; border-color: #0f0; color: #0f0; padding: 15px; margin: 15px 0; border: 1px solid; }
-  .error-box { background: #300; border-color: #f00; color: #f00; padding: 15px; margin: 15px 0; border: 1px solid; }
-
-  label { display: block; color: #0f0; margin-bottom: 4px; }
-  input[type=text], textarea {
-    width: 100%; background: #111; color: #0f0;
-    border: 1px solid #0f0; padding: 8px;
-    font-family: 'Courier New', monospace; font-size: 14px;
-  }
-  textarea { min-height: 120px; resize: vertical; }
-  .form-group { margin-bottom: 15px; }
-
-  button, .btn {
-    background: #000; color: #0f0; border: 1px solid #0f0;
-    padding: 8px 18px; font-family: 'Courier New', monospace;
-    font-size: 14px; cursor: pointer; margin-right: 10px; margin-top: 5px;
-    text-decoration: none; display: inline-block;
-  }
-  button:hover, .btn:hover { background: #0f0; color: #000; }
-  button.danger { border-color: #f00; color: #f00; }
-  button.danger:hover { background: #f00; color: #fff; }
-
-  .token-box {
-    background: #111; border: 1px solid #0ff;
-    padding: 12px; margin: 10px 0; word-break: break-all;
-    color: #0ff; font-size: 13px;
-  }
-  .token-label { color: #888; font-size: 12px; margin-bottom: 4px; }
-
-  .msg-card {
-    border: 1px solid #0f0; padding: 15px; margin: 12px 0;
-    background: #050505;
-  }
-  .msg-meta { color: #888; font-size: 12px; margin-bottom: 8px; }
-  .msg-subject { color: #0ff; font-weight: bold; margin-bottom: 6px; }
-  .msg-body { white-space: pre-wrap; word-wrap: break-word; }
-  .msg-actions { margin-top: 10px; }
-
-  #new-mailbox-result { display: none; }
-  #compose-section { display: none; }
-  #read-section { display: none; }
-
-  .section-toggle { margin: 20px 0; }
-  .section-toggle button { margin-bottom: 5px; }
-
-  .hint { color: #888; font-size: 12px; margin-top: 4px; }
-</style>
-
-<body>
+<body
+  data-http-mail-path="{{ path }}"
+  data-default-section="{% if messages is defined %}read{% elif compose_address %}compose{% else %}create{% endif %}">
 <div class="header">
   <h1>📨 HTTP Mail</h1>
-  <p style="color:#888; font-size:13px;">Secure email over HTTP — no SMTP, no IMAP, default deny</p>
+  <p class="header-subtitle">Secure email over HTTP — no SMTP, no IMAP, default deny</p>
 </div>
 
 <div class="nav">
@@ -125,9 +40,9 @@
 <!--  Section controls                                       -->
 <!-- ======================================================= -->
 <div class="section-toggle">
-  <button onclick="showSection('create')">➕ Create New Mailbox</button>
-  <button onclick="showSection('compose')">✉️ Send a Message</button>
-  <button onclick="showSection('read')">📬 Read My Inbox</button>
+  <button data-section="create">➕ Create New Mailbox</button>
+  <button data-section="compose">✉️ Send a Message</button>
+  <button data-section="read">📬 Read My Inbox</button>
 </div>
 
 <!-- ======================================================= -->
@@ -135,11 +50,11 @@
 <!-- ======================================================= -->
 <div id="create-section" class="panel">
   <h2>Create a New Mailbox</h2>
-  <p style="color:#888; margin-bottom:15px;">
+  <p class="panel-note">
     A unique address and secret read key will be generated.
     <strong>Save your read key</strong> — it is shown only once.
   </p>
-  <button id="create-btn" onclick="createMailbox()">Create Mailbox</button>
+  <button id="create-btn">Create Mailbox</button>
 
   <div id="new-mailbox-result">
     <div class="warn">
@@ -149,18 +64,18 @@
     <div class="form-group">
       <div class="token-label">Your Mailbox Address (share with senders)</div>
       <div class="token-box" id="result-address"></div>
-      <button onclick="copyText('result-address')">📋 Copy Address</button>
+      <button data-copy-target="result-address">📋 Copy Address</button>
     </div>
     <div class="form-group">
       <div class="token-label">Your Read Key (keep secret — required to read messages)</div>
       <div class="token-box" id="result-read-key"></div>
-      <button onclick="copyText('result-read-key')">📋 Copy Read Key</button>
+      <button data-copy-target="result-read-key">📋 Copy Read Key</button>
     </div>
     <div class="form-group">
       <div class="token-label">Send URL (share this link with senders)</div>
       <div class="token-box" id="result-send-url"></div>
     </div>
-    <p class="hint" style="margin-top:10px;">
+    <p class="hint top-gap">
       To read your inbox: use the "Read My Inbox" section below with your address + read key.
     </p>
   </div>
@@ -171,7 +86,7 @@
 <!-- ======================================================= -->
 <div id="compose-section" class="panel">
   <h2>Send a Message</h2>
-  <p style="color:#888; margin-bottom:15px;">
+  <p class="panel-note">
     You need the recipient's <em>mailbox address</em>.
     No account or authentication required to send.
   </p>
@@ -216,7 +131,7 @@
 <!-- ======================================================= -->
 <div id="read-section" class="panel">
   <h2>Read My Inbox</h2>
-  <p style="color:#888; margin-bottom:15px;">
+  <p class="panel-note">
     Enter your mailbox address and read key.
     Without the correct read key, no messages are revealed (default deny).
   </p>
@@ -234,15 +149,17 @@
              value="{{ inbox_read_key or '' }}"
              placeholder="Your private read key">
     </div>
-    <button type="button" onclick="fetchInbox()">Open Inbox</button>
+    <button type="button" id="open-inbox-btn">Open Inbox</button>
+    <button type="button" id="fetch-stats-btn">Mailbox Stats</button>
   </form>
+  <div id="mailbox-stats"></div>
 
   <!-- Inbox messages rendered from server (non-JS fallback) -->
   {% if messages is defined %}
-  <div id="inbox-messages" style="margin-top:20px;">
+  <div id="inbox-messages" class="inbox-wrap">
     <h3>Messages ({{ messages|length }})</h3>
     {% if messages|length == 0 %}
-    <p style="color:#888; margin-top:10px;">No messages in this mailbox.</p>
+    <p class="no-messages">No messages in this mailbox.</p>
     {% else %}
     {% for msg in messages %}
     <div class="msg-card">
@@ -254,10 +171,10 @@
       <div class="msg-body">{{ msg.body }}</div>
       <div class="msg-actions">
         <form method="POST"
-              action="/{{ path }}/mail/{{ inbox_address }}/delete/{{ msg.id }}">
+              action="/{{ path }}/mail/{{ inbox_address }}/delete/{{ msg.id }}"
+              class="js-confirm-delete">
           <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
-          <button type="submit" class="danger"
-                  onclick="return confirm('Delete this message?')">🗑 Delete</button>
+          <button type="submit" class="danger">🗑 Delete</button>
         </form>
       </div>
     </div>
@@ -265,12 +182,11 @@
     {% endif %}
 
     <!-- Destroy entire mailbox -->
-    <div style="margin-top:30px; border-top:1px solid #333; padding-top:15px;">
-      <h3 style="color:#f00;">Danger Zone</h3>
-      <form method="POST" action="/{{ path }}/mail/{{ inbox_address }}/destroy">
+    <div class="danger-zone">
+      <h3 class="danger-title">Danger Zone</h3>
+      <form method="POST" action="/{{ path }}/mail/{{ inbox_address }}/destroy" class="js-confirm-destroy">
         <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
-        <button type="submit" class="danger"
-                onclick="return confirm('Destroy mailbox and all messages permanently?')">
+        <button type="submit" class="danger">
           💣 Destroy Mailbox
         </button>
       </form>
@@ -281,192 +197,6 @@
   <!-- JS-rendered messages go here -->
   <div id="js-inbox-messages"></div>
 </div>
-
-<script>
-  // Show/hide sections
-  function showSection(name) {
-    ['create', 'compose', 'read'].forEach(function(s) {
-      var el = document.getElementById(s + '-section');
-      if (el) el.style.display = (s === name) ? 'block' : 'none';
-    });
-  }
-
-  // Auto-open section based on server context
-  (function() {
-    {% if messages is defined %}
-      showSection('read');
-    {% elif compose_address %}
-      showSection('compose');
-    {% else %}
-      showSection('create');
-    {% endif %}
-  })();
-
-  // Create mailbox via fetch
-  function createMailbox() {
-    var btn = document.getElementById('create-btn');
-    btn.disabled = true;
-    btn.textContent = 'Creating...';
-
-    fetch('/{{ path }}/mail/new', {
-      method: 'POST',
-      headers: {'Accept': 'application/json'}
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.success) {
-        document.getElementById('result-address').textContent = data.address;
-        document.getElementById('result-read-key').textContent = data.read_key;
-        document.getElementById('result-send-url').textContent =
-          window.location.origin + data.send_url;
-        document.getElementById('new-mailbox-result').style.display = 'block';
-      } else {
-        alert('Error: ' + (data.error || 'Unknown error'));
-      }
-      btn.disabled = false;
-      btn.textContent = 'Create Another Mailbox';
-    })
-    .catch(function(err) {
-      alert('Request failed: ' + err);
-      btn.disabled = false;
-      btn.textContent = 'Create Mailbox';
-    });
-  }
-
-  // Update compose form action when address changes
-  function updateComposeAction() {
-    var addr = document.getElementById('compose-address-input').value.trim();
-    var form = document.getElementById('compose-form');
-    if (addr) {
-      form.action = '/{{ path }}/mail/' + encodeURIComponent(addr) + '/send';
-    }
-  }
-
-  // Fetch inbox via JS
-  function fetchInbox() {
-    var address = document.getElementById('read-address').value.trim();
-    var readKey = document.getElementById('read-key-input').value.trim();
-
-    if (!address || !readKey) {
-      alert('Please enter both mailbox address and read key.');
-      return;
-    }
-
-    var url = '/{{ path }}/mail/' + encodeURIComponent(address) +
-              '/inbox?key=' + encodeURIComponent(readKey);
-
-    fetch(url, {headers: {'Accept': 'application/json'}})
-    .then(function(r) {
-      if (r.status === 403) throw new Error('Invalid read key — access denied');
-      if (r.status === 404) throw new Error('Mailbox not found');
-      return r.json();
-    })
-    .then(function(data) {
-      renderInbox(data.messages, address, readKey);
-    })
-    .catch(function(err) {
-      document.getElementById('js-inbox-messages').innerHTML =
-        '<div class="error-box">⚠️ ' + err.message + '</div>';
-    });
-  }
-
-  function renderInbox(messages, address, readKey) {
-    var container = document.getElementById('js-inbox-messages');
-    if (messages.length === 0) {
-      container.innerHTML = '<p style="color:#888;margin-top:10px;">No messages in this mailbox.</p>';
-      return;
-    }
-    var html = '<h3 style="margin-top:20px;">Messages (' + messages.length + ')</h3>';
-    messages.forEach(function(msg) {
-      html += '<div class="msg-card">' +
-        '<div class="msg-meta">From: ' + esc(msg.sender) + ' &nbsp;|&nbsp; ' + esc(msg.timestamp) + '</div>' +
-        '<div class="msg-subject">' + esc(msg.subject) + '</div>' +
-        '<div class="msg-body">' + esc(msg.body) + '</div>' +
-        '<div class="msg-actions">' +
-          '<button class="danger js-delete-msg"' +
-            ' data-address="' + esc(address) + '"' +
-            ' data-msg-id="' + esc(msg.id) + '"' +
-            ' data-read-key="' + esc(readKey) + '">🗑 Delete</button>' +
-        '</div></div>';
-    });
-    html += '<div style="margin-top:30px;border-top:1px solid #333;padding-top:15px;">' +
-      '<h3 style="color:#f00;">Danger Zone</h3>' +
-      '<button class="danger js-destroy-mailbox"' +
-        ' data-address="' + esc(address) + '"' +
-        ' data-read-key="' + esc(readKey) + '">💣 Destroy Mailbox</button></div>';
-    container.innerHTML = html;
-
-    // Attach event listeners after injecting HTML (avoids inline handler issues)
-    container.querySelectorAll('.js-delete-msg').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        if (!confirm('Delete this message?')) return;
-        deleteMsg(btn.dataset.address, btn.dataset.msgId, btn.dataset.readKey);
-      });
-    });
-    container.querySelectorAll('.js-destroy-mailbox').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        if (!confirm('Destroy mailbox and ALL messages permanently?')) return;
-        destroyMailbox(btn.dataset.address, btn.dataset.readKey);
-      });
-    });
-  }
-
-  function deleteMsg(address, msgId, readKey) {
-    fetch('/{{ path }}/mail/' + encodeURIComponent(address) + '/delete/' + encodeURIComponent(msgId), {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-      body: JSON.stringify({read_key: readKey})
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (d.success) fetchInbox();
-      else alert('Error: ' + (d.error || 'Could not delete'));
-    });
-  }
-
-  function destroyMailbox(address, readKey) {
-    fetch('/{{ path }}/mail/' + encodeURIComponent(address) + '/destroy', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-      body: JSON.stringify({read_key: readKey})
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (d.success) {
-        document.getElementById('js-inbox-messages').innerHTML =
-          '<div class="success-box">✅ Mailbox destroyed.</div>';
-      } else {
-        alert('Error: ' + (d.error || 'Could not destroy mailbox'));
-      }
-    });
-  }
-
-  function copyText(elementId) {
-    var text = document.getElementById(elementId).textContent;
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(text).then(function() {
-        alert('Copied!');
-      });
-    } else {
-      var ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.left = '-9999px';
-      document.body.appendChild(ta);
-      ta.select();
-      try { document.execCommand('copy'); alert('Copied!'); } catch (e) {}
-      document.body.removeChild(ta);
-    }
-  }
-
-  function esc(s) {
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#x27;');
-  }
-</script>
+<script src="{{ url_for('static', filename='http_mail.js') }}" defer></script>
 </body>
 </html>

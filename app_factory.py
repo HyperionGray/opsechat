@@ -82,8 +82,8 @@ def create_app():
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
+        # HTTP Mail template is CSP-safe (external JS/CSS). Keep migrating
+        # legacy templates to external assets to fully enforce this policy app-wide.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"

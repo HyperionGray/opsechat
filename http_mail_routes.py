@@ -7,15 +7,21 @@ and read back using a private read_key (default deny).
 Routes registered under /<path>/mail/:
   GET  /<path>/mail                        - Main UI (create mailbox form)
   POST /<path>/mail/new                    - Create a new mailbox
+  POST /<path>/mail/send                   - Send a message using form/body address
   POST /<path>/mail/<address>/send         - Send a message to a mailbox (no auth)
   GET  /<path>/mail/<address>/inbox        - Read inbox (requires ?key=<read_key>)
+  GET  /<path>/mail/<address>/stats        - Read mailbox metadata (requires ?key=<read_key>)
   POST /<path>/mail/<address>/delete/<id>  - Delete a message (requires read_key in form)
   POST /<path>/mail/<address>/destroy      - Delete entire mailbox (requires read_key in form)
 """
 
 import re
 from flask import render_template, request, session, jsonify, redirect, url_for
-from http_mail_system import http_mail_storage, MAX_MAIL_MESSAGE_LENGTH
+from http_mail_system import (
+    http_mail_storage,
+    MAX_MAIL_MESSAGE_LENGTH,
+    MAIL_EXPIRY_HOURS,
+)
 from utils import id_generator, get_random_color
 
 
@@ -35,6 +41,26 @@ def register_http_mail_routes(app):
         """Strip dangerous characters and enforce length."""
         text = re.sub(r'[<>&"\']', '', text)
         return text[:max_len]
+
+    def _wants_json() -> bool:
+        if request.is_json:
+            return True
+        accept = request.headers.get("Accept", "")
+        return "application/json" in accept
+
+    def _extract_message_payload():
+        if request.is_json:
+            data = request.get_json() or {}
+            return (
+                data.get("subject", "").strip(),
+                data.get("body", "").strip(),
+                data.get("sender", "anonymous").strip(),
+            )
+        return (
+            request.form.get("subject", "").strip(),
+            request.form.get("body", "").strip(),
+            request.form.get("sender", "anonymous").strip(),
+        )
 
     # ------------------------------------------------------------------
     # Main UI — create or access mailbox
@@ -83,19 +109,10 @@ def register_http_mail_routes(app):
         if mailbox is None:
             return jsonify({"error": "Mailbox not found"}), 404
 
-        # Accept JSON or form data
-        if request.is_json:
-            data = request.get_json() or {}
-            subject = data.get("subject", "").strip()
-            body = data.get("body", "").strip()
-            sender = data.get("sender", "anonymous").strip()
-        else:
-            subject = request.form.get("subject", "").strip()
-            body = request.form.get("body", "").strip()
-            sender = request.form.get("sender", "anonymous").strip()
+        subject, body, sender = _extract_message_payload()
 
         if not body:
-            if request.is_json:
+            if _wants_json():
                 return jsonify({"error": "Message body is required"}), 400
             return render_template("http_mail.html",
                                    path=app.config["path"],
@@ -109,8 +126,17 @@ def register_http_mail_routes(app):
         sender = _sanitize(sender, 64) or "anonymous"
 
         msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        if msg_id is None:
+            if _wants_json():
+                return jsonify({"error": "Mailbox no longer accepts messages"}), 410
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Mailbox no longer accepts messages",
+                                   compose_address=address), 410
 
-        if request.is_json:
+        if _wants_json():
             return jsonify({"success": True, "msg_id": msg_id})
 
         return render_template("http_mail.html",
@@ -119,6 +145,31 @@ def register_http_mail_routes(app):
                                max_message_length=MAX_MAIL_MESSAGE_LENGTH,
                                success="Message sent.",
                                compose_address=address)
+
+    @app.route('/<string:url_addition>/mail/send', methods=["POST"])
+    def http_mail_send_fallback(url_addition):
+        """No-JS fallback: send using address from form/json payload."""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+
+        if request.is_json:
+            payload = request.get_json() or {}
+            address = (payload.get("address") or "").strip()
+        else:
+            address = request.form.get("_address_override", "").strip()
+
+        if not address:
+            if _wants_json():
+                return jsonify({"error": "Mailbox address is required"}), 400
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Mailbox address is required",
+                                   compose_address=""), 400
+
+        return http_mail_send(url_addition, address)
 
     # ------------------------------------------------------------------
     # Read inbox (requires read_key)
@@ -132,7 +183,7 @@ def register_http_mail_routes(app):
 
         mailbox = http_mail_storage.get_mailbox(address)
         if mailbox is None:
-            if request.headers.get("Accept", "").startswith("application/json"):
+            if _wants_json():
                 return jsonify({"error": "Mailbox not found"}), 404
             return render_template("http_mail.html",
                                    path=app.config["path"],
@@ -144,7 +195,7 @@ def register_http_mail_routes(app):
         messages = mailbox.get_messages(read_key)
 
         if messages is None:
-            if request.headers.get("Accept", "").startswith("application/json"):
+            if _wants_json():
                 return jsonify({"error": "Invalid read key"}), 403
             return render_template("http_mail.html",
                                    path=app.config["path"],
@@ -152,7 +203,7 @@ def register_http_mail_routes(app):
                                    max_message_length=MAX_MAIL_MESSAGE_LENGTH,
                                    error="Invalid read key — access denied"), 403
 
-        if request.headers.get("Accept", "").startswith("application/json"):
+        if _wants_json():
             return jsonify({"address": address, "messages": messages})
 
         return render_template("http_mail.html",
@@ -162,6 +213,25 @@ def register_http_mail_routes(app):
                                inbox_address=address,
                                inbox_read_key=read_key,
                                messages=messages)
+
+    @app.route('/<string:url_addition>/mail/<string:address>/stats', methods=["GET"])
+    def http_mail_stats(url_addition, address):
+        """Return mailbox metadata and message statistics (read_key required)."""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+
+        mailbox = http_mail_storage.get_mailbox(address)
+        if mailbox is None:
+            return jsonify({"error": "Mailbox not found"}), 404
+
+        read_key = request.args.get("key", "")
+        stats = mailbox.get_stats(read_key)
+        if stats is None:
+            return jsonify({"error": "Invalid read key"}), 403
+
+        stats["expiry_hours"] = MAIL_EXPIRY_HOURS
+        return jsonify(stats)
 
     # ------------------------------------------------------------------
     # Delete a single message (requires read_key in POST body)

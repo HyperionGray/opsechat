@@ -91,6 +91,14 @@ class TestHttpMailStorage:
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
 
+    def test_delete_mailbox_marks_instance_destroyed(self):
+        mb = self.storage.create_mailbox()
+        assert mb.add_message("pre", "body", "sender") is not None
+        result = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert result is True
+        assert mb.destroyed is True
+        assert mb.add_message("late", "body", "sender") is None
+
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
         result = self.storage.delete_mailbox(mb.address, "wrongkey")
@@ -128,6 +136,11 @@ class TestHttpMailbox:
         msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
         assert msg_id
         assert len(msg_id) == 16
+
+    def test_add_message_returns_none_when_destroyed(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
+        assert msg_id is None
 
     def test_get_messages_correct_key(self):
         self.mailbox.add_message("Subj", "Body", "alice")
@@ -257,6 +270,30 @@ class TestHttpMailRoutes:
         )
         assert r.status_code == 400
 
+    def test_send_message_form_fallback_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Form route",
+                "body": "Hello via form fallback",
+                "sender": "alice",
+            },
+        )
+        assert r.status_code == 200
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        data = inbox.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["subject"] == "Form route"
+
     def test_send_to_nonexistent_mailbox(self):
         r = self.client.post(
             f"/{self.path}/mail/doesnotexist/send",
@@ -309,6 +346,39 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 404
+
+    def test_mailbox_stats_requires_valid_key(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        denied = self.client.get(
+            f"/{self.path}/mail/{addr}/stats?key=wrong",
+            headers={"Accept": "application/json"},
+        )
+        assert denied.status_code == 403
+
+    def test_mailbox_stats_returns_expected_fields(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Stats", "body": "Body", "sender": "bob"},
+        )
+
+        stats_resp = self.client.get(
+            f"/{self.path}/mail/{addr}/stats?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert stats_resp.status_code == 200
+        stats = stats_resp.get_json()
+        assert stats["address"] == addr
+        assert stats["message_count"] == 1
+        assert stats["created_at"]
+        assert "oldest_message_at" in stats
+        assert "newest_message_at" in stats
+        assert stats["expiry_hours"] >= 1
 
     def test_delete_message_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
