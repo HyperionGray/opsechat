@@ -3,8 +3,8 @@ Tests for the HTTP mail system (email over HTTP, no SMTP/IMAP).
 
 Covers:
 - HttpMailStorage: create mailbox, send, read (default deny), delete, destroy
-- http_mail_routes: all REST endpoints via Flask test client
-- Missing email_routes: view, edit, delete, burner POST, expire
+- http_mail_routes: REST endpoints via Flask test client (including filters/stats)
+- Additional email route coverage: view, edit, delete, burner POST, expire
 """
 
 import datetime
@@ -22,7 +22,7 @@ from http_mail_system import (
     http_mail_storage,
     MAX_MAIL_MESSAGE_LENGTH,
 )
-from email_system import email_storage as _global_email_storage, EmailComposer
+from email_system import email_storage as _global_email_storage
 from app_factory import create_app
 
 
@@ -143,6 +143,36 @@ class TestHttpMailbox:
         msgs = self.mailbox.get_messages("wrongkey")
         assert msgs is None
 
+    def test_get_messages_sender_filter_case_insensitive(self):
+        self.mailbox.add_message("A", "Body A", "Alice")
+        self.mailbox.add_message("B", "Body B", "bob")
+        msgs = self.mailbox.get_messages(
+            "secretkey123456789012345678901",
+            sender_filter="alice",
+        )
+        assert msgs is not None
+        assert len(msgs) == 1
+        assert msgs[0]["sender"] == "Alice"
+
+    def test_get_messages_limit_returns_newest_tail(self):
+        self.mailbox.add_message("One", "Body 1", "alice")
+        self.mailbox.add_message("Two", "Body 2", "alice")
+        self.mailbox.add_message("Three", "Body 3", "alice")
+        msgs = self.mailbox.get_messages(
+            "secretkey123456789012345678901",
+            limit=2,
+        )
+        assert msgs is not None
+        assert [m["subject"] for m in msgs] == ["Two", "Three"]
+
+    def test_get_messages_invalid_limit_returns_empty(self):
+        self.mailbox.add_message("Subj", "Body", "alice")
+        msgs = self.mailbox.get_messages(
+            "secretkey123456789012345678901",
+            limit=0,
+        )
+        assert msgs == []
+
     def test_get_messages_empty_key_returns_none(self):
         msgs = self.mailbox.get_messages("")
         assert msgs is None
@@ -196,6 +226,20 @@ class TestHttpMailbox:
         assert "Secret" not in msg.subject
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
+
+    def test_get_stats_returns_metadata(self):
+        self.mailbox.add_message("Subj", "Body", "alice")
+        stats = self.mailbox.get_stats("secretkey123456789012345678901")
+        assert stats is not None
+        assert stats["address"] == "testaddr1"
+        assert stats["message_count"] == 1
+        assert stats["created_at"]
+        assert stats["oldest_message_at"]
+        assert stats["newest_message_at"]
+
+    def test_get_stats_wrong_key_returns_none(self):
+        self.mailbox.add_message("Subj", "Body", "alice")
+        assert self.mailbox.get_stats("wrongkey") is None
 
 
 # ===========================================================================
@@ -310,6 +354,55 @@ class TestHttpMailRoutes:
         )
         assert r.status_code == 404
 
+    def test_read_inbox_with_limit(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        data = r.get_json()
+        addr = data["address"]
+        read_key = data["read_key"]
+
+        self.client.post(f"/{self.path}/mail/{addr}/send", json={"subject": "One", "body": "1", "sender": "a"})
+        self.client.post(f"/{self.path}/mail/{addr}/send", json={"subject": "Two", "body": "2", "sender": "a"})
+        self.client.post(f"/{self.path}/mail/{addr}/send", json={"subject": "Three", "body": "3", "sender": "a"})
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&limit=2",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        messages = r.get_json()["messages"]
+        assert len(messages) == 2
+        assert [m["subject"] for m in messages] == ["Two", "Three"]
+
+    def test_read_inbox_with_sender_filter(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        data = r.get_json()
+        addr = data["address"]
+        read_key = data["read_key"]
+
+        self.client.post(f"/{self.path}/mail/{addr}/send", json={"subject": "A", "body": "1", "sender": "Alice"})
+        self.client.post(f"/{self.path}/mail/{addr}/send", json={"subject": "B", "body": "2", "sender": "bob"})
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&sender=alice",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        messages = r.get_json()["messages"]
+        assert len(messages) == 1
+        assert messages[0]["sender"] == "Alice"
+
+    def test_read_inbox_with_invalid_limit_returns_400(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        data = r.get_json()
+        addr = data["address"]
+        read_key = data["read_key"]
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&limit=0",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
+
     def test_delete_message_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
@@ -384,6 +477,39 @@ class TestHttpMailRoutes:
         r = self.client.post(
             f"/{self.path}/mail/{addr}/destroy",
             json={"read_key": "badkey"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 403
+
+    def test_mailbox_stats_endpoint(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        data = r.get_json()
+        addr = data["address"]
+        read_key = data["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Subj", "body": "Body", "sender": "alice"},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/stats?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        stats = r.get_json()
+        assert stats["address"] == addr
+        assert stats["message_count"] == 1
+        assert stats["created_at"]
+        assert stats["oldest_message_at"]
+        assert stats["newest_message_at"]
+
+    def test_mailbox_stats_wrong_key_denied(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/stats?key=wrong",
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 403

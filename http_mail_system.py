@@ -80,13 +80,57 @@ class HttpMailbox:
             self.messages.append(msg)
         return msg_id
 
-    def get_messages(self, read_key: str) -> Optional[List[Dict]]:
-        """Return messages if read_key matches, else None (default deny)."""
+    def get_messages(
+        self,
+        read_key: str,
+        limit: Optional[int] = None,
+        sender_filter: str = "",
+    ) -> Optional[List[Dict]]:
+        """Return messages if read_key matches, else None (default deny).
+
+        Args:
+            read_key: Private mailbox key required to read messages.
+            limit: Optional max number of messages to return (from newest tail).
+            sender_filter: Optional exact sender-handle filter (case-insensitive).
+        """
         if not secrets.compare_digest(read_key, self.read_key):
             return None
         self._expire_old_messages()
         with self.lock:
-            return [m.to_dict() for m in self.messages]
+            messages = [m.to_dict() for m in self.messages]
+
+        if sender_filter:
+            sender_needle = sender_filter.casefold()
+            messages = [
+                msg for msg in messages
+                if msg["sender"].casefold() == sender_needle
+            ]
+
+        if limit is not None:
+            if limit < 1:
+                return []
+            messages = messages[-limit:]
+
+        return messages
+
+    def get_stats(self, read_key: str) -> Optional[Dict]:
+        """Return mailbox metadata when read_key is valid, else None."""
+        if not secrets.compare_digest(read_key, self.read_key):
+            return None
+
+        self._expire_old_messages()
+        with self.lock:
+            count = len(self.messages)
+            oldest = self.messages[0].timestamp.isoformat() if count > 0 else None
+            newest = self.messages[-1].timestamp.isoformat() if count > 0 else None
+
+        return {
+            "address": self.address,
+            "message_count": count,
+            "created_at": self.created_at.isoformat(),
+            "oldest_message_at": oldest,
+            "newest_message_at": newest,
+        }
 
     def delete_message(self, read_key: str, msg_id: str) -> bool:
         """Delete a message by ID after verifying read_key. Returns True on success."""
