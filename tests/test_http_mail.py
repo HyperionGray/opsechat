@@ -91,6 +91,17 @@ class TestHttpMailStorage:
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
 
+    def test_delete_mailbox_marks_stale_reference_destroyed(self):
+        mb = self.storage.create_mailbox()
+        stale_ref = self.storage.get_mailbox(mb.address)
+        stale_ref.add_message("Subj", "Secret body", "alice")
+
+        result = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert result is True
+        assert stale_ref.destroyed is True
+        assert stale_ref.add_message("Later", "Should fail", "bob") is None
+        assert stale_ref.get_messages(mb.read_key) == []
+
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
         result = self.storage.delete_mailbox(mb.address, "wrongkey")
@@ -196,6 +207,11 @@ class TestHttpMailbox:
         assert "Secret" not in msg.subject
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
+
+    def test_destroyed_mailbox_rejects_new_messages(self):
+        self.mailbox.destroy()
+        assert self.mailbox.destroyed is True
+        assert self.mailbox.add_message("Nope", "Nope", "Nope") is None
 
 
 # ===========================================================================
@@ -493,4 +509,9 @@ class TestEmailRoutesExtended:
 
     def test_burner_wrong_path_404(self):
         r = self.client.post("/wrongpath/email/burner", data={"action": "generate"})
+        assert r.status_code == 404
+
+    def test_view_email_without_session_returns_404_not_500(self):
+        fresh_client = self.app.test_client()
+        r = fresh_client.get("/secpath/email/view/doesnotexist")
         assert r.status_code == 404
