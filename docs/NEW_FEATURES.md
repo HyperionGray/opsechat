@@ -2,6 +2,25 @@
 
 This guide covers the new features added in the final push for OpSecHat production readiness.
 
+## 📨 HTTP Mail Lifecycle Hardening
+
+### What Changed
+HTTP mailboxes now enforce explicit destruction semantics:
+- Destroyed mailboxes reject all future writes, even if a stale in-memory mailbox reference still exists.
+- Mailbox destruction now runs through a single mailbox-level destroy path that clears and overwrites message content while atomically marking the mailbox unusable.
+- The send route now returns **HTTP 410 Gone** when a mailbox object exists but has already been destroyed.
+
+### Why It Matters
+This closes a lifecycle edge case where concurrent send operations could target a mailbox during teardown. The mailbox object now protects itself, instead of relying only on removal from the global storage map.
+
+### API Behavior
+- `POST /<path>/mail/<address>/send`
+  - `200` on success
+  - `404` if mailbox address does not exist
+  - `410` if mailbox object is destroyed/unavailable
+
+---
+
 ## 🔑 Automated Key Exchange
 
 ### What Changed
@@ -469,6 +488,6 @@ curl http://localhost:5001/chat/dm/{dm_id}
 
 ---
 
-**Last Updated**: March 2, 2026
+**Last Updated**: March 23, 2026
 **Version**: 0.8.0-alpha
 **Author**: OpSecHat Development Team
