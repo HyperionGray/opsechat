@@ -91,6 +91,13 @@ class TestHttpMailStorage:
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
 
+    def test_delete_mailbox_blocks_writes_from_stale_reference(self):
+        mb = self.storage.create_mailbox()
+        stale_reference = mb
+        result = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert result is True
+        assert stale_reference.add_message("race", "late write", "sender") is None
+
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
         result = self.storage.delete_mailbox(mb.address, "wrongkey")
@@ -196,6 +203,19 @@ class TestHttpMailbox:
         assert "Secret" not in msg.subject
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
+
+    def test_destroy_mailbox_refuses_new_messages(self):
+        self.mailbox.destroy()
+        msg_id = self.mailbox.add_message("Subj", "Body", "alice")
+        assert msg_id is None
+
+    def test_destroy_mailbox_clears_existing_messages(self):
+        self.mailbox.add_message("Subj", "Body", "alice")
+        self.mailbox.destroy()
+        msgs = self.mailbox.get_messages("secretkey123456789012345678901")
+        assert msgs == []
+        deleted = self.mailbox.delete_message("secretkey123456789012345678901", "any")
+        assert deleted is False
 
 
 # ===========================================================================
@@ -387,6 +407,21 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 403
+
+    def test_send_to_destroyed_mailbox_returns_410(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+        mailbox = http_mail_storage.get_mailbox(addr)
+        assert mailbox is not None
+        mailbox.destroy()
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 410
+        http_mail_storage.delete_mailbox(addr, read_key)
 
     def test_message_body_sanitized(self):
         r = self.client.post(f"/{self.path}/mail/new")

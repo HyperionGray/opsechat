@@ -255,6 +255,7 @@ Features
 
 ### Email System (NEW - REAL EMAIL SUPPORT!)
 - **Real SMTP/IMAP Integration** - Send and receive actual emails via configured email servers (see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md))
+- **HTTP Mailboxes** - Email-over-HTTP mode with private `read_key` access control and in-memory expiry (see [HTTP Mailboxes Guide](docs/user-guide/HTTP_MAIL.md))
 - **Encrypted Email Inbox** - In-memory email storage with PGP support
 - **Raw Mode Editing** - Full control over email headers for security testing
 - **Modern Burner Email System** - Guerrillamail-style rotating anonymous email addresses with:
@@ -291,8 +292,9 @@ For Amazon Q setup instructions, see [Amazon Q Setup Guide](docs/setup/AMAZON_Q_
 5. Configure Porkbun API for domain rotation (optional): Add API credentials and budget (see [Domain API Setup Guide](docs/setup/DOMAIN_API_SETUP.md))
 6. Compose and send emails: `http://yourservice.onion/{path}/email/compose`
 7. View your inbox: `http://yourservice.onion/{path}/email`
+8. Use HTTP mailboxes (no SMTP/IMAP): `http://yourservice.onion/{path}/mail`
 
-For full documentation, see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md).
+For full documentation, see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md) and [HTTP Mailboxes Guide](docs/user-guide/HTTP_MAIL.md).
 
 Security & Code Quality
 =======================
