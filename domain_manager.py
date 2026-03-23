@@ -134,6 +134,91 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+
+    @staticmethod
+    def _coerce_float(value, default: float = 0.0) -> float:
+        """Coerce numeric-like values to float safely."""
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            sanitized = value.replace("$", "").replace("€", "").strip()
+            try:
+                return float(sanitized)
+            except ValueError:
+                return default
+        return default
+
+    @staticmethod
+    def _coerce_datetime(value: Optional[object]) -> Optional[datetime]:
+        """Coerce datetime-like values (datetime/ISO string) safely."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return None
+        return None
+
+    def export_state(self) -> Dict:
+        """
+        Export manager state as JSON-serializable payload.
+        Datetimes are encoded as ISO 8601 strings.
+        """
+        serialized_domains = []
+        for domain in self.owned_domains:
+            if not isinstance(domain, dict):
+                continue
+            serialized_domain = dict(domain)
+            purchased_at = self._coerce_datetime(serialized_domain.get("purchased_at"))
+            expires_at = self._coerce_datetime(serialized_domain.get("expires_at"))
+            if purchased_at:
+                serialized_domain["purchased_at"] = purchased_at.isoformat()
+            if expires_at:
+                serialized_domain["expires_at"] = expires_at.isoformat()
+            serialized_domains.append(serialized_domain)
+
+        return {
+            "current_spending": float(self.current_spending),
+            "active_domain": self.active_domain,
+            "owned_domains": serialized_domains
+        }
+
+    def load_state(self, state: Optional[Dict]) -> None:
+        """
+        Load manager state from dict payload.
+        Supports legacy values and normalizes datetime/price fields.
+        """
+        if not isinstance(state, dict):
+            return
+
+        self.current_spending = self._coerce_float(
+            state.get("current_spending"),
+            default=self.current_spending
+        )
+        self.active_domain = state.get("active_domain")
+
+        normalized_domains: List[Dict] = []
+        for domain in state.get("owned_domains", []):
+            if not isinstance(domain, dict):
+                continue
+
+            normalized_domain = dict(domain)
+            normalized_domain["price"] = self._coerce_float(normalized_domain.get("price"))
+
+            purchased_at = self._coerce_datetime(normalized_domain.get("purchased_at"))
+            expires_at = self._coerce_datetime(normalized_domain.get("expires_at"))
+
+            if not purchased_at:
+                purchased_at = datetime.now()
+            if not expires_at:
+                expires_at = purchased_at + timedelta(days=365)
+
+            normalized_domain["purchased_at"] = purchased_at
+            normalized_domain["expires_at"] = expires_at
+            normalized_domains.append(normalized_domain)
+
+        self.owned_domains = normalized_domains
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
@@ -168,12 +253,7 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
-                
+                price = self._coerce_float(result.get("price"), default=999.0)
                 if price <= max_price:
                     return {
                         "domain": domain,

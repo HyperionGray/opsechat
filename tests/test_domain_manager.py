@@ -2,6 +2,7 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +175,43 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_export_state_serializes_datetime_fields(self):
+        """Test state export converts datetimes to JSON-safe strings."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 3.5
+        manager.active_domain = "active.xyz"
+        manager.owned_domains = [{
+            "domain": "active.xyz",
+            "price": 3.5,
+            "purchased_at": datetime(2026, 1, 2, 3, 4, 5),
+            "expires_at": datetime(2027, 1, 2, 3, 4, 5)
+        }]
+
+        payload = manager.export_state()
+
+        assert payload["current_spending"] == 3.5
+        assert payload["active_domain"] == "active.xyz"
+        assert payload["owned_domains"][0]["purchased_at"] == "2026-01-02T03:04:05"
+        assert payload["owned_domains"][0]["expires_at"] == "2027-01-02T03:04:05"
+
+    def test_load_state_deserializes_datetime_and_price(self):
+        """Test state load normalizes ISO datetime and numeric strings."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.load_state({
+            "current_spending": "4.25",
+            "active_domain": "state.xyz",
+            "owned_domains": [{
+                "domain": "state.xyz",
+                "price": "$4.25",
+                "purchased_at": "2026-02-03T04:05:06",
+                "expires_at": "2027-02-03T04:05:06"
+            }]
+        })
+
+        assert manager.current_spending == 4.25
+        assert manager.active_domain == "state.xyz"
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["price"] == 4.25
+        assert isinstance(manager.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(manager.owned_domains[0]["expires_at"], datetime)

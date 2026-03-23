@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from getpass import getpass
 from domain_manager import PorkbunAPIClient, DomainRotationManager
@@ -49,6 +50,18 @@ def save_config(config):
         print(f"Configuration saved to {CONFIG_FILE}")
     except Exception as e:
         print(f"Error saving config: {e}")
+
+
+def format_datetime(value, fmt: str) -> str:
+    """Format datetime-ish values for display."""
+    if isinstance(value, datetime):
+        return value.strftime(fmt)
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value).strftime(fmt)
+        except ValueError:
+            return value
+    return "unknown"
 
 
 def configure_api():
@@ -107,23 +120,29 @@ def get_manager():
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+
+    # Load saved state (new nested shape first, then legacy top-level fields)
+    state_payload = config.get("domain_rotation_state")
+    if not isinstance(state_payload, dict):
+        state_payload = {
+            "current_spending": config.get("current_spending", 0.0),
+            "owned_domains": config.get("owned_domains", []),
+            "active_domain": config.get("active_domain")
+        }
+    manager.load_state(state_payload)
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    state_payload = manager.export_state()
+    config['domain_rotation_state'] = state_payload
+
+    # Keep legacy fields for backward compatibility with older scripts/tools
+    config['current_spending'] = state_payload.get('current_spending', 0.0)
+    config['owned_domains'] = state_payload.get('owned_domains', [])
+    config['active_domain'] = state_payload.get('active_domain')
     save_config(config)
 
 
@@ -144,8 +163,8 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {format_datetime(domain.get('purchased_at'), '%Y-%m-%d %H:%M')}")
+        print(f"   Expires: {format_datetime(domain.get('expires_at'), '%Y-%m-%d')}")
         print()
 
 

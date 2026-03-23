@@ -1,5 +1,30 @@
 # Changelog - Automation Consolidation
 
+## 2026-03-23 - Domain Rotation Persistence and Repository Cleanup
+
+### Added
+1. **Domain rotation state persistence API**
+   - `domain_manager.py` now provides:
+     - `DomainRotationManager.export_state()`
+     - `DomainRotationManager.load_state()`
+   - State payloads are JSON-safe and include normalized date handling.
+
+2. **Backward-compatible CLI state loading**
+   - `domain_rotation_cli.py` now reads/writes a structured `domain_rotation_state` block.
+   - Legacy top-level keys (`current_spending`, `owned_domains`, `active_domain`) are still supported.
+
+3. **New test coverage**
+   - Added state serialization/deserialization tests in `tests/test_domain_manager.py`.
+
+### Fixed
+1. **CLI date formatting crash risk**
+   - Domain list output now safely formats persisted datetime strings and datetime objects.
+
+### Cleaned
+1. **Stray build artifacts identified for removal**
+   - `.bish-index`
+   - `.bish.sqlite`
+
 ## 2026-03-01 - Workflow Consolidation
 
 ### Summary

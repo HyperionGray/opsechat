@@ -117,7 +117,19 @@ Opsechat includes budget controls to prevent accidental overspending:
 
 - **Monthly Budget**: Maximum amount to spend per month
 - **Domain Price Limit**: Maximum price per domain (default: $5)
-- **Current Spending**: Tracked in-memory (resets on restart)
+- **Current Spending**:
+  - Web app flow: tracked in-memory (resets on app restart)
+  - CLI flow (`domain_rotation_cli.py`): persisted to `~/.opsechat/domain_config.json`
+
+### CLI State Persistence
+
+The domain rotation CLI now persists state using a structured payload:
+
+- `domain_rotation_state.current_spending`
+- `domain_rotation_state.active_domain`
+- `domain_rotation_state.owned_domains[]`
+
+Date fields (`purchased_at`, `expires_at`) are serialized as ISO 8601 strings and automatically normalized back to datetimes on load. Legacy config fields (`current_spending`, `owned_domains`, `active_domain`) are still read for backward compatibility.
 
 View budget status:
 ```
