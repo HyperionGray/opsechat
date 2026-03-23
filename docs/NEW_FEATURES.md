@@ -172,6 +172,30 @@ When limit exceeded:
 
 ---
 
+## 📨 HTTP Mail Reliability Improvements
+
+### What Changed
+The email-over-HTTP system now handles mailbox lifecycle and form submissions more safely:
+
+- Added a dedicated fallback route: `POST /<path>/mail/send`
+  - Accepts recipient mailbox address from form field `_address_override`
+  - Keeps non-JavaScript form submissions working
+- The mailbox send route now shares one validation/sanitization path for JSON and form payloads
+- Destroyed mailboxes now reject stale in-memory writes
+  - `HttpMailbox.add_message()` returns `None` if mailbox was destroyed
+  - `HttpMailStorage.delete_mailbox()` now uses a single mailbox `destroy()` operation that scrubs message data and marks the mailbox destroyed
+
+### Why It Matters
+- Prevents accidental send failures when the compose form action is not dynamically rewritten by JavaScript
+- Tightens race behavior around mailbox destruction and concurrent sends
+- Keeps the "default deny + ephemeral memory" model intact after destroy operations
+
+### Developer Notes
+- Existing route remains supported: `POST /<path>/mail/<address>/send`
+- New fallback route is primarily for HTML form compatibility and progressive enhancement
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose
