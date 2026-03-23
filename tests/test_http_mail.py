@@ -91,6 +91,15 @@ class TestHttpMailStorage:
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
 
+    def test_delete_mailbox_disables_stale_reference(self):
+        mb = self.storage.create_mailbox()
+        mb.add_message("Subj", "Body", "alice")
+        result = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert result is True
+        assert mb.destroyed is True
+        assert mb.add_message("After", "Delete", "bob") is None
+        assert mb.get_messages(mb.read_key) == []
+
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
         result = self.storage.delete_mailbox(mb.address, "wrongkey")
@@ -179,6 +188,15 @@ class TestHttpMailbox:
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
 
+    def test_destroy_mailbox_prevents_new_messages(self):
+        self.mailbox.destroy()
+        assert self.mailbox.add_message("Subj", "Body", "alice") is None
+
+    def test_destroy_mailbox_clears_existing_messages(self):
+        self.mailbox.add_message("Subj", "Body", "alice")
+        self.mailbox.destroy()
+        assert self.mailbox.get_messages("secretkey123456789012345678901") == []
+
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -247,6 +265,27 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_destroyed_mailbox_returns_410(self, monkeypatch):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        mailbox = http_mail_storage.get_mailbox(addr)
+        mailbox.destroy()
+
+        original_get_mailbox = http_mail_storage.get_mailbox
+
+        def _fake_get_mailbox(requested_address):
+            if requested_address == addr:
+                return mailbox
+            return original_get_mailbox(requested_address)
+
+        monkeypatch.setattr(http_mail_storage, "get_mailbox", _fake_get_mailbox)
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Hi", "body": "Hello there", "sender": "bob"},
+        )
+        assert r.status_code == 410
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
