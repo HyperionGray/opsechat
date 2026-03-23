@@ -70,6 +70,29 @@ def register_http_mail_routes(app):
         })
 
     # ------------------------------------------------------------------
+    # Form-only send fallback (non-JS compatibility)
+    # ------------------------------------------------------------------
+
+    @app.route('/<string:url_addition>/mail/send', methods=["POST"])
+    def http_mail_send_form(url_addition):
+        """Compose-form fallback endpoint that resolves address from POST data."""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+
+        address = _sanitize(request.form.get("_address_override", "").strip(), 128)
+        if not address:
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Recipient mailbox address is required",
+                                   compose_address=""), 400
+
+        # Delegate to the canonical address-based send route.
+        return http_mail_send(url_addition, address)
+
+    # ------------------------------------------------------------------
     # Send a message to a mailbox (no authentication required)
     # ------------------------------------------------------------------
 
@@ -81,7 +104,14 @@ def register_http_mail_routes(app):
 
         mailbox = http_mail_storage.get_mailbox(address)
         if mailbox is None:
-            return jsonify({"error": "Mailbox not found"}), 404
+            if request.is_json:
+                return jsonify({"error": "Mailbox not found"}), 404
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Mailbox not found",
+                                   compose_address=address), 404
 
         # Accept JSON or form data
         if request.is_json:
@@ -109,6 +139,15 @@ def register_http_mail_routes(app):
         sender = _sanitize(sender, 64) or "anonymous"
 
         msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        if msg_id is None:
+            if request.is_json:
+                return jsonify({"error": "Mailbox is no longer available"}), 410
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Mailbox is no longer available",
+                                   compose_address=address), 410
 
         if request.is_json:
             return jsonify({"success": True, "msg_id": msg_id})
