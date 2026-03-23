@@ -6,6 +6,8 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
+import re
+from pathlib import Path
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
@@ -16,6 +18,29 @@ except ModuleNotFoundError:
         # This keeps containerized installs working even if rate_limiter.py
         # was not included in the image build.
         return app
+
+
+def _audit_inline_template_usage(app):
+    """Return template filenames that still contain inline script/style usage."""
+    template_dir = Path(app.root_path) / "templates"
+    if not template_dir.is_dir():
+        return []
+
+    inline_script_pattern = re.compile(r"<script(?![^>]*\bsrc=)", re.IGNORECASE)
+    inline_style_block_pattern = re.compile(r"<style\b", re.IGNORECASE)
+    inline_style_attr_pattern = re.compile(r"\sstyle=", re.IGNORECASE)
+
+    findings = []
+    for template_file in sorted(template_dir.glob("*.html")):
+        try:
+            content = template_file.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        if (inline_script_pattern.search(content)
+                or inline_style_block_pattern.search(content)
+                or inline_style_attr_pattern.search(content)):
+            findings.append(template_file.name)
+    return findings
 
 
 def create_app():
@@ -82,8 +107,6 @@ def create_app():
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
@@ -120,6 +143,15 @@ def create_app():
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
+
+    # Track current template CSP compatibility status for maintainers.
+    inline_templates = _audit_inline_template_usage(app)
+    app.config["INLINE_TEMPLATE_AUDIT"] = inline_templates
+    if inline_templates:
+        app.logger.warning(
+            "CSP audit: %d template(s) still contain inline script/style usage.",
+            len(inline_templates),
+        )
     
     # CHANGELOG (AI assistant):
     # - Made rate_limiter import optional with a no-op fallback to prevent
