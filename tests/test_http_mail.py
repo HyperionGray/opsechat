@@ -115,6 +115,12 @@ class TestHttpMailStorage:
         self.storage.cleanup_empty_old_mailboxes()
         assert self.storage.get_mailbox(mb.address) is not None
 
+    def test_destroyed_mailbox_rejects_new_messages(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert mb.add_message("after", "destroy", "sender") is None
+        assert mb.message_count() == 0
+
 
 # ===========================================================================
 # HttpMailbox unit tests
@@ -254,6 +260,43 @@ class TestHttpMailRoutes:
         r = self.client.post(
             f"/{self.path}/mail/{addr}/send",
             json={"subject": "X", "body": "", "sender": "bob"},
+        )
+        assert r.status_code == 400
+
+    def test_send_message_form_via_generic_endpoint(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"_address_override": addr, "subject": "Form", "body": "From form", "sender": "web"},
+        )
+        assert r.status_code == 200
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        data = inbox.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["subject"] == "Form"
+
+    def test_send_message_json_via_generic_endpoint(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            json={"address": addr, "subject": "Hi", "body": "Body", "sender": "json"},
+        )
+        assert r.status_code == 200
+        assert r.get_json()["success"] is True
+
+    def test_send_message_generic_endpoint_invalid_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            json={"address": "bad address", "body": "x"},
         )
         assert r.status_code == 400
 
@@ -493,4 +536,9 @@ class TestEmailRoutesExtended:
 
     def test_burner_wrong_path_404(self):
         r = self.client.post("/wrongpath/email/burner", data={"action": "generate"})
+        assert r.status_code == 404
+
+    def test_view_email_without_session_returns_404_not_500(self):
+        fresh_client = self.app.test_client()
+        r = fresh_client.get("/secpath/email/view/doesnotexist")
         assert r.status_code == 404
