@@ -101,6 +101,18 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_deleted_mailbox_reference_rejects_new_messages(self):
+        mb = self.storage.create_mailbox()
+        stale_ref = self.storage.get_mailbox(mb.address)
+        assert stale_ref is not None
+
+        deleted = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert deleted is True
+
+        msg_id = stale_ref.add_message("Subj", "Body", "sender")
+        assert msg_id is None
+        assert stale_ref.get_messages(mb.read_key) == []
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -128,6 +140,12 @@ class TestHttpMailbox:
         msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
         assert msg_id
         assert len(msg_id) == 16
+
+    def test_add_message_destroyed_mailbox_returns_none(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
+        assert msg_id is None
+        assert self.mailbox.message_count() == 0
 
     def test_get_messages_correct_key(self):
         self.mailbox.add_message("Subj", "Body", "alice")
@@ -247,6 +265,38 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_compose_fallback_form(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Hi",
+                "body": "Hello from form",
+                "sender": "bob",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        data = r.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["body"] == "Hello from form"
+
+    def test_send_message_compose_fallback_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "Hi", "body": "Hello from form", "sender": "bob"},
+        )
+        assert r.status_code == 400
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
