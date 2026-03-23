@@ -11,8 +11,6 @@ import datetime
 import os
 import sys
 
-import pytest
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from http_mail_system import (
@@ -20,9 +18,8 @@ from http_mail_system import (
     HttpMailbox,
     HttpMessage,
     http_mail_storage,
-    MAX_MAIL_MESSAGE_LENGTH,
 )
-from email_system import email_storage as _global_email_storage, EmailComposer
+from email_system import email_storage as _global_email_storage
 from app_factory import create_app
 
 

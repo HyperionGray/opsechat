@@ -255,6 +255,7 @@ Features
 
 ### Email System (NEW - REAL EMAIL SUPPORT!)
 - **Real SMTP/IMAP Integration** - Send and receive actual emails via configured email servers (see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md))
+- **HTTP Mail (No SMTP/IMAP Needed)** - Exchange messages over HTTP using mailbox address + private read key (see [HTTP Mail Guide](docs/user-guide/HTTP_MAIL.md))
 - **Encrypted Email Inbox** - In-memory email storage with PGP support
 - **Raw Mode Editing** - Full control over email headers for security testing
 - **Modern Burner Email System** - Guerrillamail-style rotating anonymous email addresses with:
@@ -292,7 +293,7 @@ For Amazon Q setup instructions, see [Amazon Q Setup Guide](docs/setup/AMAZON_Q_
 6. Compose and send emails: `http://yourservice.onion/{path}/email/compose`
 7. View your inbox: `http://yourservice.onion/{path}/email`
 
-For full documentation, see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md).
+For full documentation, see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md) and [HTTP Mail Guide](docs/user-guide/HTTP_MAIL.md).
 
 Security & Code Quality
 =======================
