@@ -187,6 +187,7 @@
       <label for="compose-address-input">Recipient Mailbox Address:</label>
       <input type="text" id="compose-address-input" name="_address_override"
              value="{{ compose_address or '' }}"
+             oninput="updateComposeAction()"
              placeholder="e.g. aBcDeFgHiJkL">
       <p class="hint">This is the short address the recipient shared with you.</p>
     </div>
@@ -266,6 +267,15 @@
 
     <!-- Destroy entire mailbox -->
     <div style="margin-top:30px; border-top:1px solid #333; padding-top:15px;">
+      <h3>Security</h3>
+      <p class="hint" style="margin-bottom:10px;">
+        If your read key may have leaked, rotate it immediately.
+      </p>
+      <form method="POST" action="/{{ path }}/mail/{{ inbox_address }}/rotate-key">
+        <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
+        <button type="submit">🔑 Rotate Read Key</button>
+      </form>
+
       <h3 style="color:#f00;">Danger Zone</h3>
       <form method="POST" action="/{{ path }}/mail/{{ inbox_address }}/destroy">
         <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
@@ -390,6 +400,11 @@
         '</div></div>';
     });
     html += '<div style="margin-top:30px;border-top:1px solid #333;padding-top:15px;">' +
+      '<h3>Security</h3>' +
+      '<p class="hint" style="margin-bottom:10px;">If your read key may have leaked, rotate it immediately.</p>' +
+      '<button class="js-rotate-key"' +
+        ' data-address="' + esc(address) + '"' +
+        ' data-read-key="' + esc(readKey) + '">🔑 Rotate Read Key</button>' +
       '<h3 style="color:#f00;">Danger Zone</h3>' +
       '<button class="danger js-destroy-mailbox"' +
         ' data-address="' + esc(address) + '"' +
@@ -407,6 +422,12 @@
       btn.addEventListener('click', function() {
         if (!confirm('Destroy mailbox and ALL messages permanently?')) return;
         destroyMailbox(btn.dataset.address, btn.dataset.readKey);
+      });
+    });
+    container.querySelectorAll('.js-rotate-key').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        if (!confirm('Rotate read key now? Old key will stop working immediately.')) return;
+        rotateReadKey(btn.dataset.address, btn.dataset.readKey);
       });
     });
   }
@@ -441,6 +462,24 @@
     });
   }
 
+  function rotateReadKey(address, readKey) {
+    fetch('/{{ path }}/mail/' + encodeURIComponent(address) + '/rotate-key', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: JSON.stringify({read_key: readKey})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.success && d.new_read_key) {
+        document.getElementById('read-key-input').value = d.new_read_key;
+        fetchInbox();
+        alert('Read key rotated. Save the new key now.');
+      } else {
+        alert('Error: ' + (d.error || 'Could not rotate key'));
+      }
+    });
+  }
+
   function copyText(elementId) {
     var text = document.getElementById(elementId).textContent;
     if (navigator.clipboard) {
@@ -467,6 +506,9 @@
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#x27;');
   }
+
+  // Keep direct send route in sync when JS is enabled.
+  updateComposeAction();
 </script>
 </body>
 </html>
