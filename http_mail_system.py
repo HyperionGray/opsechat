@@ -65,23 +65,29 @@ class HttpMailbox:
         self.messages: List[HttpMessage] = []
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
+        # Tombstone flag to prevent any future writes after destroy.
+        self.destroyed = False
 
-    def add_message(self, subject: str, body: str, sender_handle: str) -> str:
-        """Add a message; returns the new message ID."""
-        msg_id = _generate_id(12)  # 12 bytes → 16 URL-safe chars
-        msg = HttpMessage(
-            msg_id=msg_id,
-            subject=subject,
-            body=body,
-            sender_handle=sender_handle,
-            timestamp=datetime.datetime.now(),
-        )
+    def add_message(self, subject: str, body: str, sender_handle: str) -> Optional[str]:
+        """Add a message; returns the new message ID or None if mailbox is destroyed."""
         with self.lock:
+            if self.destroyed:
+                return None
+            msg_id = _generate_id(12)  # 12 bytes → 16 URL-safe chars
+            msg = HttpMessage(
+                msg_id=msg_id,
+                subject=subject,
+                body=body,
+                sender_handle=sender_handle,
+                timestamp=datetime.datetime.now(),
+            )
             self.messages.append(msg)
         return msg_id
 
     def get_messages(self, read_key: str) -> Optional[List[Dict]]:
         """Return messages if read_key matches, else None (default deny)."""
+        if self.destroyed:
+            return None
         if not secrets.compare_digest(read_key, self.read_key):
             return None
         self._expire_old_messages()
@@ -90,6 +96,8 @@ class HttpMailbox:
 
     def delete_message(self, read_key: str, msg_id: str) -> bool:
         """Delete a message by ID after verifying read_key. Returns True on success."""
+        if self.destroyed:
+            return False
         if not secrets.compare_digest(read_key, self.read_key):
             return False
         with self.lock:
@@ -113,6 +121,8 @@ class HttpMailbox:
             self.messages = surviving
 
     def message_count(self) -> int:
+        if self.destroyed:
+            return 0
         self._expire_old_messages()
         with self.lock:
             return len(self.messages)
@@ -145,10 +155,6 @@ class HttpMailStorage:
         - We remove the mailbox from the global store under `self._lock`.
         - We then overwrite and clear messages under the per-mailbox lock
           to avoid races with concurrent send/add operations.
-
-        Checklist (follow-ups outside this class):
-        - [ ] Ensure HttpMailbox exposes a `lock` used by all writers.
-        - [ ] Ensure add_message (or equivalent) checks a `destroyed` flag.
         """
         # First, look up and authenticate the mailbox under the global lock.
         with self._lock:

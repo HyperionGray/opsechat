@@ -36,6 +36,19 @@ def register_http_mail_routes(app):
         text = re.sub(r'[<>&"\']', '', text)
         return text[:max_len]
 
+    def _parse_int_query(name: str, default: int, min_value: int, max_value: int):
+        """Parse a bounded integer query parameter."""
+        raw = request.args.get(name, "")
+        if raw == "":
+            return default, None
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            return None, f"{name} must be an integer between {min_value} and {max_value}"
+        if value < min_value or value > max_value:
+            return None, f"{name} must be between {min_value} and {max_value}"
+        return value, None
+
     # ------------------------------------------------------------------
     # Main UI — create or access mailbox
     # ------------------------------------------------------------------
@@ -109,6 +122,15 @@ def register_http_mail_routes(app):
         sender = _sanitize(sender, 64) or "anonymous"
 
         msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        if msg_id is None:
+            if request.is_json:
+                return jsonify({"error": "Mailbox is no longer available"}), 410
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Mailbox is no longer available",
+                                   compose_address=address), 410
 
         if request.is_json:
             return jsonify({"success": True, "msg_id": msg_id})
@@ -153,7 +175,24 @@ def register_http_mail_routes(app):
                                    error="Invalid read key — access denied"), 403
 
         if request.headers.get("Accept", "").startswith("application/json"):
-            return jsonify({"address": address, "messages": messages})
+            limit, limit_error = _parse_int_query("limit", default=100, min_value=1, max_value=500)
+            if limit_error:
+                return jsonify({"error": limit_error}), 400
+            offset, offset_error = _parse_int_query("offset", default=0, min_value=0, max_value=100000)
+            if offset_error:
+                return jsonify({"error": offset_error}), 400
+
+            total = len(messages)
+            page_messages = messages[offset:offset + limit]
+            return jsonify({
+                "address": address,
+                "messages": page_messages,
+                "total": total,
+                "offset": offset,
+                "limit": limit,
+                "returned": len(page_messages),
+                "has_more": (offset + len(page_messages)) < total,
+            })
 
         return render_template("http_mail.html",
                                path=app.config["path"],
