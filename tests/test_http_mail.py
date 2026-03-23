@@ -179,6 +179,12 @@ class TestHttpMailbox:
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
 
+    def test_add_message_destroyed_mailbox_returns_none(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Subj", "Body", "alice")
+        assert msg_id is None
+        assert self.mailbox.message_count() == 0
+
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -248,6 +254,29 @@ class TestHttpMailRoutes:
         assert data["success"] is True
         assert "msg_id" in data
 
+    def test_send_message_form_fallback_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        send = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Fallback",
+                "body": "Sent without JS",
+                "sender": "noscript",
+            },
+        )
+        assert send.status_code == 200
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert inbox.status_code == 200
+        assert inbox.get_json()["messages"][0]["subject"] == "Fallback"
+
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
@@ -282,6 +311,58 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert len(data["messages"]) == 1
         assert data["messages"][0]["subject"] == "Test"
+
+    def test_read_inbox_latest_returns_newest_first_subset(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        for subject in ["one", "two", "three"]:
+            self.client.post(
+                f"/{self.path}/mail/{addr}/send",
+                json={"subject": subject, "body": "Hello", "sender": "alice"},
+            )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&latest=2",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["latest"] == 2
+        assert [m["subject"] for m in data["messages"]] == ["three", "two"]
+
+    def test_read_inbox_latest_invalid_returns_400(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&latest=0",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
+        assert "latest must be an integer" in r.get_json()["error"]
+
+    def test_read_inbox_summary_returns_body_preview_only(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "s", "body": "Hello " * 40, "sender": "alice"},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&summary=1",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        msg = r.get_json()["messages"][0]
+        assert "body" not in msg
+        assert "body_preview" in msg
+        assert "body_length" in msg
 
     def test_read_inbox_wrong_key_is_denied(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -462,6 +543,13 @@ class TestEmailRoutesExtended:
         assert b"Hello" in r.data
 
     def test_view_nonexistent_email_returns_404(self):
+        r = self.client.get("/secpath/email/view/doesnotexist")
+        assert r.status_code == 404
+
+    def test_view_without_session_is_handled_gracefully(self):
+        with self.client.session_transaction() as sess:
+            sess.pop("_id", None)
+            sess.pop("color", None)
         r = self.client.get("/secpath/email/view/doesnotexist")
         assert r.status_code == 404
 
