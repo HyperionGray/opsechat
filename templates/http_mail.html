@@ -182,11 +182,13 @@
 
   <form method="POST"
         action="/{{ path }}/mail/send"
-        id="compose-form">
+        id="compose-form"
+        onsubmit="updateComposeAction()">
     <div class="form-group">
       <label for="compose-address-input">Recipient Mailbox Address:</label>
       <input type="text" id="compose-address-input" name="_address_override"
              value="{{ compose_address or '' }}"
+             oninput="updateComposeAction()"
              placeholder="e.g. aBcDeFgHiJkL">
       <p class="hint">This is the short address the recipient shared with you.</p>
     </div>
@@ -300,6 +302,7 @@
     {% else %}
       showSection('create');
     {% endif %}
+    updateComposeAction();
   })();
 
   // Create mailbox via fetch
