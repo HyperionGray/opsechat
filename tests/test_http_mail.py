@@ -4,7 +4,7 @@ Tests for the HTTP mail system (email over HTTP, no SMTP/IMAP).
 Covers:
 - HttpMailStorage: create mailbox, send, read (default deny), delete, destroy
 - http_mail_routes: all REST endpoints via Flask test client
-- Missing email_routes: view, edit, delete, burner POST, expire
+- Extended email_routes coverage: view, edit, delete, burner POST
 """
 
 import datetime
@@ -100,6 +100,15 @@ class TestHttpMailStorage:
     def test_delete_nonexistent_mailbox(self):
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
+
+    def test_destroyed_mailbox_rejects_new_messages(self):
+        mb = self.storage.create_mailbox()
+        mb.add_message("before", "message", "alice")
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert mb.destroyed is True
+        # Stale references cannot append after mailbox destruction.
+        assert mb.add_message("after", "should fail", "bob") is None
+        assert mb.message_count() == 0
 
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
@@ -256,6 +265,53 @@ class TestHttpMailRoutes:
             json={"subject": "X", "body": "", "sender": "bob"},
         )
         assert r.status_code == 400
+
+    def test_send_message_form_fallback_without_js(self):
+        created = self.client.post(f"/{self.path}/mail/new").get_json()
+        addr = created["address"]
+        read_key = created["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Fallback Subject",
+                "body": "Fallback message body",
+                "sender": "plain-form",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        data = inbox.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["subject"] == "Fallback Subject"
+        assert data["messages"][0]["body"] == "Fallback message body"
+        assert data["messages"][0]["sender"] == "plain-form"
+
+    def test_send_message_form_fallback_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "No address", "body": "Body"},
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required" in r.data
+
+    def test_send_message_form_fallback_unknown_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": "doesnotexist",
+                "subject": "No mailbox",
+                "body": "Body",
+            },
+        )
+        assert r.status_code == 404
+        assert b"Mailbox not found" in r.data
 
     def test_send_to_nonexistent_mailbox(self):
         r = self.client.post(
