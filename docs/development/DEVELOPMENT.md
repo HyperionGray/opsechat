@@ -66,15 +66,15 @@ opsechat/
 
 ## Development Tools
 
-### Python Files in Root (Dev Tools)
-These are development and testing utilities that help during development:
+### Manual Test Utilities
+Ad-hoc/manual validation scripts are kept in `tests/manual/` to avoid root-level clutter:
 
-- **`manual-test.py`** - Manual testing script for interactive testing
-- **`simple_test.py`** - Quick sanity checks
-- **`quick_import_test.py`** - Test Python imports
-- **`review_performance.py`** - Performance benchmarking tool
-- **`usability_assessment.py`** - UI/UX testing helper
-- **`comprehensive_functionality_test.py`** - Full functional test suite
+- **`tests/manual/simple_test.py`** - Quick sanity checks
+- **`tests/manual/comprehensive_functionality_test.py`** - Full functional test suite
+- **`tests/manual/test_fix.sh`** - Focused regression test runner
+- **`tests/manual/test-server.js`** - Mock server startup/connectivity check
+- **`tests/manual/test-ci-fix.js`** - CI startup validation helper
+- **`usability_assessment.py`** - UI/UX assessment helper (kept at root as a primary utility)
 
 ### Main Application Files
 - **`runserver.py`** - Main entry point (legacy monolithic)
