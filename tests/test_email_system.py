@@ -242,6 +242,16 @@ class TestBurnerEmailManager:
         
         assert result is True
         assert email not in manager.burner_addresses
+
+    def test_expire_burner_removes_from_user_mapping(self):
+        """Expiring a burner should also remove it from user_burners."""
+        manager = BurnerEmailManager()
+        email = manager.generate_burner_email("user1")
+
+        assert email in manager.user_burners["user1"]
+        manager.expire_burner(email)
+
+        assert email not in manager.user_burners.get("user1", [])
     
     def test_custom_domain(self):
         """Test setting custom domain for burners"""
@@ -276,3 +286,4 @@ class TestBurnerEmailManager:
         
         assert len(burners) == 1
         assert burners[0]['email'] == active_email
+        assert expired_email not in manager.user_burners.get("user1", [])

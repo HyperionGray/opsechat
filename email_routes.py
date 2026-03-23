@@ -229,9 +229,8 @@ def register_email_routes(app, id_generator, get_random_color):
             return ('', 404)
 
         if "_id" not in session:
-            _ensure_session()
-
-        email = email_storage.get_email(session["_id"], email_id)
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
 
         email = email_storage.get_email(session["_id"], email_id)
         if email is None:

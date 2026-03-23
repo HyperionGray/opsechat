@@ -172,6 +172,37 @@ When limit exceeded:
 
 ---
 
+## 📨 HTTP Mail Read-Key Rotation
+
+### Purpose
+If a mailbox read key is exposed, the owner can now rotate the key immediately without deleting the mailbox.
+
+### New Endpoint
+```bash
+POST /{path}/mail/{address}/rotate-key
+Content-Type: application/json
+
+{
+  "read_key": "<current_read_key>"
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "read_key": "<new_read_key>"
+}
+```
+
+### Behavior
+- Rotation requires the current valid read key.
+- On success, the old key is invalidated immediately.
+- Existing mailbox address and messages are preserved.
+- Web UI now includes a "Rotate Read Key" action in inbox key management.
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

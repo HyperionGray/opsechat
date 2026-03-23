@@ -275,7 +275,9 @@ class BurnerEmailManager:
     def expire_burner(self, email: str) -> bool:
         """Immediately expire a burner email"""
         if email in self.burner_addresses:
+            user_id = self.burner_addresses[email]['user_id']
             del self.burner_addresses[email]
+            self._remove_burner_from_user_map(user_id, email)
             return True
         return False
     
@@ -289,15 +291,19 @@ class BurnerEmailManager:
     def cleanup_expired(self) -> None:
         """Remove expired burner addresses"""
         now = datetime.datetime.now()
-        expired = [email for email, info in self.burner_addresses.items() 
+        expired = [email for email, info in self.burner_addresses.items()
                    if info['expires_at'] <= now]
         for email in expired:
+            user_id = self.burner_addresses[email]['user_id']
             del self.burner_addresses[email]
-            # Also remove from user_burners
-            user_id = self.burner_addresses.get(email, {}).get('user_id')
-            if user_id and user_id in self.user_burners:
-                if email in self.user_burners[user_id]:
-                    self.user_burners[user_id].remove(email)
+            self._remove_burner_from_user_map(user_id, email)
+
+    def _remove_burner_from_user_map(self, user_id: str, email: str) -> None:
+        """Keep user_burners in sync when a burner is removed from active storage."""
+        if user_id not in self.user_burners:
+            return
+        if email in self.user_burners[user_id]:
+            self.user_burners[user_id].remove(email)
     
     def _format_time_remaining(self, time_delta: datetime.timedelta) -> str:
         """Format time remaining in human-readable format"""

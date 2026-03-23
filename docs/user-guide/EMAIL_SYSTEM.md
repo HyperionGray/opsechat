@@ -20,6 +20,23 @@ Misuse of these features may be illegal in your jurisdiction. Always obtain prop
 
 ## Core Features
 
+### HTTP Mail Read-Key Rotation (NEW)
+
+HTTP Mail inboxes now support read-key rotation so users can recover quickly if a key is leaked.
+
+- **Route:** `POST /{path}/mail/{address}/rotate-key`
+- **Auth:** Current `read_key` is required in JSON or form body
+- **Result:** Returns a new read key and immediately invalidates the old key
+- **Safety:** Mailbox address and stored messages are preserved
+
+Example:
+
+```bash
+curl -X POST "http://localhost:5001/{path}/mail/<address>/rotate-key" \
+  -H "Content-Type: application/json" \
+  -d '{"read_key":"<current_read_key>"}'
+```
+
 ### 1. Real Email Integration (NEW!)
 
 #### SMTP Email Sending
