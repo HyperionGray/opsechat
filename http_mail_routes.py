@@ -15,7 +15,11 @@ Routes registered under /<path>/mail/:
 
 import re
 from flask import render_template, request, session, jsonify, redirect, url_for
-from http_mail_system import http_mail_storage, MAX_MAIL_MESSAGE_LENGTH
+from http_mail_system import (
+    http_mail_storage,
+    MAX_MAIL_MESSAGE_LENGTH,
+    MailboxDestroyedError,
+)
 from utils import id_generator, get_random_color
 
 
@@ -108,7 +112,10 @@ def register_http_mail_routes(app):
         body = _sanitize(body, MAX_MAIL_MESSAGE_LENGTH)
         sender = _sanitize(sender, 64) or "anonymous"
 
-        msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        try:
+            msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        except MailboxDestroyedError:
+            return jsonify({"error": "Mailbox not found"}), 404
 
         if request.is_json:
             return jsonify({"success": True, "msg_id": msg_id})
@@ -141,7 +148,16 @@ def register_http_mail_routes(app):
                                    error="Mailbox not found"), 404
 
         read_key = request.args.get("key", "")
-        messages = mailbox.get_messages(read_key)
+        try:
+            messages = mailbox.get_messages(read_key)
+        except MailboxDestroyedError:
+            if request.headers.get("Accept", "").startswith("application/json"):
+                return jsonify({"error": "Mailbox not found"}), 404
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Mailbox not found"), 404
 
         if messages is None:
             if request.headers.get("Accept", "").startswith("application/json"):
@@ -183,7 +199,10 @@ def register_http_mail_routes(app):
         else:
             read_key = request.form.get("read_key", "")
 
-        deleted = mailbox.delete_message(read_key, msg_id)
+        try:
+            deleted = mailbox.delete_message(read_key, msg_id)
+        except MailboxDestroyedError:
+            return jsonify({"error": "Mailbox not found"}), 404
 
         if not deleted:
             return jsonify({"error": "Invalid read key or message not found"}), 403

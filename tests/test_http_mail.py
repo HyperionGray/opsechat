@@ -19,6 +19,7 @@ from http_mail_system import (
     HttpMailStorage,
     HttpMailbox,
     HttpMessage,
+    MailboxDestroyedError,
     http_mail_storage,
     MAX_MAIL_MESSAGE_LENGTH,
 )
@@ -90,6 +91,27 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox(mb.address, mb.read_key)
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
+
+    def test_destroyed_mailbox_rejects_stale_reference_writes(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+
+        with pytest.raises(MailboxDestroyedError):
+            mb.add_message("Subj", "Body", "alice")
+
+    def test_destroyed_mailbox_rejects_stale_reference_reads(self):
+        mb = self.storage.create_mailbox()
+        msg_id = mb.add_message("Subj", "Body", "alice")
+        assert msg_id
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+
+        with pytest.raises(MailboxDestroyedError):
+            mb.get_messages(mb.read_key)
+
+        with pytest.raises(MailboxDestroyedError):
+            mb.delete_message(mb.read_key, msg_id)
+
+        assert mb.message_count() == 0
 
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
@@ -260,6 +282,17 @@ class TestHttpMailRoutes:
     def test_send_to_nonexistent_mailbox(self):
         r = self.client.post(
             f"/{self.path}/mail/doesnotexist/send",
+            json={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 404
+
+    def test_send_to_destroyed_mailbox_returns_404(self, monkeypatch):
+        destroyed = HttpMailbox(address="deadbox12345", read_key="x" * 32)
+        destroyed.destroy()
+        monkeypatch.setattr(http_mail_storage, "get_mailbox", lambda _address: destroyed)
+
+        r = self.client.post(
+            f"/{self.path}/mail/deadbox12345/send",
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
         assert r.status_code == 404

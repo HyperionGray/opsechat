@@ -144,6 +144,20 @@ Modern, Guerrillamail-style rotating anonymous email system with advanced featur
 - Direct link to inbox from each burner
 - Custom domain support (via Porkbun integration)
 
+### 6. HTTP Mailboxes (No SMTP/IMAP Required)
+
+Opsechat also supports lightweight "email-over-HTTP" mailboxes at `/{path}/mail`.
+Each mailbox has:
+- **Public address**: shared with senders
+- **Private read key**: required to read/delete messages (default deny)
+
+Lifecycle hardening behavior:
+- Destroying a mailbox immediately invalidates stale in-memory mailbox references
+- Any in-flight stale send/read/delete attempts are rejected
+- Deleted mailbox content is overwritten in memory before removal
+
+This keeps mailbox deletion deterministic and reduces race-condition leakage during concurrent access.
+
 - Prevent over-spending with configurable limits
 - Visual budget bar showing spending vs. limit
 - Auto-rotation when budget allows
