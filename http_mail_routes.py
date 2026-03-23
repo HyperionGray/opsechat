@@ -7,6 +7,7 @@ and read back using a private read_key (default deny).
 Routes registered under /<path>/mail/:
   GET  /<path>/mail                        - Main UI (create mailbox form)
   POST /<path>/mail/new                    - Create a new mailbox
+  POST /<path>/mail/send                   - Send from generic compose form
   POST /<path>/mail/<address>/send         - Send a message to a mailbox (no auth)
   GET  /<path>/mail/<address>/inbox        - Read inbox (requires ?key=<read_key>)
   POST /<path>/mail/<address>/delete/<id>  - Delete a message (requires read_key in form)
@@ -70,17 +71,19 @@ def register_http_mail_routes(app):
         })
 
     # ------------------------------------------------------------------
-    # Send a message to a mailbox (no authentication required)
+    # Send helper
     # ------------------------------------------------------------------
 
-    @app.route('/<string:url_addition>/mail/<string:address>/send', methods=["POST"])
-    def http_mail_send(url_addition, address):
-        if url_addition != app.config["path"]:
-            return ('', 404)
-        _ensure_session()
-
+    def _handle_send(url_addition: str, address: str):
         mailbox = http_mail_storage.get_mailbox(address)
         if mailbox is None:
+            if not request.is_json:
+                return render_template("http_mail.html",
+                                       path=app.config["path"],
+                                       hostname=app.config.get("hostname", ""),
+                                       max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                       error="Mailbox not found.",
+                                       compose_address=address), 404
             return jsonify({"error": "Mailbox not found"}), 404
 
         # Accept JSON or form data
@@ -109,6 +112,15 @@ def register_http_mail_routes(app):
         sender = _sanitize(sender, 64) or "anonymous"
 
         msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        if msg_id is None:
+            if request.is_json:
+                return jsonify({"error": "Mailbox is no longer available"}), 410
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Mailbox is no longer available.",
+                                   compose_address=address), 410
 
         if request.is_json:
             return jsonify({"success": True, "msg_id": msg_id})
@@ -119,6 +131,48 @@ def register_http_mail_routes(app):
                                max_message_length=MAX_MAIL_MESSAGE_LENGTH,
                                success="Message sent.",
                                compose_address=address)
+
+    # ------------------------------------------------------------------
+    # Send a message from generic compose form (address in body)
+    # ------------------------------------------------------------------
+
+    @app.route('/<string:url_addition>/mail/send', methods=["POST"])
+    def http_mail_send_direct(url_addition):
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+
+        if request.is_json:
+            data = request.get_json() or {}
+            address = (data.get("_address_override") or data.get("address") or "").strip()
+        else:
+            address = (request.form.get("_address_override")
+                       or request.form.get("address")
+                       or "").strip()
+
+        if not address:
+            if request.is_json:
+                return jsonify({"error": "Mailbox address is required"}), 400
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Recipient mailbox address is required.",
+                                   compose_address=""), 400
+
+        return _handle_send(url_addition, address)
+
+    # ------------------------------------------------------------------
+    # Send a message to a mailbox (no authentication required)
+    # ------------------------------------------------------------------
+
+    @app.route('/<string:url_addition>/mail/<string:address>/send', methods=["POST"])
+    def http_mail_send(url_addition, address):
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+
+        return _handle_send(url_addition, address)
 
     # ------------------------------------------------------------------
     # Read inbox (requires read_key)
