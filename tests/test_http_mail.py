@@ -21,6 +21,9 @@ from http_mail_system import (
     HttpMessage,
     http_mail_storage,
     MAX_MAIL_MESSAGE_LENGTH,
+    MAX_MESSAGES_PER_MAILBOX,
+    MailboxDestroyedError,
+    MailboxFullError,
 )
 from email_system import email_storage as _global_email_storage, EmailComposer
 from app_factory import create_app
@@ -179,6 +182,17 @@ class TestHttpMailbox:
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
 
+    def test_add_message_rejects_destroyed_mailbox(self):
+        self.mailbox.destroy()
+        with pytest.raises(MailboxDestroyedError):
+            self.mailbox.add_message("Subj", "Body", "alice")
+
+    def test_add_message_enforces_capacity_limit(self):
+        for _ in range(MAX_MESSAGES_PER_MAILBOX):
+            self.mailbox.add_message("Subj", "Body", "alice")
+        with pytest.raises(MailboxFullError):
+            self.mailbox.add_message("Overflow", "Body", "alice")
+
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -232,6 +246,7 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert "send_url" in data
         assert "inbox_url" in data
+        assert data["max_messages_per_mailbox"] == MAX_MESSAGES_PER_MAILBOX
         assert data["send_url"].startswith(f"/{self.path}/mail/")
         assert data["inbox_url"].endswith("/inbox")
 
@@ -247,6 +262,33 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_returns_410_if_mailbox_marked_destroyed(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        mailbox = http_mail_storage.get_mailbox(addr)
+        mailbox.destroy()
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Hi", "body": "Hello there", "sender": "bob"},
+        )
+        assert r.status_code == 410
+
+    def test_send_message_returns_429_when_mailbox_full(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        mailbox = http_mail_storage.get_mailbox(addr)
+        for _ in range(MAX_MESSAGES_PER_MAILBOX):
+            mailbox.add_message("Subj", "Body", "alice")
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Hi", "body": "Hello there", "sender": "bob"},
+        )
+        assert r.status_code == 429
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
