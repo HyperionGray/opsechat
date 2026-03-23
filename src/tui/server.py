@@ -9,12 +9,12 @@ Features:
 - Messages auto-delete after 4 minutes with overwriting
 - Randomized usernames (no user choice)
 - Text-only (no images, videos, or b64 encoded data)
+- Per-user message rate limiting (anti-flood)
 - Tor hidden service integration
 - Optional PGP encryption
 """
 
 import sys
-import time
 import datetime
 import secrets
 import threading
@@ -25,16 +25,20 @@ from typing import Dict, List, Any, Optional
 # Message storage (in-memory only)
 class ChatServer:
     MAX_MESSAGE_LENGTH = 1000  # Prevent b64 encoded images
-    MESSAGE_LIFETIME = 180  # 3 minutes in seconds
+    MESSAGE_LIFETIME = 240  # 4 minutes in seconds
+    MAX_MESSAGES_PER_WINDOW = 8
+    RATE_LIMIT_WINDOW_SECONDS = 20
     
     def __init__(self, host='127.0.0.1', port=5555):
         self.host = host
         self.port = port
         self.messages: List[Dict[str, Any]] = []
         self.clients: Dict[socket.socket, str] = {}
+        self._message_timestamps: Dict[str, List[datetime.datetime]] = {}
         self.lock = threading.Lock()
         self.server_socket = None
         self.running = False
+        self._cleanup_stop_event = threading.Event()
         
         # Start cleanup thread
         self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
@@ -49,9 +53,34 @@ class ChatServer:
     
     def _cleanup_loop(self):
         """Continuously clean up old messages"""
-        while True:
-            time.sleep(10)  # Check every 10 seconds
+        while not self._cleanup_stop_event.wait(10):
             self._cleanup_old_messages()
+
+    def _prune_rate_limit_history_locked(
+        self, now: datetime.datetime, username: Optional[str] = None
+    ) -> None:
+        """Prune old rate-limit timestamps (lock must already be held)."""
+        cutoff = now - datetime.timedelta(seconds=self.RATE_LIMIT_WINDOW_SECONDS)
+        usernames = [username] if username is not None else list(self._message_timestamps.keys())
+
+        for name in usernames:
+            entries = self._message_timestamps.get(name, [])
+            valid = [ts for ts in entries if ts >= cutoff]
+            if valid:
+                self._message_timestamps[name] = valid
+            else:
+                self._message_timestamps.pop(name, None)
+
+    def _is_rate_limited_locked(self, username: str, now: datetime.datetime) -> bool:
+        """Check if user exceeded send quota (lock must already be held)."""
+        self._prune_rate_limit_history_locked(now, username=username)
+        return len(self._message_timestamps.get(username, [])) >= self.MAX_MESSAGES_PER_WINDOW
+
+    def _record_sent_message_locked(self, username: str, now: datetime.datetime) -> None:
+        """Record one sent message for rate limiting (lock must already be held)."""
+        if username not in self._message_timestamps:
+            self._message_timestamps[username] = []
+        self._message_timestamps[username].append(now)
     
     def _cleanup_old_messages(self):
         """Remove and overwrite messages older than MESSAGE_LIFETIME"""
@@ -70,28 +99,40 @@ class ChatServer:
                     msg['username'] = 'X' * len(msg['username'])
             
             self.messages = new_messages
-    
-    def add_message(self, username: str, message: str) -> bool:
-        """Add a message to the chat (with validation)"""
-        # Validate message
-        if not message or len(message) > self.MAX_MESSAGE_LENGTH:
-            return False
-        
+            self._prune_rate_limit_history_locked(now)
+
+    def add_message_with_error(self, username: str, message: str) -> tuple[bool, Optional[str]]:
+        """Add a message with explicit rejection reason for caller feedback."""
+        if not message:
+            return False, "empty"
+        if len(message) > self.MAX_MESSAGE_LENGTH:
+            return False, "too_long"
+
         # Check for potential b64 encoded data (rough heuristic)
         if len(message) > 500 and message.replace('=', '').isalnum():
-            return False  # Likely b64 encoded image/video
-        
+            return False, "binary_payload"
+
         # Strip any HTML/special chars
         message = message.replace('<', '').replace('>', '').replace('&', '')
-        
+        now = datetime.datetime.now()
+
         with self.lock:
+            if self._is_rate_limited_locked(username, now):
+                return False, "rate_limited"
+
             self.messages.append({
                 'username': username,
                 'message': message,
-                'timestamp': datetime.datetime.now()
+                'timestamp': now
             })
-        
-        return True
+            self._record_sent_message_locked(username, now)
+
+        return True, None
+    
+    def add_message(self, username: str, message: str) -> bool:
+        """Add a message to the chat (with validation)"""
+        success, _ = self.add_message_with_error(username, message)
+        return success
     
     def get_messages(self, since: datetime.datetime = None) -> List[Dict[str, Any]]:
         """Get messages (optionally since a specific time)"""
@@ -113,7 +154,7 @@ class ChatServer:
             welcome = {
                 'type': 'welcome',
                 'username': username,
-                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
+                'message': f'Welcome! You are {username}. Messages burn in 4 minutes.'
             }
             client_socket.send((json.dumps(welcome) + '\n').encode())
             
@@ -144,13 +185,40 @@ class ChatServer:
                                 msg_obj = json.loads(line)
                                 if msg_obj.get('type') == 'message':
                                     message = msg_obj.get('message', '')
-                                    if self.add_message(username, message):
+                                    added, error_code = self.add_message_with_error(username, message)
+                                    if added:
                                         # Broadcast to all clients
                                         self.broadcast_message(username, message)
+                                    else:
+                                        error_messages = {
+                                            "empty": "Message cannot be empty.",
+                                            "too_long": (
+                                                f"Message too long (max {self.MAX_MESSAGE_LENGTH} chars)."
+                                            ),
+                                            "binary_payload": (
+                                                "Message resembles encoded binary payload and was rejected."
+                                            ),
+                                            "rate_limited": (
+                                                "Rate limit exceeded: "
+                                                f"{self.MAX_MESSAGES_PER_WINDOW} messages / "
+                                                f"{self.RATE_LIMIT_WINDOW_SECONDS}s."
+                                            ),
+                                        }
+                                        payload = {
+                                            "type": "error",
+                                            "code": error_code or "rejected",
+                                            "message": error_messages.get(
+                                                error_code, "Message rejected by server validation."
+                                            ),
+                                        }
+                                        try:
+                                            client_socket.send((json.dumps(payload) + '\n').encode())
+                                        except (OSError, socket.error):
+                                            break
                             except json.JSONDecodeError:
                                 pass
                 
-                except (OSError, socket.error) as e:
+                except (OSError, socket.error):
                     break
         
         finally:
@@ -221,6 +289,7 @@ class ChatServer:
     
     def stop(self):
         """Stop the chat server"""
+        self._cleanup_stop_event.set()
         self.running = False
         
         # Close all client connections
@@ -245,6 +314,10 @@ class ChatServer:
                 msg['message'] = 'X' * len(msg['message'])
                 msg['username'] = 'X' * len(msg['username'])
             self.messages.clear()
+            self._message_timestamps.clear()
+
+        if self.cleanup_thread.is_alive():
+            self.cleanup_thread.join(timeout=1)
         
         print("\n[*] Server stopped. All messages overwritten and cleared.")
 
