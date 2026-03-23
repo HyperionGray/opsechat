@@ -2,6 +2,20 @@
 
 This guide covers the new features added in the final push for OpSecHat production readiness.
 
+## 📨 HTTP Mail Hardening
+
+### What Changed
+- Added **read-key rotation** endpoint and UI action for HTTP mailboxes
+- Added **No-JS send fallback** route (`POST /{path}/mail/send`)
+- Added destroyed-mailbox safeguards so in-flight sends are rejected after destruction
+
+### Why It Matters
+- Key rotation limits impact if a mailbox read key is leaked
+- No-JS users can send messages without client-side form rewrites
+- Race-safe mailbox destruction prevents writes to deleted mailboxes
+
+---
+
 ## 🔑 Automated Key Exchange
 
 ### What Changed
