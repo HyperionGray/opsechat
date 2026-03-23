@@ -11,12 +11,19 @@ import time
 _review_stats_cache = None
 _review_stats_cache_time = 0
 _cache_ttl = 60  # Cache for 60 seconds
+_user_review_counts_by_hash = {}
 
 def invalidate_review_cache():
     """Invalidate the review statistics cache"""
-    global _review_stats_cache, _review_stats_cache_time
+    global _review_stats_cache, _review_stats_cache_time, _user_review_counts_by_hash
     _review_stats_cache = None
     _review_stats_cache_time = 0
+    _user_review_counts_by_hash = {}
+    try:
+        get_user_review_count.cache_clear()
+    except NameError:
+        # get_user_review_count may not be defined yet during module import.
+        pass
 
 def get_cached_review_stats(reviews):
     """
@@ -87,20 +94,36 @@ def get_user_review_count(user_id, reviews_hash):
     Get review count for a specific user (cached)
     reviews_hash is used to invalidate cache when reviews change
     """
-    # This would need to be implemented with actual review data
-    # For now, return 0 as placeholder
-    return 0
+    counts = _user_review_counts_by_hash.get(reviews_hash, {})
+    return counts.get(user_id, 0)
 
 def create_reviews_hash(reviews):
     """
-    Create a hash of reviews for cache invalidation
+    Create a hash of reviews for cache invalidation.
+
+    Side effect: also precomputes per-user review counts keyed by that hash
+    so get_user_review_count() can return actual values.
     """
+    global _user_review_counts_by_hash
+
     if not reviews:
-        return hash(())
+        empty_hash = hash(())
+        _user_review_counts_by_hash[empty_hash] = {}
+        return empty_hash
     
     # Create hash based on review count and latest timestamp
     latest_timestamp = max(review["timestamp"] for review in reviews)
-    return hash((len(reviews), latest_timestamp.isoformat()))
+    reviews_hash = hash((len(reviews), latest_timestamp.isoformat()))
+    user_counts = {}
+    for review in reviews:
+        user_id = review.get("user_id")
+        if not user_id:
+            continue
+        user_counts[user_id] = user_counts.get(user_id, 0) + 1
+
+    _user_review_counts_by_hash[reviews_hash] = user_counts
+    get_user_review_count.cache_clear()
+    return reviews_hash
 
 # Performance monitoring for review operations
 class ReviewPerformanceMonitor:

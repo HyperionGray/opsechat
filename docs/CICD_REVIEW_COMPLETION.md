@@ -35,13 +35,13 @@ src/amazon_q/
 
 ### 2. tests/e2e.spec.js
 **Before:** 641 lines (single test file)  
-**After:** 25 lines (deprecation stub) + 6 focused test files
+**After:** 25 lines (compatibility shim) + 6 focused test files
 
 #### Refactored Structure
 ```
 tests/
-├── e2e.spec.js (25 lines) - Deprecation notice
-├── e2e.spec.js.deprecated - Original preserved
+├── e2e.spec.js (25 lines) - Compatibility notice
+├── (legacy monolithic file removed in later cleanup)
 ├── landing-page.e2e.spec.js (88 lines)
 ├── chat-interface.e2e.spec.js (165 lines)
 ├── email-burner.e2e.spec.js (78 lines)
@@ -55,7 +55,7 @@ tests/
 - Tests organized by functional area
 - Each test file < 200 lines
 - Easier to run specific test suites
-- Backward compatibility maintained
+- Compatibility shim maintained for legacy references
 
 ### 3. Already Compliant Files
 - **runserver.py:** 102 lines (already refactored before this work)
