@@ -91,6 +91,12 @@ class TestHttpMailStorage:
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
 
+    def test_delete_mailbox_rejects_late_writes_on_stale_reference(self):
+        mb = self.storage.create_mailbox()
+        result = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert result is True
+        assert mb.add_message("late", "should fail", "race") is None
+
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
         result = self.storage.delete_mailbox(mb.address, "wrongkey")
@@ -263,6 +269,18 @@ class TestHttpMailRoutes:
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
         assert r.status_code == 404
+
+    def test_send_to_destroyed_mailbox_returns_gone(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        mailbox = http_mail_storage.get_mailbox(addr)
+        mailbox.destroyed = True
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 410
 
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -462,6 +480,13 @@ class TestEmailRoutesExtended:
         assert b"Hello" in r.data
 
     def test_view_nonexistent_email_returns_404(self):
+        r = self.client.get("/secpath/email/view/doesnotexist")
+        assert r.status_code == 404
+
+    def test_view_email_without_session_does_not_error(self):
+        with self.client.session_transaction() as sess:
+            sess.clear()
+
         r = self.client.get("/secpath/email/view/doesnotexist")
         assert r.status_code == 404
 
