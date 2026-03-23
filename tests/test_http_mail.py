@@ -215,6 +215,14 @@ class TestHttpMailRoutes:
         r = self.client.get(f"/{self.path}/mail")
         assert r.status_code == 200
 
+    def test_mail_index_uses_external_assets_for_csp(self):
+        r = self.client.get(f"/{self.path}/mail")
+        assert r.status_code == 200
+        assert b"/static/http_mail.css" in r.data
+        assert b"/static/http_mail.js" in r.data
+        assert b"<style>" not in r.data
+        assert b"<script>" not in r.data
+
     def test_mail_index_wrong_path_404(self):
         r = self.client.get("/wrongpath/mail")
         assert r.status_code == 404
@@ -254,6 +262,39 @@ class TestHttpMailRoutes:
         r = self.client.post(
             f"/{self.path}/mail/{addr}/send",
             json={"subject": "X", "body": "", "sender": "bob"},
+        )
+        assert r.status_code == 400
+
+    def test_send_message_via_no_js_form_endpoint(self):
+        create_resp = self.client.post(f"/{self.path}/mail/new")
+        mailbox = create_resp.get_json()
+
+        send_resp = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": mailbox["address"],
+                "subject": "No JS",
+                "body": "Form path works",
+                "sender": "alice",
+            },
+        )
+        assert send_resp.status_code == 200
+        assert b"Message sent." in send_resp.data
+
+        inbox_resp = self.client.get(
+            f"/{self.path}/mail/{mailbox['address']}/inbox?key={mailbox['read_key']}",
+            headers={"Accept": "application/json"},
+        )
+        assert inbox_resp.status_code == 200
+        messages = inbox_resp.get_json()["messages"]
+        assert len(messages) == 1
+        assert messages[0]["subject"] == "No JS"
+        assert messages[0]["body"] == "Form path works"
+
+    def test_send_message_via_no_js_form_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "No addr", "body": "Hello"},
         )
         assert r.status_code == 400
 
