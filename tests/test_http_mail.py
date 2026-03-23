@@ -19,9 +19,11 @@ from http_mail_system import (
     HttpMailStorage,
     HttpMailbox,
     HttpMessage,
+    MailboxDestroyedError,
     http_mail_storage,
     MAX_MAIL_MESSAGE_LENGTH,
 )
+import http_mail_routes
 from email_system import email_storage as _global_email_storage, EmailComposer
 from app_factory import create_app
 
@@ -100,6 +102,15 @@ class TestHttpMailStorage:
     def test_delete_nonexistent_mailbox(self):
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
+
+    def test_stale_mailbox_reference_rejects_writes_after_destroy(self):
+        mb = self.storage.create_mailbox()
+        stale_ref = self.storage.get_mailbox(mb.address)
+        assert stale_ref is not None
+
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        with pytest.raises(MailboxDestroyedError):
+            stale_ref.add_message("late", "write", "sender")
 
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
@@ -421,6 +432,24 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.get_json()["messages"][0]["sender"] == "anonymous"
+
+    def test_send_returns_410_for_destroyed_mailbox_reference(self, monkeypatch):
+        mailbox = HttpMailbox(address="deadmailbox12", read_key="k" * 32)
+        mailbox.destroyed = True
+
+        def fake_get_mailbox(address):
+            if address == "deadmailbox12":
+                return mailbox
+            return None
+
+        monkeypatch.setattr(http_mail_routes.http_mail_storage, "get_mailbox", fake_get_mailbox)
+
+        r = self.client.post(
+            f"/{self.path}/mail/deadmailbox12/send",
+            json={"subject": "Hi", "body": "Hello there", "sender": "bob"},
+        )
+        assert r.status_code == 410
+        assert "destroyed" in r.get_json()["error"].lower()
 
 
 # ===========================================================================
