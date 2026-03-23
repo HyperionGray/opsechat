@@ -101,6 +101,12 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_delete_mailbox_blocks_future_writes_from_stale_reference(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert mb.add_message("Subj", "Body", "alice") is None
+        assert mb.message_count() == 0
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -129,6 +135,11 @@ class TestHttpMailbox:
         assert msg_id
         assert len(msg_id) == 16
 
+    def test_add_message_returns_none_when_mailbox_destroyed(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
+        assert msg_id is None
+
     def test_get_messages_correct_key(self):
         self.mailbox.add_message("Subj", "Body", "alice")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -142,6 +153,28 @@ class TestHttpMailbox:
         self.mailbox.add_message("Subj", "Body", "alice")
         msgs = self.mailbox.get_messages("wrongkey")
         assert msgs is None
+
+    def test_get_messages_respects_limit_desc_order(self):
+        self.mailbox.add_message("First", "Body 1", "alice")
+        self.mailbox.add_message("Second", "Body 2", "alice")
+        self.mailbox.add_message("Third", "Body 3", "alice")
+        msgs = self.mailbox.get_messages("secretkey123456789012345678901", limit=2)
+        assert len(msgs) == 2
+        assert msgs[0]["subject"] == "Third"
+        assert msgs[1]["subject"] == "Second"
+
+    def test_get_messages_supports_ascending_order(self):
+        self.mailbox.add_message("First", "Body 1", "alice")
+        self.mailbox.add_message("Second", "Body 2", "alice")
+        self.mailbox.add_message("Third", "Body 3", "alice")
+        msgs = self.mailbox.get_messages(
+            "secretkey123456789012345678901",
+            limit=2,
+            newest_first=False
+        )
+        assert len(msgs) == 2
+        assert msgs[0]["subject"] == "First"
+        assert msgs[1]["subject"] == "Second"
 
     def test_get_messages_empty_key_returns_none(self):
         msgs = self.mailbox.get_messages("")
@@ -257,6 +290,34 @@ class TestHttpMailRoutes:
         )
         assert r.status_code == 400
 
+    def test_send_message_form_route_accepts_address_override(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        mailbox = r.get_json()
+        addr = mailbox["address"]
+        read_key = mailbox["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"_address_override": addr, "subject": "FormSend", "body": "Hello", "sender": "bob"},
+        )
+        assert r.status_code == 200
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        messages = r.get_json()["messages"]
+        assert len(messages) == 1
+        assert messages[0]["subject"] == "FormSend"
+
+    def test_send_message_form_route_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "NoAddress", "body": "Hello", "sender": "bob"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
+
     def test_send_to_nonexistent_mailbox(self):
         r = self.client.post(
             f"/{self.path}/mail/doesnotexist/send",
@@ -282,6 +343,61 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert len(data["messages"]) == 1
         assert data["messages"][0]["subject"] == "Test"
+
+    def test_read_inbox_supports_limit_and_order(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "One", "body": "Body1", "sender": "alice"},
+        )
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Two", "body": "Body2", "sender": "alice"},
+        )
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Three", "body": "Body3", "sender": "alice"},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&limit=2",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["returned"] == 2
+        assert data["order"] == "desc"
+        assert data["messages"][0]["subject"] == "Three"
+        assert data["messages"][1]["subject"] == "Two"
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&limit=2&order=asc",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["messages"][0]["subject"] == "One"
+        assert data["messages"][1]["subject"] == "Two"
+
+    def test_read_inbox_invalid_limit_or_order_returns_400(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        bad_limit = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&limit=0",
+            headers={"Accept": "application/json"},
+        )
+        assert bad_limit.status_code == 400
+
+        bad_order = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&order=sideways",
+            headers={"Accept": "application/json"},
+        )
+        assert bad_order.status_code == 400
 
     def test_read_inbox_wrong_key_is_denied(self):
         r = self.client.post(f"/{self.path}/mail/new")
