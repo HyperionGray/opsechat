@@ -101,6 +101,24 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_delete_mailbox_marks_destroyed_and_scrubs_messages(self):
+        mb = self.storage.create_mailbox()
+        mb.add_message("secret", "top secret body", "alice")
+        assert mb.message_count() == 1
+
+        result = self.storage.delete_mailbox(mb.address, mb.read_key)
+
+        assert result is True
+        assert mb.destroyed is True
+        assert mb.message_count() == 0
+
+    def test_stale_mailbox_reference_cannot_add_after_destroy(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+
+        with pytest.raises(RuntimeError, match="destroyed"):
+            mb.add_message("subject", "body", "alice")
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -178,6 +196,21 @@ class TestHttpMailbox:
         assert self.mailbox.message_count() == 0
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
+
+    def test_destroy_prevents_future_writes(self):
+        self.mailbox.destroy()
+        assert self.mailbox.destroyed is True
+        assert self.mailbox.message_count() == 0
+
+        with pytest.raises(RuntimeError, match="destroyed"):
+            self.mailbox.add_message("Subj", "Body", "alice")
+
+    def test_get_messages_destroyed_mailbox_returns_empty(self):
+        self.mailbox.add_message("Subj", "Body", "alice")
+        self.mailbox.destroy()
+
+        msgs = self.mailbox.get_messages("secretkey123456789012345678901")
+        assert msgs == []
 
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
@@ -263,6 +296,22 @@ class TestHttpMailRoutes:
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
         assert r.status_code == 404
+
+    def test_send_message_returns_410_if_mailbox_destroyed_mid_request(self, monkeypatch):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        mailbox = http_mail_storage.get_mailbox(addr)
+
+        def _raise_destroyed(*args, **kwargs):
+            raise RuntimeError("Mailbox has been destroyed")
+
+        monkeypatch.setattr(mailbox, "add_message", _raise_destroyed)
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Hi", "body": "Hello", "sender": "bob"},
+        )
+        assert r.status_code == 410
+        assert r.get_json()["error"] == "Mailbox has been destroyed"
 
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
