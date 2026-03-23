@@ -91,6 +91,12 @@ class TestHttpMailStorage:
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
 
+    def test_delete_mailbox_prevents_late_writes_on_stale_reference(self):
+        mb = self.storage.create_mailbox()
+        result = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert result is True
+        assert mb.add_message("subj", "body", "sender") is None
+
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
         result = self.storage.delete_mailbox(mb.address, "wrongkey")
@@ -179,6 +185,12 @@ class TestHttpMailbox:
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
 
+    def test_add_message_rejected_when_destroyed(self):
+        self.mailbox.destroyed = True
+        result = self.mailbox.add_message("A", "B", "c")
+        assert result is None
+        assert self.mailbox.message_count() == 0
+
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -247,6 +259,61 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_json_via_generic_endpoint(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        payload = r.get_json()
+        addr = payload["address"]
+        read_key = payload["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            json={"address": addr, "subject": "Hi", "body": "Generic send", "sender": "bob"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["success"] is True
+        assert data["address"] == addr
+        assert "msg_id" in data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        ).get_json()
+        assert inbox["messages"][0]["body"] == "Generic send"
+
+    def test_send_message_form_via_generic_endpoint(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        payload = r.get_json()
+        addr = payload["address"]
+        read_key = payload["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Form subject",
+                "body": "Form body",
+                "sender": "alice",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        ).get_json()
+        assert inbox["messages"][0]["subject"] == "Form subject"
+        assert inbox["messages"][0]["body"] == "Form body"
+
+    def test_send_message_generic_endpoint_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            json={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 400
+        assert r.get_json()["error"] == "Mailbox address is required"
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -424,7 +491,7 @@ class TestHttpMailRoutes:
 
 
 # ===========================================================================
-# Missing email route tests (view, edit, delete, burner POST, expire)
+# Additional email route tests (view, edit, delete, burner POST, expire)
 # ===========================================================================
 
 class TestEmailRoutesExtended:

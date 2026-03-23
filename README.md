@@ -294,6 +294,17 @@ For Amazon Q setup instructions, see [Amazon Q Setup Guide](docs/setup/AMAZON_Q_
 
 For full documentation, see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md).
 
+#### HTTP Mail (SMTP/IMAP-free mailbox mode)
+OpSecChat also includes an in-memory mailbox system that works entirely over HTTP.
+
+Quick flow:
+1. Open `/{path}/mail` and create a mailbox
+2. Save the mailbox `address` (public) and `read_key` (private)
+3. Send to that mailbox via `POST /{path}/mail/send` or `POST /{path}/mail/{address}/send`
+4. Read messages at `GET /{path}/mail/{address}/inbox?key={read_key}`
+
+For full usage and API examples, see [HTTP Mail Guide](docs/user-guide/HTTP_MAIL.md).
+
 Security & Code Quality
 =======================
 
