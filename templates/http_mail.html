@@ -241,6 +241,11 @@
   {% if messages is defined %}
   <div id="inbox-messages" style="margin-top:20px;">
     <h3>Messages ({{ messages|length }})</h3>
+    <form method="POST" action="/{{ path }}/mail/{{ inbox_address }}/rotate-key" style="margin: 10px 0 16px 0;">
+      <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
+      <button type="submit">Rotate Read Key</button>
+      <p class="hint">Rotating invalidates your old read key immediately.</p>
+    </form>
     {% if messages|length == 0 %}
     <p style="color:#888; margin-top:10px;">No messages in this mailbox.</p>
     {% else %}
@@ -359,6 +364,7 @@
     .then(function(r) {
       if (r.status === 403) throw new Error('Invalid read key — access denied');
       if (r.status === 404) throw new Error('Mailbox not found');
+      if (r.status === 410) throw new Error('Mailbox was destroyed');
       return r.json();
     })
     .then(function(data) {
@@ -376,7 +382,13 @@
       container.innerHTML = '<p style="color:#888;margin-top:10px;">No messages in this mailbox.</p>';
       return;
     }
-    var html = '<h3 style="margin-top:20px;">Messages (' + messages.length + ')</h3>';
+    var html = '<h3 style="margin-top:20px;">Messages (' + messages.length + ')</h3>' +
+      '<div style="margin:10px 0 16px 0;">' +
+        '<button class="js-rotate-read-key"' +
+          ' data-address="' + esc(address) + '"' +
+          ' data-read-key="' + esc(readKey) + '">Rotate Read Key</button>' +
+        '<p class="hint">Rotating invalidates your old read key immediately.</p>' +
+      '</div>';
     messages.forEach(function(msg) {
       html += '<div class="msg-card">' +
         '<div class="msg-meta">From: ' + esc(msg.sender) + ' &nbsp;|&nbsp; ' + esc(msg.timestamp) + '</div>' +
@@ -409,6 +421,12 @@
         destroyMailbox(btn.dataset.address, btn.dataset.readKey);
       });
     });
+    container.querySelectorAll('.js-rotate-read-key').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        if (!confirm('Rotate read key now? This invalidates the current key.')) return;
+        rotateReadKey(btn.dataset.address, btn.dataset.readKey);
+      });
+    });
   }
 
   function deleteMsg(address, msgId, readKey) {
@@ -437,6 +455,24 @@
           '<div class="success-box">✅ Mailbox destroyed.</div>';
       } else {
         alert('Error: ' + (d.error || 'Could not destroy mailbox'));
+      }
+    });
+  }
+
+  function rotateReadKey(address, readKey) {
+    fetch('/{{ path }}/mail/' + encodeURIComponent(address) + '/rotate-key', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: JSON.stringify({read_key: readKey})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.success) {
+        document.getElementById('read-key-input').value = d.read_key;
+        alert('Read key rotated. Save the new key now.');
+        fetchInbox();
+      } else {
+        alert('Error: ' + (d.error || 'Could not rotate key'));
       }
     });
   }
