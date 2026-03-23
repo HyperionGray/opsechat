@@ -7,8 +7,10 @@ and read back using a private read_key (default deny).
 Routes registered under /<path>/mail/:
   GET  /<path>/mail                        - Main UI (create mailbox form)
   POST /<path>/mail/new                    - Create a new mailbox
+  POST /<path>/mail/send                   - Send form fallback using _address_override
   POST /<path>/mail/<address>/send         - Send a message to a mailbox (no auth)
   GET  /<path>/mail/<address>/inbox        - Read inbox (requires ?key=<read_key>)
+                                              JSON supports limit, offset, include_body
   POST /<path>/mail/<address>/delete/<id>  - Delete a message (requires read_key in form)
   POST /<path>/mail/<address>/destroy      - Delete entire mailbox (requires read_key in form)
 """
@@ -35,6 +37,20 @@ def register_http_mail_routes(app):
         """Strip dangerous characters and enforce length."""
         text = re.sub(r'[<>&"\']', '', text)
         return text[:max_len]
+
+    def _wants_json() -> bool:
+        return request.headers.get("Accept", "").startswith("application/json")
+
+    def _parse_non_negative_int(raw_value: str, field_name: str):
+        if raw_value is None or raw_value == "":
+            return None
+        try:
+            parsed = int(raw_value)
+        except (TypeError, ValueError):
+            raise ValueError(f"{field_name} must be a non-negative integer")
+        if parsed < 0:
+            raise ValueError(f"{field_name} must be a non-negative integer")
+        return parsed
 
     # ------------------------------------------------------------------
     # Main UI — create or access mailbox
@@ -109,6 +125,8 @@ def register_http_mail_routes(app):
         sender = _sanitize(sender, 64) or "anonymous"
 
         msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        if msg_id is None:
+            return jsonify({"error": "Mailbox is unavailable"}), 410
 
         if request.is_json:
             return jsonify({"success": True, "msg_id": msg_id})
@@ -119,6 +137,23 @@ def register_http_mail_routes(app):
                                max_message_length=MAX_MAIL_MESSAGE_LENGTH,
                                success="Message sent.",
                                compose_address=address)
+
+    @app.route('/<string:url_addition>/mail/send', methods=["POST"])
+    def http_mail_send_form_fallback(url_addition):
+        """Form/no-JS send fallback where address is supplied in request body."""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+
+        address = request.form.get("_address_override", "").strip()
+        if not address:
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Recipient mailbox address is required",
+                                   compose_address=""), 400
+        return http_mail_send(url_addition, address)
 
     # ------------------------------------------------------------------
     # Read inbox (requires read_key)
@@ -132,7 +167,7 @@ def register_http_mail_routes(app):
 
         mailbox = http_mail_storage.get_mailbox(address)
         if mailbox is None:
-            if request.headers.get("Accept", "").startswith("application/json"):
+            if _wants_json():
                 return jsonify({"error": "Mailbox not found"}), 404
             return render_template("http_mail.html",
                                    path=app.config["path"],
@@ -141,19 +176,42 @@ def register_http_mail_routes(app):
                                    error="Mailbox not found"), 404
 
         read_key = request.args.get("key", "")
+        if _wants_json():
+            try:
+                limit = _parse_non_negative_int(request.args.get("limit"), "limit")
+                offset = _parse_non_negative_int(request.args.get("offset", "0"), "offset")
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+
+            include_body_arg = request.args.get("include_body", "1").strip().lower()
+            include_body = include_body_arg not in {"0", "false", "no"}
+
+            page = mailbox.get_messages_page(read_key,
+                                             limit=limit,
+                                             offset=offset or 0,
+                                             include_body=include_body)
+            if page is None:
+                return jsonify({"error": "Invalid read key"}), 403
+
+            return jsonify({
+                "address": address,
+                "total_messages": page["total"],
+                "offset": page["offset"],
+                "limit": page["limit"],
+                "returned_messages": len(page["messages"]),
+                "messages": page["messages"],
+            })
+
         messages = mailbox.get_messages(read_key)
 
         if messages is None:
-            if request.headers.get("Accept", "").startswith("application/json"):
+            if _wants_json():
                 return jsonify({"error": "Invalid read key"}), 403
             return render_template("http_mail.html",
                                    path=app.config["path"],
                                    hostname=app.config.get("hostname", ""),
                                    max_message_length=MAX_MAIL_MESSAGE_LENGTH,
                                    error="Invalid read key — access denied"), 403
-
-        if request.headers.get("Accept", "").startswith("application/json"):
-            return jsonify({"address": address, "messages": messages})
 
         return render_template("http_mail.html",
                                path=app.config["path"],

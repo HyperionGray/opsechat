@@ -129,6 +129,11 @@ class TestHttpMailbox:
         assert msg_id
         assert len(msg_id) == 16
 
+    def test_add_message_rejected_when_destroyed(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
+        assert msg_id is None
+
     def test_get_messages_correct_key(self):
         self.mailbox.add_message("Subj", "Body", "alice")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -257,12 +262,42 @@ class TestHttpMailRoutes:
         )
         assert r.status_code == 400
 
+    def test_send_message_form_fallback_route(self):
+        create = self.client.post(f"/{self.path}/mail/new")
+        addr = create.get_json()["address"]
+        read_key = create.get_json()["read_key"]
+
+        send = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"_address_override": addr, "subject": "fallback", "body": "hello"},
+        )
+        assert send.status_code == 200
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert inbox.status_code == 200
+        assert inbox.get_json()["messages"][0]["subject"] == "fallback"
+
     def test_send_to_nonexistent_mailbox(self):
         r = self.client.post(
             f"/{self.path}/mail/doesnotexist/send",
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
         assert r.status_code == 404
+
+    def test_send_to_destroyed_mailbox_returns_410(self):
+        create = self.client.post(f"/{self.path}/mail/new")
+        addr = create.get_json()["address"]
+        mailbox = http_mail_storage.get_mailbox(addr)
+        mailbox.destroyed = True
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 410
 
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -282,6 +317,58 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert len(data["messages"]) == 1
         assert data["messages"][0]["subject"] == "Test"
+
+    def test_read_inbox_supports_limit_and_offset(self):
+        create = self.client.post(f"/{self.path}/mail/new")
+        addr = create.get_json()["address"]
+        read_key = create.get_json()["read_key"]
+
+        for idx in range(5):
+            self.client.post(
+                f"/{self.path}/mail/{addr}/send",
+                json={"subject": f"S{idx}", "body": f"B{idx}", "sender": "alice"},
+            )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&limit=2&offset=1",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["total_messages"] == 5
+        assert data["offset"] == 1
+        assert data["limit"] == 2
+        assert data["returned_messages"] == 2
+        assert [m["subject"] for m in data["messages"]] == ["S1", "S2"]
+
+    def test_read_inbox_supports_include_body_false(self):
+        create = self.client.post(f"/{self.path}/mail/new")
+        addr = create.get_json()["address"]
+        read_key = create.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "No body", "body": "secret", "sender": "alice"},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&include_body=false",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        message = r.get_json()["messages"][0]
+        assert "body" not in message
+
+    def test_read_inbox_rejects_invalid_limit(self):
+        create = self.client.post(f"/{self.path}/mail/new")
+        addr = create.get_json()["address"]
+        read_key = create.get_json()["read_key"]
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&limit=abc",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
 
     def test_read_inbox_wrong_key_is_denied(self):
         r = self.client.post(f"/{self.path}/mail/new")

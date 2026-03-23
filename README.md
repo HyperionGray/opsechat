@@ -270,6 +270,7 @@ Features
 - **Security Research Tools** - For authorized penetration testing and awareness training
 - **Plain Text Only** - HTML and images are shown as text for security analysis
 - JavaScript optional throughout
+- **HTTP Mail API Pagination** - JSON inbox reads now support `limit`, `offset`, and `include_body` query options (see [HTTP Mail API Guide](docs/user-guide/HTTP_MAIL_API.md))
 
 ### Amazon Q Code Review Integration (NEW!)
 - **Automated Code Reviews** - Amazon Q Developer integration for comprehensive code analysis
@@ -292,7 +293,7 @@ For Amazon Q setup instructions, see [Amazon Q Setup Guide](docs/setup/AMAZON_Q_
 6. Compose and send emails: `http://yourservice.onion/{path}/email/compose`
 7. View your inbox: `http://yourservice.onion/{path}/email`
 
-For full documentation, see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md).
+For full documentation, see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md) and [HTTP Mail API Guide](docs/user-guide/HTTP_MAIL_API.md).
 
 Security & Code Quality
 =======================
