@@ -115,6 +115,13 @@ class TestHttpMailStorage:
         self.storage.cleanup_empty_old_mailboxes()
         assert self.storage.get_mailbox(mb.address) is not None
 
+    def test_destroyed_mailbox_rejects_stale_writer_reference(self):
+        mb = self.storage.create_mailbox()
+        stale_ref = mb
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert stale_ref.add_message("later", "body", "sender") is None
+        assert stale_ref.get_messages(mb.read_key) == []
+
 
 # ===========================================================================
 # HttpMailbox unit tests
@@ -248,6 +255,32 @@ class TestHttpMailRoutes:
         assert data["success"] is True
         assert "msg_id" in data
 
+    def test_send_message_non_js_fallback_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        mailbox = r.get_json()
+        addr = mailbox["address"]
+        read_key = mailbox["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "No JS",
+                "body": "Form fallback works",
+                "sender": "form-user",
+            },
+        )
+        assert r.status_code == 200
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert inbox.status_code == 200
+        data = inbox.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["subject"] == "No JS"
+
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
@@ -282,6 +315,65 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert len(data["messages"]) == 1
         assert data["messages"][0]["subject"] == "Test"
+
+    def test_read_inbox_with_limit_and_offset(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        for subject in ["one", "two", "three"]:
+            self.client.post(
+                f"/{self.path}/mail/{addr}/send",
+                json={"subject": subject, "body": "Hello", "sender": "alice"},
+            )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&limit=2&offset=1",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["limit"] == 2
+        assert data["offset"] == 1
+        assert data["total_messages"] == 3
+        assert data["returned_messages"] == 2
+        assert [m["subject"] for m in data["messages"]] == ["two", "three"]
+
+    def test_read_inbox_with_sender_filter(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "A", "body": "Hello", "sender": "alice"},
+        )
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "B", "body": "Hello", "sender": "bob"},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&sender=alice",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["sender_filter"] == "alice"
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["sender"] == "alice"
+
+    def test_read_inbox_invalid_limit_returns_400(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}&limit=0",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
+        assert "error" in r.get_json()
 
     def test_read_inbox_wrong_key_is_denied(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -462,6 +554,12 @@ class TestEmailRoutesExtended:
         assert b"Hello" in r.data
 
     def test_view_nonexistent_email_returns_404(self):
+        r = self.client.get("/secpath/email/view/doesnotexist")
+        assert r.status_code == 404
+
+    def test_view_nonexistent_email_without_session_still_returns_404(self):
+        with self.client.session_transaction() as sess:
+            sess.clear()
         r = self.client.get("/secpath/email/view/doesnotexist")
         assert r.status_code == 404
 

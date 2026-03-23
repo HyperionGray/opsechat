@@ -234,13 +234,37 @@
              value="{{ inbox_read_key or '' }}"
              placeholder="Your private read key">
     </div>
+    <div class="form-group">
+      <label for="read-sender-filter">Sender Filter (optional):</label>
+      <input type="text" id="read-sender-filter" name="_read_sender_filter"
+             value="{{ inbox_sender or '' }}"
+             placeholder="Only show messages from this sender">
+    </div>
+    <div class="form-group">
+      <label for="read-limit">Max Messages:</label>
+      <input type="text" id="read-limit" name="_read_limit"
+             value="{{ inbox_limit or 50 }}"
+             placeholder="1 - 200">
+      <p class="hint">Pagination controls apply to both JSON and UI inbox views.</p>
+    </div>
+    <div class="form-group">
+      <label for="read-offset">Offset:</label>
+      <input type="text" id="read-offset" name="_read_offset"
+             value="{{ inbox_offset or 0 }}"
+             placeholder="0 for newest page">
+    </div>
     <button type="button" onclick="fetchInbox()">Open Inbox</button>
   </form>
 
   <!-- Inbox messages rendered from server (non-JS fallback) -->
   {% if messages is defined %}
   <div id="inbox-messages" style="margin-top:20px;">
-    <h3>Messages ({{ messages|length }})</h3>
+    <h3>
+      Messages ({{ messages|length }})
+      {% if total_messages is defined %}
+        <span style="color:#888;">/ Total: {{ total_messages }}</span>
+      {% endif %}
+    </h3>
     {% if messages|length == 0 %}
     <p style="color:#888; margin-top:10px;">No messages in this mailbox.</p>
     {% else %}
@@ -302,6 +326,14 @@
     {% endif %}
   })();
 
+  // Keep compose form action aligned with typed mailbox address.
+  (function() {
+    var input = document.getElementById('compose-address-input');
+    if (!input) return;
+    input.addEventListener('input', updateComposeAction);
+    updateComposeAction();
+  })();
+
   // Create mailbox via fetch
   function createMailbox() {
     var btn = document.getElementById('create-btn');
@@ -346,6 +378,9 @@
   function fetchInbox() {
     var address = document.getElementById('read-address').value.trim();
     var readKey = document.getElementById('read-key-input').value.trim();
+    var senderFilter = document.getElementById('read-sender-filter').value.trim();
+    var limit = document.getElementById('read-limit').value.trim();
+    var offset = document.getElementById('read-offset').value.trim();
 
     if (!address || !readKey) {
       alert('Please enter both mailbox address and read key.');
@@ -354,6 +389,15 @@
 
     var url = '/{{ path }}/mail/' + encodeURIComponent(address) +
               '/inbox?key=' + encodeURIComponent(readKey);
+    if (senderFilter) {
+      url += '&sender=' + encodeURIComponent(senderFilter);
+    }
+    if (limit) {
+      url += '&limit=' + encodeURIComponent(limit);
+    }
+    if (offset) {
+      url += '&offset=' + encodeURIComponent(offset);
+    }
 
     fetch(url, {headers: {'Accept': 'application/json'}})
     .then(function(r) {
@@ -362,7 +406,13 @@
       return r.json();
     })
     .then(function(data) {
-      renderInbox(data.messages, address, readKey);
+      renderInbox(
+        data.messages,
+        address,
+        readKey,
+        data.total_messages,
+        data.returned_messages
+      );
     })
     .catch(function(err) {
       document.getElementById('js-inbox-messages').innerHTML =
@@ -370,13 +420,16 @@
     });
   }
 
-  function renderInbox(messages, address, readKey) {
+  function renderInbox(messages, address, readKey, totalMessages, returnedMessages) {
     var container = document.getElementById('js-inbox-messages');
+    var count = (typeof returnedMessages === 'number') ? returnedMessages : messages.length;
+    var total = (typeof totalMessages === 'number') ? totalMessages : messages.length;
     if (messages.length === 0) {
-      container.innerHTML = '<p style="color:#888;margin-top:10px;">No messages in this mailbox.</p>';
+      container.innerHTML = '<h3 style="margin-top:20px;">Messages (0 / Total: ' + total + ')</h3>' +
+        '<p style="color:#888;margin-top:10px;">No messages in this mailbox.</p>';
       return;
     }
-    var html = '<h3 style="margin-top:20px;">Messages (' + messages.length + ')</h3>';
+    var html = '<h3 style="margin-top:20px;">Messages (' + count + ' / Total: ' + total + ')</h3>';
     messages.forEach(function(msg) {
       html += '<div class="msg-card">' +
         '<div class="msg-meta">From: ' + esc(msg.sender) + ' &nbsp;|&nbsp; ' + esc(msg.timestamp) + '</div>' +

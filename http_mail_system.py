@@ -65,34 +65,59 @@ class HttpMailbox:
         self.messages: List[HttpMessage] = []
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
+        # Once destroyed, this mailbox rejects all future writes even if a
+        # stale in-memory reference is still held by another thread.
+        self.destroyed = False
 
-    def add_message(self, subject: str, body: str, sender_handle: str) -> str:
-        """Add a message; returns the new message ID."""
-        msg_id = _generate_id(12)  # 12 bytes → 16 URL-safe chars
-        msg = HttpMessage(
-            msg_id=msg_id,
-            subject=subject,
-            body=body,
-            sender_handle=sender_handle,
-            timestamp=datetime.datetime.now(),
-        )
+    def add_message(self, subject: str, body: str, sender_handle: str) -> Optional[str]:
+        """Add a message; returns the new message ID, or None if mailbox is destroyed."""
         with self.lock:
+            if self.destroyed:
+                return None
+            msg_id = _generate_id(12)  # 12 bytes → 16 URL-safe chars
+            msg = HttpMessage(
+                msg_id=msg_id,
+                subject=subject,
+                body=body,
+                sender_handle=sender_handle,
+                timestamp=datetime.datetime.now(),
+            )
             self.messages.append(msg)
         return msg_id
 
-    def get_messages(self, read_key: str) -> Optional[List[Dict]]:
-        """Return messages if read_key matches, else None (default deny)."""
+    def get_messages(self, read_key: str, limit: Optional[int] = None,
+                     offset: int = 0, sender: Optional[str] = None) -> Optional[List[Dict]]:
+        """Return messages if read_key matches, else None (default deny).
+
+        Optional filtering:
+        - limit: return at most N messages
+        - offset: skip first N messages
+        - sender: exact sender-handle match (case-insensitive)
+        """
         if not secrets.compare_digest(read_key, self.read_key):
             return None
         self._expire_old_messages()
         with self.lock:
-            return [m.to_dict() for m in self.messages]
+            if self.destroyed:
+                return []
+            messages = [m.to_dict() for m in self.messages]
+
+        if sender:
+            sender_key = sender.casefold()
+            messages = [m for m in messages if m.get("sender", "").casefold() == sender_key]
+        if offset > 0:
+            messages = messages[offset:]
+        if limit is not None:
+            messages = messages[:limit]
+        return messages
 
     def delete_message(self, read_key: str, msg_id: str) -> bool:
         """Delete a message by ID after verifying read_key. Returns True on success."""
         if not secrets.compare_digest(read_key, self.read_key):
             return False
         with self.lock:
+            if self.destroyed:
+                return False
             for i, msg in enumerate(self.messages):
                 if msg.msg_id == msg_id:
                     msg.overwrite()
@@ -115,6 +140,8 @@ class HttpMailbox:
     def message_count(self) -> int:
         self._expire_old_messages()
         with self.lock:
+            if self.destroyed:
+                return 0
             return len(self.messages)
 
 
@@ -145,10 +172,6 @@ class HttpMailStorage:
         - We remove the mailbox from the global store under `self._lock`.
         - We then overwrite and clear messages under the per-mailbox lock
           to avoid races with concurrent send/add operations.
-
-        Checklist (follow-ups outside this class):
-        - [ ] Ensure HttpMailbox exposes a `lock` used by all writers.
-        - [ ] Ensure add_message (or equivalent) checks a `destroyed` flag.
         """
         # First, look up and authenticate the mailbox under the global lock.
         with self._lock:
@@ -188,7 +211,7 @@ class HttpMailStorage:
         with self._lock:
             stale = [
                 addr for addr, mb in self._mailboxes.items()
-                if mb.created_at < cutoff and len(mb.messages) == 0
+                if mb.created_at < cutoff and mb.message_count() == 0
             ]
             for addr in stale:
                 del self._mailboxes[addr]
