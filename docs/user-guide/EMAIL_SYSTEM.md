@@ -148,7 +148,38 @@ Modern, Guerrillamail-style rotating anonymous email system with advanced featur
 - Visual budget bar showing spending vs. limit
 - Auto-rotation when budget allows
 
-### 3. Email Inbox
+### 3. HTTP Mail (No SMTP/IMAP Required)
+
+HTTP Mail provides email-like messaging over the existing web server only.
+It is designed for temporary, anonymous message exchange where inbox access
+is protected by a secret read key instead of account credentials.
+
+**Access:** `/{path}/mail`
+
+#### How HTTP Mail Works
+- Create a mailbox to receive:
+  - **Address**: share with senders
+  - **Read key**: keep private, required to read/delete/destroy
+- Senders post messages to your address without authentication.
+- Owners read inbox contents with `?key=<read_key>`.
+- Messages auto-expire after 24 hours and are stored in memory only.
+
+#### Routes
+- `GET /{path}/mail` - HTTP Mail UI
+- `POST /{path}/mail/new` - Create mailbox (returns address + read_key)
+- `POST /{path}/mail/send` - No-JS fallback send endpoint (address in form body)
+- `POST /{path}/mail/{address}/send` - Send to known mailbox address
+- `GET /{path}/mail/{address}/inbox?key=...` - Read inbox
+- `POST /{path}/mail/{address}/delete/{id}` - Delete message
+- `POST /{path}/mail/{address}/destroy` - Destroy mailbox
+
+#### Security Notes
+- Default deny: wrong/missing read key returns access denied.
+- Destroyed mailboxes refuse further writes.
+- Stale references to destroyed mailboxes are blocked in memory.
+- Message fields are sanitized and bounded by length limits.
+
+### 4. Email Inbox
 - View received emails with full header information
 - PGP encrypted message detection and display
 - In-memory storage (nothing touches disk unencrypted)
@@ -158,7 +189,7 @@ Modern, Guerrillamail-style rotating anonymous email system with advanced featur
 
 **Access:** `/{path}/email`
 
-### 4. Email Composition
+### 5. Email Composition
 - **Standard Mode:** Simple form-based email composition
 - **Raw Mode:** Full control over email headers and structure
 - **Real SMTP Sending:** Optional checkbox to send via configured SMTP

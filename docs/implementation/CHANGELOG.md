@@ -11,13 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- HTTP Mail no-JS compose fallback endpoint: `POST /{path}/mail/send`
 
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- HTTP Mail mailbox destruction now marks mailboxes as destroyed and blocks
+  stale-reference writes/reads after destroy operations
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022
+- HTTP Mail now returns explicit destroyed-mailbox behavior to prevent
+  in-memory stale-object mutation after mailbox deletion
 
 ## [2.0.0] - 2024-12-08
 
