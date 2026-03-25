@@ -36,49 +36,8 @@ def register_http_mail_routes(app):
         text = re.sub(r'[<>&"\']', '', text)
         return text[:max_len]
 
-    # ------------------------------------------------------------------
-    # Main UI — create or access mailbox
-    # ------------------------------------------------------------------
-
-    @app.route('/<string:url_addition>/mail', methods=["GET"])
-    def http_mail_index(url_addition):
-        if url_addition != app.config["path"]:
-            return ('', 404)
-        _ensure_session()
-        return render_template("http_mail.html",
-                               path=app.config["path"],
-                               hostname=app.config.get("hostname", ""),
-                               max_message_length=MAX_MAIL_MESSAGE_LENGTH)
-
-    # ------------------------------------------------------------------
-    # Create a new mailbox
-    # ------------------------------------------------------------------
-
-    @app.route('/<string:url_addition>/mail/new', methods=["POST"])
-    def http_mail_create(url_addition):
-        if url_addition != app.config["path"]:
-            return ('', 404)
-        _ensure_session()
-        mailbox = http_mail_storage.create_mailbox()
-        # JSON response — the UI stores address + read_key locally
-        return jsonify({
-            "success": True,
-            "address": mailbox.address,
-            "read_key": mailbox.read_key,
-            "send_url": f"/{url_addition}/mail/{mailbox.address}/send",
-            "inbox_url": f"/{url_addition}/mail/{mailbox.address}/inbox",
-        })
-
-    # ------------------------------------------------------------------
-    # Send a message to a mailbox (no authentication required)
-    # ------------------------------------------------------------------
-
-    @app.route('/<string:url_addition>/mail/<string:address>/send', methods=["POST"])
-    def http_mail_send(url_addition, address):
-        if url_addition != app.config["path"]:
-            return ('', 404)
-        _ensure_session()
-
+    def _handle_send_to_mailbox(url_addition: str, address: str):
+        """Shared send implementation used by direct and generic endpoints."""
         mailbox = http_mail_storage.get_mailbox(address)
         if mailbox is None:
             return jsonify({"error": "Mailbox not found"}), 404
@@ -124,9 +83,53 @@ def register_http_mail_routes(app):
                                success="Message sent.",
                                compose_address=address)
 
+    # ------------------------------------------------------------------
+    # Main UI — create or access mailbox
+    # ------------------------------------------------------------------
+
+    @app.route('/<string:url_addition>/mail', methods=["GET"])
+    def http_mail_index(url_addition):
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+        return render_template("http_mail.html",
+                               path=app.config["path"],
+                               hostname=app.config.get("hostname", ""),
+                               max_message_length=MAX_MAIL_MESSAGE_LENGTH)
+
+    # ------------------------------------------------------------------
+    # Create a new mailbox
+    # ------------------------------------------------------------------
+
+    @app.route('/<string:url_addition>/mail/new', methods=["POST"])
+    def http_mail_create(url_addition):
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+        mailbox = http_mail_storage.create_mailbox()
+        # JSON response — the UI stores address + read_key locally
+        return jsonify({
+            "success": True,
+            "address": mailbox.address,
+            "read_key": mailbox.read_key,
+            "send_url": f"/{url_addition}/mail/{mailbox.address}/send",
+            "inbox_url": f"/{url_addition}/mail/{mailbox.address}/inbox",
+        })
+
+    # ------------------------------------------------------------------
+    # Send a message to a mailbox (no authentication required)
+    # ------------------------------------------------------------------
+
+    @app.route('/<string:url_addition>/mail/<string:address>/send', methods=["POST"])
+    def http_mail_send(url_addition, address):
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+        return _handle_send_to_mailbox(url_addition, address)
+
     @app.route('/<string:url_addition>/mail/send', methods=["POST"])
     def http_mail_send_generic(url_addition):
-        """Form-friendly send endpoint that forwards to /mail/<address>/send."""
+        """Form-friendly send endpoint using `_address_override`."""
         if url_addition != app.config["path"]:
             return ('', 404)
         _ensure_session()
@@ -146,11 +149,7 @@ def register_http_mail_routes(app):
                                    max_message_length=MAX_MAIL_MESSAGE_LENGTH,
                                    error="Recipient mailbox address is required",
                                    compose_address=""), 400
-
-        return redirect(url_for("http_mail_send",
-                                url_addition=url_addition,
-                                address=address),
-                        code=307)
+        return _handle_send_to_mailbox(url_addition, address)
 
     # ------------------------------------------------------------------
     # Read inbox (requires read_key)

@@ -255,6 +255,7 @@ Features
 
 ### Email System (NEW - REAL EMAIL SUPPORT!)
 - **Real SMTP/IMAP Integration** - Send and receive actual emails via configured email servers (see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md))
+- **HTTP Mailboxes (SMTP/IMAP-Free)** - Create temporary in-memory mailboxes over HTTP with private read keys (default-deny inbox access)
 - **Encrypted Email Inbox** - In-memory email storage with PGP support
 - **Raw Mode Editing** - Full control over email headers for security testing
 - **Modern Burner Email System** - Guerrillamail-style rotating anonymous email addresses with:
@@ -270,6 +271,19 @@ Features
 - **Security Research Tools** - For authorized penetration testing and awareness training
 - **Plain Text Only** - HTML and images are shown as text for security analysis
 - JavaScript optional throughout
+
+#### HTTP Mail Quick Use
+1. Open `/{path}/mail`
+2. Create a mailbox to get:
+   - public `address` (share with senders)
+   - private `read_key` (required to read/delete/destroy)
+3. Send with:
+   - `POST /{path}/mail/<address>/send` (direct endpoint), or
+   - `POST /{path}/mail/send` with `_address_override` (non-JavaScript form fallback)
+4. Read inbox with:
+   - `GET /{path}/mail/<address>/inbox?key=<read_key>`
+
+HTTP mailboxes are in-memory only, messages auto-expire after 24 hours, mailbox size is bounded, and destroying a mailbox permanently scrubs message content and rejects future writes.
 
 ### Amazon Q Code Review Integration (NEW!)
 - **Automated Code Reviews** - Amazon Q Developer integration for comprehensive code analysis

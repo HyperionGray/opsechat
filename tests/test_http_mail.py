@@ -284,7 +284,6 @@ class TestHttpMailRoutes:
                 "body": "Hello from non-JS form",
                 "sender": "form-user",
             },
-            follow_redirects=True,
         )
         assert r.status_code == 200
 

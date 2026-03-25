@@ -172,6 +172,35 @@ When limit exceeded:
 
 ---
 
+## 📨 HTTP Mail (No SMTP/IMAP)
+
+### Purpose
+Provide a mailbox-like messaging mode over plain HTTP for operational scenarios where SMTP/IMAP setup is undesirable.
+
+### Features
+- **Mailbox address + private read key** model (default deny)
+- **JSON and non-JS form support** for sending messages
+- **In-memory only** storage with 24-hour expiry
+- **Destroy mailbox** support with message overwrite before deletion
+- **Bounded mailbox retention** (oldest messages evicted when mailbox cap is reached)
+
+### Endpoints
+```bash
+POST /<path>/mail/new
+POST /<path>/mail/<address>/send
+POST /<path>/mail/send                # form-friendly route using _address_override
+GET  /<path>/mail/<address>/inbox?key=<read_key>
+POST /<path>/mail/<address>/delete/<msg_id>
+POST /<path>/mail/<address>/destroy
+```
+
+### Operational Notes
+- A destroyed mailbox can no longer accept writes.
+- If a mailbox is destroyed between lookup and send, the sender receives `410 Gone`.
+- Message retention is capped per mailbox to avoid unbounded in-memory growth.
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose
