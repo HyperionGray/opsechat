@@ -108,7 +108,11 @@ def register_http_mail_routes(app):
         body = _sanitize(body, MAX_MAIL_MESSAGE_LENGTH)
         sender = _sanitize(sender, 64) or "anonymous"
 
-        msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        try:
+            msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        except RuntimeError:
+            # Mailbox was destroyed after lookup; treat as gone.
+            return jsonify({"error": "Mailbox no longer available"}), 410
 
         if request.is_json:
             return jsonify({"success": True, "msg_id": msg_id})
@@ -119,6 +123,34 @@ def register_http_mail_routes(app):
                                max_message_length=MAX_MAIL_MESSAGE_LENGTH,
                                success="Message sent.",
                                compose_address=address)
+
+    @app.route('/<string:url_addition>/mail/send', methods=["POST"])
+    def http_mail_send_generic(url_addition):
+        """Form-friendly send endpoint that forwards to /mail/<address>/send."""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+
+        if request.is_json:
+            data = request.get_json() or {}
+            address = (data.get("address") or data.get("_address_override") or "").strip()
+        else:
+            address = request.form.get("_address_override", "").strip()
+
+        if not address:
+            if request.is_json:
+                return jsonify({"error": "Recipient mailbox address is required"}), 400
+            return render_template("http_mail.html",
+                                   path=app.config["path"],
+                                   hostname=app.config.get("hostname", ""),
+                                   max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                                   error="Recipient mailbox address is required",
+                                   compose_address=""), 400
+
+        return redirect(url_for("http_mail_send",
+                                url_addition=url_addition,
+                                address=address),
+                        code=307)
 
     # ------------------------------------------------------------------
     # Read inbox (requires read_key)

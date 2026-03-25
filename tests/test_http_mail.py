@@ -21,6 +21,7 @@ from http_mail_system import (
     HttpMessage,
     http_mail_storage,
     MAX_MAIL_MESSAGE_LENGTH,
+    MAX_MAILBOX_MESSAGES,
 )
 from email_system import email_storage as _global_email_storage, EmailComposer
 from app_factory import create_app
@@ -91,6 +92,13 @@ class TestHttpMailStorage:
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
 
+    def test_deleted_mailbox_rejects_future_writes(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        with pytest.raises(RuntimeError):
+            mb.add_message("after destroy", "body", "sender")
+        assert mb.get_messages(mb.read_key) == []
+
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
         result = self.storage.delete_mailbox(mb.address, "wrongkey")
@@ -128,6 +136,11 @@ class TestHttpMailbox:
         msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
         assert msg_id
         assert len(msg_id) == 16
+
+    def test_add_message_to_destroyed_mailbox_raises(self):
+        self.mailbox.destroyed = True
+        with pytest.raises(RuntimeError):
+            self.mailbox.add_message("Hello", "Body text", "alice")
 
     def test_get_messages_correct_key(self):
         self.mailbox.add_message("Subj", "Body", "alice")
@@ -178,6 +191,16 @@ class TestHttpMailbox:
         assert self.mailbox.message_count() == 0
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
+
+    def test_mailbox_message_cap_evicts_oldest(self):
+        for i in range(MAX_MAILBOX_MESSAGES + 3):
+            self.mailbox.add_message(f"subject-{i}", f"body-{i}", "alice")
+
+        msgs = self.mailbox.get_messages("secretkey123456789012345678901")
+        assert len(msgs) == MAX_MAILBOX_MESSAGES
+        subjects = [m["subject"] for m in msgs]
+        assert "subject-0" not in subjects
+        assert f"subject-{MAX_MAILBOX_MESSAGES + 2}" in subjects
 
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
@@ -247,6 +270,37 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_form_generic_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Via form",
+                "body": "Hello from non-JS form",
+                "sender": "form-user",
+            },
+            follow_redirects=True,
+        )
+        assert r.status_code == 200
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        assert len(r.get_json()["messages"]) == 1
+
+    def test_send_message_form_generic_route_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "No address", "body": "x", "sender": "s"},
+        )
+        assert r.status_code == 400
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
