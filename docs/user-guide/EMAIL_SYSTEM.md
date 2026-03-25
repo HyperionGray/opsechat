@@ -20,6 +20,25 @@ Misuse of these features may be illegal in your jurisdiction. Always obtain prop
 
 ## Core Features
 
+### 0. HTTP Mail (No SMTP/IMAP) (NEW)
+
+HTTP Mail provides a minimal mailbox system over HTTP only. It is designed for
+short-lived message drops without relying on external mail infrastructure.
+
+- Create mailbox: get a public `address` and private `read_key`
+- Send path: `/{path}/mail/<address>/send`
+- No-JS fallback send path: `/{path}/mail/send` using `_address_override`
+- Read path: `/{path}/mail/<address>/inbox?key=<read_key>`
+- Delete message: `/{path}/mail/<address>/delete/<msg_id>`
+- Destroy mailbox: `/{path}/mail/<address>/destroy`
+
+Security behavior:
+- Default-deny reads: wrong key reveals nothing
+- Message expiry after 24 hours (in-memory)
+- Mailbox destruction now marks mailbox state as `destroyed` so late write
+  attempts are rejected instead of silently re-adding messages in race windows
+- Deleted message content is overwritten before removal
+
 ### 1. Real Email Integration (NEW!)
 
 #### SMTP Email Sending
