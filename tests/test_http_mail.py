@@ -11,18 +11,14 @@ import datetime
 import os
 import sys
 
-import pytest
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from http_mail_system import (
     HttpMailStorage,
     HttpMailbox,
     HttpMessage,
-    http_mail_storage,
-    MAX_MAIL_MESSAGE_LENGTH,
 )
-from email_system import email_storage as _global_email_storage, EmailComposer
+from email_system import email_storage as _global_email_storage
 from app_factory import create_app
 
 
@@ -114,6 +110,22 @@ class TestHttpMailStorage:
         mb.add_message("subj", "body", "sender")
         self.storage.cleanup_empty_old_mailboxes()
         assert self.storage.get_mailbox(mb.address) is not None
+
+    def test_destroyed_mailbox_rejects_future_message_adds(self):
+        mb = self.storage.create_mailbox()
+        address = mb.address
+        read_key = mb.read_key
+        assert self.storage.delete_mailbox(address, read_key) is True
+        assert mb.add_message("late", "message", "alice") is None
+        assert mb.get_messages(read_key) is None
+
+    def test_get_mailbox_stats_requires_valid_key(self):
+        mb = self.storage.create_mailbox()
+        stats = self.storage.get_mailbox_stats(mb.address, mb.read_key)
+        assert stats is not None
+        assert stats["address"] == mb.address
+        assert stats["message_count"] == 0
+        assert self.storage.get_mailbox_stats(mb.address, "wrongkey") is None
 
 
 # ===========================================================================
@@ -263,6 +275,69 @@ class TestHttpMailRoutes:
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
         assert r.status_code == 404
+
+    def test_send_fallback_form_route_success(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Form Subject",
+                "body": "Body via form",
+                "sender": "webform",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        data = inbox.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["subject"] == "Form Subject"
+
+    def test_send_fallback_form_route_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "No Address", "body": "x"},
+        )
+        assert r.status_code == 400
+
+    def test_mailbox_stats_endpoint(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "S", "body": "B", "sender": "stats-user"},
+        )
+
+        stats = self.client.get(
+            f"/{self.path}/mail/{addr}/stats?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert stats.status_code == 200
+        data = stats.get_json()
+        assert data["address"] == addr
+        assert data["message_count"] == 1
+        assert "created_at" in data
+        assert "age_seconds" in data
+
+    def test_mailbox_stats_endpoint_invalid_key(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        stats = self.client.get(
+            f"/{self.path}/mail/{addr}/stats?key=wrong",
+            headers={"Accept": "application/json"},
+        )
+        assert stats.status_code == 403
 
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
