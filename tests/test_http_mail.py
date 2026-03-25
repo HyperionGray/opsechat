@@ -91,6 +91,13 @@ class TestHttpMailStorage:
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
 
+    def test_deleted_mailbox_blocks_late_writes(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert mb.add_message("late", "write", "sender") is None
+        assert mb.get_messages(mb.read_key) is None
+        assert mb.message_count() == 0
+
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
         result = self.storage.delete_mailbox(mb.address, "wrongkey")
@@ -189,6 +196,12 @@ class TestHttpMailbox:
         assert "sender" in m
         assert "timestamp" in m
 
+    def test_destroyed_mailbox_rejects_add_message(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Subj", "Body", "alice")
+        assert msg_id is None
+        assert self.mailbox.message_count() == 0
+
     def test_overwrite_clears_content(self):
         msg = HttpMessage("id1", "Secret Subject", "Secret Body", "Alice",
                           datetime.datetime.now())
@@ -196,6 +209,21 @@ class TestHttpMailbox:
         assert "Secret" not in msg.subject
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
+
+    def test_add_message_returns_none_after_destroyed(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Subj", "Body", "alice")
+        assert msg_id is None
+
+    def test_message_count_is_zero_when_destroyed(self):
+        self.mailbox.add_message("Subj", "Body", "alice")
+        self.mailbox.destroyed = True
+        assert self.mailbox.message_count() == 0
+
+    def test_get_messages_returns_none_when_destroyed(self):
+        self.mailbox.add_message("Subj", "Body", "alice")
+        self.mailbox.destroyed = True
+        assert self.mailbox.get_messages("secretkey123456789012345678901") is None
 
 
 # ===========================================================================
@@ -262,6 +290,56 @@ class TestHttpMailRoutes:
             f"/{self.path}/mail/doesnotexist/send",
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
+        assert r.status_code == 404
+
+    def test_send_via_fallback_route_with_form_address(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Form route",
+                "body": "Posted through fallback route",
+                "sender": "form-user",
+            },
+        )
+        assert r.status_code == 200
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        assert r.get_json()["messages"][0]["body"] == "Posted through fallback route"
+
+    def test_send_via_fallback_route_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "No address", "body": "Body", "sender": "x"},
+        )
+        assert r.status_code == 400
+
+    def test_send_to_destroyed_mailbox_returns_410(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        destroy = self.client.post(
+            f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": read_key},
+            headers={"Accept": "application/json"},
+        )
+        assert destroy.status_code == 200
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "X", "body": "Y", "sender": "z"},
+            headers={"Accept": "application/json"},
+        )
+        # Mailbox address no longer exists in storage after destroy.
         assert r.status_code == 404
 
     def test_read_inbox_correct_key(self):

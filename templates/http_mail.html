@@ -339,8 +339,19 @@
     var form = document.getElementById('compose-form');
     if (addr) {
       form.action = '/{{ path }}/mail/' + encodeURIComponent(addr) + '/send';
+    } else {
+      form.action = '/{{ path }}/mail/send';
     }
   }
+
+  (function bindComposeAddressUpdater() {
+    var input = document.getElementById('compose-address-input');
+    var form = document.getElementById('compose-form');
+    if (!input || !form) return;
+    input.addEventListener('input', updateComposeAction);
+    form.addEventListener('submit', updateComposeAction);
+    updateComposeAction();
+  })();
 
   // Fetch inbox via JS
   function fetchInbox() {
