@@ -101,6 +101,16 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_destroyed_mailbox_rejects_future_writes(self):
+        mb = self.storage.create_mailbox()
+        mb.add_message("subj", "body", "sender")
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+
+        assert mb.destroyed is True
+        assert mb.messages == []
+        with pytest.raises(RuntimeError):
+            mb.add_message("later", "should fail", "sender")
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -260,6 +270,58 @@ class TestHttpMailRoutes:
     def test_send_to_nonexistent_mailbox(self):
         r = self.client.post(
             f"/{self.path}/mail/doesnotexist/send",
+            json={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 404
+
+    def test_send_message_form_fallback_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Form subject",
+                "body": "Hello from form",
+                "sender": "form-user",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        messages = r.get_json()["messages"]
+        assert len(messages) == 1
+        assert messages[0]["body"] == "Hello from form"
+
+    def test_send_message_form_fallback_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": "",
+                "subject": "Form subject",
+                "body": "Hello from form",
+                "sender": "form-user",
+            },
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required" in r.data
+
+    def test_send_to_destroyed_mailbox_returns_not_found(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        mailbox = http_mail_storage.get_mailbox(addr)
+        mailbox.destroyed = True
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
         assert r.status_code == 404
