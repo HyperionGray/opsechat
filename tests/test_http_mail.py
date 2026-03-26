@@ -91,6 +91,15 @@ class TestHttpMailStorage:
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
 
+    def test_delete_mailbox_marks_destroyed_and_blocks_writes(self):
+        mb = self.storage.create_mailbox()
+        mb.add_message("subj", "body", "sender")
+        result = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert result is True
+        assert mb.destroyed is True
+        assert mb.message_count() == 0
+        assert mb.add_message("late", "write", "sender") is None
+
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
         result = self.storage.delete_mailbox(mb.address, "wrongkey")
@@ -128,6 +137,11 @@ class TestHttpMailbox:
         msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
         assert msg_id
         assert len(msg_id) == 16
+
+    def test_add_message_destroyed_mailbox_returns_none(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
+        assert msg_id is None
 
     def test_get_messages_correct_key(self):
         self.mailbox.add_message("Subj", "Body", "alice")
@@ -178,6 +192,17 @@ class TestHttpMailbox:
         assert self.mailbox.message_count() == 0
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
+
+    def test_get_status_correct_key(self):
+        self.mailbox.add_message("A", "B", "c")
+        status = self.mailbox.get_status("secretkey123456789012345678901")
+        assert status is not None
+        assert status["address"] == "testaddr1"
+        assert status["message_count"] == 1
+        assert status["destroyed"] is False
+
+    def test_get_status_wrong_key(self):
+        assert self.mailbox.get_status("wrongkey") is None
 
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
@@ -248,6 +273,40 @@ class TestHttpMailRoutes:
         assert data["success"] is True
         assert "msg_id" in data
 
+    def test_send_message_form_nojs_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        mailbox = r.get_json()
+        addr = mailbox["address"]
+        read_key = mailbox["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "No JS",
+                "body": "Form submit works",
+                "sender": "formuser",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        messages = r.get_json()["messages"]
+        assert len(messages) == 1
+        assert messages[0]["subject"] == "No JS"
+
+    def test_send_message_form_nojs_route_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "No address", "body": "Body"},
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required." in r.data
+
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
@@ -262,6 +321,50 @@ class TestHttpMailRoutes:
             f"/{self.path}/mail/doesnotexist/send",
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
+        assert r.status_code == 404
+
+    def test_send_to_destroyed_mailbox_returns_410(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        mailbox = http_mail_storage.get_mailbox(addr)
+        assert mailbox is not None
+        mailbox.destroyed = True
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 410
+        assert r.get_json()["error"] == "Mailbox unavailable"
+
+    def test_status_correct_key(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        mailbox = r.get_json()
+        addr = mailbox["address"]
+        read_key = mailbox["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Status", "body": "Hello", "sender": "alice"},
+        )
+
+        r = self.client.get(f"/{self.path}/mail/{addr}/status?key={read_key}")
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["success"] is True
+        assert data["mailbox"]["address"] == addr
+        assert data["mailbox"]["message_count"] == 1
+        assert data["mailbox"]["destroyed"] is False
+        assert data["mailbox"]["max_message_length"] == MAX_MAIL_MESSAGE_LENGTH
+
+    def test_status_wrong_key_denied(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        r = self.client.get(f"/{self.path}/mail/{addr}/status?key=wrongkey")
+        assert r.status_code == 403
+
+    def test_status_nonexistent_mailbox(self):
+        r = self.client.get(f"/{self.path}/mail/doesnotexist/status?key=anykey")
         assert r.status_code == 404
 
     def test_read_inbox_correct_key(self):

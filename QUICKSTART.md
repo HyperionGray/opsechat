@@ -131,8 +131,10 @@ OpSecChat includes a secure email system:
 2. Configure SMTP/IMAP (optional) at `/email/config`
 3. Generate burner emails at `/email/burner`
 4. Send encrypted emails with PGP support
+5. Use ephemeral HTTP Mail at `/mail` (no SMTP/IMAP required)
 
-See [Email Quick Start](docs/user-guide/EMAIL_QUICKSTART.md) for more details.
+See [Email Quick Start](docs/user-guide/EMAIL_QUICKSTART.md) and
+[HTTP Mail Guide](docs/user-guide/HTTP_MAIL.md) for more details.
 
 ## Common Issues
 
