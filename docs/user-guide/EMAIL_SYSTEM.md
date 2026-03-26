@@ -209,6 +209,62 @@ The system integrates with existing PGP functionality:
 
 ## API Reference
 
+### HTTP Mail (Email over HTTP)
+
+The HTTP mail subsystem provides SMTP/IMAP-free mailbox delivery over JSON endpoints.
+Access is default-deny and requires a mailbox read key for read operations.
+
+#### Create mailbox
+```http
+POST /{path}/mail/new
+```
+Response:
+```json
+{
+  "success": true,
+  "address": "publicAddress",
+  "read_key": "privateReadKey",
+  "send_url": "/{path}/mail/publicAddress/send",
+  "inbox_url": "/{path}/mail/publicAddress/inbox"
+}
+```
+
+#### Send message (unauthenticated)
+```http
+POST /{path}/mail/{address}/send
+Content-Type: application/json
+{
+  "subject": "hello",
+  "body": "message body",
+  "sender": "alias"
+}
+```
+
+#### Read inbox (read key required)
+```http
+GET /{path}/mail/{address}/inbox?key={read_key}
+Accept: application/json
+```
+
+#### Read mailbox metadata (read key required)
+```http
+GET /{path}/mail/{address}/info?key={read_key}
+Accept: application/json
+```
+Response:
+```json
+{
+  "address": "publicAddress",
+  "created_at": "2026-03-26T12:34:56.000000",
+  "message_count": 2,
+  "destroyed": false
+}
+```
+
+Notes:
+- `info` is useful for lightweight status checks without fetching full message bodies.
+- Destroyed mailboxes reject new writes and are scrubbed in memory before deletion.
+
 ### Email Storage Class
 ```python
 class EmailStorage:

@@ -11,18 +11,14 @@ import datetime
 import os
 import sys
 
-import pytest
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from http_mail_system import (
     HttpMailStorage,
     HttpMailbox,
     HttpMessage,
-    http_mail_storage,
-    MAX_MAIL_MESSAGE_LENGTH,
 )
-from email_system import email_storage as _global_email_storage, EmailComposer
+from email_system import email_storage as _global_email_storage
 from app_factory import create_app
 
 
@@ -96,6 +92,11 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox(mb.address, "wrongkey")
         assert result is False
         assert self.storage.get_mailbox(mb.address) is not None
+
+    def test_deleted_mailbox_ref_rejects_new_messages(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert mb.add_message("Subj", "Body", "alice") is None
 
     def test_delete_nonexistent_mailbox(self):
         result = self.storage.delete_mailbox("nope", "key")
@@ -179,6 +180,10 @@ class TestHttpMailbox:
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
 
+    def test_add_message_rejected_when_destroyed(self):
+        self.mailbox.destroyed = True
+        assert self.mailbox.add_message("Subj", "Body", "alice") is None
+
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -196,6 +201,19 @@ class TestHttpMailbox:
         assert "Secret" not in msg.subject
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
+
+    def test_get_mailbox_info(self):
+        self.mailbox.add_message("Subj", "Body", "alice")
+        info = self.mailbox.get_mailbox_info("secretkey123456789012345678901")
+        assert info is not None
+        assert info["address"] == "testaddr1"
+        assert info["message_count"] == 1
+        assert info["destroyed"] is False
+
+    def test_get_mailbox_info_wrong_key_returns_none(self):
+        self.mailbox.add_message("Subj", "Body", "alice")
+        info = self.mailbox.get_mailbox_info("wrongkey")
+        assert info is None
 
 
 # ===========================================================================
@@ -306,6 +324,54 @@ class TestHttpMailRoutes:
     def test_read_inbox_nonexistent_mailbox(self):
         r = self.client.get(
             f"/{self.path}/mail/doesnotexist/inbox?key=anykey",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 404
+
+    def test_mailbox_info_correct_key(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Meta", "body": "Hello", "sender": "alice"},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/info?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["address"] == addr
+        assert data["message_count"] == 1
+        assert data["destroyed"] is False
+        assert "created_at" in data
+
+    def test_mailbox_info_wrong_key_is_denied(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/info?key=wrongkey",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 403
+
+    def test_mailbox_info_no_key_is_denied(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/info",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 403
+
+    def test_mailbox_info_nonexistent_mailbox(self):
+        r = self.client.get(
+            f"/{self.path}/mail/doesnotexist/info?key=anykey",
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 404
@@ -463,6 +529,11 @@ class TestEmailRoutesExtended:
 
     def test_view_nonexistent_email_returns_404(self):
         r = self.client.get("/secpath/email/view/doesnotexist")
+        assert r.status_code == 404
+
+    def test_view_email_without_existing_session_returns_not_500(self):
+        client = self.app.test_client()
+        r = client.get(f"/secpath/email/view/{self.email_id}")
         assert r.status_code == 404
 
     def test_edit_email_get_returns_200(self):

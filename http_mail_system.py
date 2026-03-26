@@ -16,7 +16,6 @@ Design:
 
 import datetime
 import secrets
-import string
 import threading
 from typing import Dict, List, Optional
 
@@ -65,18 +64,21 @@ class HttpMailbox:
         self.messages: List[HttpMessage] = []
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
+        self.destroyed = False
 
-    def add_message(self, subject: str, body: str, sender_handle: str) -> str:
-        """Add a message; returns the new message ID."""
-        msg_id = _generate_id(12)  # 12 bytes → 16 URL-safe chars
-        msg = HttpMessage(
-            msg_id=msg_id,
-            subject=subject,
-            body=body,
-            sender_handle=sender_handle,
-            timestamp=datetime.datetime.now(),
-        )
+    def add_message(self, subject: str, body: str, sender_handle: str) -> Optional[str]:
+        """Add a message; returns the new message ID, or None if mailbox is destroyed."""
         with self.lock:
+            if self.destroyed:
+                return None
+            msg_id = _generate_id(12)  # 12 bytes → 16 URL-safe chars
+            msg = HttpMessage(
+                msg_id=msg_id,
+                subject=subject,
+                body=body,
+                sender_handle=sender_handle,
+                timestamp=datetime.datetime.now(),
+            )
             self.messages.append(msg)
         return msg_id
 
@@ -86,6 +88,8 @@ class HttpMailbox:
             return None
         self._expire_old_messages()
         with self.lock:
+            if self.destroyed:
+                return []
             return [m.to_dict() for m in self.messages]
 
     def delete_message(self, read_key: str, msg_id: str) -> bool:
@@ -93,6 +97,8 @@ class HttpMailbox:
         if not secrets.compare_digest(read_key, self.read_key):
             return False
         with self.lock:
+            if self.destroyed:
+                return False
             for i, msg in enumerate(self.messages):
                 if msg.msg_id == msg_id:
                     msg.overwrite()
@@ -100,10 +106,28 @@ class HttpMailbox:
                     return True
         return False
 
+    def get_mailbox_info(self, read_key: str) -> Optional[Dict]:
+        """Return mailbox metadata when read_key matches, else None."""
+        if not secrets.compare_digest(read_key, self.read_key):
+            return None
+        self._expire_old_messages()
+        with self.lock:
+            return {
+                "address": self.address,
+                "created_at": self.created_at.isoformat(),
+                "message_count": len(self.messages),
+                "destroyed": self.destroyed,
+            }
+
     def _expire_old_messages(self) -> None:
         """Remove messages older than MAIL_EXPIRY_HOURS."""
         cutoff = datetime.datetime.now() - datetime.timedelta(hours=MAIL_EXPIRY_HOURS)
         with self.lock:
+            if self.destroyed:
+                for msg in self.messages:
+                    msg.overwrite()
+                self.messages.clear()
+                return
             surviving = []
             for msg in self.messages:
                 if msg.timestamp < cutoff:
@@ -115,6 +139,8 @@ class HttpMailbox:
     def message_count(self) -> int:
         self._expire_old_messages()
         with self.lock:
+            if self.destroyed:
+                return 0
             return len(self.messages)
 
 
@@ -145,10 +171,6 @@ class HttpMailStorage:
         - We remove the mailbox from the global store under `self._lock`.
         - We then overwrite and clear messages under the per-mailbox lock
           to avoid races with concurrent send/add operations.
-
-        Checklist (follow-ups outside this class):
-        - [ ] Ensure HttpMailbox exposes a `lock` used by all writers.
-        - [ ] Ensure add_message (or equivalent) checks a `destroyed` flag.
         """
         # First, look up and authenticate the mailbox under the global lock.
         with self._lock:
@@ -188,7 +210,7 @@ class HttpMailStorage:
         with self._lock:
             stale = [
                 addr for addr, mb in self._mailboxes.items()
-                if mb.created_at < cutoff and len(mb.messages) == 0
+                if mb.created_at < cutoff and mb.message_count() == 0
             ]
             for addr in stale:
                 del self._mailboxes[addr]
