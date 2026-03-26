@@ -137,6 +137,23 @@ Modern, Guerrillamail-style rotating anonymous email system with advanced featur
 
 **Access:** `/{path}/email/burner` (NoScript) or `/{path}/email/burner/yesscript` (JavaScript)
 
+### 6. HTTP Mail (No SMTP/IMAP)
+HTTP Mail provides ephemeral mailbox-style messaging entirely over HTTP endpoints.
+It is designed for quick, shareable inboxes with default-deny reads.
+
+- Create mailbox: `POST /{path}/mail/new`
+- Send message (direct): `POST /{path}/mail/{address}/send`
+- Send message (form/no-JS fallback): `POST /{path}/mail/send` with `_address_override`
+- Read inbox: `GET /{path}/mail/{address}/inbox?key={read_key}`
+- Delete message: `POST /{path}/mail/{address}/delete/{message_id}`
+- Destroy mailbox: `POST /{path}/mail/{address}/destroy`
+
+Security and behavior notes:
+- Mailbox reads require the private `read_key` (default deny).
+- Message and sender input is sanitized to plain text.
+- Messages auto-expire after 24 hours (in-memory only).
+- Destroyed mailboxes are write-locked, and subsequent sends are rejected.
+
 **Key Features:**
 - Generate unlimited burner addresses
 - Each user can have multiple active burners

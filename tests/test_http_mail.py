@@ -189,6 +189,11 @@ class TestHttpMailbox:
         assert "sender" in m
         assert "timestamp" in m
 
+    def test_add_message_to_destroyed_mailbox_returns_none(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Subject", "Body", "sender")
+        assert msg_id is None
+
     def test_overwrite_clears_content(self):
         msg = HttpMessage("id1", "Secret Subject", "Secret Body", "Alice",
                           datetime.datetime.now())
@@ -263,6 +268,48 @@ class TestHttpMailRoutes:
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
         assert r.status_code == 404
+
+    def test_send_message_form_route_success(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        mailbox = r.get_json()
+        addr = mailbox["address"]
+        read_key = mailbox["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Form Subject",
+                "body": "Form body",
+                "sender": "form-user",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        payload = inbox.get_json()
+        assert len(payload["messages"]) == 1
+        assert payload["messages"][0]["subject"] == "Form Subject"
+
+    def test_send_message_form_route_missing_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "No Addr", "body": "Body", "sender": "alice"},
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required" in r.data
+
+    def test_send_message_form_route_json_missing_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            json={"subject": "No Addr", "body": "Body", "sender": "alice"},
+        )
+        assert r.status_code == 400
+        assert r.get_json()["error"] == "Mailbox address is required"
 
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
