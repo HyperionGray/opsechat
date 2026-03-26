@@ -11,10 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- HTTP Mail no-JavaScript compose flow via `POST /<path>/mail/send`
+- Burner email stats API payload support via `BurnerEmailManager.get_user_stats()`
+- Implementation note: `docs/implementation/HTTP_MAIL_AND_BURNER_UPDATES_2026-03-26.md`
 
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- Hardened HTTP mailbox destruction semantics to reject writes after destroy
+- Refined email route session initialization and removed duplicate lookup path
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022
