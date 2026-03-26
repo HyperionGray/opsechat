@@ -241,6 +241,15 @@
   {% if messages is defined %}
   <div id="inbox-messages" style="margin-top:20px;">
     <h3>Messages ({{ messages|length }})</h3>
+    <div style="margin-bottom: 15px;">
+      <form method="POST" action="/{{ path }}/mail/{{ inbox_address }}/rotate-key">
+        <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
+        <button type="submit">Rotate Read Key</button>
+      </form>
+      <p class="hint">
+        Rotating the key invalidates the previous read key immediately.
+      </p>
+    </div>
     {% if messages|length == 0 %}
     <p style="color:#888; margin-top:10px;">No messages in this mailbox.</p>
     {% else %}
@@ -391,6 +400,9 @@
     });
     html += '<div style="margin-top:30px;border-top:1px solid #333;padding-top:15px;">' +
       '<h3 style="color:#f00;">Danger Zone</h3>' +
+      '<button class="js-rotate-key"' +
+        ' data-address="' + esc(address) + '"' +
+        ' data-read-key="' + esc(readKey) + '">Rotate Read Key</button>' +
       '<button class="danger js-destroy-mailbox"' +
         ' data-address="' + esc(address) + '"' +
         ' data-read-key="' + esc(readKey) + '">💣 Destroy Mailbox</button></div>';
@@ -409,6 +421,12 @@
         destroyMailbox(btn.dataset.address, btn.dataset.readKey);
       });
     });
+    container.querySelectorAll('.js-rotate-key').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        if (!confirm('Rotate read key now? Old key will stop working.')) return;
+        rotateReadKey(btn.dataset.address, btn.dataset.readKey);
+      });
+    });
   }
 
   function deleteMsg(address, msgId, readKey) {
@@ -421,6 +439,24 @@
     .then(function(d) {
       if (d.success) fetchInbox();
       else alert('Error: ' + (d.error || 'Could not delete'));
+    });
+  }
+
+  function rotateReadKey(address, readKey) {
+    fetch('/{{ path }}/mail/' + encodeURIComponent(address) + '/rotate-key', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: JSON.stringify({read_key: readKey})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.success && d.new_read_key) {
+        document.getElementById('read-key-input').value = d.new_read_key;
+        fetchInbox();
+        alert('Read key rotated. Save the new key now.');
+      } else {
+        alert('Error: ' + (d.error || 'Could not rotate key'));
+      }
     });
   }
 
