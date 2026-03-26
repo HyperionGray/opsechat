@@ -98,5 +98,5 @@ When adding new documentation:
 
 ---
 
-**Last Updated:** February 23, 2026  
+**Last Updated:** March 26, 2026  
 **Maintained by:** OpSecChat Team
