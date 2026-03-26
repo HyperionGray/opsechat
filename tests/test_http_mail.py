@@ -101,6 +101,19 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_delete_mailbox_marks_destroyed_and_rejects_new_writes(self):
+        mb = self.storage.create_mailbox()
+        msg_id = mb.add_message("A", "B", "sender")
+        assert msg_id is not None
+        assert len(mb.messages) == 1
+
+        result = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert result is True
+        assert mb.destroyed is True
+        assert mb.destroyed_at is not None
+        assert mb.messages == []
+        assert mb.add_message("later", "write", "sender") is None
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -179,6 +192,10 @@ class TestHttpMailbox:
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
 
+    def test_add_message_when_destroyed_returns_none(self):
+        self.mailbox.destroyed = True
+        assert self.mailbox.add_message("A", "B", "c") is None
+
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -247,6 +264,57 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_form_no_js_endpoint(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "No JS",
+                "body": "Form send path",
+                "sender": "noscript-user",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        data = r.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["subject"] == "No JS"
+        assert data["messages"][0]["sender"] == "noscript-user"
+
+    def test_send_message_form_no_js_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "X", "body": "Y", "sender": "nobody"},
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required" in r.data
+
+    def test_send_message_returns_410_when_mailbox_marked_destroyed(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+        mailbox = http_mail_storage.get_mailbox(addr)
+        mailbox.destroyed = True
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 410
+        assert r.get_json()["error"] == "Mailbox is no longer available"
+
+        # Cleanup mailbox from global store.
+        http_mail_storage.delete_mailbox(addr, read_key)
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -463,6 +531,11 @@ class TestEmailRoutesExtended:
 
     def test_view_nonexistent_email_returns_404(self):
         r = self.client.get("/secpath/email/view/doesnotexist")
+        assert r.status_code == 404
+
+    def test_view_email_without_session_does_not_crash(self):
+        client_no_session = self.app.test_client()
+        r = client_no_session.get("/secpath/email/view/doesnotexist")
         assert r.status_code == 404
 
     def test_edit_email_get_returns_200(self):

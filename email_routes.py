@@ -11,30 +11,43 @@ This module contains Flask routes for email functionality including:
 
 from flask import render_template, request, session, jsonify, redirect, url_for
 from email_system import email_storage, burner_manager, EmailComposer, EmailValidator
-from email_security_tools import spoofing_tester, phishing_simulator
-from email_transport import transport_manager
-from domain_manager import domain_rotation_manager
 
 
 def register_email_routes(app, id_generator, get_random_color):
     """Register all email-related routes with the Flask app"""
-    
+
+    def _ensure_session():
+        """Ensure the current user has a session identity."""
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
+
+    def _get_burner_stats(user_id: str):
+        """Return burner + send-limit stats for UI/API usage."""
+        burners = burner_manager.get_user_burners(user_id)
+        send_status = burner_manager.get_send_limit_status(user_id)
+        return {
+            "active_burners": len(burners),
+            "sends_used": send_status.get("sends_used", 0),
+            "sends_remaining": send_status.get("sends_remaining", 0),
+            "max_sends_per_hour": send_status.get("max_sends_per_hour", 0),
+            "reset_time": send_status.get("reset_time"),
+        }
+
     @app.route('/<string:url_addition>/email', methods=["GET"])
     def email_inbox(url_addition):
         """Main email inbox page"""
         if url_addition != app.config["path"]:
             return ('', 404)
-        
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
-        
+
+        _ensure_session()
+
         # Initialize inbox for user
         email_storage.create_user_inbox(session["_id"])
-        
+
         # Get emails
         emails = email_storage.get_emails(session["_id"])
-        
+
         return render_template("email_inbox.html",
                               hostname=app.config["hostname"],
                               path=app.config["path"],
@@ -46,14 +59,12 @@ def register_email_routes(app, id_generator, get_random_color):
         """Email inbox with JavaScript enabled"""
         if url_addition != app.config["path"]:
             return ('', 404)
-        
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
-        
+
+        _ensure_session()
+
         email_storage.create_user_inbox(session["_id"])
         emails = email_storage.get_emails(session["_id"])
-        
+
         return render_template("email_inbox.html",
                               hostname=app.config["hostname"],
                               path=app.config["path"],
@@ -65,18 +76,16 @@ def register_email_routes(app, id_generator, get_random_color):
         """Burner email management page"""
         if url_addition != app.config["path"]:
             return ('', 404)
-        
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
-        
+
+        _ensure_session()
+
         # Get active burner emails
         burner_emails = burner_manager.get_user_burners(session["_id"])
-        
+
         return render_template("email_burner.html",
                               hostname=app.config["hostname"],
                               path=app.config["path"],
-                              burner_emails=burner_emails,
+                              active_burners=burner_emails,
                               script_enabled=False)
 
     @app.route('/<string:url_addition>/email/burner/yesscript', methods=["GET"])
@@ -84,32 +93,31 @@ def register_email_routes(app, id_generator, get_random_color):
         """Burner email management with JavaScript"""
         if url_addition != app.config["path"]:
             return ('', 404)
-        
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
-        
+
+        _ensure_session()
+
         burner_emails = burner_manager.get_user_burners(session["_id"])
-        
+
         return render_template("email_burner.html",
                               hostname=app.config["hostname"],
                               path=app.config["path"],
-                              burner_emails=burner_emails,
+                              active_burners=burner_emails,
                               script_enabled=True)
 
     @app.route('/<string:url_addition>/email/burner/list.json', methods=["GET"])
+    @app.route('/<string:url_addition>/email/burner/list', methods=["GET"])
     def email_burner_list_json(url_addition):
         """JSON API for burner email list"""
         if url_addition != app.config["path"]:
             return ('', 404)
-        
+
         if "_id" not in session:
             return jsonify({"error": "No session"}), 401
-        
+
         burner_emails = burner_manager.get_user_burners(session["_id"])
         return jsonify({
             "burners": burner_emails,
-            "stats": burner_manager.get_user_stats(session["_id"])
+            "stats": _get_burner_stats(session["_id"])
         })
 
     @app.route('/<string:url_addition>/email/config', methods=["GET", "POST"])
@@ -117,11 +125,9 @@ def register_email_routes(app, id_generator, get_random_color):
         """Email configuration page"""
         if url_addition != app.config["path"]:
             return ('', 404)
-        
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
-        
+
+        _ensure_session()
+
         if request.method == "POST":
             # Handle configuration updates
             config_data = {
@@ -137,46 +143,44 @@ def register_email_routes(app, id_generator, get_random_color):
                 'porkbun_secret_key': request.form.get('porkbun_secret_key', ''),
                 'domain_budget': request.form.get('domain_budget', '10')
             }
-            
+
             # Store configuration (in memory for this session)
             session['email_config'] = config_data
-            
+
             return redirect(url_for('email_config', url_addition=url_addition))
-        
+
         # Get current configuration
         config = session.get('email_config', {})
-        
+
         return render_template("email_config.html",
                               hostname=app.config["hostname"],
                               path=app.config["path"],
                               config=config)
-    
+
     @app.route('/<string:url_addition>/email/compose', methods=["GET", "POST"])
     def email_compose(url_addition):
         """Email composition and sending with rate limiting"""
         if url_addition != app.config["path"]:
             return ('', 404)
-        
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
-        
+
+        _ensure_session()
+
         if request.method == "POST":
             # Check rate limit before allowing send
             allowed, error_msg = burner_manager.check_send_rate_limit(session["_id"])
-            
+
             if not allowed:
                 return render_template("email_compose.html",
                                      hostname=app.config["hostname"],
                                      path=app.config["path"],
                                      error=error_msg,
                                      send_limit_status=burner_manager.get_send_limit_status(session["_id"]))
-            
+
             # Get form data
             to_addr = request.form.get('to', '').strip()
             subject = request.form.get('subject', '').strip()
             body = request.form.get('body', '').strip()
-            
+
             # Basic validation
             if not to_addr or not EmailValidator.validate_email_address(to_addr):
                 return render_template("email_compose.html",
@@ -184,19 +188,18 @@ def register_email_routes(app, id_generator, get_random_color):
                                      path=app.config["path"],
                                      error="Invalid recipient email address",
                                      send_limit_status=burner_manager.get_send_limit_status(session["_id"]))
-            
+
             if not body:
                 return render_template("email_compose.html",
                                      hostname=app.config["hostname"],
                                      path=app.config["path"],
                                      error="Email body cannot be empty",
                                      send_limit_status=burner_manager.get_send_limit_status(session["_id"]))
-            
+
             # Record the send (for rate limiting)
             burner_manager.record_sent_email(session["_id"])
-            
-            # In a real implementation, this would use transport_manager to send
-            # For now, just store in local inbox as sent
+
+            # Store in local inbox as "sent" in the current in-memory model.
             email_data = {
                 'to': to_addr,
                 'from': session.get('email_address', 'anonymous@opsechat.onion'),
@@ -205,13 +208,13 @@ def register_email_routes(app, id_generator, get_random_color):
                 'sent': True
             }
             email_storage.add_email(session["_id"], email_data)
-            
+
             return render_template("email_compose.html",
                                  hostname=app.config["hostname"],
                                  path=app.config["path"],
                                  success="Email sent successfully",
                                  send_limit_status=burner_manager.get_send_limit_status(session["_id"]))
-        
+
         # GET request - show compose form
         return render_template("email_compose.html",
                              hostname=app.config["hostname"],
@@ -230,8 +233,6 @@ def register_email_routes(app, id_generator, get_random_color):
 
         if "_id" not in session:
             _ensure_session()
-
-        email = email_storage.get_email(session["_id"], email_id)
 
         email = email_storage.get_email(session["_id"], email_id)
         if email is None:
@@ -258,9 +259,7 @@ def register_email_routes(app, id_generator, get_random_color):
         if url_addition != app.config["path"]:
             return ('', 404)
 
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
+        _ensure_session()
 
         email = email_storage.get_email(session["_id"], email_id)
         if email is None:
@@ -317,9 +316,7 @@ def register_email_routes(app, id_generator, get_random_color):
         if url_addition != app.config["path"]:
             return ('', 404)
 
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
+        _ensure_session()
 
         action = request.form.get("action", "generate")
 
