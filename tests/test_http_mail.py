@@ -179,6 +179,12 @@ class TestHttpMailbox:
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
 
+    def test_add_message_to_destroyed_mailbox_returns_none(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Subj", "Body", "alice")
+        assert msg_id is None
+        assert self.mailbox.message_count() == 0
+
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -256,6 +262,74 @@ class TestHttpMailRoutes:
             json={"subject": "X", "body": "", "sender": "bob"},
         )
         assert r.status_code == 400
+
+    def test_send_message_form_fallback_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Form Subject",
+                "body": "Sent from no-js form fallback",
+                "sender": "form-user",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        msgs = r.get_json()["messages"]
+        assert len(msgs) == 1
+        assert msgs[0]["subject"] == "Form Subject"
+        assert msgs[0]["body"] == "Sent from no-js form fallback"
+        assert msgs[0]["sender"] == "form-user"
+
+    def test_send_message_form_fallback_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": "",
+                "subject": "Form Subject",
+                "body": "No address provided",
+            },
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required" in r.data
+
+    def test_create_mailbox_form_no_js_flow(self):
+        r = self.client.post(f"/{self.path}/mail/create")
+        assert r.status_code == 200
+        assert b"Mailbox created. Save your read key now." in r.data
+        assert b"Your Read Key" in r.data
+
+    def test_open_inbox_form_no_js_redirects(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.get(
+            f"/{self.path}/mail/inbox",
+            query_string={"_read_address": addr, "_read_key": read_key},
+            follow_redirects=False,
+        )
+        assert r.status_code == 302
+        location = r.headers.get("Location", "")
+        assert f"/{self.path}/mail/{addr}/inbox" in location
+        assert f"key={read_key}" in location
+
+    def test_open_inbox_form_no_js_requires_both_fields(self):
+        r = self.client.get(
+            f"/{self.path}/mail/inbox",
+            query_string={"_read_address": "", "_read_key": ""},
+        )
+        assert r.status_code == 400
+        assert b"Mailbox address and read key are required" in r.data
 
     def test_send_to_nonexistent_mailbox(self):
         r = self.client.post(
