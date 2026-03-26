@@ -276,3 +276,27 @@ class TestBurnerEmailManager:
         
         assert len(burners) == 1
         assert burners[0]['email'] == active_email
+
+    def test_cleanup_expired_removes_email_from_user_mapping(self):
+        manager = BurnerEmailManager()
+        email = manager.generate_burner_email("user1")
+        manager.burner_addresses[email]['expires_at'] = (
+            datetime.datetime.now() - datetime.timedelta(minutes=1)
+        )
+
+        manager.cleanup_expired()
+
+        assert email not in manager.burner_addresses
+        assert "user1" not in manager.user_burners
+
+    def test_get_user_stats_includes_burner_and_send_data(self):
+        manager = BurnerEmailManager()
+        manager.generate_burner_email("user1")
+        manager.record_sent_email("user1")
+
+        stats = manager.get_user_stats("user1")
+
+        assert stats["active_burners"] == 1
+        assert "total_time_remaining_seconds" in stats
+        assert "send_limit" in stats
+        assert stats["send_limit"]["sends_used"] == 1

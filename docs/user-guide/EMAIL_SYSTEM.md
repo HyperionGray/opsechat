@@ -37,6 +37,25 @@ Supported providers:
 - Outlook (smtp.office365.com:587)
 - Any custom SMTP server
 
+### HTTP Mail (Session-Tracked Mailboxes)
+
+OpSecChat also includes an HTTP-native mail mode that does not require SMTP/IMAP:
+
+- Create random mailbox addresses and private read keys
+- Send plain text messages to a mailbox over HTTP
+- Read inbox only with the correct read key (default deny)
+- Session-tracked mailbox list for quick recovery during active use
+- In-memory only storage with expiry and memory overwrite on deletion
+
+Routes:
+
+- `/{path}/mail` - HTTP mail UI
+- `POST /{path}/mail/new` - create mailbox (JSON)
+- `POST /{path}/mail/send` - non-JS form fallback send
+- `POST /{path}/mail/{address}/send` - send to mailbox
+- `GET /{path}/mail/my/list.json` - session mailbox list and message stats
+- `GET /{path}/mail/{address}/inbox?key=<read_key>` - read inbox
+
 #### IMAP Email Receiving
 - Fetch emails from real email accounts
 - SSL/TLS encryption support

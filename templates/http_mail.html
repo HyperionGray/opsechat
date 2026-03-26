@@ -130,6 +130,31 @@
   <button onclick="showSection('read')">📬 Read My Inbox</button>
 </div>
 
+{% if tracked_mailboxes %}
+<div class="panel">
+  <h2>My Mailboxes (This Session)</h2>
+  <p style="color:#888; margin-bottom:12px;">
+    Session-tracked mailboxes and message counts. Keys are shown so you can copy them before ending this session.
+  </p>
+  {% for box in tracked_mailboxes %}
+  <div class="msg-card">
+    <div class="msg-meta">
+      Address: <strong>{{ box.address }}</strong>
+      &nbsp;|&nbsp; Messages: {{ box.message_count }}
+      {% if box.last_message_timestamp %}
+      &nbsp;|&nbsp; Last: {{ box.last_message_timestamp }}
+      {% endif %}
+    </div>
+    <div class="form-group" style="margin-top:8px;">
+      <div class="token-label">Read Key</div>
+      <div class="token-box">{{ box.read_key }}</div>
+    </div>
+    <a class="btn" href="{{ box.inbox_url }}">Open Inbox</a>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
 <!-- ======================================================= -->
 <!--  Create mailbox                                         -->
 <!-- ======================================================= -->
@@ -331,15 +356,6 @@
       btn.disabled = false;
       btn.textContent = 'Create Mailbox';
     });
-  }
-
-  // Update compose form action when address changes
-  function updateComposeAction() {
-    var addr = document.getElementById('compose-address-input').value.trim();
-    var form = document.getElementById('compose-form');
-    if (addr) {
-      form.action = '/{{ path }}/mail/' + encodeURIComponent(addr) + '/send';
-    }
   }
 
   // Fetch inbox via JS

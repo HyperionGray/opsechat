@@ -289,15 +289,17 @@ class BurnerEmailManager:
     def cleanup_expired(self) -> None:
         """Remove expired burner addresses"""
         now = datetime.datetime.now()
-        expired = [email for email, info in self.burner_addresses.items() 
+        expired = [email for email, info in self.burner_addresses.items()
                    if info['expires_at'] <= now]
         for email in expired:
-            del self.burner_addresses[email]
-            # Also remove from user_burners
             user_id = self.burner_addresses.get(email, {}).get('user_id')
+            del self.burner_addresses[email]
+            # Also remove from user_burners and prune empty lists.
             if user_id and user_id in self.user_burners:
                 if email in self.user_burners[user_id]:
                     self.user_burners[user_id].remove(email)
+                if len(self.user_burners[user_id]) == 0:
+                    del self.user_burners[user_id]
     
     def _format_time_remaining(self, time_delta: datetime.timedelta) -> str:
         """Format time remaining in human-readable format"""
@@ -373,6 +375,19 @@ class BurnerEmailManager:
             'sends_remaining': self.max_sends_per_hour - limit_info['count'],
             'max_sends_per_hour': self.max_sends_per_hour,
             'reset_time': limit_info['reset_time']
+        }
+
+    def get_user_stats(self, user_id: str) -> Dict:
+        """Return burner and send-rate stats for a user."""
+        burners = self.get_user_burners(user_id)
+        send_status = self.get_send_limit_status(user_id)
+        total_remaining_seconds = sum(
+            max(0, b.get('time_remaining_seconds', 0)) for b in burners
+        )
+        return {
+            'active_burners': len(burners),
+            'total_time_remaining_seconds': total_remaining_seconds,
+            'send_limit': send_status,
         }
 
 
