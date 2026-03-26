@@ -221,7 +221,7 @@
     Without the correct read key, no messages are revealed (default deny).
   </p>
 
-  <form method="GET" id="read-form">
+  <form method="GET" id="read-form" action="/{{ path }}/mail/inbox">
     <div class="form-group">
       <label for="read-address">Mailbox Address:</label>
       <input type="text" id="read-address" name="_read_address"
@@ -234,7 +234,7 @@
              value="{{ inbox_read_key or '' }}"
              placeholder="Your private read key">
     </div>
-    <button type="button" onclick="fetchInbox()">Open Inbox</button>
+    <button type="submit" id="read-open-btn">Open Inbox</button>
   </form>
 
   <!-- Inbox messages rendered from server (non-JS fallback) -->
@@ -333,12 +333,16 @@
     });
   }
 
-  // Update compose form action when address changes
+  // Upgrade compose form to direct-address endpoint when JS is available.
   function updateComposeAction() {
-    var addr = document.getElementById('compose-address-input').value.trim();
+    var addrInput = document.getElementById('compose-address-input');
     var form = document.getElementById('compose-form');
+    if (!addrInput || !form) return;
+    var addr = addrInput.value.trim();
     if (addr) {
       form.action = '/{{ path }}/mail/' + encodeURIComponent(addr) + '/send';
+    } else {
+      form.action = '/{{ path }}/mail/send';
     }
   }
 
@@ -466,6 +470,19 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#x27;');
+  }
+
+  var composeAddrInput = document.getElementById('compose-address-input');
+  if (composeAddrInput) {
+    composeAddrInput.addEventListener('input', updateComposeAction);
+    updateComposeAction();
+  }
+
+  var readForm = document.getElementById('read-form');
+  var readOpenBtn = document.getElementById('read-open-btn');
+  if (readForm && readOpenBtn) {
+    readOpenBtn.type = 'button';
+    readOpenBtn.addEventListener('click', fetchInbox);
   }
 </script>
 </body>

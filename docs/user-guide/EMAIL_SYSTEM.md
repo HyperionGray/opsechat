@@ -20,6 +20,20 @@ Misuse of these features may be illegal in your jurisdiction. Always obtain prop
 
 ## Core Features
 
+### 0. HTTP Mail (no SMTP/IMAP, in-memory only)
+
+HTTP Mail is a separate "email-over-HTTP" mode for fully in-memory delivery without SMTP or IMAP configuration.
+
+- Address + read-key model (default deny)
+- Anonymous send (no account required to send)
+- Private inbox access via read key
+- Optional JavaScript UX, with full no-JS fallback routes
+- 24-hour message expiry with overwrite-on-delete
+
+Access:
+- Main page: `/{path}/mail`
+- Detailed guide: [HTTP_MAIL.md](HTTP_MAIL.md)
+
 ### 1. Real Email Integration (NEW!)
 
 #### SMTP Email Sending

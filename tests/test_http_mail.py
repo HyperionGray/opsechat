@@ -90,6 +90,9 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox(mb.address, mb.read_key)
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
+        # Stale references should not accept writes after destroy.
+        assert mb.add_message("post", "destroy", "tester") is None
+        assert mb.message_count() == 0
 
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
@@ -387,6 +390,62 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 403
+
+    def test_send_message_form_fallback_success(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Fallback",
+                "body": "Form-based send",
+                "sender": "noscript",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        messages = inbox.get_json()["messages"]
+        assert len(messages) == 1
+        assert messages[0]["subject"] == "Fallback"
+        assert messages[0]["body"] == "Form-based send"
+
+    def test_send_message_form_fallback_missing_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "No addr", "body": "Body"},
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required" in r.data
+
+    def test_inbox_form_fallback_redirects_and_renders_messages(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "From sender", "body": "Inbox fallback body", "sender": "alice"},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/inbox",
+            query_string={"_read_address": addr, "_read_key": read_key},
+            follow_redirects=True,
+        )
+        assert r.status_code == 200
+        assert b"Inbox fallback body" in r.data
+
+    def test_inbox_form_fallback_requires_address_and_key(self):
+        r = self.client.get(f"/{self.path}/mail/inbox")
+        assert r.status_code == 400
+        assert b"Mailbox address and read key are required" in r.data
 
     def test_message_body_sanitized(self):
         r = self.client.post(f"/{self.path}/mail/new")
