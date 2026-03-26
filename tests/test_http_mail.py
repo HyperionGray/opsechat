@@ -264,6 +264,81 @@ class TestHttpMailRoutes:
         )
         assert r.status_code == 404
 
+    def test_send_form_to_nonexistent_mailbox(self):
+        r = self.client.post(
+            f"/{self.path}/mail/doesnotexist/send",
+            data={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 404
+        assert b"Mailbox not found" in r.data
+
+    def test_send_nojs_endpoint_success(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "NoJS",
+                "body": "plain form route",
+                "sender": "tester",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        data = inbox.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["subject"] == "NoJS"
+
+    def test_send_nojs_endpoint_missing_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "NoJS", "body": "body"},
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required" in r.data
+
+    def test_send_nojs_endpoint_missing_body(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"_address_override": addr, "body": ""},
+        )
+        assert r.status_code == 400
+        assert b"Message body is required" in r.data
+
+    def test_send_rejected_after_mailbox_destroyed(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+        mailbox = http_mail_storage.get_mailbox(addr)
+        assert mailbox is not None
+
+        # Simulate race: mailbox became destroyed after lookup but before add.
+        mailbox.destroyed = True
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 410
+        assert r.get_json()["error"] == "Mailbox is no longer available"
+
+        # Destroy endpoint still returns success for the existing mailbox entry.
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": read_key},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]

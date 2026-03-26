@@ -89,6 +89,7 @@ These are development and testing utilities that help during development:
 - **`chat_routes.py`** - Chat functionality
 - **`simple_chat_routes.py`** - Simplified chat interface
 - **`email_routes.py`** - Email inbox/compose
+- **`http_mail_routes.py`** - HTTP mail routes (no SMTP/IMAP path)
 - **`burner_routes.py`** - Burner email system
 - **`security_routes.py`** - Security testing tools
 - **`landing_routes.py`** - Landing pages
@@ -98,6 +99,7 @@ These are development and testing utilities that help during development:
 - **`utils.py`** - Shared utility functions
 - **`email_system.py`** - Email storage and PGP handling
 - **`email_transport.py`** - SMTP/IMAP integration
+- **`http_mail_system.py`** - In-memory HTTP mailbox storage
 - **`email_security_tools.py`** - Spoofing/phishing detection
 - **`domain_manager.py`** - Domain registrar API integration
 - **`state_manager.py`** - State persistence
