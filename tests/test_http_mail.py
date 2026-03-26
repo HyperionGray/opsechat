@@ -101,6 +101,25 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_rotate_mailbox_key_success(self):
+        mb = self.storage.create_mailbox()
+        old_key = mb.read_key
+        new_key = self.storage.rotate_mailbox_key(mb.address, old_key)
+        assert new_key is not None
+        assert new_key != old_key
+        assert mb.get_messages(old_key) is None
+        assert mb.get_messages(new_key) == []
+
+    def test_rotate_mailbox_key_wrong_key(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.rotate_mailbox_key(mb.address, "wrongkey") is None
+
+    def test_add_message_after_destroy_fails(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        with pytest.raises(RuntimeError):
+            mb.add_message("x", "y", "z")
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup
@@ -248,6 +267,40 @@ class TestHttpMailRoutes:
         assert data["success"] is True
         assert "msg_id" in data
 
+    def test_send_message_form_via_generic_send_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Form Subject",
+                "body": "Form Body",
+                "sender": "form-user",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        msgs = inbox.get_json()["messages"]
+        assert len(msgs) == 1
+        assert msgs[0]["subject"] == "Form Subject"
+
+    def test_send_message_generic_route_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            json={"subject": "No addr", "body": "Body", "sender": "x"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
+        assert "address" in r.get_json()["error"].lower()
+
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
@@ -387,6 +440,52 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 403
+
+    def test_rotate_read_key_success(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        old_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "before rotate", "body": "hello", "sender": "alice"},
+        )
+
+        rotate = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
+            json={"read_key": old_key},
+            headers={"Accept": "application/json"},
+        )
+        assert rotate.status_code == 200
+        rotate_data = rotate.get_json()
+        assert rotate_data["success"] is True
+        assert "read_key" in rotate_data
+        assert rotate_data["read_key"] != old_key
+
+        old_inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={old_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert old_inbox.status_code == 403
+
+        new_key = rotate_data["read_key"]
+        new_inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={new_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert new_inbox.status_code == 200
+        assert len(new_inbox.get_json()["messages"]) == 1
+
+    def test_rotate_read_key_wrong_key(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        rotate = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
+            json={"read_key": "wrongkey"},
+            headers={"Accept": "application/json"},
+        )
+        assert rotate.status_code == 403
 
     def test_message_body_sanitized(self):
         r = self.client.post(f"/{self.path}/mail/new")

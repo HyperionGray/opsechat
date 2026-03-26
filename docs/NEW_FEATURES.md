@@ -172,6 +172,41 @@ When limit exceeded:
 
 ---
 
+## 📨 HTTP Mail Read-Key Rotation
+
+### Purpose
+HTTP Mail now supports rotating mailbox read keys to immediately revoke old access credentials.
+
+### What Changed
+- Added endpoint: `POST /{path}/mail/{address}/rotate-key`
+- Added form and JavaScript controls in HTTP Mail UI to rotate keys
+- Added server-side hardening so destroyed mailboxes reject future writes
+- Added no-JavaScript send fallback route: `POST /{path}/mail/send`
+
+### Security Impact
+- If a read key leaks, mailbox owners can revoke it instantly
+- Old key becomes invalid right away for inbox reads and destructive actions
+- Mailbox destroy path now marks mailbox as destroyed and blocks concurrent writes
+
+### API Example
+```bash
+curl -X POST "http://localhost:5001/{path}/mail/{address}/rotate-key" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{"read_key":"current_read_key"}'
+```
+
+Response:
+```json
+{
+  "success": true,
+  "read_key": "new_read_key",
+  "inbox_url": "/{path}/mail/{address}/inbox?key=new_read_key"
+}
+```
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

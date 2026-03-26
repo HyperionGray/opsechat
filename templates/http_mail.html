@@ -113,6 +113,14 @@
 <div class="success-box">✅ {{ success }}</div>
 {% endif %}
 
+{% if rotated_read_key %}
+<div class="warn">
+  <strong>New Read Key:</strong>
+  <div class="token-box" id="rotated-read-key">{{ rotated_read_key }}</div>
+  <button onclick="copyText('rotated-read-key')">📋 Copy New Read Key</button>
+</div>
+{% endif %}
+
 <div class="info">
   <strong>How HTTP Mail works:</strong><br>
   1. Create a mailbox — you get a public <em>address</em> and a private <em>read key</em>.<br>
@@ -241,6 +249,14 @@
   {% if messages is defined %}
   <div id="inbox-messages" style="margin-top:20px;">
     <h3>Messages ({{ messages|length }})</h3>
+    <div class="warn" style="margin-top:12px;">
+      <strong>Security:</strong> You can rotate your read key at any time.
+      Old key access is revoked immediately.
+    </div>
+    <form method="POST" action="/{{ path }}/mail/{{ inbox_address }}/rotate-key">
+      <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
+      <button type="submit">Rotate Read Key</button>
+    </form>
     {% if messages|length == 0 %}
     <p style="color:#888; margin-top:10px;">No messages in this mailbox.</p>
     {% else %}
@@ -390,6 +406,9 @@
         '</div></div>';
     });
     html += '<div style="margin-top:30px;border-top:1px solid #333;padding-top:15px;">' +
+      '<button class="js-rotate-key"' +
+        ' data-address="' + esc(address) + '"' +
+        ' data-read-key="' + esc(readKey) + '">Rotate Read Key</button>' +
       '<h3 style="color:#f00;">Danger Zone</h3>' +
       '<button class="danger js-destroy-mailbox"' +
         ' data-address="' + esc(address) + '"' +
@@ -407,6 +426,12 @@
       btn.addEventListener('click', function() {
         if (!confirm('Destroy mailbox and ALL messages permanently?')) return;
         destroyMailbox(btn.dataset.address, btn.dataset.readKey);
+      });
+    });
+    container.querySelectorAll('.js-rotate-key').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        if (!confirm('Rotate read key now? Old key will stop working.')) return;
+        rotateReadKey(btn.dataset.address, btn.dataset.readKey);
       });
     });
   }
@@ -438,6 +463,27 @@
       } else {
         alert('Error: ' + (d.error || 'Could not destroy mailbox'));
       }
+    });
+  }
+
+  function rotateReadKey(address, readKey) {
+    fetch('/{{ path }}/mail/' + encodeURIComponent(address) + '/rotate-key', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: JSON.stringify({read_key: readKey})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.success) {
+        alert('Error: ' + (d.error || 'Could not rotate key'));
+        return;
+      }
+      document.getElementById('read-key-input').value = d.read_key;
+      var container = document.getElementById('js-inbox-messages');
+      container.innerHTML = '<div class="success-box">✅ Read key rotated. Save this key now:</div>' +
+        '<div class="token-box" id="js-rotated-read-key">' + esc(d.read_key) + '</div>' +
+        '<button onclick="copyText(\'js-rotated-read-key\')">📋 Copy New Read Key</button>';
+      fetchInbox();
     });
   }
 
