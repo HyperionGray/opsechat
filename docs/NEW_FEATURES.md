@@ -131,6 +131,20 @@ First-time users see a prominent security warning:
 - **VIOLATIONS = CONSEQUENCES** - Logs preserved, not burned, potential reporting
 - Users must click "I UNDERSTAND AND AGREE" before chatting
 
+### HTTP Mailbox Lifecycle Hardening
+HTTP mail mailboxes now have explicit destruction semantics to close a stale-reference race.
+
+What changed:
+- Mailboxes now track a `destroyed` flag.
+- `HttpMailbox.destroy()` securely overwrites all message content and clears memory.
+- `add_message` now refuses writes to destroyed mailboxes (`None` return).
+- Read/delete/count paths now short-circuit safely for destroyed mailboxes.
+- Route-level send handling now treats destroyed/stale mailbox references as `404`.
+
+Security impact:
+- Prevents a removed mailbox object from accepting new messages via stale references.
+- Makes mailbox destroy behavior deterministic under concurrent access.
+
 ---
 
 ## 📧 Email Rate Limiting

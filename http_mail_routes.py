@@ -109,6 +109,9 @@ def register_http_mail_routes(app):
         sender = _sanitize(sender, 64) or "anonymous"
 
         msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        if msg_id is None:
+            # Mailbox was destroyed between lookup and write.
+            return jsonify({"error": "Mailbox not found"}), 404
 
         if request.is_json:
             return jsonify({"success": True, "msg_id": msg_id})

@@ -90,6 +90,13 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox(mb.address, mb.read_key)
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
+        assert mb.destroyed is True
+
+    def test_deleted_mailbox_stale_reference_cannot_accept_messages(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        # Even with a stale object reference, writes are blocked after destroy.
+        assert mb.add_message("Subj", "Body", "sender") is None
 
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
@@ -114,6 +121,16 @@ class TestHttpMailStorage:
         mb.add_message("subj", "body", "sender")
         self.storage.cleanup_empty_old_mailboxes()
         assert self.storage.get_mailbox(mb.address) is not None
+
+    def test_deleted_mailbox_stale_reference_is_destroyed(self):
+        mb = self.storage.create_mailbox()
+        msg_id = mb.add_message("subj", "body", "sender")
+        assert msg_id is not None
+
+        deleted = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert deleted is True
+        assert mb.destroyed is True
+        assert mb.add_message("late", "write", "sender") is None
 
 
 # ===========================================================================
@@ -196,6 +213,15 @@ class TestHttpMailbox:
         assert "Secret" not in msg.subject
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
+
+    def test_destroy_blocks_future_writes_reads_and_deletes(self):
+        msg_id = self.mailbox.add_message("Subj", "Body", "alice")
+        assert msg_id is not None
+        self.mailbox.destroy()
+        assert self.mailbox.destroyed is True
+        assert self.mailbox.add_message("Another", "Body", "alice") is None
+        assert self.mailbox.get_messages("secretkey123456789012345678901") is None
+        assert self.mailbox.delete_message("secretkey123456789012345678901", msg_id) is False
 
 
 # ===========================================================================
@@ -387,6 +413,24 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 403
+
+    def test_send_to_destroyed_mailbox_returns_404(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": read_key},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 404
 
     def test_message_body_sanitized(self):
         r = self.client.post(f"/{self.path}/mail/new")
