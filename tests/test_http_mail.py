@@ -603,6 +603,17 @@ class TestEmailRoutesExtended:
         r = self.client.post("/secpath/email/burner", data={"action": "generate"})
         assert r.status_code == 302
 
+    def test_burner_list_json_returns_stats(self):
+        r = self.client.get("/secpath/email/burner/list.json")
+        assert r.status_code == 200
+        payload = r.get_json()
+        assert "burners" in payload
+        assert "stats" in payload
+        assert payload["stats"]["active_burners"] >= 0
+        assert "sends_used" in payload["stats"]
+        assert "sends_remaining" in payload["stats"]
+        assert "max_sends_per_hour" in payload["stats"]
+
     def test_burner_wrong_path_404(self):
         r = self.client.post("/wrongpath/email/burner", data={"action": "generate"})
         assert r.status_code == 404

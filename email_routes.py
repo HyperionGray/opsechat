@@ -11,9 +11,6 @@ This module contains Flask routes for email functionality including:
 
 from flask import render_template, request, session, jsonify, redirect, url_for
 from email_system import email_storage, burner_manager, EmailComposer, EmailValidator
-from email_security_tools import spoofing_tester, phishing_simulator
-from email_transport import transport_manager
-from domain_manager import domain_rotation_manager
 
 
 def register_email_routes(app, id_generator, get_random_color):
@@ -100,14 +97,23 @@ def register_email_routes(app, id_generator, get_random_color):
         """JSON API for burner email list"""
         if url_addition != app.config["path"]:
             return ('', 404)
-        
-        if "_id" not in session:
-            return jsonify({"error": "No session"}), 401
-        
+
+        _ensure_session()
+
         burner_emails = burner_manager.get_user_burners(session["_id"])
+        send_limit_status = burner_manager.get_send_limit_status(session["_id"])
         return jsonify({
             "burners": burner_emails,
-            "stats": burner_manager.get_user_stats(session["_id"])
+            "stats": {
+                # Backward-compatible fields consumed by existing clients/tests.
+                "active_count": len(burner_emails),
+                "send_limit": send_limit_status,
+                # Explicit convenience fields for frontend displays.
+                "active_burners": len(burner_emails),
+                "sends_used": send_limit_status["sends_used"],
+                "sends_remaining": send_limit_status["sends_remaining"],
+                "max_sends_per_hour": send_limit_status["max_sends_per_hour"],
+            }
         })
 
     @app.route('/<string:url_addition>/email/config', methods=["GET", "POST"])

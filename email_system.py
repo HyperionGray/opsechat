@@ -375,6 +375,18 @@ class BurnerEmailManager:
             'reset_time': limit_info['reset_time']
         }
 
+    def get_user_stats(self, user_id: str) -> Dict:
+        """Return lightweight burner statistics for UI/API consumers."""
+        active_burners = self.get_user_burners(user_id)
+        total_remaining_seconds = sum(
+            max(0, burner['time_remaining_seconds']) for burner in active_burners
+        )
+        return {
+            'active_burners': len(active_burners),
+            'total_time_remaining_seconds': total_remaining_seconds,
+            'send_limit_status': self.get_send_limit_status(user_id),
+        }
+
 
 # Global instances
 email_storage = EmailStorage()

@@ -37,6 +37,25 @@ Supported providers:
 - Outlook (smtp.office365.com:587)
 - Any custom SMTP server
 
+### 2. HTTP Mail (Email-over-HTTP)
+
+The project includes a separate in-memory mailbox model that does not use SMTP or IMAP.
+HTTP Mail is designed for minimal, default-deny message exchange:
+
+- Create mailbox: `POST /{path}/mail/new`
+- Send message: `POST /{path}/mail/{address}/send`
+- Read inbox: `GET /{path}/mail/{address}/inbox?key={read_key}`
+- Delete message: `POST /{path}/mail/{address}/delete/{msg_id}`
+- Rotate read key: `POST /{path}/mail/{address}/rotate-key`
+- Destroy mailbox: `POST /{path}/mail/{address}/destroy`
+
+Security properties:
+- Mailbox address is shareable and used only for receiving sends.
+- Inbox reads are blocked unless the correct read key is provided.
+- Read keys can be rotated to invalidate old access immediately.
+- Messages expire after 24 hours and are overwritten before deletion.
+- Mailboxes are in-memory only and can be explicitly destroyed.
+
 #### IMAP Email Receiving
 - Fetch emails from real email accounts
 - SSL/TLS encryption support
@@ -47,7 +66,7 @@ Supported providers:
 
 **Configuration:** Configure IMAP settings at `/{path}/email/config`
 
-### 2. Automated Domain Management (NEW!)
+### 3. Automated Domain Management (NEW!)
 
 #### Porkbun API Integration
 - Automatic domain availability checking
@@ -148,7 +167,7 @@ Modern, Guerrillamail-style rotating anonymous email system with advanced featur
 - Visual budget bar showing spending vs. limit
 - Auto-rotation when budget allows
 
-### 3. Email Inbox
+### 4. Email Inbox
 - View received emails with full header information
 - PGP encrypted message detection and display
 - In-memory storage (nothing touches disk unencrypted)
@@ -158,7 +177,7 @@ Modern, Guerrillamail-style rotating anonymous email system with advanced featur
 
 **Access:** `/{path}/email`
 
-### 4. Email Composition
+### 5. Email Composition
 - **Standard Mode:** Simple form-based email composition
 - **Raw Mode:** Full control over email headers and structure
 - **Real SMTP Sending:** Optional checkbox to send via configured SMTP

@@ -11,13 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- HTTP Mail read-key rotation endpoint and UI flow:
+  - `POST /<path>/mail/<address>/rotate-key` for immediate key invalidation
+  - no-JS helper route `POST /<path>/mail/send` for form-based send flow
+- Burner JSON stats support via `BurnerEmailManager.get_user_stats()`
 
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- Hardened HTTP mailbox lifecycle handling:
+  - Enforced destroyed-mailbox writer guard in `HttpMailbox.add_message()`
+  - Removed stale delete checklist comments now implemented in code
+- Consolidated session bootstrap in `email_routes.py` and fixed
+  `email_view` undefined helper regression path
+- Removed stale TODO marker from docs quickstart index entry
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022
+- Rotated HTTP mailbox read keys invalidate prior keys immediately
 
 ## [2.0.0] - 2024-12-08
 
