@@ -108,7 +108,12 @@ def register_http_mail_routes(app):
         body = _sanitize(body, MAX_MAIL_MESSAGE_LENGTH)
         sender = _sanitize(sender, 64) or "anonymous"
 
-        msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        try:
+            msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        except ValueError:
+            # Mailbox can be concurrently destroyed between lookup and write.
+            # Treat this as gone and avoid a 500 response.
+            return jsonify({"error": "Mailbox no longer accepts messages"}), 410
 
         if request.is_json:
             return jsonify({"success": True, "msg_id": msg_id})

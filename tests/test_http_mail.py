@@ -179,6 +179,11 @@ class TestHttpMailbox:
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
 
+    def test_add_message_after_destroy_raises(self):
+        self.mailbox.destroyed = True
+        with pytest.raises(ValueError):
+            self.mailbox.add_message("Subj", "Body", "alice")
+
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -387,6 +392,26 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 403
+
+    def test_send_after_destroy_returns_gone(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        # Destroy mailbox successfully
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": read_key},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+
+        # Sending to the destroyed mailbox should be treated as gone/not writable
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Late", "body": "Too late", "sender": "bob"},
+        )
+        assert r.status_code in (404, 410)
 
     def test_message_body_sanitized(self):
         r = self.client.post(f"/{self.path}/mail/new")
