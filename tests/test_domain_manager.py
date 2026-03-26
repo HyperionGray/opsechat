@@ -3,6 +3,7 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -174,3 +175,70 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_export_state_serializes_datetimes(self):
+        """State export should be JSON-safe."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 12.5
+        now = datetime.now()
+        manager.owned_domains = [{
+            "domain": "test.xyz",
+            "price": 2.99,
+            "purchased_at": manager._current_budget_period(),  # non-datetime should remain untouched
+            "expires_at": manager._current_budget_period(),
+        }, {
+            "domain": "test2.xyz",
+            "price": 3.99,
+            "purchased_at": now,
+            "expires_at": now,
+        }]
+
+        exported = manager.export_state()
+
+        assert exported["current_spending"] == 12.5
+        assert "T" in exported["owned_domains"][1]["purchased_at"]
+        assert isinstance(exported["owned_domains"][1]["expires_at"], str)
+
+    def test_import_state_parses_iso_datetime_and_keeps_invalid(self):
+        """State import should parse ISO dates and preserve invalid values."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        state = {
+            "current_spending": 9.5,
+            "spending_period": manager._current_budget_period(),
+            "active_domain": "abc.xyz",
+            "owned_domains": [{
+                "domain": "abc.xyz",
+                "price": 1.99,
+                "purchased_at": datetime.now().isoformat(),
+                "expires_at": "not-a-date",
+            }]
+        }
+
+        manager.import_state(state)
+
+        assert manager.current_spending == 9.5
+        assert manager.active_domain == "abc.xyz"
+        assert isinstance(manager.owned_domains[0]["purchased_at"], datetime)
+        assert manager.owned_domains[0]["expires_at"] == "not-a-date"
+
+    def test_get_budget_status_resets_when_period_changes(self):
+        """Budget should reset automatically when month changes."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 20.0
+        manager.spending_period = "1999-01"
+
+        status = manager.get_budget_status()
+
+        assert status["current_spending"] == 0.0
+        assert status["budget_period"] == manager._current_budget_period()
+
+    def test_reset_budget_clears_spending(self):
+        """Manual reset should clear spending and set current period."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 25.0
+        manager.spending_period = "2001-02"
+
+        manager.reset_budget()
+
+        assert manager.current_spending == 0.0
+        assert manager.spending_period == manager._current_budget_period()

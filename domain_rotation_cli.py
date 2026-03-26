@@ -90,7 +90,7 @@ def configure_api():
         config['monthly_budget'] = 50.0
     
     save_config(config)
-    print("\n✅ Configuration updated successfully!")
+    print("\nConfiguration updated successfully.")
 
 
 def get_manager():
@@ -107,24 +107,40 @@ def get_manager():
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+
+    # Load saved state (with datetime-safe parsing and budget period handling).
+    manager.import_state({
+        'current_spending': config.get('current_spending', 0.0),
+        'spending_period': config.get('spending_period'),
+        'owned_domains': config.get('owned_domains', []),
+        'active_domain': config.get('active_domain'),
+    })
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    config.update(manager.export_state())
     save_config(config)
+
+
+def _format_timestamp(value, with_time=False):
+    """Format datetime-like values stored in manager state."""
+    if hasattr(value, "strftime"):
+        fmt = '%Y-%m-%d %H:%M' if with_time else '%Y-%m-%d'
+        return value.strftime(fmt)
+
+    if isinstance(value, str):
+        try:
+            from datetime import datetime
+            parsed = datetime.fromisoformat(value)
+            fmt = '%Y-%m-%d %H:%M' if with_time else '%Y-%m-%d'
+            return parsed.strftime(fmt)
+        except ValueError:
+            return value
+
+    return "unknown"
 
 
 def list_domains():
@@ -144,8 +160,8 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_timestamp(domain.get('purchased_at'), with_time=True)}")
+        print(f"   Expires: {_format_timestamp(domain.get('expires_at'))}")
         print()
 
 
@@ -223,6 +239,7 @@ def show_status():
     
     print(f"Active Domain: {manager.active_domain or 'None'}")
     print(f"\nBudget:")
+    print(f"  Period: {budget_status['budget_period']}")
     print(f"  Monthly: ${budget_status['monthly_budget']}")
     print(f"  Spent: ${budget_status['current_spending']}")
     print(f"  Remaining: ${budget_status['remaining']}")
@@ -231,6 +248,20 @@ def show_status():
     if manager.active_domain:
         print(f"\n✅ Current burner email domain: {manager.active_domain}")
         print(f"   Configure your email system to use: user@{manager.active_domain}")
+
+
+def reset_budget():
+    """Manually reset monthly spending to zero."""
+    manager, config = get_manager()
+    before = manager.get_budget_status()
+    manager.reset_budget()
+    save_manager_state(manager, config)
+    after = manager.get_budget_status()
+
+    print("\n=== Budget Reset Complete ===\n")
+    print(f"Previous Spending: ${before['current_spending']}")
+    print(f"New Spending: ${after['current_spending']}")
+    print(f"Active Budget Period: {after['budget_period']}")
 
 
 def main():
@@ -250,7 +281,7 @@ Examples:
     
     parser.add_argument(
         'command',
-        choices=['config', 'status', 'search', 'rotate', 'list'],
+        choices=['config', 'status', 'search', 'rotate', 'list', 'reset-budget'],
         help='Command to execute'
     )
     
@@ -266,6 +297,8 @@ Examples:
         rotate_domain()
     elif args.command == 'list':
         list_domains()
+    elif args.command == 'reset-budget':
+        reset_budget()
 
 
 if __name__ == '__main__':

@@ -132,8 +132,27 @@ class DomainRotationManager:
         self.api_client = api_client
         self.monthly_budget = monthly_budget
         self.current_spending = 0.0
+        self.spending_period = self._current_budget_period()
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+
+    def _current_budget_period(self) -> str:
+        """Return the current budget period as YYYY-MM."""
+        return datetime.now().strftime("%Y-%m")
+
+    def _ensure_budget_window(self):
+        """
+        Automatically reset spending when a new month starts.
+        """
+        current_period = self._current_budget_period()
+        if self.spending_period != current_period:
+            logger.info(
+                "Budget period rolled from %s to %s. Resetting spending.",
+                self.spending_period,
+                current_period,
+            )
+            self.current_spending = 0.0
+            self.spending_period = current_period
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
@@ -191,6 +210,8 @@ class DomainRotationManager:
         if not self.api_client:
             logger.error("No API client configured")
             return False
+
+        self._ensure_budget_window()
         
         # Check budget
         if self.current_spending + price > self.monthly_budget:
@@ -219,6 +240,61 @@ class DomainRotationManager:
         else:
             logger.error(f"Failed to purchase domain: {result.get('message')}")
             return False
+
+    def export_state(self) -> Dict:
+        """
+        Export manager state to a JSON-serializable dictionary.
+        """
+        self._ensure_budget_window()
+        serialized_domains = []
+        for domain in self.owned_domains:
+            serialized_domain = dict(domain)
+            for key in ("purchased_at", "expires_at"):
+                value = serialized_domain.get(key)
+                if isinstance(value, datetime):
+                    serialized_domain[key] = value.isoformat()
+            serialized_domains.append(serialized_domain)
+
+        return {
+            "current_spending": self.current_spending,
+            "spending_period": self.spending_period,
+            "owned_domains": serialized_domains,
+            "active_domain": self.active_domain,
+        }
+
+    def import_state(self, state: Optional[Dict]):
+        """
+        Import manager state from a persisted dictionary.
+        """
+        if not state:
+            return
+
+        self.current_spending = float(state.get("current_spending", 0.0))
+        self.spending_period = state.get("spending_period") or self._current_budget_period()
+        self.active_domain = state.get("active_domain")
+
+        owned_domains = []
+        for domain in state.get("owned_domains", []):
+            if not isinstance(domain, dict):
+                continue
+            parsed_domain = dict(domain)
+            for key in ("purchased_at", "expires_at"):
+                value = parsed_domain.get(key)
+                if isinstance(value, str):
+                    try:
+                        parsed_domain[key] = datetime.fromisoformat(value)
+                    except ValueError:
+                        # Keep original value if not ISO format.
+                        pass
+            owned_domains.append(parsed_domain)
+        self.owned_domains = owned_domains
+
+        self._ensure_budget_window()
+
+    def reset_budget(self):
+        """Manually reset monthly spending."""
+        self.current_spending = 0.0
+        self.spending_period = self._current_budget_period()
     
     def rotate_domain(self) -> Optional[str]:
         """
@@ -254,11 +330,13 @@ class DomainRotationManager:
     
     def get_budget_status(self) -> Dict:
         """Get budget information"""
+        self._ensure_budget_window()
         return {
             "monthly_budget": self.monthly_budget,
             "current_spending": self.current_spending,
             "remaining": self.monthly_budget - self.current_spending,
-            "domains_owned": len(self.owned_domains)
+            "domains_owned": len(self.owned_domains),
+            "budget_period": self.spending_period
         }
 
 
