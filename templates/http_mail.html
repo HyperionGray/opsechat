@@ -181,7 +181,7 @@
   {% endif %}
 
   <form method="POST"
-        action="/{{ path }}/mail/send"
+        action="{{ compose_form_action or ('/' ~ path ~ '/mail/send') }}"
         id="compose-form">
     <div class="form-group">
       <label for="compose-address-input">Recipient Mailbox Address:</label>

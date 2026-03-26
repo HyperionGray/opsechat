@@ -90,6 +90,7 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox(mb.address, mb.read_key)
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
+        assert mb.destroyed is True
 
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
@@ -179,6 +180,11 @@ class TestHttpMailbox:
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
 
+    def test_add_message_after_destroy_raises(self):
+        self.mailbox.destroyed = True
+        with pytest.raises(RuntimeError):
+            self.mailbox.add_message("Subj", "Body", "alice")
+
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -260,6 +266,85 @@ class TestHttpMailRoutes:
     def test_send_to_nonexistent_mailbox(self):
         r = self.client.post(
             f"/{self.path}/mail/doesnotexist/send",
+            json={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 404
+
+    def test_send_message_via_generic_form_endpoint(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Form Path",
+                "body": "Sent without JS endpoint rewrite",
+                "sender": "form-user",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert inbox.status_code == 200
+        messages = inbox.get_json()["messages"]
+        assert len(messages) == 1
+        assert messages[0]["subject"] == "Form Path"
+
+    def test_send_message_via_generic_endpoint_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 400
+        assert b"Mailbox address is required" in r.data
+
+    def test_send_message_via_generic_json_endpoint(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            json={"address": addr, "subject": "JSON Path", "body": "Sent via generic JSON", "sender": "api-user"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        payload = r.get_json()
+        assert payload["success"] is True
+        assert payload["address"] == addr
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert inbox.status_code == 200
+        messages = inbox.get_json()["messages"]
+        assert len(messages) == 1
+        assert messages[0]["subject"] == "JSON Path"
+
+    def test_send_message_via_generic_endpoint_requires_address_json(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            json={"subject": "X", "body": "Y", "sender": "bob"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
+        assert r.get_json()["error"] == "Mailbox address is required"
+
+    def test_send_to_destroyed_mailbox_returns_not_found(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+        http_mail_storage.delete_mailbox(addr, read_key)
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
         assert r.status_code == 404
@@ -465,6 +550,17 @@ class TestEmailRoutesExtended:
         r = self.client.get("/secpath/email/view/doesnotexist")
         assert r.status_code == 404
 
+    def test_view_email_initializes_session_if_missing(self):
+        # Clear existing session to exercise route-side session initialization.
+        with self.client.session_transaction() as sess:
+            sess.pop("_id", None)
+            sess.pop("color", None)
+
+        r = self.client.get(f"/secpath/email/view/{self.email_id}")
+        # A brand-new session should not crash with NameError/KeyError.
+        # Email is looked up under the new session user and not found.
+        assert r.status_code == 404
+
     def test_edit_email_get_returns_200(self):
         r = self.client.get(f"/secpath/email/edit/{self.email_id}")
         assert r.status_code == 200
@@ -494,3 +590,11 @@ class TestEmailRoutesExtended:
     def test_burner_wrong_path_404(self):
         r = self.client.post("/wrongpath/email/burner", data={"action": "generate"})
         assert r.status_code == 404
+
+    def test_burner_list_json_returns_stats(self):
+        r = self.client.get("/secpath/email/burner/list.json")
+        assert r.status_code == 200
+        data = r.get_json()
+        assert "burners" in data
+        assert "stats" in data
+        assert "active_burners" in data["stats"]
