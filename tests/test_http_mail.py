@@ -21,6 +21,7 @@ from http_mail_system import (
     HttpMessage,
     http_mail_storage,
     MAX_MAIL_MESSAGE_LENGTH,
+    MAX_MESSAGES_PER_MAILBOX,
 )
 from email_system import email_storage as _global_email_storage, EmailComposer
 from app_factory import create_app
@@ -178,6 +179,14 @@ class TestHttpMailbox:
         assert self.mailbox.message_count() == 0
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
+
+    def test_mailbox_is_bounded_to_max_messages(self):
+        for i in range(MAX_MESSAGES_PER_MAILBOX + 5):
+            self.mailbox.add_message(f"S{i}", f"B{i}", "alice")
+        msgs = self.mailbox.get_messages("secretkey123456789012345678901")
+        assert len(msgs) == MAX_MESSAGES_PER_MAILBOX
+        # Oldest messages are dropped first.
+        assert msgs[0]["subject"] == "S5"
 
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
@@ -494,3 +503,30 @@ class TestEmailRoutesExtended:
     def test_burner_wrong_path_404(self):
         r = self.client.post("/wrongpath/email/burner", data={"action": "generate"})
         assert r.status_code == 404
+
+    def test_view_email_bootstraps_session_when_missing(self):
+        # Remove session to exercise _ensure_session() path.
+        with self.client.session_transaction() as sess:
+            sess.clear()
+
+        # First request bootstraps a new session user.
+        r = self.client.get("/secpath/email")
+        assert r.status_code == 200
+
+        with self.client.session_transaction() as sess:
+            new_user = sess["_id"]
+
+        _global_email_storage.create_user_inbox(new_user)
+        _global_email_storage.add_email(new_user, {
+            "from": "sender@example.com",
+            "to": "me@example.com",
+            "subject": "Session Bootstrap",
+            "body": "Body",
+            "is_pgp": False,
+            "headers": {},
+        })
+        new_email_id = _global_email_storage.emails[new_user][-1]["id"]
+
+        r = self.client.get(f"/secpath/email/view/{new_email_id}")
+        assert r.status_code == 200
+        assert b"Session Bootstrap" in r.data

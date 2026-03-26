@@ -456,14 +456,15 @@
     // Update every second
     setInterval(updateCountdowns, 1000);
 
-    // Auto-refresh burner list every 30 seconds
+    // Auto-refresh burner stats every 30 seconds
     function refreshBurnerList() {
-      fetch('/{{ path }}/email/burner/list')
+      fetch('/{{ path }}/email/burner/list.json')
         .then(response => response.json())
-        .then(burners => {
+        .then(data => {
           // Update the list (simple reload for now)
           // In a more advanced implementation, we'd update the DOM directly
-          console.log('Burners refreshed:', burners.length);
+          const count = Array.isArray(data.burners) ? data.burners.length : 0;
+          console.log('Burners refreshed:', count);
         })
         .catch(err => console.error('Error refreshing burners:', err));
     }

@@ -276,3 +276,14 @@ class TestBurnerEmailManager:
         
         assert len(burners) == 1
         assert burners[0]['email'] == active_email
+
+    def test_get_user_stats(self):
+        """Test user burner stats helper used by JSON endpoint."""
+        manager = BurnerEmailManager()
+        manager.generate_burner_email("user1")
+        manager.generate_burner_email("user1")
+
+        stats = manager.get_user_stats("user1")
+        assert stats["active_count"] == 2
+        assert stats["total_time_remaining_seconds"] > 0
+        assert stats["max_sends_per_hour"] == manager.max_sends_per_hour

@@ -137,6 +137,27 @@ Modern, Guerrillamail-style rotating anonymous email system with advanced featur
 
 **Access:** `/{path}/email/burner` (NoScript) or `/{path}/email/burner/yesscript` (JavaScript)
 
+### 6. HTTP Mail (Email-over-HTTP, No SMTP/IMAP)
+
+For short-lived, anonymous inboxes without external mail providers, use HTTP Mail:
+
+- Create a mailbox and receive:
+  - a public mailbox `address` (safe to share with senders)
+  - a private `read_key` (required to read/delete/destroy)
+- Anyone with the address can send
+- Only the read_key holder can read
+- Messages expire after 24 hours
+- Mailboxes are bounded to a fixed in-memory message window (oldest messages are overwritten and dropped when full)
+
+Routes:
+
+- `/{path}/mail` - web UI
+- `POST /{path}/mail/new` - create mailbox
+- `POST /{path}/mail/<address>/send` - send message
+- `GET /{path}/mail/<address>/inbox?key=<read_key>` - read inbox
+- `POST /{path}/mail/<address>/delete/<message_id>` - delete one message
+- `POST /{path}/mail/<address>/destroy` - destroy mailbox
+
 **Key Features:**
 - Generate unlimited burner addresses
 - Each user can have multiple active burners
