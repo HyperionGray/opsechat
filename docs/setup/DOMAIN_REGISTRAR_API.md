@@ -117,7 +117,9 @@ Opsechat includes budget controls to prevent accidental overspending:
 
 - **Monthly Budget**: Maximum amount to spend per month
 - **Domain Price Limit**: Maximum price per domain (default: $5)
-- **Current Spending**: Tracked in-memory (resets on restart)
+- **Current Spending**: Persisted in CLI config (`~/.opsechat/domain_config.json`)
+- **Budget Period**: Spending is tracked per calendar month (`YYYY-MM`)
+- **Automatic Monthly Reset**: Spending resets automatically when the month changes
 
 View budget status:
 ```
@@ -135,11 +137,12 @@ http://yourservice.onion/{path}/email/config
 
 ### API Key Storage
 
-⚠️ **Important**: API keys are stored in-memory only. They are NOT persisted to disk. After restart, you must reconfigure.
+⚠️ **Important**: CLI API keys are persisted in `~/.opsechat/domain_config.json`.
+Treat this file as sensitive and keep strict permissions (`0600`).
 
-For persistent configuration:
-- Use environment variables in your deployment
-- Store encrypted credentials separately
+For secure configuration:
+- Prefer environment variables in managed deployments
+- Store encrypted credentials separately when possible
 - Never commit API keys to version control
 
 ### Domain Privacy
@@ -150,8 +153,9 @@ All domains purchased through the API will use registrar privacy protection (Por
 
 - Always set a monthly budget
 - Start with a low budget for testing ($10-20)
-- Monitor spending in the config page
-- Budget resets on application restart (intentional for ephemeral deployments)
+- Monitor spending in status output
+- Spending auto-resets when the calendar month changes
+- Manual reset is available: `python domain_rotation_cli.py reset-budget`
 
 ## Troubleshooting
 
@@ -161,10 +165,11 @@ Solution: Configure the domain API in email config page
 
 ### "Budget exceeded"
 
-Solution: 
-1. Wait for budget reset (restart application)
-2. Increase monthly budget
-3. Check current spending in config page
+Solution:
+1. Wait until the next calendar month (automatic reset)
+2. Run manual reset if needed: `python domain_rotation_cli.py reset-budget`
+3. Increase monthly budget
+4. Check current spending in config page
 
 ### "Could not find available cheap domain"
 

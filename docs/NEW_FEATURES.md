@@ -284,7 +284,11 @@ After rotating domains, update your email configuration:
 - Set monthly budget to prevent overspending
 - CLI tracks spending automatically
 - Prevents purchases that would exceed budget
-- Resets monthly (manual reset required)
+- Budget period is tracked as `YYYY-MM` and auto-resets when month rolls over
+- Manual reset is also available:
+  ```bash
+  python domain_rotation_cli.py reset-budget
+  ```
 
 ---
 
