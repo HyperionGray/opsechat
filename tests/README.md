@@ -5,7 +5,7 @@ This directory contains the automated test suite for opsechat.
 ## Test Files
 
 - **basic.spec.js** - Tests for project structure, file existence, and Python module imports
-- **e2e.spec.js** - Comprehensive end-to-end tests validating complete user workflows with both status codes and content validation
+- **`*.e2e.spec.js`** - Comprehensive end-to-end browser suites split by feature
 - **mock-server.spec.js** - Integration tests that use a mock Flask server
 - **ui-headless.spec.js** - UI tests that run in headless browser mode (no visible window)
 - **ui-headed.spec.js** - UI tests that run in headed mode (with visible browser window) for visual validation

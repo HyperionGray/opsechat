@@ -117,6 +117,9 @@ opsechat/
 └── setup.py                 # Python package metadata
 ```
 
+Note: `runserver_refactored.py` was removed because it duplicated `runserver.py`.
+The app-factory/blueprint architecture remains active via `runserver.py` + `app_factory.py`.
+
 ### How It Works Technically
 
 #### 1. Server Startup (`runserver.py:850-906`)

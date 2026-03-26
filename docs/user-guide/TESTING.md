@@ -38,12 +38,13 @@ The project now includes comprehensive testing using Playwright for both headles
 
 ```
 tests/
-├── basic.spec.js          # Basic structure and module tests
-├── e2e.spec.js            # End-to-end functional tests (NEW)
-├── mock-server.spec.js    # Mock server integration tests
-├── ui-headless.spec.js    # UI tests in headless mode
-├── ui-headed.spec.js      # UI tests in headed mode
-└── mock_server.py         # Mock Flask server for testing
+├── basic.spec.js              # Basic structure and module tests
+├── *.e2e.spec.js              # Active E2E suites (chat, security, workflow, etc.)
+├── e2e.spec.js                # Deprecated compatibility wrapper (intentionally skipped)
+├── mock-server.spec.js        # Mock server integration tests
+├── ui-headless.spec.js        # UI tests in headless mode
+├── ui-headed.spec.js          # UI tests in headed mode
+└── mock_server.py             # Mock Flask server for testing
 ```
 
 ## Running Tests
@@ -86,6 +87,11 @@ npm run test:ui
 Run only end-to-end tests:
 ```bash
 npm run test:e2e
+```
+
+Direct Playwright equivalent:
+```bash
+npx playwright test tests/*.e2e.spec.js
 ```
 
 ### Running Specific Browsers
@@ -240,9 +246,9 @@ Current test coverage includes:
 - ✅ **Multi-user concurrent chat scenarios** (NEW)
 - ✅ **Complete user journey testing** (NEW)
 
-### New E2E Test Suite
+### E2E Test Suites
 
-The new `e2e.spec.js` test suite provides comprehensive end-to-end testing that validates:
+The `*.e2e.spec.js` suites provide comprehensive end-to-end testing that validates:
 
 1. **HTTP Status Codes AND Content**: Every test checks both the status code (200, 404, 302) and validates the actual response content
 2. **User Workflows**: Tests simulate real user interactions:
