@@ -209,6 +209,30 @@ The system integrates with existing PGP functionality:
 
 ## API Reference
 
+### HTTP Mail (No SMTP/IMAP) API
+HTTP Mail is an in-memory mailbox system that does not require external mail
+providers. Access is controlled by mailbox `address` (public) + `read_key`
+(private).
+
+Endpoints:
+
+- `POST /{path}/mail/new`
+  - Create mailbox.
+  - Returns `address`, `read_key`, `send_url`, `inbox_url`.
+- `POST /{path}/mail/{address}/send`
+  - Send message to mailbox address.
+  - Accepts JSON or form fields: `subject`, `body`, `sender`.
+  - Returns `404` if mailbox does not exist.
+  - Returns `410` if mailbox was destroyed during a concurrent write race.
+- `GET /{path}/mail/{address}/inbox?key={read_key}`
+  - Read inbox with valid `read_key`.
+  - Returns `403` on invalid key, `404` on unknown mailbox.
+- `POST /{path}/mail/{address}/delete/{msg_id}`
+  - Delete one message with `read_key` (JSON or form).
+- `POST /{path}/mail/{address}/destroy`
+  - Destroy mailbox and overwrite in-memory message content before deletion.
+  - After destroy, mailbox no longer accepts messages.
+
 ### Email Storage Class
 ```python
 class EmailStorage:
