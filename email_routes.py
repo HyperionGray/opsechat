@@ -11,9 +11,6 @@ This module contains Flask routes for email functionality including:
 
 from flask import render_template, request, session, jsonify, redirect, url_for
 from email_system import email_storage, burner_manager, EmailComposer, EmailValidator
-from email_security_tools import spoofing_tester, phishing_simulator
-from email_transport import transport_manager
-from domain_manager import domain_rotation_manager
 
 
 def register_email_routes(app, id_generator, get_random_color):
