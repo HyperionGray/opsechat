@@ -197,6 +197,28 @@ class TestHttpMailbox:
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
 
+    def test_rotate_read_key_success(self):
+        old_key = "secretkey123456789012345678901"
+        self.mailbox.add_message("Subj", "Body", "alice")
+        new_key = self.mailbox.rotate_read_key(old_key)
+        assert new_key is not None
+        assert new_key != old_key
+        assert len(new_key) == 32
+
+        # Old key no longer works
+        assert self.mailbox.get_messages(old_key) is None
+        # New key works
+        msgs = self.mailbox.get_messages(new_key)
+        assert msgs is not None
+        assert len(msgs) == 1
+
+    def test_rotate_read_key_wrong_key_fails(self):
+        assert self.mailbox.rotate_read_key("wrongkey") is None
+
+    def test_add_message_returns_none_when_destroyed(self):
+        self.mailbox.destroyed = True
+        assert self.mailbox.add_message("S", "B", "alice") is None
+
 
 # ===========================================================================
 # HTTP mail route integration tests
@@ -387,6 +409,77 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 403
+
+    def test_rotate_key_success(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        old_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
+            json={"read_key": old_key},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["success"] is True
+        assert "read_key" in data
+        new_key = data["read_key"]
+        assert new_key != old_key
+
+        # Old key is rejected, new key works.
+        denied = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={old_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert denied.status_code == 403
+        allowed = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={new_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert allowed.status_code == 200
+
+    def test_rotate_key_wrong_key_fails(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
+            json={"read_key": "badkey"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 403
+
+    def test_form_send_fallback_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "S", "body": "B", "sender": "alice"},
+        )
+        assert r.status_code == 400
+
+    def test_form_send_fallback_sends_message(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        sent = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Fallback",
+                "body": "From form route",
+                "sender": "form-user",
+            },
+        )
+        assert sent.status_code == 200
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert inbox.status_code == 200
+        messages = inbox.get_json()["messages"]
+        assert len(messages) == 1
+        assert messages[0]["subject"] == "Fallback"
 
     def test_message_body_sanitized(self):
         r = self.client.post(f"/{self.path}/mail/new")

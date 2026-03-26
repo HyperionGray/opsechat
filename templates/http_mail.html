@@ -266,6 +266,14 @@
 
     <!-- Destroy entire mailbox -->
     <div style="margin-top:30px; border-top:1px solid #333; padding-top:15px;">
+      <h3 style="color:#f90;">Key Management</h3>
+      <form method="POST" action="/{{ path }}/mail/{{ inbox_address }}/rotate-key">
+        <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
+        <button type="submit"
+                onclick="return confirm('Rotate read key now? Old key stops working immediately.')">
+          🔐 Rotate Read Key
+        </button>
+      </form>
       <h3 style="color:#f00;">Danger Zone</h3>
       <form method="POST" action="/{{ path }}/mail/{{ inbox_address }}/destroy">
         <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
@@ -343,19 +351,11 @@
   }
 
   // Fetch inbox via JS
-  function fetchInbox() {
-    var address = document.getElementById('read-address').value.trim();
-    var readKey = document.getElementById('read-key-input').value.trim();
-
-    if (!address || !readKey) {
-      alert('Please enter both mailbox address and read key.');
-      return;
-    }
-
+  function fetchInboxWithKey(address, readKey) {
     var url = '/{{ path }}/mail/' + encodeURIComponent(address) +
-              '/inbox?key=' + encodeURIComponent(readKey);
+      '/inbox?key=' + encodeURIComponent(readKey);
 
-    fetch(url, {headers: {'Accept': 'application/json'}})
+    return fetch(url, {headers: {'Accept': 'application/json'}})
     .then(function(r) {
       if (r.status === 403) throw new Error('Invalid read key — access denied');
       if (r.status === 404) throw new Error('Mailbox not found');
@@ -363,6 +363,7 @@
     })
     .then(function(data) {
       renderInbox(data.messages, address, readKey);
+      return data;
     })
     .catch(function(err) {
       document.getElementById('js-inbox-messages').innerHTML =
@@ -370,25 +371,40 @@
     });
   }
 
-  function renderInbox(messages, address, readKey) {
-    var container = document.getElementById('js-inbox-messages');
-    if (messages.length === 0) {
-      container.innerHTML = '<p style="color:#888;margin-top:10px;">No messages in this mailbox.</p>';
+  function fetchInbox() {
+    var address = document.getElementById('read-address').value.trim();
+    var readKey = document.getElementById('read-key-input').value.trim();
+    if (!address || !readKey) {
+      alert('Please enter both mailbox address and read key.');
       return;
     }
+    fetchInboxWithKey(address, readKey);
+  }
+
+  function renderInbox(messages, address, readKey) {
+    var container = document.getElementById('js-inbox-messages');
     var html = '<h3 style="margin-top:20px;">Messages (' + messages.length + ')</h3>';
-    messages.forEach(function(msg) {
-      html += '<div class="msg-card">' +
-        '<div class="msg-meta">From: ' + esc(msg.sender) + ' &nbsp;|&nbsp; ' + esc(msg.timestamp) + '</div>' +
-        '<div class="msg-subject">' + esc(msg.subject) + '</div>' +
-        '<div class="msg-body">' + esc(msg.body) + '</div>' +
-        '<div class="msg-actions">' +
-          '<button class="danger js-delete-msg"' +
-            ' data-address="' + esc(address) + '"' +
-            ' data-msg-id="' + esc(msg.id) + '"' +
-            ' data-read-key="' + esc(readKey) + '">🗑 Delete</button>' +
-        '</div></div>';
-    });
+    if (messages.length === 0) {
+      html += '<p style="color:#888;margin-top:10px;">No messages in this mailbox.</p>';
+    } else {
+      messages.forEach(function(msg) {
+        html += '<div class="msg-card">' +
+          '<div class="msg-meta">From: ' + esc(msg.sender) + ' &nbsp;|&nbsp; ' + esc(msg.timestamp) + '</div>' +
+          '<div class="msg-subject">' + esc(msg.subject) + '</div>' +
+          '<div class="msg-body">' + esc(msg.body) + '</div>' +
+          '<div class="msg-actions">' +
+            '<button class="danger js-delete-msg"' +
+              ' data-address="' + esc(address) + '"' +
+              ' data-msg-id="' + esc(msg.id) + '"' +
+              ' data-read-key="' + esc(readKey) + '">🗑 Delete</button>' +
+          '</div></div>';
+      });
+    }
+    html += '<div style="margin-top:20px;border-top:1px solid #333;padding-top:15px;">' +
+      '<h3 style="color:#f90;">Key Management</h3>' +
+      '<button class="js-rotate-key"' +
+        ' data-address="' + esc(address) + '"' +
+        ' data-read-key="' + esc(readKey) + '">🔐 Rotate Read Key</button></div>';
     html += '<div style="margin-top:30px;border-top:1px solid #333;padding-top:15px;">' +
       '<h3 style="color:#f00;">Danger Zone</h3>' +
       '<button class="danger js-destroy-mailbox"' +
@@ -409,6 +425,12 @@
         destroyMailbox(btn.dataset.address, btn.dataset.readKey);
       });
     });
+    container.querySelectorAll('.js-rotate-key').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        if (!confirm('Rotate read key now? Old key will stop working immediately.')) return;
+        rotateReadKey(btn.dataset.address, btn.dataset.readKey);
+      });
+    });
   }
 
   function deleteMsg(address, msgId, readKey) {
@@ -419,7 +441,7 @@
     })
     .then(function(r) { return r.json(); })
     .then(function(d) {
-      if (d.success) fetchInbox();
+      if (d.success) fetchInboxWithKey(address, readKey);
       else alert('Error: ' + (d.error || 'Could not delete'));
     });
   }
@@ -438,6 +460,25 @@
       } else {
         alert('Error: ' + (d.error || 'Could not destroy mailbox'));
       }
+    });
+  }
+
+  function rotateReadKey(address, readKey) {
+    fetch('/{{ path }}/mail/' + encodeURIComponent(address) + '/rotate-key', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: JSON.stringify({read_key: readKey})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.success) {
+        alert('Error: ' + (d.error || 'Could not rotate key'));
+        return;
+      }
+      var newKey = d.read_key;
+      document.getElementById('read-address').value = address;
+      document.getElementById('read-key-input').value = newKey;
+      fetchInboxWithKey(address, newKey);
     });
   }
 
