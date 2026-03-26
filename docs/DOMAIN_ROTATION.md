@@ -74,11 +74,9 @@ python -c "from domain_manager import domain_rotation_manager; \
 
 # Get current budget status
 python -c "from domain_manager import domain_rotation_manager; \
-    print(f'Budget: ${domain_rotation_manager.budget_manager.monthly_budget}'); \
-    print(f'Spent: ${domain_rotation_manager.budget_manager.get_month_spending()}'); \
-    print(f'Remaining: ${domain_rotation_manager.budget_manager.get_remaining_budget()}')"
+    print(domain_rotation_manager.get_budget_status())"
 
-# Rotate to new domain
+# Rotate to new domain (structured response)
 python -c "from domain_manager import domain_rotation_manager; \
     result = domain_rotation_manager.rotate_to_new_domain(); \
     print(result)"
@@ -103,16 +101,17 @@ crontab -e
 ```python
 from domain_manager import domain_rotation_manager
 
-# Set monthly budget to $20
-domain_rotation_manager.budget_manager.set_monthly_budget(20.0)
+# Configure and set monthly budget to $20
+domain_rotation_manager.configure(
+    api_key="pk1_example",
+    api_secret="sk1_example",
+    monthly_budget=20.0
+)
 
-# Check spending
-spending = domain_rotation_manager.budget_manager.get_month_spending()
-print(f"Spent this month: ${spending}")
-
-# Check remaining budget
-remaining = domain_rotation_manager.budget_manager.get_remaining_budget()
-print(f"Remaining: ${remaining}")
+# Check spending and remaining budget
+status = domain_rotation_manager.get_budget_status()
+print(f"Spent this month: ${status['current_spending']}")
+print(f"Remaining: ${status['remaining']}")
 ```
 
 ### Budget Safety Features
@@ -162,27 +161,8 @@ domain = domain_rotation_manager.generate_random_domain_name(
 
 ### DNS Setup
 
-After purchasing a domain, configure DNS:
-
-```python
-from domain_manager import domain_rotation_manager
-
-# Add MX record for email
-domain_rotation_manager.configure_domain_dns(
-    domain="example.xyz",
-    mx_records=[
-        {"priority": 10, "host": "mail.example.xyz"}
-    ]
-)
-
-# Add A record
-domain_rotation_manager.configure_domain_dns(
-    domain="example.xyz",
-    a_records=[
-        {"host": "@", "ip": "1.2.3.4"}
-    ]
-)
-```
+DNS management is registrar-specific and not yet implemented in `DomainRotationManager`.
+Use your registrar dashboard or provider API directly for MX/A records after purchase.
 
 ### Email Integration
 
@@ -192,11 +172,10 @@ Link domain to burner email system:
 from domain_manager import domain_rotation_manager
 from email_system import burner_manager
 
-# Rotate domain and update burner emails
-new_domain = domain_rotation_manager.rotate_to_new_domain()
-if new_domain['success']:
-    # Update all burner emails to use new domain
-    burner_manager.update_domain(new_domain['domain'])
+# Rotate domain and update burner email default domain
+result = domain_rotation_manager.rotate_to_new_domain()
+if result['success']:
+    burner_manager.set_custom_domain(result['domain'])
 ```
 
 ## Testing Domain Rotation
@@ -294,10 +273,14 @@ curl -X POST https://porkbun.com/api/json/v3/ping \
 from domain_manager import domain_rotation_manager
 
 # Check current budget
-print(domain_rotation_manager.budget_manager.get_remaining_budget())
+print(domain_rotation_manager.get_budget_status()["remaining"])
 
-# Increase monthly budget
-domain_rotation_manager.budget_manager.set_monthly_budget(50.0)
+# Increase monthly budget by reconfiguring
+domain_rotation_manager.configure(
+    api_key="pk1_example",
+    api_secret="sk1_example",
+    monthly_budget=50.0
+)
 ```
 
 ### Domain Not Available
@@ -340,50 +323,41 @@ class NamecheapAPIClient(DomainAPIClient):
     
     def search_domain(self, domain: str):
         # Implementation here
-        pass
+        return {"domain": domain, "available": True, "price": 2.50}
     
     def purchase_domain(self, domain: str, years: int = 1):
         # Implementation here
-        pass
+        return {"success": True, "domain": domain}
+
+    def get_pricing(self, tld: str):
+        return {"tld": tld, "registration": 2.50}
 
 # Register new client
 domain_rotation_manager.add_api_client('namecheap', NamecheapAPIClient(api_key))
 ```
 
-### Custom Domain Patterns
+### Provider Fallback Rotation
 
 ```python
-# Use specific naming pattern
-pattern = "burner-{timestamp}-{random}"
-domain = domain_rotation_manager.generate_domain_from_pattern(pattern, tld='xyz')
-# Example: burner-20260302-k3s9.xyz
+from domain_manager import domain_rotation_manager
+
+# Primary provider first, then automatic fallback
+domain_rotation_manager.add_api_client("namecheap", NamecheapAPIClient("api-key"))
+domain_rotation_manager.set_primary_provider("porkbun")
+result = domain_rotation_manager.rotate_to_new_domain(max_price=3.00)
+print(result)
 ```
 
 ## CLI Reference
 
-All domain rotation commands:
+Use the dedicated CLI script:
 
 ```bash
-# Check available domains
-python -m domain_manager search --tld xyz --max-price 2.00
-
-# Purchase specific domain
-python -m domain_manager purchase --domain example.xyz
-
-# Rotate to new random domain
-python -m domain_manager rotate
-
-# Check budget status
-python -m domain_manager budget status
-
-# Set monthly budget
-python -m domain_manager budget set --amount 20.00
-
-# List all active domains
-python -m domain_manager list
-
-# Configure DNS
-python -m domain_manager dns --domain example.xyz --mx "mail.example.xyz"
+python domain_rotation_cli.py config
+python domain_rotation_cli.py status
+python domain_rotation_cli.py search
+python domain_rotation_cli.py rotate
+python domain_rotation_cli.py list
 ```
 
 ## Summary
