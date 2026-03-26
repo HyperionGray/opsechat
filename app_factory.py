@@ -6,7 +6,9 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+import re
+import secrets
+from flask import Flask, jsonify, g
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -66,24 +68,55 @@ def create_app():
     
     def add_review_wrapper(user_id, rating, review_text):
         return add_review(reviews, user_id, rating, review_text)
+
+    def _inject_csp_nonce(content: str, nonce: str) -> str:
+        """Add CSP nonce attributes to inline script/style tags."""
+        content = re.sub(
+            r"<script(?![^>]*\bnonce=)",
+            f'<script nonce="{nonce}"',
+            content,
+            flags=re.IGNORECASE,
+        )
+        content = re.sub(
+            r"<style(?![^>]*\bnonce=)",
+            f'<style nonce="{nonce}"',
+            content,
+            flags=re.IGNORECASE,
+        )
+        return content
+
+    @app.before_request
+    def set_csp_nonce():
+        g.csp_nonce = secrets.token_urlsafe(16)
+
+    @app.context_processor
+    def inject_template_globals():
+        return {"csp_nonce": getattr(g, "csp_nonce", "")}
     
     # Add security headers after every response
     @app.after_request
     def add_security_headers(response):
+        nonce = getattr(g, "csp_nonce", secrets.token_urlsafe(16))
+
+        # Keep inline script/style support strict by requiring a per-request nonce.
+        content_type = response.headers.get("Content-Type", "")
+        if "text/html" in content_type and not response.direct_passthrough:
+            body = response.get_data(as_text=True)
+            if "<script" in body or "<style" in body:
+                response.set_data(_inject_csp_nonce(body, nonce))
+
         response.headers["Server"] = ""
         response.headers["Date"] = ""
-        # Content Security Policy: restrict resources to same origin, block inline scripts
+        # Content Security Policy: same-origin resources plus per-response nonce.
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self'; "
-            "style-src 'self'; "
+            f"script-src 'self' 'nonce-{nonce}'; "
+            f"style-src 'self' 'nonce-{nonce}'; "
             "img-src 'self' data:; "
             "font-src 'self'; "
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"

@@ -11,18 +11,14 @@ import datetime
 import os
 import sys
 
-import pytest
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from http_mail_system import (
     HttpMailStorage,
     HttpMailbox,
     HttpMessage,
-    http_mail_storage,
-    MAX_MAIL_MESSAGE_LENGTH,
 )
-from email_system import email_storage as _global_email_storage, EmailComposer
+from email_system import email_storage as _global_email_storage
 from app_factory import create_app
 
 
@@ -90,6 +86,14 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox(mb.address, mb.read_key)
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
+
+    def test_delete_mailbox_marks_mailbox_destroyed(self):
+        mb = self.storage.create_mailbox()
+        mb.add_message("s", "b", "alice")
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert mb.destroyed is True
+        assert mb.message_count() == 0
+        assert mb.add_message("later", "msg", "bob") is None
 
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
@@ -197,6 +201,12 @@ class TestHttpMailbox:
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
 
+    def test_destroy_prevents_future_writes(self):
+        self.mailbox.add_message("Before", "Body", "alice")
+        self.mailbox.destroy()
+        assert self.mailbox.message_count() == 0
+        assert self.mailbox.add_message("After", "Body", "alice") is None
+
 
 # ===========================================================================
 # HTTP mail route integration tests
@@ -256,6 +266,39 @@ class TestHttpMailRoutes:
             json={"subject": "X", "body": "", "sender": "bob"},
         )
         assert r.status_code == 400
+
+    def test_send_message_form_fallback_route(self):
+        created = self.client.post(f"/{self.path}/mail/new").get_json()
+        addr = created["address"]
+        read_key = created["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Form Subject",
+                "body": "Form Body",
+                "sender": "form-user",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        data = inbox.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["subject"] == "Form Subject"
+
+    def test_send_message_form_fallback_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "Missing address", "body": "Body"},
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required" in r.data
 
     def test_send_to_nonexistent_mailbox(self):
         r = self.client.post(

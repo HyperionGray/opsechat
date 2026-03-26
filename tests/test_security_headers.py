@@ -36,6 +36,17 @@ class TestSecurityHeaders:
         csp = self._headers()["Content-Security-Policy"]
         # Must not contain 'unsafe-inline' for scripts
         assert "unsafe-inline" not in csp
+        assert "script-src 'self' 'nonce-" in csp
+        assert "style-src 'self' 'nonce-" in csp
+
+    def test_inline_script_and_style_have_nonce(self):
+        app = _fresh_app()
+        app.config["path"] = "secpath"
+        client = app.test_client()
+        r = client.get("/secpath/mail")
+        body = r.get_data(as_text=True)
+        assert '<script nonce="' in body
+        assert '<style nonce="' in body
 
     def test_x_content_type_options(self):
         h = self._headers()
