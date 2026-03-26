@@ -5,7 +5,8 @@ Welcome to the OpSecChat documentation. All documentation has been organized int
 ## Quick Links
 
 - **[Main README](../README.md)** - Start here for project overview
-- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes (TODO)
+- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes
+- **[HTTP Mail Guide](user-guide/EMAIL_SYSTEM.md#http-mail-email-over-http-no-smtpimap)** - Ephemeral mailbox flow over HTTP
 - **[Security](../SECURITY.md)** - Security information and best practices
 - **[License](../LICENSE.md)** - MIT License
 

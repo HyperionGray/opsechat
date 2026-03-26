@@ -37,6 +37,25 @@ Supported providers:
 - Outlook (smtp.office365.com:587)
 - Any custom SMTP server
 
+### 1b. HTTP Mail (No SMTP/IMAP, In-Memory Only)
+
+HTTP Mail is a mailbox mode that operates entirely over HTTP endpoints and
+does not require external email infrastructure:
+
+- Create mailbox: `POST /{path}/mail/new`
+- Send message (API): `POST /{path}/mail/{address}/send`
+- Send message (no-JS form): `POST /{path}/mail/send` with `_address_override`
+- Read inbox: `GET /{path}/mail/{address}/inbox?key={read_key}`
+- Delete message: `POST /{path}/mail/{address}/delete/{msg_id}`
+- Destroy mailbox: `POST /{path}/mail/{address}/destroy`
+
+Security model:
+- Mailbox address is public/shareable (send-only identifier)
+- Read key is private (required for all reads/deletes/destroy)
+- Default deny behavior on invalid or missing read key
+- Messages expire after 24 hours
+- Destroyed mailboxes reject late write attempts
+
 #### IMAP Email Receiving
 - Fetch emails from real email accounts
 - SSL/TLS encryption support

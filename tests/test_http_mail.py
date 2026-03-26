@@ -15,13 +15,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from http_mail_system import (
-    HttpMailStorage,
-    HttpMailbox,
-    HttpMessage,
-    http_mail_storage,
-    MAX_MAIL_MESSAGE_LENGTH,
-)
+from http_mail_system import HttpMailStorage, HttpMailbox, HttpMessage
 from email_system import email_storage as _global_email_storage, EmailComposer
 from app_factory import create_app
 
@@ -90,6 +84,17 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox(mb.address, mb.read_key)
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
+
+    def test_delete_mailbox_marks_cached_handle_destroyed(self):
+        mb = self.storage.create_mailbox()
+        cached = self.storage.get_mailbox(mb.address)
+        assert cached is not None
+        assert cached.destroyed is False
+
+        result = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert result is True
+        assert cached.destroyed is True
+        assert cached.add_message("late", "message", "sender") is None
 
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
@@ -179,6 +184,12 @@ class TestHttpMailbox:
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
 
+    def test_add_message_returns_none_when_destroyed(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Subj", "Body", "alice")
+        assert msg_id is None
+        assert self.mailbox.message_count() == 0
+
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -247,6 +258,58 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_form_route_success(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        payload = r.get_json()
+        addr = payload["address"]
+        read_key = payload["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "No JS path",
+                "body": "hello from form",
+                "sender": "form-user",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        messages = r.get_json()["messages"]
+        assert len(messages) == 1
+        assert messages[0]["subject"] == "No JS path"
+        assert messages[0]["body"] == "hello from form"
+
+    def test_send_message_form_route_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": "",
+                "subject": "No address",
+                "body": "body",
+            },
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required" in r.data
+
+    def test_send_message_form_route_nonexistent_mailbox(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": "doesnotexist",
+                "subject": "hello",
+                "body": "body",
+            },
+        )
+        assert r.status_code == 404
+        assert b"Mailbox not found" in r.data
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
