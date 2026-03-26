@@ -467,6 +467,14 @@
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#x27;');
   }
+
+  // Keep no-JS and JS send flows aligned when user edits recipient field.
+  var composeAddressInput = document.getElementById('compose-address-input');
+  if (composeAddressInput) {
+    composeAddressInput.addEventListener('input', updateComposeAction);
+    composeAddressInput.addEventListener('change', updateComposeAction);
+    updateComposeAction();
+  }
 </script>
 </body>
 </html>

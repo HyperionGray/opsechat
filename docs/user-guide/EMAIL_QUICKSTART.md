@@ -101,6 +101,26 @@ Monthly Budget: $50.00
 - If SMTP configured and checked: Email sent to real recipient
 - Always saved to local inbox for reference
 
+## HTTP Mail Quick Usage (No SMTP/IMAP)
+
+HTTP Mail provides a lightweight mailbox flow that works over plain HTTP endpoints.
+
+1. Open: `http://yourservice.onion/{path}/mail`
+2. Click **Create Mailbox** and save:
+   - Mailbox address (shareable)
+   - Read key (private)
+3. Senders can post to:
+   - `/{path}/mail/{address}/send` (JSON/API)
+   - `/{path}/mail/send` (form/no-JavaScript endpoint)
+4. Read inbox with:
+   - `/{path}/mail/{address}/inbox?key={read_key}`
+5. Delete messages or destroy mailbox from inbox actions.
+
+Behavior notes:
+- Mailboxes are default-deny for reads (read key required)
+- Messages expire after 24 hours
+- Mailbox destruction overwrites in-memory content before removal
+
 ### Receiving Emails
 
 1. Navigate to: `http://yourservice.onion/{path}/email/config`
