@@ -168,17 +168,7 @@ class HttpMailStorage:
         # Now that the mailbox is no longer globally reachable, safely
         # overwrite and clear its messages under the per-mailbox lock.
         # This avoids data races on `mailbox.messages` with concurrent sends.
-        lock = getattr(mailbox, "lock", None)
-        if lock is not None:
-            with lock:
-                mailbox.destroyed = True
-                for msg in mailbox.messages:
-                    msg.overwrite()
-                # Clear the list so message objects can be GC'ed.
-                mailbox.messages.clear()
-        else:
-            # Fallback: no explicit mailbox lock available; still perform
-            # overwrite/clear to maintain best-effort data scrubbing.
+        with mailbox.lock:
             mailbox.destroyed = True
             for msg in mailbox.messages:
                 msg.overwrite()
