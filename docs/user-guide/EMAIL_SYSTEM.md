@@ -265,12 +265,6 @@ Test coverage includes:
 ### Planned Features
 The following features are planned for future releases:
 
-#### 1. SMTP/IMAP Integration
-- Custom SMTP server settings
-- Send emails to external addresses
-- Receive emails from external sources
-- Multiple protocol support (SMTP, IMAP, POP3)
-
 #### 2. Database Backend
 - HBase integration for scalability
 - Persistent email storage with encryption
@@ -309,12 +303,10 @@ The following features are planned for future releases:
 - Custom header injection testing
 
 #### 7. Domain Management
-- API integration (Porkbun, etc.)
-- Automatic domain purchasing
-- Budget management (monthly limits)
-- Domain rotation system
-- Blacklist testing against popular sites
-- Automatic domain switching
+- Domain health scoring and provider failover
+- Automatic DNS readiness checks before rotation
+- Blacklist/reputation monitoring against popular services
+- Safer monthly budget reset workflows
 
 #### 8. Advanced Features
 - Email templates library
