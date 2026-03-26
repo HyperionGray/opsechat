@@ -63,6 +63,7 @@ Implementation details and summaries of major features.
 
 - [Alpha Implementation Roadmap](implementation/ALPHA_IMPLEMENTATION_ROADMAP.md) - Detailed implementation plan
 - [Implementation Summary](implementation/IMPLEMENTATION_SUMMARY.md) - Email feature implementation
+- [HTTP Mail Enhancements (2026-03-26)](implementation/HTTP_MAIL_ENHANCEMENTS_2026-03-26.md) - Generic send endpoint, CSP-compatible UI, and mailbox lifecycle hardening
 - [Amazon Q Integration](implementation/AMAZON_Q_IMPLEMENTATION_SUMMARY.md) - Amazon Q implementation
 - [CI/CD Implementation](implementation/CI_CD_IMPLEMENTATION_SUMMARY.md) - CI/CD setup
 - [Containerization Summary](implementation/CONTAINERIZATION_SUMMARY.md) - Container implementation

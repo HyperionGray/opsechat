@@ -11,18 +11,14 @@ import datetime
 import os
 import sys
 
-import pytest
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from http_mail_system import (
     HttpMailStorage,
     HttpMailbox,
     HttpMessage,
-    http_mail_storage,
-    MAX_MAIL_MESSAGE_LENGTH,
 )
-from email_system import email_storage as _global_email_storage, EmailComposer
+from email_system import email_storage as _global_email_storage
 from app_factory import create_app
 
 
@@ -179,6 +175,11 @@ class TestHttpMailbox:
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
 
+    def test_add_message_after_destroy_returns_none(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("A", "B", "c")
+        assert msg_id is None
+
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -215,6 +216,13 @@ class TestHttpMailRoutes:
         r = self.client.get(f"/{self.path}/mail")
         assert r.status_code == 200
 
+    def test_mail_index_uses_external_assets_for_csp(self):
+        r = self.client.get(f"/{self.path}/mail")
+        html = r.data.decode("utf-8")
+        assert "/static/http_mail.css" in html
+        assert "/static/http_mail.js" in html
+        assert "onclick=" not in html
+
     def test_mail_index_wrong_path_404(self):
         r = self.client.get("/wrongpath/mail")
         assert r.status_code == 404
@@ -232,8 +240,11 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert "send_url" in data
         assert "inbox_url" in data
+        assert "read_url" in data
         assert data["send_url"].startswith(f"/{self.path}/mail/")
         assert data["inbox_url"].endswith("/inbox")
+        assert data["read_url"].startswith(f"/{self.path}/mail/")
+        assert "?key=" in data["read_url"]
 
     def test_send_message_json(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -263,6 +274,54 @@ class TestHttpMailRoutes:
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
         assert r.status_code == 404
+
+    def test_send_message_via_generic_endpoint_json(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        data = r.get_json()
+        addr = data["address"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            json={"address": addr, "subject": "Hi", "body": "Hello generic", "sender": "bob"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        payload = r.get_json()
+        assert payload["success"] is True
+        assert "msg_id" in payload
+
+    def test_send_message_via_generic_endpoint_form(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        data = r.get_json()
+        addr = data["address"]
+        read_key = data["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Form",
+                "body": "Form message",
+                "sender": "formuser",
+            },
+        )
+        assert r.status_code == 200
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        msgs = inbox.get_json()["messages"]
+        assert any(m["body"] == "Form message" for m in msgs)
+
+    def test_send_message_via_generic_endpoint_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            json={"subject": "No address", "body": "Body", "sender": "bob"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
+        assert "address" in r.get_json()["error"].lower()
 
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -376,6 +435,13 @@ class TestHttpMailRoutes:
         )
         assert r.status_code == 200
         assert r.get_json()["success"] is True
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "After destroy", "body": "Nope", "sender": "x"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 404
 
     def test_destroy_mailbox_wrong_key(self):
         r = self.client.post(f"/{self.path}/mail/new")

@@ -271,6 +271,13 @@ Features
 - **Plain Text Only** - HTML and images are shown as text for security analysis
 - JavaScript optional throughout
 
+### HTTP Mail (NEW - EMAIL OVER HTTP)
+- **No SMTP/IMAP Required** - In-memory mailbox model using HTTP endpoints
+- **Default Deny Read Access** - Inbox reads require a private read key
+- **Shareable Send Address** - Anyone with address can send messages
+- **Mailbox Destroy Hardening** - Destroy marks mailbox unavailable for new sends
+- **CSP-Compatible UI** - HTTP mail page now uses external JS/CSS (no inline script/style)
+
 ### Amazon Q Code Review Integration (NEW!)
 - **Automated Code Reviews** - Amazon Q Developer integration for comprehensive code analysis
 - **Security Scanning** - CodeWhisperer-powered vulnerability detection
