@@ -16,7 +16,6 @@ Design:
 
 import datetime
 import secrets
-import string
 import threading
 from typing import Dict, List, Optional
 
@@ -62,6 +61,7 @@ class HttpMailbox:
     def __init__(self, address: str, read_key: str):
         self.address = address
         self.read_key = read_key
+        self.destroyed = False
         self.messages: List[HttpMessage] = []
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
@@ -69,14 +69,16 @@ class HttpMailbox:
     def add_message(self, subject: str, body: str, sender_handle: str) -> str:
         """Add a message; returns the new message ID."""
         msg_id = _generate_id(12)  # 12 bytes → 16 URL-safe chars
-        msg = HttpMessage(
-            msg_id=msg_id,
-            subject=subject,
-            body=body,
-            sender_handle=sender_handle,
-            timestamp=datetime.datetime.now(),
-        )
         with self.lock:
+            if self.destroyed:
+                raise RuntimeError("Mailbox has been destroyed")
+            msg = HttpMessage(
+                msg_id=msg_id,
+                subject=subject,
+                body=body,
+                sender_handle=sender_handle,
+                timestamp=datetime.datetime.now(),
+            )
             self.messages.append(msg)
         return msg_id
 
@@ -117,6 +119,16 @@ class HttpMailbox:
         with self.lock:
             return len(self.messages)
 
+    def rotate_read_key(self, read_key: str) -> Optional[str]:
+        """Rotate read key when current key is presented. Returns new key or None."""
+        with self.lock:
+            if self.destroyed:
+                return None
+            if not secrets.compare_digest(read_key, self.read_key):
+                return None
+            self.read_key = _generate_id(24)  # 24 bytes -> 32 URL-safe chars
+            return self.read_key
+
 
 class HttpMailStorage:
     """Global in-memory store for all HTTP mailboxes."""
@@ -145,10 +157,6 @@ class HttpMailStorage:
         - We remove the mailbox from the global store under `self._lock`.
         - We then overwrite and clear messages under the per-mailbox lock
           to avoid races with concurrent send/add operations.
-
-        Checklist (follow-ups outside this class):
-        - [ ] Ensure HttpMailbox exposes a `lock` used by all writers.
-        - [ ] Ensure add_message (or equivalent) checks a `destroyed` flag.
         """
         # First, look up and authenticate the mailbox under the global lock.
         with self._lock:
@@ -182,6 +190,15 @@ class HttpMailStorage:
             setattr(mailbox, "destroyed", True)
 
         return True
+
+    def rotate_read_key(self, address: str, read_key: str) -> Optional[str]:
+        """Rotate mailbox read key; returns new key on success."""
+        with self._lock:
+            mailbox = self._mailboxes.get(address)
+            if mailbox is None:
+                return None
+        return mailbox.rotate_read_key(read_key)
+
     def cleanup_empty_old_mailboxes(self) -> None:
         """Remove mailboxes with no messages that are older than 48 hours."""
         cutoff = datetime.datetime.now() - datetime.timedelta(hours=48)
