@@ -197,6 +197,11 @@ class TestHttpMailbox:
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
 
+    def test_add_message_rejected_after_destroy(self):
+        self.mailbox.destroyed = True
+        with pytest.raises(RuntimeError):
+            self.mailbox.add_message("Subj", "Body", "alice")
+
 
 # ===========================================================================
 # HTTP mail route integration tests
@@ -247,6 +252,39 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_form_endpoint_with_address_override(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "From Form",
+                "body": "Hello from form route",
+                "sender": "form-user",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        payload = inbox.get_json()
+        assert len(payload["messages"]) == 1
+        assert payload["messages"][0]["subject"] == "From Form"
+
+    def test_send_message_form_without_address_fails(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "X", "body": "Y"},
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required" in r.data
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
