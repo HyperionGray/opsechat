@@ -91,6 +91,23 @@ class TestHttpMailStorage:
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
 
+    def test_delete_mailbox_marks_existing_reference_destroyed(self):
+        mb = self.storage.create_mailbox()
+        msg_id = mb.add_message("subj", "body", "sender")
+        assert msg_id is not None
+
+        result = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert result is True
+        assert mb.destroyed is True
+        assert mb.message_count() == 0
+
+    def test_stale_mailbox_reference_refuses_new_messages_after_destroy(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+
+        stale_write = mb.add_message("late", "write", "sender")
+        assert stale_write is None
+
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
         result = self.storage.delete_mailbox(mb.address, "wrongkey")
@@ -128,6 +145,11 @@ class TestHttpMailbox:
         msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
         assert msg_id
         assert len(msg_id) == 16
+
+    def test_destroyed_mailbox_refuses_add_message(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
+        assert msg_id is None
 
     def test_get_messages_correct_key(self):
         self.mailbox.add_message("Subj", "Body", "alice")
@@ -387,6 +409,26 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 403
+
+    def test_send_with_stale_reference_after_destroy_returns_gone(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        payload = r.get_json()
+        addr = payload["address"]
+        read_key = payload["read_key"]
+
+        mailbox = http_mail_storage.get_mailbox(addr)
+        assert mailbox is not None
+        assert http_mail_storage.delete_mailbox(addr, read_key) is True
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "x", "body": "late message", "sender": "bob"},
+        )
+        assert r.status_code == 404
+
+        # Stale writer references are explicitly refused with 410.
+        stale_id = mailbox.add_message("x", "late message", "bob")
+        assert stale_id is None
 
     def test_message_body_sanitized(self):
         r = self.client.post(f"/{self.path}/mail/new")
