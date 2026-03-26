@@ -8,10 +8,10 @@ import os
 import time
 import subprocess
 import requests
-from threading import Thread
 
-def test_mock_server():
-    """Test that the mock server can start and respond to health checks"""
+
+def _run_mock_server_healthcheck():
+    """Run the mock server and return True if health check succeeds."""
     print("Testing mock server startup...")
     
     # Start the mock server in a subprocess
@@ -34,25 +34,27 @@ def test_mock_server():
             if response.status_code == 200:
                 data = response.json()
                 print(f"Health check response: {data}")
-                print("✅ Mock server is working correctly!")
+                print("Mock server is working correctly.")
                 return True
-            else:
-                print(f"❌ Health check failed with status {response.status_code}")
-                return False
+
+            print(f"Health check failed with status {response.status_code}")
+            return False
         except requests.RequestException as e:
-            print(f"❌ Could not connect to mock server: {e}")
+            print(f"Could not connect to mock server: {e}")
             return False
             
     except Exception as e:
-        print(f"❌ Error starting mock server: {e}")
+        print(f"Error starting mock server: {e}")
         return False
     finally:
         if server_process:
             server_process.terminate()
             server_process.wait()
-    
-    return False
+
+def test_mock_server():
+    """Test that the mock server can start and respond to health checks"""
+    assert _run_mock_server_healthcheck()
 
 if __name__ == '__main__':
-    success = test_mock_server()
+    success = _run_mock_server_healthcheck()
     sys.exit(0 if success else 1)
