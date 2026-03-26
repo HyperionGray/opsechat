@@ -59,14 +59,26 @@ Key endpoints used by opsechat:
 - `pricing/get` - Get TLD pricing
 - `domain/listAll` - List owned domains
 
-## Other Registrars (Future Support)
-
-The opsechat domain manager is designed to be extensible. Future registrar support may include:
-
-### Namecheap
+### Namecheap (Supported)
 - API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
-- Cheap TLDs: .xyz, .club, .online
+- Requires API allowlisting for your `ClientIp`
+- Supports availability checks and purchasing through the domain manager abstraction
+- Cheap TLDs commonly available: .xyz, .club, .online
+
+#### Namecheap Setup Notes
+1. Enable Namecheap API access for your account.
+2. Add your outbound public IP to Namecheap API allowlist.
+3. Configure:
+   - `provider = namecheap`
+   - `api_key`
+   - `username`
+   - `client_ip`
+   - optional `sandbox = true` for test environment
+4. Optional: configure Porkbun or Namecheap as a fallback provider.
+
+## Other Registrars (Planned)
+
+The opsechat domain manager is designed to be extensible. Additional registrar support may include:
 
 ### Namesilo
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)
@@ -93,7 +105,7 @@ The opsechat domain manager is designed to be extensible. Future registrar suppo
 
 2. Under "Domain API Configuration":
    - Enter your API Key
-   - Enter your API Secret
+   - Enter your API Secret (Porkbun) or username/client IP (Namecheap)
    - Set monthly budget limit (recommended: start with $20-50)
 
 3. Click "Configure"
@@ -107,9 +119,15 @@ For container deployments, you can set:
 Environment=PORKBUN_API_KEY=pk1_xxxxx
 Environment=PORKBUN_API_SECRET=sk1_xxxxx
 Environment=DOMAIN_MONTHLY_BUDGET=50.0
+
+# Namecheap alternative
+Environment=DOMAIN_PROVIDER=namecheap
+Environment=NAMECHEAP_API_KEY=xxxx
+Environment=NAMECHEAP_USERNAME=your_username
+Environment=NAMECHEAP_CLIENT_IP=your.allowlisted.ip
 ```
 
-Then modify the runserver.py to read these on startup.
+Then modify startup wiring to read these on startup.
 
 ## Budget Management
 

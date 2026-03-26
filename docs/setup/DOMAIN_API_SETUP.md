@@ -4,7 +4,7 @@ This guide explains how to set up domain registrar API access for automated burn
 
 ## Supported Registrars
 
-### Porkbun (Recommended)
+### Porkbun (Recommended Primary)
 
 Porkbun offers cheap domains and a simple API, making it ideal for burner email rotation.
 
@@ -79,9 +79,9 @@ Porkbun offers cheap domains and a simple API, making it ideal for burner email 
 
 ## Alternative Registrars
 
-### Namecheap
+### Namecheap (Implemented as Optional Primary/Fallback)
 
-While not directly integrated, Namecheap offers competitive pricing and API access.
+Namecheap is now supported in code as either a primary registrar or a fallback registrar.
 
 #### Getting Started
 - Website: [namecheap.com](https://namecheap.com)
@@ -89,7 +89,9 @@ While not directly integrated, Namecheap offers competitive pricing and API acce
 - Pricing: .com domains ~$8.88/year, .xyz ~$1.98/year
 
 #### Integration Notes
-- Requires custom API client implementation
+- Requires API key + username + allowlisted client IP
+- Namecheap purchase calls also require contact profile fields
+- Namecheap fallback mode works well when Porkbun returns unavailable domains
 - More complex API than Porkbun
 - Good for high-volume usage
 

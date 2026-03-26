@@ -4,7 +4,10 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient,
+    PorkbunAPIClient,
+    NamecheapAPIClient,
+    DomainRotationManager,
 )
 
 
@@ -74,6 +77,50 @@ class TestPorkbunAPIClient:
         
         assert result["tld"] == "com"
         assert result["registration"] == "9.99"
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch("domain_manager.requests.Session")
+    def test_search_domain_available(self, mock_session_class):
+        """Test Namecheap availability search parsing"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """
+<ApiResponse Status="OK">
+  <CommandResponse>
+    <DomainCheckResult Domain="test123.xyz" Available="true" IsPremiumName="false"/>
+  </CommandResponse>
+</ApiResponse>
+        """.strip()
+        mock_response.raise_for_status.return_value = None
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_key="test_key",
+            username="test_user",
+            client_ip="127.0.0.1",
+        )
+
+        result = client.search_domain("test123.xyz")
+        assert result["available"] is True
+        assert result["domain"] == "test123.xyz"
+        assert result["provider"] == "namecheap"
+
+    def test_get_pricing_fallback_defaults(self):
+        """Test static fallback pricing for supported TLD"""
+        client = NamecheapAPIClient(
+            api_key="test_key",
+            username="test_user",
+            client_ip="127.0.0.1",
+        )
+        client._make_request = Mock(return_value={"status": "ERROR"})
+
+        result = client.get_pricing("xyz")
+        assert result["tld"] == "xyz"
+        assert float(result["registration"]) > 0
 
 
 class TestDomainRotationManager:
@@ -174,3 +221,44 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_find_cheap_available_domain_uses_fallback_client(self):
+        """Test fallback client is used when primary has no availability"""
+        primary = Mock(spec=DomainAPIClient)
+        fallback = Mock(spec=DomainAPIClient)
+        primary.provider_name = "primary"
+        fallback.provider_name = "fallback"
+        primary.search_domain.return_value = {"available": False}
+        fallback.search_domain.return_value = {"available": True, "price": "2.50"}
+
+        manager = DomainRotationManager(primary, fallback_clients=[fallback])
+        with patch.object(manager, "generate_random_domain", return_value="cheap.xyz"):
+            result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["provider"] == "fallback"
+        assert result["domain"] == "cheap.xyz"
+        assert result["api_client"] == fallback
+        primary.search_domain.assert_called_once_with("cheap.xyz")
+        fallback.search_domain.assert_called_once_with("cheap.xyz")
+
+    def test_configure_and_get_config(self):
+        """Test manager configuration status output"""
+        manager = DomainRotationManager()
+        configure_result = manager.configure(
+            provider="porkbun",
+            api_key="pk_test",
+            secret_key="sk_test",
+            monthly_budget=25.0,
+            fallback_provider="namecheap",
+            fallback_api_key="nc_key",
+            fallback_username="nc_user",
+            fallback_client_ip="127.0.0.1",
+        )
+
+        assert configure_result["success"] is True
+        config = manager.get_config()
+        assert config["configured"] is True
+        assert config["primary_provider"] == "porkbun"
+        assert "namecheap" in config["fallback_providers"]
+        assert config["monthly_budget"] == 25.0
