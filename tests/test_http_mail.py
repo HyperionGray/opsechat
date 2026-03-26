@@ -197,6 +197,23 @@ class TestHttpMailbox:
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
 
+    def test_add_message_raises_after_mailbox_destroyed(self):
+        self.mailbox.destroyed = True
+        with pytest.raises(RuntimeError):
+            self.mailbox.add_message("Subject", "Body", "sender")
+
+    def test_get_messages_after_mailbox_destroyed_returns_empty(self):
+        self.mailbox.add_message("Subj", "Body", "alice")
+        self.mailbox.destroyed = True
+        msgs = self.mailbox.get_messages("secretkey123456789012345678901")
+        assert msgs == []
+
+    def test_delete_message_after_mailbox_destroyed_returns_false(self):
+        msg_id = self.mailbox.add_message("Subj", "Body", "alice")
+        self.mailbox.destroyed = True
+        result = self.mailbox.delete_message("secretkey123456789012345678901", msg_id)
+        assert result is False
+
 
 # ===========================================================================
 # HTTP mail route integration tests
@@ -405,6 +422,26 @@ class TestHttpMailRoutes:
         msgs = r.get_json()["messages"]
         assert "<script>" not in msgs[0]["subject"]
         assert "<b>" not in msgs[0]["body"]
+
+    def test_send_message_returns_410_when_mailbox_destroyed_after_lookup(self, monkeypatch):
+        from http_mail_system import HttpMailbox
+        import http_mail_routes
+
+        destroyed_mailbox = HttpMailbox("testaddress01", "testreadkey")
+        destroyed_mailbox.destroyed = True
+
+        monkeypatch.setattr(
+            http_mail_routes.http_mail_storage,
+            "get_mailbox",
+            lambda _address: destroyed_mailbox,
+        )
+
+        r = self.client.post(
+            f"/{self.path}/mail/testaddress01/send",
+            json={"subject": "Hi", "body": "Hello there", "sender": "bob"},
+        )
+        assert r.status_code == 410
+        assert r.get_json()["error"] == "Mailbox is no longer available"
 
     def test_empty_sender_defaults_to_anonymous(self):
         r = self.client.post(f"/{self.path}/mail/new")
