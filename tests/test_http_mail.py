@@ -115,6 +115,13 @@ class TestHttpMailStorage:
         self.storage.cleanup_empty_old_mailboxes()
         assert self.storage.get_mailbox(mb.address) is not None
 
+    def test_destroyed_mailbox_rejects_stale_reference_writes(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        # Even with a stale reference, writes must be rejected.
+        assert mb.add_message("x", "y", "z") is None
+        assert mb.message_count() == 0
+
 
 # ===========================================================================
 # HttpMailbox unit tests
@@ -387,6 +394,30 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 403
+
+    def test_send_uses_gone_status_for_destroyed_stale_mailbox_reference(self):
+        from unittest.mock import patch
+
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        # Capture mailbox reference before deletion to simulate stale lookup.
+        stale_mb = http_mail_storage.get_mailbox(addr)
+        self.client.post(
+            f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": read_key},
+            headers={"Accept": "application/json"},
+        )
+
+        with patch("http_mail_routes.http_mail_storage.get_mailbox", return_value=stale_mb):
+            r = self.client.post(
+                f"/{self.path}/mail/{addr}/send",
+                json={"subject": "X", "body": "Y", "sender": "z"},
+            )
+
+        assert r.status_code == 410
+        assert r.get_json()["error"] == "Mailbox unavailable"
 
     def test_message_body_sanitized(self):
         r = self.client.post(f"/{self.path}/mail/new")

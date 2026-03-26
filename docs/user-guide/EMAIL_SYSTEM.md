@@ -60,6 +60,29 @@ Supported providers:
 - Set monthly budget (default: $50)
 - System finds domains under $5
 
+### 3. HTTP Mailboxes (No SMTP/IMAP Required)
+
+For anonymous throwaway inboxes without external mail providers, OpSecChat also
+supports an HTTP-native mailbox system.
+
+Key properties:
+- Public mailbox address for receiving messages
+- Private `read_key` required to read or delete messages (default deny)
+- In-memory only storage with 24-hour message expiry
+- Mailbox destruction support with message overwrite before clear
+- Stale mailbox references are rejected after destroy (no post-destroy writes)
+
+Key routes:
+- `POST /{path}/mail/new` - Create mailbox (returns `address` + `read_key`)
+- `POST /{path}/mail/{address}/send` - Send message to mailbox address
+- `GET /{path}/mail/{address}/inbox?key={read_key}` - Read inbox with key
+- `POST /{path}/mail/{address}/delete/{message_id}` - Delete message with key
+- `POST /{path}/mail/{address}/destroy` - Destroy mailbox with key
+
+Behavior note:
+- If a send races with mailbox destruction and uses a stale mailbox reference,
+  the send is denied and returns HTTP `410 Gone`.
+
 #### Budget Management
 - Track spending across domain purchases
 - View received emails with full header information

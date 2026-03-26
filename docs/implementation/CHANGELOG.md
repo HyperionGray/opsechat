@@ -11,13 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- HTTP mail lifecycle hardening tests to cover mailbox destruction edge cases
 
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- HTTP mailboxes now reject sends through stale references after mailbox destruction
+- HTTP mail send endpoint now returns `410 Gone` for destroyed/unavailable mailboxes
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022
+- Improved in-memory mailbox teardown semantics to prevent post-destroy writes
 
 ## [2.0.0] - 2024-12-08
 
