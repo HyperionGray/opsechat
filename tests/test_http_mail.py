@@ -273,6 +273,25 @@ class TestHttpMailRoutes:
         )
         assert r.status_code == 404
 
+    def test_send_returns_404_if_mailbox_destroyed_between_lookup_and_write(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        # Destroy mailbox first, then try sending to now-stale address.
+        d = self.client.post(
+            f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": read_key},
+            headers={"Accept": "application/json"},
+        )
+        assert d.status_code == 200
+
+        s = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "late", "body": "write", "sender": "bob"},
+        )
+        assert s.status_code == 404
+
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
