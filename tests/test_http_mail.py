@@ -3,8 +3,8 @@ Tests for the HTTP mail system (email over HTTP, no SMTP/IMAP).
 
 Covers:
 - HttpMailStorage: create mailbox, send, read (default deny), delete, destroy
-- http_mail_routes: all REST endpoints via Flask test client
-- Missing email_routes: view, edit, delete, burner POST, expire
+- http_mail_routes: JSON and no-JS fallback endpoints via Flask test client
+- email_routes: view, edit, delete, burner POST
 """
 
 import datetime
