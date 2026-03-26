@@ -148,6 +148,26 @@ Modern, Guerrillamail-style rotating anonymous email system with advanced featur
 - Visual budget bar showing spending vs. limit
 - Auto-rotation when budget allows
 
+### 6. HTTP Mail (No SMTP/IMAP, default deny)
+HTTP Mail is a separate lightweight flow for anonymous message dropboxes over plain HTTP routes.
+
+- **No SMTP/IMAP dependency** - Uses in-memory mailbox storage only
+- **Address + Read-Key model** - Public address for senders, private read key for owners
+- **Default-deny inbox reads** - Inbox access requires the exact read key
+- **No-JavaScript compatible send path** - Form posts to `/{path}/mail/send`
+- **Message expiry** - Messages auto-expire after 24 hours
+- **Secure mailbox destruction** - Destroyed mailboxes refuse new messages
+
+**Access:** `/{path}/mail`
+
+HTTP Mail endpoints:
+- `POST /{path}/mail/new` - create mailbox
+- `POST /{path}/mail/send` - send via no-JS form flow
+- `POST /{path}/mail/{address}/send` - send directly to address
+- `GET /{path}/mail/{address}/inbox?key=<read_key>` - read inbox
+- `POST /{path}/mail/{address}/delete/{msg_id}` - delete one message
+- `POST /{path}/mail/{address}/destroy` - destroy mailbox
+
 ### 3. Email Inbox
 - View received emails with full header information
 - PGP encrypted message detection and display
