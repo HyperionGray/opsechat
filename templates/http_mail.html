@@ -112,6 +112,13 @@
 {% if success %}
 <div class="success-box">✅ {{ success }}</div>
 {% endif %}
+{% if rotated_read_key %}
+<div class="warn">
+  🔐 <strong>New Read Key:</strong>
+  <div class="token-box" id="rotated-read-key">{{ rotated_read_key }}</div>
+  <button type="button" onclick="copyText('rotated-read-key')">📋 Copy New Read Key</button>
+</div>
+{% endif %}
 
 <div class="info">
   <strong>How HTTP Mail works:</strong><br>
@@ -266,6 +273,15 @@
 
     <!-- Destroy entire mailbox -->
     <div style="margin-top:30px; border-top:1px solid #333; padding-top:15px;">
+      <h3>Rotate Read Key</h3>
+      <p class="hint" style="margin-bottom:10px;">
+        Rotating immediately invalidates your old read key. Save the new key before closing this page.
+      </p>
+      <form method="POST" action="/{{ path }}/mail/{{ inbox_address }}/rotate-key" style="margin-bottom:20px;">
+        <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
+        <button type="submit">🔐 Rotate Read Key</button>
+      </form>
+
       <h3 style="color:#f00;">Danger Zone</h3>
       <form method="POST" action="/{{ path }}/mail/{{ inbox_address }}/destroy">
         <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
@@ -372,24 +388,29 @@
 
   function renderInbox(messages, address, readKey) {
     var container = document.getElementById('js-inbox-messages');
-    if (messages.length === 0) {
-      container.innerHTML = '<p style="color:#888;margin-top:10px;">No messages in this mailbox.</p>';
-      return;
-    }
     var html = '<h3 style="margin-top:20px;">Messages (' + messages.length + ')</h3>';
-    messages.forEach(function(msg) {
-      html += '<div class="msg-card">' +
-        '<div class="msg-meta">From: ' + esc(msg.sender) + ' &nbsp;|&nbsp; ' + esc(msg.timestamp) + '</div>' +
-        '<div class="msg-subject">' + esc(msg.subject) + '</div>' +
-        '<div class="msg-body">' + esc(msg.body) + '</div>' +
-        '<div class="msg-actions">' +
-          '<button class="danger js-delete-msg"' +
-            ' data-address="' + esc(address) + '"' +
-            ' data-msg-id="' + esc(msg.id) + '"' +
-            ' data-read-key="' + esc(readKey) + '">🗑 Delete</button>' +
-        '</div></div>';
-    });
+    if (messages.length === 0) {
+      html += '<p style="color:#888;margin-top:10px;">No messages in this mailbox.</p>';
+    } else {
+      messages.forEach(function(msg) {
+        html += '<div class="msg-card">' +
+          '<div class="msg-meta">From: ' + esc(msg.sender) + ' &nbsp;|&nbsp; ' + esc(msg.timestamp) + '</div>' +
+          '<div class="msg-subject">' + esc(msg.subject) + '</div>' +
+          '<div class="msg-body">' + esc(msg.body) + '</div>' +
+          '<div class="msg-actions">' +
+            '<button class="danger js-delete-msg"' +
+              ' data-address="' + esc(address) + '"' +
+              ' data-msg-id="' + esc(msg.id) + '"' +
+              ' data-read-key="' + esc(readKey) + '">🗑 Delete</button>' +
+          '</div></div>';
+      });
+    }
     html += '<div style="margin-top:30px;border-top:1px solid #333;padding-top:15px;">' +
+      '<h3>Rotate Read Key</h3>' +
+      '<p class="hint" style="margin-bottom:10px;">Rotating invalidates the old key immediately. Save the new key.</p>' +
+      '<button class="js-rotate-read-key"' +
+        ' data-address="' + esc(address) + '"' +
+        ' data-read-key="' + esc(readKey) + '">🔐 Rotate Read Key</button>' +
       '<h3 style="color:#f00;">Danger Zone</h3>' +
       '<button class="danger js-destroy-mailbox"' +
         ' data-address="' + esc(address) + '"' +
@@ -407,6 +428,12 @@
       btn.addEventListener('click', function() {
         if (!confirm('Destroy mailbox and ALL messages permanently?')) return;
         destroyMailbox(btn.dataset.address, btn.dataset.readKey);
+      });
+    });
+    container.querySelectorAll('.js-rotate-read-key').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        if (!confirm('Rotate read key now? Old key will stop working immediately.')) return;
+        rotateReadKey(btn.dataset.address, btn.dataset.readKey);
       });
     });
   }
@@ -437,6 +464,24 @@
           '<div class="success-box">✅ Mailbox destroyed.</div>';
       } else {
         alert('Error: ' + (d.error || 'Could not destroy mailbox'));
+      }
+    });
+  }
+
+  function rotateReadKey(address, readKey) {
+    fetch('/{{ path }}/mail/' + encodeURIComponent(address) + '/rotate-key', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: JSON.stringify({read_key: readKey})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.success && d.new_read_key) {
+        document.getElementById('read-key-input').value = d.new_read_key;
+        alert('Read key rotated. New key copied into the Read Key input. Save it now.');
+        fetchInbox();
+      } else {
+        alert('Error: ' + (d.error || 'Could not rotate read key'));
       }
     });
   }

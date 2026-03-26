@@ -5,7 +5,7 @@ Welcome to the OpSecChat documentation. All documentation has been organized int
 ## Quick Links
 
 - **[Main README](../README.md)** - Start here for project overview
-- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes (TODO)
+- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes
 - **[Security](../SECURITY.md)** - Security information and best practices
 - **[License](../LICENSE.md)** - MIT License
 
@@ -63,6 +63,7 @@ Implementation details and summaries of major features.
 
 - [Alpha Implementation Roadmap](implementation/ALPHA_IMPLEMENTATION_ROADMAP.md) - Detailed implementation plan
 - [Implementation Summary](implementation/IMPLEMENTATION_SUMMARY.md) - Email feature implementation
+- [HTTP Mail Read-Key Rotation](implementation/HTTP_MAIL_KEY_ROTATION.md) - Rotating mailbox read keys safely
 - [Amazon Q Integration](implementation/AMAZON_Q_IMPLEMENTATION_SUMMARY.md) - Amazon Q implementation
 - [CI/CD Implementation](implementation/CI_CD_IMPLEMENTATION_SUMMARY.md) - CI/CD setup
 - [Containerization Summary](implementation/CONTAINERIZATION_SUMMARY.md) - Container implementation
@@ -97,5 +98,5 @@ When adding new documentation:
 
 ---
 
-**Last Updated:** February 23, 2026  
+**Last Updated:** March 26, 2026  
 **Maintained by:** OpSecChat Team

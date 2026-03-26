@@ -19,8 +19,6 @@ from http_mail_system import (
     HttpMailStorage,
     HttpMailbox,
     HttpMessage,
-    http_mail_storage,
-    MAX_MAIL_MESSAGE_LENGTH,
 )
 from email_system import email_storage as _global_email_storage, EmailComposer
 from app_factory import create_app
@@ -91,6 +89,14 @@ class TestHttpMailStorage:
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
 
+    def test_delete_mailbox_marks_mailbox_destroyed(self):
+        mb = self.storage.create_mailbox()
+        deleted = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert deleted is True
+        assert mb.destroyed is True
+        # Stale references should not be able to write after destroy.
+        assert mb.add_message("late", "write", "sender") is None
+
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
         result = self.storage.delete_mailbox(mb.address, "wrongkey")
@@ -129,6 +135,11 @@ class TestHttpMailbox:
         assert msg_id
         assert len(msg_id) == 16
 
+    def test_add_message_destroyed_mailbox_returns_none(self):
+        self.mailbox.destroy()
+        msg_id = self.mailbox.add_message("Hello", "Body text", "alice")
+        assert msg_id is None
+
     def test_get_messages_correct_key(self):
         self.mailbox.add_message("Subj", "Body", "alice")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -164,6 +175,25 @@ class TestHttpMailbox:
     def test_delete_nonexistent_message(self):
         result = self.mailbox.delete_message("secretkey123456789012345678901", "fakeid")
         assert result is False
+
+    def test_rotate_read_key_success(self):
+        self.mailbox.add_message("Subj", "Body", "alice")
+        old_key = "secretkey123456789012345678901"
+        new_key = self.mailbox.rotate_read_key(old_key)
+        assert new_key is not None
+        assert new_key != old_key
+        assert self.mailbox.get_messages(old_key) is None
+        msgs = self.mailbox.get_messages(new_key)
+        assert msgs is not None
+        assert len(msgs) == 1
+
+    def test_rotate_read_key_wrong_key_fails(self):
+        self.mailbox.add_message("Subj", "Body", "alice")
+        result = self.mailbox.rotate_read_key("wrongkey")
+        assert result is None
+        msgs = self.mailbox.get_messages("secretkey123456789012345678901")
+        assert msgs is not None
+        assert len(msgs) == 1
 
     def test_message_expiry(self):
         self.mailbox.add_message("Old", "Old body", "bob")
@@ -377,12 +407,66 @@ class TestHttpMailRoutes:
         assert r.status_code == 200
         assert r.get_json()["success"] is True
 
+        # Mailbox no longer exists after destroy.
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 404
+
     def test_destroy_mailbox_wrong_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
 
         r = self.client.post(
             f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": "badkey"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 403
+
+    def test_rotate_read_key_correct_key(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        old_read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Rotate", "body": "Body", "sender": "x"},
+        )
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
+            json={"read_key": old_read_key},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["success"] is True
+        assert "new_read_key" in data
+        assert data["new_read_key"] != old_read_key
+
+        # Old key should fail immediately.
+        denied = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={old_read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert denied.status_code == 403
+
+        # New key should work.
+        allowed = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={data['new_read_key']}",
+            headers={"Accept": "application/json"},
+        )
+        assert allowed.status_code == 200
+        assert len(allowed.get_json()["messages"]) == 1
+
+    def test_rotate_read_key_wrong_key(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/rotate-key",
             json={"read_key": "badkey"},
             headers={"Accept": "application/json"},
         )

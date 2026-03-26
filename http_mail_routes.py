@@ -9,6 +9,7 @@ Routes registered under /<path>/mail/:
   POST /<path>/mail/new                    - Create a new mailbox
   POST /<path>/mail/<address>/send         - Send a message to a mailbox (no auth)
   GET  /<path>/mail/<address>/inbox        - Read inbox (requires ?key=<read_key>)
+  POST /<path>/mail/<address>/rotate-key   - Rotate mailbox read key (requires read_key)
   POST /<path>/mail/<address>/delete/<id>  - Delete a message (requires read_key in form)
   POST /<path>/mail/<address>/destroy      - Delete entire mailbox (requires read_key in form)
 """
@@ -109,6 +110,8 @@ def register_http_mail_routes(app):
         sender = _sanitize(sender, 64) or "anonymous"
 
         msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        if msg_id is None:
+            return jsonify({"error": "Mailbox is no longer available"}), 410
 
         if request.is_json:
             return jsonify({"success": True, "msg_id": msg_id})
@@ -119,6 +122,37 @@ def register_http_mail_routes(app):
                                max_message_length=MAX_MAIL_MESSAGE_LENGTH,
                                success="Message sent.",
                                compose_address=address)
+
+    # ------------------------------------------------------------------
+    # Rotate read key (requires current read_key in POST body)
+    # ------------------------------------------------------------------
+
+    @app.route('/<string:url_addition>/mail/<string:address>/rotate-key', methods=["POST"])
+    def http_mail_rotate_key(url_addition, address):
+        if url_addition != app.config["path"]:
+            return ('', 404)
+        _ensure_session()
+
+        if request.is_json:
+            read_key = (request.get_json() or {}).get("read_key", "")
+        else:
+            read_key = request.form.get("read_key", "")
+
+        new_key = http_mail_storage.rotate_mailbox_read_key(address, read_key)
+        if new_key is None:
+            return jsonify({"error": "Invalid read key or mailbox not found"}), 403
+
+        if request.is_json:
+            return jsonify({"success": True, "new_read_key": new_key})
+
+        return render_template("http_mail.html",
+                               path=app.config["path"],
+                               hostname=app.config.get("hostname", ""),
+                               max_message_length=MAX_MAIL_MESSAGE_LENGTH,
+                               inbox_address=address,
+                               inbox_read_key=new_key,
+                               success="Read key rotated. Replace your old key immediately.",
+                               rotated_read_key=new_key)
 
     # ------------------------------------------------------------------
     # Read inbox (requires read_key)
