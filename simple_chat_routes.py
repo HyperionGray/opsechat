@@ -46,6 +46,7 @@ RATE_LIMITS = {
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
+MAX_DM_MESSAGE_LENGTH = 200  # DMs are for short room-sharing notes
 MESSAGE_RETENTION_SECONDS = 180  # Burn window for room messages
 ROOM_INACTIVITY_EXPIRY_SECONDS = 3600  # 1 hour inactivity expiry
 DM_EXPIRY_SECONDS = 60  # Ephemeral direct-message expiry
