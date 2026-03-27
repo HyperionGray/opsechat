@@ -115,6 +115,18 @@ class TestHttpMailStorage:
         self.storage.cleanup_empty_old_mailboxes()
         assert self.storage.get_mailbox(mb.address) is not None
 
+    def test_destroyed_mailbox_stale_reference_rejects_writes_and_reads(self):
+        mb = self.storage.create_mailbox()
+        stale_ref = self.storage.get_mailbox(mb.address)
+        assert stale_ref is not None
+
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert self.storage.get_mailbox(mb.address) is None
+
+        # Even a stale object reference must refuse operations post-destroy.
+        assert stale_ref.add_message("Subj", "Body", "alice") is None
+        assert stale_ref.get_messages(mb.read_key) is None
+
 
 # ===========================================================================
 # HttpMailbox unit tests
@@ -193,6 +205,27 @@ class TestHttpMailbox:
         msg = HttpMessage("id1", "Secret Subject", "Secret Body", "Alice",
                           datetime.datetime.now())
         msg.overwrite()
+        assert "Secret" not in msg.subject
+        assert "Secret" not in msg.body
+        assert "Alice" not in msg.sender_handle
+
+    def test_destroy_rejects_new_messages(self):
+        self.mailbox.destroy()
+        msg_id = self.mailbox.add_message("Subj", "Body", "alice")
+        assert msg_id is None
+        assert self.mailbox.message_count() == 0
+
+    def test_destroy_blocks_reads_even_with_correct_key(self):
+        self.mailbox.add_message("Subj", "Body", "alice")
+        self.mailbox.destroy()
+        msgs = self.mailbox.get_messages("secretkey123456789012345678901")
+        assert msgs is None
+
+    def test_destroy_scrubs_existing_messages(self):
+        self.mailbox.add_message("Secret Subject", "Secret Body", "Alice")
+        msg = self.mailbox.messages[0]
+        self.mailbox.destroy()
+        assert self.mailbox.messages == []
         assert "Secret" not in msg.subject
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
@@ -387,6 +420,25 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 403
+
+    def test_send_after_destroyed_mailbox_returns_not_found(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": read_key},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "X", "body": "Y", "sender": "bob"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 404
 
     def test_message_body_sanitized(self):
         r = self.client.post(f"/{self.path}/mail/new")
