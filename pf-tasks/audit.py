@@ -26,6 +26,7 @@ DEFAULT_MARKERS: Tuple[str, ...] = (
 
 DEFAULT_EXCLUDED_DIRS = {
     ".git",
+    ".cache",
     ".venv",
     "venv",
     "deadenv",
@@ -172,6 +173,9 @@ def classify_stale_candidate(rel_path: str, abs_path: Path) -> str:
     if abs_path.name == "d":
         return "single-letter ambiguous filename"
     try:
+        # Empty package marker modules are intentional in many Python layouts.
+        if abs_path.name == "__init__.py" and abs_path.is_file() and abs_path.stat().st_size == 0:
+            return ""
         if abs_path.is_file() and abs_path.stat().st_size == 0:
             return "empty file"
     except OSError:

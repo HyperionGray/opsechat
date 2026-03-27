@@ -4,27 +4,13 @@ PF Task: Deploy opsechat using quadlets or compose
 Compatible with pf-web-poly-compile-helper-runner patterns
 """
 
+import argparse
+import shutil
 import subprocess
 import sys
-import shutil
 from pathlib import Path
-import argparse
 
-def run_command(cmd, cwd=None, check=True):
-    """Run command with proper error handling"""
-    print(f"[*] Running: {' '.join(cmd)}")
-    try:
-        result = subprocess.run(cmd, cwd=cwd, check=check, capture_output=True, text=True)
-        if result.stdout:
-            print(result.stdout)
-        return result
-    except subprocess.CalledProcessError as e:
-        print(f"[!] Command failed: {e}")
-        if e.stderr:
-            print(f"[!] Error: {e.stderr}")
-        if check:
-            sys.exit(1)
-        return e
+from common import run_command
 
 def detect_deployment_method():
     """Detect available deployment methods"""

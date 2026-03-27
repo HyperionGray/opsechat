@@ -4,37 +4,17 @@ PF Task: Build opsechat container images
 Compatible with pf-web-poly-compile-helper-runner patterns
 """
 
-import subprocess
 import sys
 from pathlib import Path
-
-def run_command(cmd, cwd=None, check=True):
-    """Run command with proper error handling"""
-    print(f"[*] Running: {' '.join(cmd)}")
-    try:
-        result = subprocess.run(cmd, cwd=cwd, check=check, capture_output=True, text=True)
-        if result.stdout:
-            print(result.stdout)
-        return result
-    except subprocess.CalledProcessError as e:
-        print(f"[!] Command failed: {e}")
-        if e.stderr:
-            print(f"[!] Error: {e.stderr}")
-        if check:
-            sys.exit(1)
-        return e
+from common import run_command, detect_first_available_tool
 
 def detect_container_tool():
     """Detect available container build tool"""
-    for tool in ['podman', 'docker']:
-        try:
-            subprocess.run([tool, '--version'], capture_output=True, check=True)
-            return tool
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            continue
-    
-    print("[!] No container tool (podman/docker) found")
-    sys.exit(1)
+    tool = detect_first_available_tool(["podman", "docker"])
+    if not tool:
+        print("[!] No container tool (podman/docker) found")
+        sys.exit(1)
+    return tool
 
 def build_image(container_tool, tag="localhost/opsechat:latest"):
     """Build the opsechat container image"""
