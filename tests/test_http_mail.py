@@ -91,6 +91,16 @@ class TestHttpMailStorage:
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
 
+    def test_stale_mailbox_reference_refuses_writes_after_destroy(self):
+        mb = self.storage.create_mailbox()
+        stale_ref = self.storage.get_mailbox(mb.address)
+        assert stale_ref is not None
+        assert stale_ref.add_message("before", "msg", "alice") is not None
+
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        assert stale_ref.add_message("after", "msg", "alice") is None
+        assert stale_ref.message_count() == 0
+
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
         result = self.storage.delete_mailbox(mb.address, "wrongkey")
@@ -179,6 +189,13 @@ class TestHttpMailbox:
         self.mailbox.add_message("A", "B", "c")
         assert self.mailbox.message_count() == 1
 
+    def test_destroy_blocks_further_message_access(self):
+        self.mailbox.add_message("A", "B", "c")
+        self.mailbox.destroy()
+        assert self.mailbox.add_message("x", "y", "z") is None
+        assert self.mailbox.get_messages("secretkey123456789012345678901") is None
+        assert self.mailbox.message_count() == 0
+
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
         msgs = self.mailbox.get_messages("secretkey123456789012345678901")
@@ -263,6 +280,43 @@ class TestHttpMailRoutes:
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
         assert r.status_code == 404
+
+    def test_send_after_destroy_returns_410(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": read_key},
+            headers={"Accept": "application/json"},
+        )
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "X", "body": "Y", "sender": "bob"},
+        )
+        assert r.status_code == 410
+        assert "destroyed" in r.get_json()["error"].lower()
+
+    def test_form_compose_send_uses_dynamic_address_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            data={"subject": "Form", "body": "Hello", "sender": "bob"},
+        )
+        assert r.status_code == 200
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        data = r.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["subject"] == "Form"
 
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
