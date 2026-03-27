@@ -99,6 +99,31 @@ python pf-tasks/clean.py --artifacts
 - Optionally removes container images
 - Cleans build artifacts and cache
 
+### audit.py
+Audits repository hygiene and reports unfinished work plus cleanup hotspots.
+
+```bash
+# Run audit in human-readable format
+python pf-tasks/audit.py
+
+# Emit JSON for automation
+python pf-tasks/audit.py --format json
+
+# Fail CI if findings are present
+python pf-tasks/audit.py --fail-on-findings
+
+# Tune depth and result volume
+python pf-tasks/audit.py --max-depth 3 --limit 25
+```
+
+**Features:**
+- Scans tracked text files for unfinished markers (`TODO`, `FIXME`, `STUB`, etc.)
+- Flags stale/backup naming patterns (`*.bak`, `*.old`, `*.deprecated`)
+- Detects repeated nested directories (for example `foo/foo/...`)
+- Reports deep path hotspots beyond configurable depth
+- Detects empty directories that may be stale leftovers
+- Supports text and JSON output for local usage and CI workflows
+
 ## Usage Patterns
 
 ### Complete Deployment Workflow
@@ -151,6 +176,9 @@ systemctl --user enable opsechat-app.service
 ```bash
 # Regular cleanup (keeps images)
 python pf-tasks/clean.py --method all
+
+# Repository hygiene audit (report only)
+python pf-tasks/audit.py
 
 # Complete cleanup (removes everything)
 python pf-tasks/clean.py --images --artifacts

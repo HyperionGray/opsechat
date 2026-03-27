@@ -35,7 +35,7 @@ class PFTaskTester:
         """Test that all pf task modules can be imported"""
         print("\n=== Testing Module Imports ===")
         
-        modules = ['build', 'deploy', 'test', 'clean']
+        modules = ['build', 'deploy', 'test', 'clean', 'audit']
         for module_name in modules:
             try:
                 spec = importlib.util.spec_from_file_location(
@@ -286,6 +286,53 @@ class PFTaskTester:
             file_path = project_root / filename
             exists = file_path.exists()
             self.log_test(f"Integration file exists: {filename}", exists)
+
+    def test_audit_report_generation(self):
+        """Test audit report generation and schema."""
+        print("\n=== Testing Audit Report Generation ===")
+
+        try:
+            import audit
+
+            project_root = Path(__file__).parent
+            report = audit.build_report(
+                repo_root=project_root,
+                markers=list(audit.DEFAULT_MARKERS),
+                max_depth=4,
+                limit=10,
+                excluded_dirs=audit.DEFAULT_EXCLUDED_DIRS,
+            )
+
+            required_top_level = {
+                "summary",
+                "unfinished_markers",
+                "stale_candidates",
+                "nested_dir_anomalies",
+                "deep_paths",
+                "empty_directories",
+            }
+            self.log_test(
+                "Audit report includes expected top-level keys",
+                required_top_level.issubset(set(report.keys())),
+            )
+
+            summary_keys = {
+                "tracked_files",
+                "unfinished_markers_total",
+                "stale_candidates_total",
+                "nested_dir_anomalies_total",
+                "deep_paths_total",
+                "empty_dirs_total",
+                "max_depth",
+                "limit",
+            }
+            self.log_test(
+                "Audit summary includes expected keys",
+                summary_keys.issubset(set(report["summary"].keys())),
+            )
+
+        except Exception as e:
+            self.log_test("Audit report generation", False, str(e))
     
     def run_all_tests(self):
         """Run all tests"""
@@ -299,6 +346,7 @@ class PFTaskTester:
         self.test_error_handling()
         self.test_duplicate_code()
         self.test_integration_points()
+        self.test_audit_report_generation()
         
         # Summary
         print(f"\n=== Test Summary ===")
