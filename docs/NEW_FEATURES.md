@@ -75,6 +75,21 @@ Response:
 }
 ```
 
+#### Check DM Read Status (NEW)
+```bash
+GET /chat/dm/{dm_id}/status
+
+Response:
+{
+  "dm_id": "14gvVa4l3SPsLJc1Ijb_sA",
+  "read": false,
+  "expires_in": 52
+}
+```
+
+Use this endpoint when a sender needs lightweight delivery/read visibility
+without polling the full DM payload.
+
 ### Example Workflow
 ```python
 # User A creates a room

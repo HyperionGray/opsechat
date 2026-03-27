@@ -308,6 +308,46 @@ class TestDMRoutes:
         response = client.get(f"/chat/dm/{dm_id}")
         assert response.status_code == 404
 
+    def test_dm_status_unread_then_read(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        dm_id = client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "check status"},
+            content_type="application/json",
+        ).get_json()["dm_id"]
+
+        status_before = client.get(f"/chat/dm/{dm_id}/status")
+        assert status_before.status_code == 200
+        assert status_before.get_json()["read"] is False
+
+        view = client.get(f"/chat/dm/{dm_id}")
+        assert view.status_code == 200
+
+        status_after = client.get(f"/chat/dm/{dm_id}/status")
+        assert status_after.status_code == 200
+        data = status_after.get_json()
+        assert data["read"] is True
+        assert "expires_in" in data
+
+    def test_dm_status_nonexistent_or_expired(self, client):
+        missing = client.get("/chat/dm/not-a-real-id/status")
+        assert missing.status_code == 404
+
+        from simple_chat_routes import direct_messages, dm_lock
+
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        dm_id = client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "will expire"},
+            content_type="application/json",
+        ).get_json()["dm_id"]
+
+        with dm_lock:
+            direct_messages[dm_id]["timestamp"] -= datetime.timedelta(minutes=5)
+
+        expired = client.get(f"/chat/dm/{dm_id}/status")
+        assert expired.status_code == 404
+
 
 # ---------------------------------------------------------------------------
 # Bug fixes: trailing slash, VERSION path, encrypted messages, CSP
@@ -365,6 +405,13 @@ class TestBugFixes:
         response = client.get(f"/chat/room/{room_id}")
         body = response.data.decode()
         assert f'data-room-id="{room_id}"' in body
+
+    def test_chat_room_has_no_inline_onclick_handlers(self, client):
+        """Chat room template should avoid inline event handlers for CSP."""
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.get(f"/chat/room/{room_id}")
+        body = response.data.decode()
+        assert "onclick=" not in body
 
     # -- Bug 4: Encrypted messages must be accepted by the server -----------
 

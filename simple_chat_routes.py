@@ -17,8 +17,8 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Absolute path to this file's directory (used for reliable VERSION lookup)
@@ -503,6 +503,24 @@ def register_simple_chat_routes(app):
                 "sender_name": dm["sender_name"],
                 "room_id": dm["room_id"],
                 "message": dm["message"],
+                "expires_in": max(0, 60 - int(age))
+            })
+
+    @app.route('/chat/dm/<string:dm_id>/status')
+    def dm_status(dm_id):
+        """Return read/expiry status for a direct message."""
+        with dm_lock:
+            if dm_id not in direct_messages:
+                return jsonify({"error": "DM not found or expired"}), 404
+
+            dm = direct_messages[dm_id]
+            age = (datetime.datetime.now() - dm["timestamp"]).total_seconds()
+            if age > 60:
+                return jsonify({"error": "DM not found or expired"}), 404
+
+            return jsonify({
+                "dm_id": dm["dm_id"],
+                "read": dm["read"],
                 "expires_in": max(0, 60 - int(age))
             })
     

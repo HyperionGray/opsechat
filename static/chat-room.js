@@ -44,24 +44,6 @@ async function fetchRoomKey() {
     return false;
 }
 
-// Simple encryption using AES-GCM with Web Crypto API
-async function generateKey() {
-    const key = await window.crypto.subtle.generateKey(
-        {
-            name: "AES-GCM",
-            length: 256
-        },
-        true,
-        ["encrypt", "decrypt"]
-    );
-    return key;
-}
-
-async function exportKey(key) {
-    const exported = await window.crypto.subtle.exportKey("raw", key);
-    return Array.from(new Uint8Array(exported));
-}
-
 async function importKey(keyArray) {
     const key = await window.crypto.subtle.importKey(
         "raw",
@@ -295,5 +277,4 @@ window.addEventListener('beforeunload', function() {
     }
 });
 
-// Expose acceptSecurityWarning for the HTML onclick attribute
-window.acceptSecurityWarning = acceptSecurityWarning;
+document.getElementById('acceptSecurityWarningBtn').addEventListener('click', acceptSecurityWarning);
