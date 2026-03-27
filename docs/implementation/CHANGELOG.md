@@ -11,10 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- HTTP Mail read-key rotation endpoint/UI (`POST /<path>/mail/<address>/rotate-key`)
+- HTTP Mail no-JavaScript compose fallback endpoint (`POST /<path>/mail/send`)
+- Dedicated HTTP Mail user guide (`docs/user-guide/HTTP_MAIL.md`)
 
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- HTTP Mail mailbox destruction flow now marks mailboxes as destroyed and refuses late writes
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022

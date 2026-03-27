@@ -209,6 +209,34 @@ The system integrates with existing PGP functionality:
 
 ## API Reference
 
+### HTTP Mail API (No SMTP/IMAP)
+
+These routes provide lightweight mailbox messaging over HTTP only:
+
+- `POST /{path}/mail/new`  
+  Create a mailbox and return:
+  - `address` (public sender target)
+  - `read_key` (private inbox access secret)
+
+- `POST /{path}/mail/{address}/send`  
+  Send message to mailbox address (JSON or form).
+
+- `POST /{path}/mail/send`  
+  No-JavaScript fallback compose endpoint using form field `_address_override`.
+
+- `GET /{path}/mail/{address}/inbox?key=<read_key>`  
+  Read inbox with default-deny behavior (invalid key returns 403).
+
+- `POST /{path}/mail/{address}/delete/{msg_id}`  
+  Delete one message (requires `read_key`).
+
+- `POST /{path}/mail/{address}/rotate-key`  
+  Rotate mailbox read key (requires current `read_key`).
+  After rotation, the previous key is invalid immediately.
+
+- `POST /{path}/mail/{address}/destroy`  
+  Destroy mailbox and securely overwrite message memory before deletion.
+
 ### Email Storage Class
 ```python
 class EmailStorage:
