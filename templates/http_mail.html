@@ -95,22 +95,22 @@
 
 <body>
 <div class="header">
-  <h1>📨 HTTP Mail</h1>
-  <p style="color:#888; font-size:13px;">Secure email over HTTP — no SMTP, no IMAP, default deny</p>
+  <h1>HTTP Mail</h1>
+  <p style="color:#888; font-size:13px;">Secure email over HTTP - no SMTP, no IMAP, default deny</p>
 </div>
 
 <div class="nav">
-  <a href="/{{ path }}">💬 Chat</a>
-  <a href="/{{ path }}/email">📧 Classic Inbox</a>
-  <a href="/{{ path }}/email/burner">🔥 Burner Email</a>
+  <a href="/{{ path }}">Chat</a>
+  <a href="/{{ path }}/email">Classic Inbox</a>
+  <a href="/{{ path }}/email/burner">Burner Email</a>
 </div>
 
 {% if error %}
-<div class="error-box">⚠️ {{ error }}</div>
+<div class="error-box">{{ error }}</div>
 {% endif %}
 
 {% if success %}
-<div class="success-box">✅ {{ success }}</div>
+<div class="success-box">{{ success }}</div>
 {% endif %}
 
 <div class="info">
@@ -125,9 +125,9 @@
 <!--  Section controls                                       -->
 <!-- ======================================================= -->
 <div class="section-toggle">
-  <button onclick="showSection('create')">➕ Create New Mailbox</button>
-  <button onclick="showSection('compose')">✉️ Send a Message</button>
-  <button onclick="showSection('read')">📬 Read My Inbox</button>
+  <button onclick="showSection('create')">Create New Mailbox</button>
+  <button onclick="showSection('compose')">Send a Message</button>
+  <button onclick="showSection('read')">Read My Inbox</button>
 </div>
 
 <!-- ======================================================= -->
@@ -139,22 +139,44 @@
     A unique address and secret read key will be generated.
     <strong>Save your read key</strong> — it is shown only once.
   </p>
-  <button id="create-btn" onclick="createMailbox()">Create Mailbox</button>
+  <form method="POST" action="/{{ path }}/mail/new">
+    <button id="create-btn" type="submit">Create Mailbox</button>
+    <button type="button" onclick="createMailbox()">Create Mailbox (JS)</button>
+  </form>
+
+  {% if new_mailbox %}
+  <div class="warn">
+    <strong>Save these values now.</strong>
+    The read key may not be shown again after you leave this page.
+  </div>
+  <div class="form-group">
+    <div class="token-label">Your Mailbox Address (share with senders)</div>
+    <div class="token-box">{{ new_mailbox.address }}</div>
+  </div>
+  <div class="form-group">
+    <div class="token-label">Your Read Key (keep secret — required to read messages)</div>
+    <div class="token-box">{{ new_mailbox.read_key }}</div>
+  </div>
+  <div class="form-group">
+    <div class="token-label">Send URL (share this link with senders)</div>
+    <div class="token-box">{{ new_mailbox.send_url }}</div>
+  </div>
+  {% endif %}
 
   <div id="new-mailbox-result">
     <div class="warn">
-      ⚠️ <strong>Save these values now.</strong>
+      <strong>Save these values now.</strong>
       The read key will not be shown again after you leave this page.
     </div>
     <div class="form-group">
       <div class="token-label">Your Mailbox Address (share with senders)</div>
       <div class="token-box" id="result-address"></div>
-      <button onclick="copyText('result-address')">📋 Copy Address</button>
+      <button onclick="copyText('result-address')">Copy Address</button>
     </div>
     <div class="form-group">
       <div class="token-label">Your Read Key (keep secret — required to read messages)</div>
       <div class="token-box" id="result-read-key"></div>
-      <button onclick="copyText('result-read-key')">📋 Copy Read Key</button>
+      <button onclick="copyText('result-read-key')">Copy Read Key</button>
     </div>
     <div class="form-group">
       <div class="token-label">Send URL (share this link with senders)</div>
@@ -221,7 +243,7 @@
     Without the correct read key, no messages are revealed (default deny).
   </p>
 
-  <form method="GET" id="read-form">
+  <form method="GET" action="/{{ path }}/mail/inbox" id="read-form">
     <div class="form-group">
       <label for="read-address">Mailbox Address:</label>
       <input type="text" id="read-address" name="_read_address"
@@ -234,7 +256,8 @@
              value="{{ inbox_read_key or '' }}"
              placeholder="Your private read key">
     </div>
-    <button type="button" onclick="fetchInbox()">Open Inbox</button>
+    <button type="submit">Open Inbox</button>
+    <button type="button" onclick="fetchInbox()">Open Inbox (JS)</button>
   </form>
 
   <!-- Inbox messages rendered from server (non-JS fallback) -->
@@ -257,7 +280,7 @@
               action="/{{ path }}/mail/{{ inbox_address }}/delete/{{ msg.id }}">
           <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
           <button type="submit" class="danger"
-                  onclick="return confirm('Delete this message?')">🗑 Delete</button>
+                  onclick="return confirm('Delete this message?')">Delete</button>
         </form>
       </div>
     </div>
@@ -271,7 +294,7 @@
         <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
         <button type="submit" class="danger"
                 onclick="return confirm('Destroy mailbox and all messages permanently?')">
-          💣 Destroy Mailbox
+          Destroy Mailbox
         </button>
       </form>
     </div>
@@ -366,7 +389,7 @@
     })
     .catch(function(err) {
       document.getElementById('js-inbox-messages').innerHTML =
-        '<div class="error-box">⚠️ ' + err.message + '</div>';
+        '<div class="error-box">' + err.message + '</div>';
     });
   }
 
@@ -386,14 +409,14 @@
           '<button class="danger js-delete-msg"' +
             ' data-address="' + esc(address) + '"' +
             ' data-msg-id="' + esc(msg.id) + '"' +
-            ' data-read-key="' + esc(readKey) + '">🗑 Delete</button>' +
+            ' data-read-key="' + esc(readKey) + '">Delete</button>' +
         '</div></div>';
     });
     html += '<div style="margin-top:30px;border-top:1px solid #333;padding-top:15px;">' +
       '<h3 style="color:#f00;">Danger Zone</h3>' +
       '<button class="danger js-destroy-mailbox"' +
         ' data-address="' + esc(address) + '"' +
-        ' data-read-key="' + esc(readKey) + '">💣 Destroy Mailbox</button></div>';
+        ' data-read-key="' + esc(readKey) + '">Destroy Mailbox</button></div>';
     container.innerHTML = html;
 
     // Attach event listeners after injecting HTML (avoids inline handler issues)
@@ -434,7 +457,7 @@
     .then(function(d) {
       if (d.success) {
         document.getElementById('js-inbox-messages').innerHTML =
-          '<div class="success-box">✅ Mailbox destroyed.</div>';
+          '<div class="success-box">Mailbox destroyed.</div>';
       } else {
         alert('Error: ' + (d.error || 'Could not destroy mailbox'));
       }

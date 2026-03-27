@@ -38,6 +38,7 @@ Installation and deployment guides for different environments.
 Documentation for end users and operators.
 
 - [Email System](user-guide/EMAIL_SYSTEM.md) - Comprehensive email documentation
+- [HTTP Mail](user-guide/HTTP_MAIL.md) - SMTP-free ephemeral mailboxes with no-JS support
 - [Email Quick Start](user-guide/EMAIL_QUICKSTART.md) - Quick email setup guide
 - [PGP Usage](user-guide/PGP_USAGE.md) - PGP encryption guide
 - [PGP Test Examples](user-guide/PGP_TEST_EXAMPLE.md) - PGP testing examples

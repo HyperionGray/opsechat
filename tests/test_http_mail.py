@@ -235,6 +235,17 @@ class TestHttpMailRoutes:
         assert data["send_url"].startswith(f"/{self.path}/mail/")
         assert data["inbox_url"].endswith("/inbox")
 
+    def test_create_mailbox_form_post_renders_html_and_values(self):
+        r = self.client.post(
+            f"/{self.path}/mail/new",
+            data={},
+            headers={"Accept": "text/html"},
+        )
+        assert r.status_code == 200
+        assert b"Mailbox created. Save your read key now." in r.data
+        assert b"Your Mailbox Address" in r.data
+        assert b"Your Read Key" in r.data
+
     def test_send_message_json(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
@@ -263,6 +274,43 @@ class TestHttpMailRoutes:
             json={"subject": "X", "body": "Y", "sender": "bob"},
         )
         assert r.status_code == 404
+
+    def test_send_fallback_without_address_fails(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"body": "Hello"},
+            headers={"Accept": "text/html"},
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required" in r.data
+
+    def test_send_fallback_posts_to_selected_address(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Fallback",
+                "body": "Form body",
+                "sender": "form-user",
+            },
+            headers={"Accept": "text/html"},
+            follow_redirects=True,
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        data = inbox.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["subject"] == "Fallback"
+        assert data["messages"][0]["body"] == "Form body"
 
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -309,6 +357,32 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.status_code == 404
+
+    def test_inbox_lookup_without_address_or_key_fails(self):
+        r = self.client.get(
+            f"/{self.path}/mail/inbox",
+            headers={"Accept": "text/html"},
+        )
+        assert r.status_code == 400
+        assert b"Mailbox address and read key are required" in r.data
+
+    def test_inbox_lookup_redirects_to_inbox_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Lookup", "body": "Body", "sender": "alice"},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/inbox?_read_address={addr}&_read_key={read_key}",
+            headers={"Accept": "text/html"},
+            follow_redirects=True,
+        )
+        assert r.status_code == 200
+        assert b"Messages (1)" in r.data
 
     def test_delete_message_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
