@@ -350,6 +350,7 @@ class TestBugFixes:
         # There should be no inline event handler JS (addEventListener, fetch, etc.)
         assert "addEventListener" not in body
         assert "fetch(" not in body
+        assert "onclick=" not in body
 
     def test_chat_room_has_no_inline_script(self, client):
         """The chat room page must reference external JS, not inline script."""
@@ -358,6 +359,7 @@ class TestBugFixes:
         body = response.data.decode()
         assert "chat-room.js" in body
         assert "addEventListener" not in body
+        assert "onclick=" not in body
 
     def test_chat_room_passes_room_id_via_data_attribute(self, client):
         """room_id must be available as a data-room-id attribute, not inlined in JS."""
@@ -365,6 +367,13 @@ class TestBugFixes:
         response = client.get(f"/chat/room/{room_id}")
         body = response.data.decode()
         assert f'data-room-id="{room_id}"' in body
+
+    def test_chat_room_warning_button_has_js_hook_id(self, client):
+        """The security warning button should be wired via external JS, not inline handlers."""
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.get(f"/chat/room/{room_id}")
+        body = response.data.decode()
+        assert 'id="acceptSecurityWarningBtn"' in body
 
     # -- Bug 4: Encrypted messages must be accepted by the server -----------
 
