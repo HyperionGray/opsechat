@@ -135,12 +135,30 @@ POST /chat/create
 Response: {"success": true, "room_id": "...", "room_url": "/chat/room/..."}
 ```
 
+Rate limit headers are included on responses:
+- `X-RateLimit-Limit`: endpoint quota for the current window
+- `X-RateLimit-Remaining`: remaining requests in the current window
+- `X-RateLimit-Reset`: seconds until the current window resets
+- `Retry-After`: included on `429` responses with the wait time in seconds
+
 #### Get/Post Messages
 ```
 GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
+
+For `POST /chat/room/<room_id>/messages`, successful and rate-limited responses
+include the same rate-limit headers listed above.
+
+#### Send Direct Message
+```
+POST /chat/dm/send
+Body: {"room_id": "...", "message": "..."}
+```
+
+Successful and `429` responses include the standard rate-limit headers so clients
+can implement backoff without parsing error text.
 
 ### Encryption Implementation
 

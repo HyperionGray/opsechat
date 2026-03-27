@@ -75,6 +75,13 @@ class TestChatCreateEndpoint:
         assert "room_url" in data
         assert data["room_url"].startswith("/chat/room/")
 
+    def test_create_room_includes_rate_limit_headers(self):
+        resp = self.client.post("/chat/create")
+        assert resp.status_code == 200
+        assert resp.headers.get("X-RateLimit-Limit") == "10"
+        assert resp.headers.get("X-RateLimit-Remaining") == "9"
+        assert "X-RateLimit-Reset" in resp.headers
+
     def test_created_room_is_accessible(self):
         create_resp = self.client.post("/chat/create")
         room_id = create_resp.get_json()["room_id"]
@@ -112,6 +119,16 @@ class TestChatMessagesEndpoint:
         )
         assert resp.status_code == 200
         assert resp.get_json()["success"] is True
+
+    def test_post_message_includes_rate_limit_headers(self):
+        resp = self.client.post(
+            f"/chat/room/{self.room_id}/messages",
+            json={"message": "header check"},
+        )
+        assert resp.status_code == 200
+        assert resp.headers.get("X-RateLimit-Limit") == "30"
+        assert resp.headers.get("X-RateLimit-Remaining") == "29"
+        assert "X-RateLimit-Reset" in resp.headers
 
     def test_posted_message_appears_in_get(self):
         self.client.post(
@@ -178,6 +195,23 @@ class TestChatMessagesEndpoint:
     def test_get_on_missing_room_returns_404(self):
         resp = self.client.get("/chat/room/no-such-room-xyz/messages")
         assert resp.status_code == 404
+
+    def test_post_message_rate_limit_429_has_retry_headers(self):
+        for i in range(30):
+            ok = self.client.post(
+                f"/chat/room/{self.room_id}/messages",
+                json={"message": f"m{i}"},
+            )
+            assert ok.status_code == 200
+
+        blocked = self.client.post(
+            f"/chat/room/{self.room_id}/messages",
+            json={"message": "blocked"},
+        )
+        assert blocked.status_code == 429
+        assert blocked.headers.get("X-RateLimit-Limit") == "30"
+        assert blocked.headers.get("X-RateLimit-Remaining") == "0"
+        assert blocked.headers.get("Retry-After") is not None
 
     def test_message_response_contains_expected_fields(self):
         self.client.post(
@@ -259,6 +293,16 @@ class TestDMEndpoints:
         assert data["success"] is True
         assert "dm_id" in data
         assert data["expires_in"] == 60
+
+    def test_send_dm_includes_rate_limit_headers(self):
+        resp = self.client.post(
+            "/chat/dm/send",
+            json={"room_id": self.room_id, "message": "header check"},
+        )
+        assert resp.status_code == 200
+        assert resp.headers.get("X-RateLimit-Limit") == "5"
+        assert resp.headers.get("X-RateLimit-Remaining") == "4"
+        assert "X-RateLimit-Reset" in resp.headers
 
     def test_send_dm_creates_viewable_link(self):
         resp = self.client.post(

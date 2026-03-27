@@ -19,6 +19,7 @@ from simple_chat_routes import (
     get_random_color_rgb,
     ChatRoom,
     check_rate_limit,
+    get_rate_limit_state,
     RATE_LIMITS,
     MAX_MESSAGE_LENGTH,
 )
@@ -139,6 +140,12 @@ class TestCheckRateLimit:
     def test_unknown_endpoint_always_allowed(self):
         allowed, _ = check_rate_limit("sess-002", "nonexistent_endpoint")
         assert allowed is True
+
+    def test_rate_limit_state_reports_limit_and_remaining(self):
+        state = get_rate_limit_state("sess-state", "dm_send", consume=True)
+        assert state["allowed"] is True
+        assert state["limit"] == RATE_LIMITS["dm_send"]["max_requests"]
+        assert state["remaining"] == RATE_LIMITS["dm_send"]["max_requests"] - 1
 
 
 # ---------------------------------------------------------------------------
