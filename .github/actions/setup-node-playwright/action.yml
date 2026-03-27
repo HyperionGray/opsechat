@@ -24,8 +24,36 @@ runs:
       id: playwright-version
       shell: bash
       run: |
-        PLAYWRIGHT_VERSION=$(npm list @playwright/test --depth=0 --json | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
-        echo "version=$PLAYWRIGHT_VERSION" >> $GITHUB_OUTPUT
+        PLAYWRIGHT_VERSION=$(node <<'EOF'
+        const fs = require('fs');
+
+        function readJson(path) {
+          try {
+            return JSON.parse(fs.readFileSync(path, 'utf8'));
+          } catch (error) {
+            return null;
+          }
+        }
+
+        const packageLock = readJson('package-lock.json');
+        const packageJson = readJson('package.json');
+
+        const version =
+          packageLock?.packages?.['node_modules/@playwright/test']?.version ||
+          packageLock?.packages?.['']?.devDependencies?.['@playwright/test'] ||
+          packageJson?.devDependencies?.['@playwright/test'] ||
+          '';
+
+        process.stdout.write(String(version).replace(/^[^\d]*/, ''));
+        EOF
+        )
+
+        if [ -z "$PLAYWRIGHT_VERSION" ]; then
+          echo "Failed to determine Playwright version" >&2
+          exit 1
+        fi
+
+        echo "version=$PLAYWRIGHT_VERSION" >> "$GITHUB_OUTPUT"
     
     - name: Cache Playwright browsers
       uses: actions/cache@v4
