@@ -18,7 +18,7 @@ import secrets
 import threading
 import base64
 from flask import render_template, request, session, jsonify, make_response
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Absolute path to this file's directory (used for reliable VERSION lookup)
