@@ -134,6 +134,95 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+
+    @staticmethod
+    def _parse_datetime(value: object) -> Optional[datetime]:
+        """Parse datetime values from state (datetime or ISO-8601 string)."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return None
+        return None
+
+    def export_state(self) -> Dict:
+        """Export manager state in a JSON-serializable format."""
+        serialized_domains = []
+        for domain_info in self.owned_domains:
+            if not isinstance(domain_info, dict):
+                continue
+
+            domain_name = domain_info.get("domain")
+            if not domain_name:
+                continue
+
+            purchased_at = self._parse_datetime(domain_info.get("purchased_at")) or datetime.now()
+            expires_at = self._parse_datetime(domain_info.get("expires_at")) or (purchased_at + timedelta(days=365))
+
+            try:
+                price = float(domain_info.get("price", 0.0))
+            except (TypeError, ValueError):
+                price = 0.0
+
+            serialized_domains.append({
+                "domain": domain_name,
+                "price": price,
+                "purchased_at": purchased_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
+            })
+
+        return {
+            "current_spending": float(self.current_spending),
+            "owned_domains": serialized_domains,
+            "active_domain": self.active_domain,
+        }
+
+    def import_state(self, state: Dict) -> int:
+        """
+        Import persisted state.
+
+        Returns:
+            int: Number of dropped invalid domain records during import.
+        """
+        try:
+            self.current_spending = float(state.get("current_spending", 0.0))
+        except (TypeError, ValueError):
+            self.current_spending = 0.0
+
+        raw_domains = state.get("owned_domains") or []
+        valid_domains = []
+
+        for domain_info in raw_domains:
+            if not isinstance(domain_info, dict):
+                continue
+
+            domain_name = domain_info.get("domain")
+            if not isinstance(domain_name, str) or not domain_name:
+                continue
+
+            try:
+                price = float(domain_info.get("price", 0.0))
+            except (TypeError, ValueError):
+                continue
+
+            purchased_at = self._parse_datetime(domain_info.get("purchased_at")) or datetime.now()
+            expires_at = self._parse_datetime(domain_info.get("expires_at")) or (purchased_at + timedelta(days=365))
+
+            valid_domains.append({
+                "domain": domain_name,
+                "price": price,
+                "purchased_at": purchased_at,
+                "expires_at": expires_at,
+            })
+
+        self.owned_domains = valid_domains
+        self.active_domain = state.get("active_domain")
+        if self.active_domain not in {domain["domain"] for domain in self.owned_domains}:
+            self.active_domain = None
+
+        return max(0, len(raw_domains) - len(valid_domains))
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
@@ -243,6 +332,35 @@ class DomainRotationManager:
             return self.active_domain
         
         return None
+
+    def prune_expired_domains(self, now: Optional[datetime] = None) -> int:
+        """
+        Remove expired domains from in-memory state.
+
+        Returns:
+            int: number of removed domains
+        """
+        now = now or datetime.now()
+        active_before = self.active_domain
+        kept_domains = []
+
+        for domain_info in self.owned_domains:
+            expires_at = self._parse_datetime(domain_info.get("expires_at"))
+            if expires_at and expires_at > now:
+                kept_domains.append(domain_info)
+                continue
+
+            # Best-effort overwrite before dropping records.
+            if isinstance(domain_info.get("domain"), str):
+                domain_info["domain"] = "X" * len(domain_info["domain"])
+
+        removed_count = len(self.owned_domains) - len(kept_domains)
+        self.owned_domains = kept_domains
+
+        if active_before and active_before not in {domain["domain"] for domain in self.owned_domains}:
+            self.active_domain = None
+
+        return removed_count
     
     def get_active_domain(self) -> Optional[str]:
         """Get currently active domain"""

@@ -1,6 +1,7 @@
 """
 Tests for domain management module
 """
+from datetime import datetime, timedelta
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
@@ -174,3 +175,84 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_export_import_state_roundtrip(self):
+        """State export/import preserves domain records and datetime fields"""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 9.5
+        manager.active_domain = "active.xyz"
+        manager.owned_domains = [
+            {
+                "domain": "active.xyz",
+                "price": 2.99,
+                "purchased_at": datetime.now() - timedelta(days=2),
+                "expires_at": datetime.now() + timedelta(days=363),
+            },
+            {
+                "domain": "legacy.club",
+                "price": "3.50",
+                "purchased_at": (datetime.now() - timedelta(days=5)).isoformat(),
+                "expires_at": (datetime.now() + timedelta(days=360)).isoformat(),
+            },
+        ]
+
+        exported = manager.export_state()
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert exported["active_domain"] == "active.xyz"
+
+        restored = DomainRotationManager(monthly_budget=50.0)
+        dropped = restored.import_state(exported)
+        assert dropped == 0
+        assert restored.current_spending == 9.5
+        assert restored.active_domain == "active.xyz"
+        assert len(restored.owned_domains) == 2
+        assert isinstance(restored.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(restored.owned_domains[0]["expires_at"], datetime)
+
+    def test_import_state_drops_invalid_records_and_active_domain(self):
+        """Invalid state records are ignored and stale active domain is cleared"""
+        manager = DomainRotationManager()
+        dropped = manager.import_state(
+            {
+                "current_spending": "not-a-number",
+                "active_domain": "missing.xyz",
+                "owned_domains": [
+                    {"domain": "good.xyz", "price": 1.0},
+                    {"domain": "", "price": 1.0},
+                    {"price": 1.0},
+                    {"domain": "bad-price.xyz", "price": "abc"},
+                    "bad-record",
+                ],
+            }
+        )
+        assert dropped == 4
+        assert manager.current_spending == 0.0
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["domain"] == "good.xyz"
+        assert manager.active_domain is None
+
+    def test_prune_expired_domains_removes_stale_entries(self):
+        """Expired domain entries are removed and active domain is updated"""
+        now = datetime.now()
+        manager = DomainRotationManager()
+        manager.active_domain = "expired.xyz"
+        manager.owned_domains = [
+            {
+                "domain": "expired.xyz",
+                "price": 1.0,
+                "purchased_at": now - timedelta(days=10),
+                "expires_at": now - timedelta(seconds=1),
+            },
+            {
+                "domain": "valid.xyz",
+                "price": 2.0,
+                "purchased_at": now - timedelta(days=3),
+                "expires_at": now + timedelta(days=300),
+            },
+        ]
+
+        removed = manager.prune_expired_domains(now=now)
+        assert removed == 1
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["domain"] == "valid.xyz"
+        assert manager.active_domain is None

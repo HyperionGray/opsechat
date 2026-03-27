@@ -10,6 +10,7 @@ Usage:
     python domain_rotation_cli.py search        # Search for available cheap domains
     python domain_rotation_cli.py rotate        # Rotate to a new domain
     python domain_rotation_cli.py status        # Show budget status
+    python domain_rotation_cli.py cleanup       # Remove expired domains from saved state
     python domain_rotation_cli.py config        # Configure API credentials
 """
 
@@ -107,23 +108,18 @@ def get_manager():
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+
+    # Load saved state (datetime-safe and validated)
+    dropped_records = manager.import_state(config)
+    if dropped_records:
+        print(f"Warning: ignored {dropped_records} invalid saved domain records.")
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    config.update(manager.export_state())
     save_config(config)
 
 
@@ -233,6 +229,21 @@ def show_status():
         print(f"   Configure your email system to use: user@{manager.active_domain}")
 
 
+def cleanup_domains():
+    """Remove expired domains from persisted state"""
+    manager, config = get_manager()
+    removed_count = manager.prune_expired_domains()
+    save_manager_state(manager, config)
+
+    print("\n=== Domain State Cleanup ===\n")
+    if removed_count:
+        print(f"Removed {removed_count} expired domain record(s).")
+    else:
+        print("No expired domains found.")
+    print(f"Remaining domains: {len(manager.get_owned_domains())}")
+    print(f"Active domain: {manager.active_domain or 'None'}")
+
+
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
@@ -245,12 +256,13 @@ Examples:
   python domain_rotation_cli.py search     # Search for available domains
   python domain_rotation_cli.py rotate     # Rotate to a new domain
   python domain_rotation_cli.py list       # List owned domains
+  python domain_rotation_cli.py cleanup    # Remove expired domains from state
         """
     )
     
     parser.add_argument(
         'command',
-        choices=['config', 'status', 'search', 'rotate', 'list'],
+        choices=['config', 'status', 'search', 'rotate', 'list', 'cleanup'],
         help='Command to execute'
     )
     
@@ -266,6 +278,8 @@ Examples:
         rotate_domain()
     elif args.command == 'list':
         list_domains()
+    elif args.command == 'cleanup':
+        cleanup_domains()
 
 
 if __name__ == '__main__':
