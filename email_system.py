@@ -289,12 +289,14 @@ class BurnerEmailManager:
     def cleanup_expired(self) -> None:
         """Remove expired burner addresses"""
         now = datetime.datetime.now()
-        expired = [email for email, info in self.burner_addresses.items() 
-                   if info['expires_at'] <= now]
-        for email in expired:
+        expired = [
+            (email, info['user_id'])
+            for email, info in self.burner_addresses.items()
+            if info['expires_at'] <= now
+        ]
+        for email, user_id in expired:
             del self.burner_addresses[email]
             # Also remove from user_burners
-            user_id = self.burner_addresses.get(email, {}).get('user_id')
             if user_id and user_id in self.user_burners:
                 if email in self.user_burners[user_id]:
                     self.user_burners[user_id].remove(email)
@@ -373,6 +375,17 @@ class BurnerEmailManager:
             'sends_remaining': self.max_sends_per_hour - limit_info['count'],
             'max_sends_per_hour': self.max_sends_per_hour,
             'reset_time': limit_info['reset_time']
+        }
+
+    def get_user_stats(self, user_id: str) -> Dict:
+        """Return burner usage summary for a specific user."""
+        burners = self.get_user_burners(user_id)
+        total_remaining_seconds = sum(b['time_remaining_seconds'] for b in burners)
+        return {
+            'active_burners': len(burners),
+            'total_time_remaining_seconds': total_remaining_seconds,
+            'max_sends_per_hour': self.max_sends_per_hour,
+            'send_limit': self.get_send_limit_status(user_id),
         }
 
 

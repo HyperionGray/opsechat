@@ -242,6 +242,7 @@ class TestBurnerEmailManager:
         
         assert result is True
         assert email not in manager.burner_addresses
+        assert email not in manager.user_burners.get("user1", [])
     
     def test_custom_domain(self):
         """Test setting custom domain for burners"""
@@ -276,3 +277,13 @@ class TestBurnerEmailManager:
         
         assert len(burners) == 1
         assert burners[0]['email'] == active_email
+
+    def test_get_user_stats(self):
+        """Test burner stats aggregation for UI/API usage"""
+        manager = BurnerEmailManager()
+        manager.generate_burner_email("user1")
+        manager.generate_burner_email("user1")
+        stats = manager.get_user_stats("user1")
+        assert stats["active_burners"] == 2
+        assert stats["total_time_remaining_seconds"] > 0
+        assert stats["send_limit"]["max_sends_per_hour"] == manager.max_sends_per_hour

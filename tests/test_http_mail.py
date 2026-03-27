@@ -115,6 +115,12 @@ class TestHttpMailStorage:
         self.storage.cleanup_empty_old_mailboxes()
         assert self.storage.get_mailbox(mb.address) is not None
 
+    def test_destroyed_mailbox_rejects_new_messages(self):
+        mb = self.storage.create_mailbox()
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        with pytest.raises(ValueError):
+            mb.add_message("Late", "Should fail", "sender")
+
 
 # ===========================================================================
 # HttpMailbox unit tests
@@ -197,6 +203,19 @@ class TestHttpMailbox:
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
 
+    def test_get_status_correct_key(self):
+        self.mailbox.add_message("Status Subject", "Status Body", "alice")
+        status = self.mailbox.get_status("secretkey123456789012345678901")
+        assert status is not None
+        assert status["address"] == "testaddr1"
+        assert status["message_count"] == 1
+        assert status["created_at"]
+        assert status["latest_message_at"]
+
+    def test_get_status_wrong_key_returns_none(self):
+        status = self.mailbox.get_status("wrongkey")
+        assert status is None
+
 
 # ===========================================================================
 # HTTP mail route integration tests
@@ -247,6 +266,81 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_form_fallback_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        payload = r.get_json()
+        addr = payload["address"]
+        read_key = payload["read_key"]
+
+        send = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Form route",
+                "body": "From fallback endpoint",
+                "sender": "form-user",
+            },
+        )
+        assert send.status_code == 200
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert inbox.status_code == 200
+        data = inbox.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["subject"] == "Form route"
+
+    def test_send_message_form_fallback_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "X", "body": "Y", "sender": "z"},
+        )
+        assert r.status_code == 400
+
+    def test_mailbox_status_correct_key(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        payload = r.get_json()
+        addr = payload["address"]
+        read_key = payload["read_key"]
+
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "S", "body": "B", "sender": "alice"},
+        )
+        status = self.client.get(f"/{self.path}/mail/{addr}/status?key={read_key}")
+        assert status.status_code == 200
+        data = status.get_json()
+        assert data["address"] == addr
+        assert data["message_count"] == 1
+        assert data["created_at"]
+        assert data["latest_message_at"]
+
+    def test_mailbox_status_wrong_key_denied(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        status = self.client.get(f"/{self.path}/mail/{addr}/status?key=wrong")
+        assert status.status_code == 403
+
+    def test_send_after_destroy_returns_404(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+        destroyed = self.client.post(
+            f"/{self.path}/mail/{addr}/destroy",
+            json={"read_key": read_key},
+            headers={"Accept": "application/json"},
+        )
+        assert destroyed.status_code == 200
+
+        send = self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"subject": "Late", "body": "B", "sender": "x"},
+            headers={"Accept": "application/json"},
+        )
+        assert send.status_code == 404
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
