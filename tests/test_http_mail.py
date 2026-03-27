@@ -197,6 +197,12 @@ class TestHttpMailbox:
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
 
+    def test_destroyed_mailbox_rejects_writes_and_reads_empty(self):
+        self.mailbox.destroyed = True
+        assert self.mailbox.add_message("A", "B", "sender") is None
+        assert self.mailbox.delete_message("secretkey123456789012345678901", "id") is False
+        assert self.mailbox.get_messages("secretkey123456789012345678901") == []
+
 
 # ===========================================================================
 # HTTP mail route integration tests
@@ -247,6 +253,57 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_nojs_form_endpoint(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        send_resp = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "NoJS",
+                "body": "Posted from classic form",
+                "sender": "form-user",
+            },
+        )
+        assert send_resp.status_code == 200
+        assert b"Message sent." in send_resp.data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        payload = inbox.get_json()
+        assert len(payload["messages"]) == 1
+        assert payload["messages"][0]["subject"] == "NoJS"
+
+    def test_send_message_nojs_requires_address(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "X", "body": "Y"},
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required" in r.data
+
+    def test_inbox_nojs_endpoint_redirects(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        response = self.client.get(
+            f"/{self.path}/mail/inbox",
+            query_string={"address": addr, "key": read_key},
+            follow_redirects=False,
+        )
+        assert response.status_code == 302
+        assert f"/{self.path}/mail/{addr}/inbox?key={read_key}" in response.headers["Location"]
+
+    def test_inbox_nojs_requires_address(self):
+        response = self.client.get(f"/{self.path}/mail/inbox")
+        assert response.status_code == 400
+        assert b"Mailbox address is required" in response.data
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -421,6 +478,22 @@ class TestHttpMailRoutes:
             headers={"Accept": "application/json"},
         )
         assert r.get_json()["messages"][0]["sender"] == "anonymous"
+
+    def test_mail_index_supports_section_query(self):
+        response = self.client.get(f"/{self.path}/mail?section=compose")
+        assert response.status_code == 200
+        assert b'data-active-section="compose"' in response.data
+
+    def test_accept_header_with_charset_still_gets_json_error(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key=bad",
+            headers={"Accept": "application/json; charset=utf-8"},
+        )
+        assert inbox.status_code == 403
+        assert inbox.get_json()["error"] == "Invalid read key"
 
 
 # ===========================================================================

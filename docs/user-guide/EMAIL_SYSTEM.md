@@ -148,6 +148,17 @@ Modern, Guerrillamail-style rotating anonymous email system with advanced featur
 - Visual budget bar showing spending vs. limit
 - Auto-rotation when budget allows
 
+### HTTP Mail (No SMTP/IMAP)
+HTTP Mail provides mailbox-style messaging over HTTP endpoints only. It does not require SMTP/IMAP configuration and is useful for quick, ephemeral contact channels.
+
+- Create mailbox with a public address and private read key
+- Send messages using the public address
+- Read messages only with the private key (default deny)
+- Messages expire automatically after 24 hours
+
+**Access:** `/{path}/mail`  
+**Guide:** [HTTP Mail Guide](HTTP_MAIL.md)
+
 ### 3. Email Inbox
 - View received emails with full header information
 - PGP encrypted message detection and display
