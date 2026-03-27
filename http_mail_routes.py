@@ -83,11 +83,15 @@ def register_http_mail_routes(app):
             "send_url": f"/{url_addition}/mail/{mailbox.address}/send",
             "inbox_url": f"/{url_addition}/mail/{mailbox.address}/inbox",
         }
-        is_form_post = request.mimetype in (
-            "application/x-www-form-urlencoded",
-            "multipart/form-data",
+        content_type = request.content_type or ""
+        is_form_post = (
+            content_type.startswith("application/x-www-form-urlencoded")
+            or content_type.startswith("multipart/form-data")
         )
-        if _wants_json() or not is_form_post:
+        accept = request.headers.get("Accept", "")
+        if _wants_json():
+            return jsonify(payload)
+        if "text/html" not in accept and not is_form_post:
             return jsonify(payload)
         return _render_http_mail(
             success="Mailbox created. Save your read key now.",
