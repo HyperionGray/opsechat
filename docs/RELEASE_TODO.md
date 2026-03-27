@@ -1,6 +1,6 @@
 # Product Release TODO
 
-**Last Updated:** March 2, 2026  
+**Last Updated:** March 27, 2026  
 **Status:** Post-Release Enhancements
 
 ---
@@ -43,7 +43,7 @@
 
 ### 2. Domain Rotation CLI Tool
 
-**Current State:** Python API only (requires programming)  
+**Current State:** ✅ Implemented (`domain_rotation_cli.py` and `rotate-domain.py`)  
 **Desired State:** Simple CLI tool for non-programmers
 
 **Create:** `rotate-domain.py`
@@ -57,13 +57,24 @@ python rotate-domain.py --get-pricing xyz
 ```
 
 **Implementation:**
-- [ ] Create CLI argument parser
-- [ ] Add interactive mode
-- [ ] Display pricing before purchase
-- [ ] Confirm purchases with user
-- [ ] Add budget checking
-- [ ] Store API credentials securely
-- [ ] Add to documentation
+- [x] Create CLI argument parser
+- [x] Add interactive mode (`domain_rotation_cli.py config` and purchase confirmation)
+- [x] Display pricing before purchase
+- [x] Confirm purchases with user
+- [x] Add budget checking
+- [x] Store API credentials securely (`~/.opsechat/domain_config.json` with `0600`)
+- [x] Add to documentation (`docs/NEW_FEATURES.md`, `docs/setup/DOMAIN_API_SETUP.md`)
+
+**Delivered Enhancements (2026-03-27):**
+- Added `rotate-domain.py` simple wrapper:
+  - `--search`
+  - `--buy <domain> --years <n>`
+  - `--list-owned`
+  - `--get-pricing <tld>`
+  - `--status`
+- Added `--years` support to `domain_rotation_cli.py rotate`
+- Fixed persisted state handling for datetime fields in domain ownership records
+- Added tests for domain manager and CLI persistence helpers
 
 **Estimated Effort:** 1-2 days
 
@@ -333,7 +344,7 @@ npx playwright test --config=playwright-release.config.js --headed --project=chr
 ## Next Steps
 
 1. Prioritize automatic key exchange implementation
-2. Create domain rotation CLI tool
+2. Improve key management UX
 3. Enhance key management UX
 4. Add integration tests
 5. Update documentation with new features
