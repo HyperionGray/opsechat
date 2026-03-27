@@ -24,7 +24,7 @@ runs:
       id: playwright-version
       shell: bash
       run: |
-        PLAYWRIGHT_VERSION=$(npm list @playwright/test --depth=0 --json | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
+        PLAYWRIGHT_VERSION=$(node -p "const pkg = require('./package.json'); const version = pkg.devDependencies?.['@playwright/test'] || pkg.dependencies?.['@playwright/test']; if (!version) { throw new Error('Could not find @playwright/test in package.json'); } version.replace(/^[^0-9]*/, '')")
         echo "version=$PLAYWRIGHT_VERSION" >> $GITHUB_OUTPUT
     
     - name: Cache Playwright browsers
