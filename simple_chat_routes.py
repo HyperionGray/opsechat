@@ -17,8 +17,8 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Absolute path to this file's directory (used for reliable VERSION lookup)
@@ -46,6 +46,9 @@ RATE_LIMITS = {
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
+MESSAGE_RETENTION_SECONDS = 180  # Burn window for room messages
+ROOM_INACTIVITY_EXPIRY_SECONDS = 3600  # 1 hour inactivity expiry
+DM_EXPIRY_SECONDS = 60  # Ephemeral direct-message expiry
 
 # Prefix for E2E-encrypted messages sent from the client.
 # The client prepends this ASCII marker before the base64 AES-GCM ciphertext.
@@ -102,7 +105,7 @@ class ChatRoom:
             
             for msg in self.messages:
                 age = (now - msg["timestamp"]).total_seconds()
-                if age < 180:  # 3 minutes
+                if age < MESSAGE_RETENTION_SECONDS:
                     new_messages.append(msg)
                 else:
                     # Overwrite message data before deletion (security)
@@ -125,20 +128,46 @@ class ChatRoom:
                              if (now - u["last_seen"]).total_seconds() < 300)
             return active_users
 
+    def get_status(self):
+        """Get room metadata used by UI/API status displays."""
+        with self.lock:
+            now = datetime.datetime.now()
+            if self.messages:
+                last_activity = max(msg["timestamp"] for msg in self.messages)
+            else:
+                last_activity = self.created_at
+
+            active_users = sum(
+                1
+                for u in self.users.values()
+                if (now - u["last_seen"]).total_seconds() < 300
+            )
+            expires_in_seconds = max(
+                0,
+                ROOM_INACTIVITY_EXPIRY_SECONDS
+                - int((now - last_activity).total_seconds()),
+            )
+
+            return {
+                "room_id": self.room_id,
+                "created_at": self.created_at.isoformat(),
+                "last_activity_at": last_activity.isoformat(),
+                "message_count": len(self.messages),
+                "active_user_count": active_users,
+                "message_ttl_seconds": MESSAGE_RETENTION_SECONDS,
+                "expires_in_seconds": expires_in_seconds,
+            }
+
 
 def cleanup_old_rooms():
     """Remove rooms inactive for more than 1 hour"""
     with rooms_lock:
-        now = datetime.datetime.now()
         rooms_to_delete = []
         
         for room_id, room in chat_rooms.items():
             # Check if room has been inactive for > 1 hour
-            if room.messages:
-                last_msg_time = max(msg["timestamp"] for msg in room.messages)
-                if (now - last_msg_time).total_seconds() > 3600:
-                    rooms_to_delete.append(room_id)
-            elif (now - room.created_at).total_seconds() > 3600:
+            room_status = room.get_status()
+            if room_status["expires_in_seconds"] == 0:
                 rooms_to_delete.append(room_id)
         
         for room_id in rooms_to_delete:
@@ -156,7 +185,7 @@ def cleanup_old_dms():
         
         for dm_id, dm_data in direct_messages.items():
             age = (now - dm_data["timestamp"]).total_seconds()
-            if age > 60:  # 1 minute expiry
+            if age > DM_EXPIRY_SECONDS:
                 expired_dms.append(dm_id)
         
         for dm_id in expired_dms:
@@ -408,7 +437,7 @@ def register_simple_chat_routes(app):
         
         else:  # GET
             messages = room.get_messages()
-            user_count = room.get_user_count()
+            room_status = room.get_status()
             
             return jsonify({
                 "messages": [
@@ -421,9 +450,11 @@ def register_simple_chat_routes(app):
                     }
                     for msg in messages
                 ],
-                "user_count": user_count,
+                "user_count": room_status["active_user_count"],
                 "my_username": session.get("username"),
-                "my_color": session.get("color")
+                "my_color": session.get("color"),
+                "room_expires_in_seconds": room_status["expires_in_seconds"],
+                "message_ttl_seconds": room_status["message_ttl_seconds"],
             })
     
     @app.route('/chat/dm/send', methods=['POST'])
@@ -454,8 +485,10 @@ def register_simple_chat_routes(app):
         if not room_id or not message:
             return jsonify({"error": "Empty room_id or message"}), 400
         
-        if len(message) > 200:  # DMs should be short
-            return jsonify({"error": "DM too long. Maximum 200 characters."}), 400
+        if len(message) > MAX_DM_MESSAGE_LENGTH:
+            return jsonify({
+                "error": f"DM too long. Maximum {MAX_DM_MESSAGE_LENGTH} characters."
+            }), 400
         
         # Sanitize
         message = re.sub(r'<[^>]+>', '', message)
@@ -478,7 +511,7 @@ def register_simple_chat_routes(app):
             "success": True,
             "dm_id": dm_id,
             "dm_url": f"/chat/dm/{dm_id}",
-            "expires_in": 60
+            "expires_in": DM_EXPIRY_SECONDS
         })
     
     @app.route('/chat/dm/<string:dm_id>')
@@ -492,7 +525,7 @@ def register_simple_chat_routes(app):
             
             # Check if expired
             age = (datetime.datetime.now() - dm["timestamp"]).total_seconds()
-            if age > 60:
+            if age > DM_EXPIRY_SECONDS:
                 return jsonify({"error": "DM expired"}), 404
             
             # Mark as read
@@ -503,7 +536,7 @@ def register_simple_chat_routes(app):
                 "sender_name": dm["sender_name"],
                 "room_id": dm["room_id"],
                 "message": dm["message"],
-                "expires_in": max(0, 60 - int(age))
+                "expires_in": max(0, DM_EXPIRY_SECONDS - int(age))
             })
     
     @app.route('/chat/room/<string:room_id>/key', methods=['GET'])
@@ -518,6 +551,16 @@ def register_simple_chat_routes(app):
                 "room_id": room_id,
                 "encryption_key": room.get_room_key()
             })
+
+    @app.route('/chat/room/<string:room_id>/status', methods=['GET'])
+    def get_room_status(room_id):
+        """Get room status (activity, message count, and expiry countdown)."""
+        with rooms_lock:
+            if room_id not in chat_rooms:
+                return jsonify({"error": "Room not found"}), 404
+            room = chat_rooms[room_id]
+
+        return jsonify(room.get_status())
 
 
 def generate_random_username():

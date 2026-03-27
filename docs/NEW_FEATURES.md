@@ -2,6 +2,45 @@
 
 This guide covers the new features added in the final push for OpSecHat production readiness.
 
+## Room Status & Expiry Visibility (NEW)
+
+### What Changed
+Simple chat rooms now expose room lifecycle metadata and surface it in the UI:
+
+- `GET /chat/room/<room_id>/status` returns room metadata, active users, and expiry countdown
+- `GET /chat/room/<room_id>/messages` now includes:
+  - `room_expires_in_seconds`
+  - `message_ttl_seconds`
+- The room UI now displays:
+  - **Room expires in: Xm YYs**
+  - **Messages burn after: Xm YYs**
+
+This gives users clear feedback about chat ephemerality without changing storage behavior.
+
+### API Example
+```bash
+GET /chat/room/{room_id}/status
+
+Response:
+{
+  "room_id": "abc123...",
+  "created_at": "2026-03-27T18:00:00.123456",
+  "last_activity_at": "2026-03-27T18:05:20.123456",
+  "message_count": 3,
+  "active_user_count": 2,
+  "message_ttl_seconds": 180,
+  "expires_in_seconds": 3320
+}
+```
+
+### Security/Operational Notes
+- Room/message expiry semantics are unchanged:
+  - Message burn window: **3 minutes**
+  - Room inactivity expiry: **1 hour**
+- The new API is read-only and does not expose message contents.
+
+---
+
 ## 🔑 Automated Key Exchange
 
 ### What Changed

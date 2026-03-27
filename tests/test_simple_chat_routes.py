@@ -240,6 +240,31 @@ class TestChatRoutes:
         response = client.get("/chat/room/no-such-room/key")
         assert response.status_code == 404
 
+    def test_get_room_status_returns_metadata(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.get(f"/chat/room/{room_id}/status")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["room_id"] == room_id
+        assert data["message_count"] == 0
+        assert "created_at" in data
+        assert "last_activity_at" in data
+        assert data["message_ttl_seconds"] == simple_chat_routes.MESSAGE_RETENTION_SECONDS
+        assert 0 <= data["expires_in_seconds"] <= simple_chat_routes.ROOM_INACTIVITY_EXPIRY_SECONDS
+
+    def test_get_room_status_nonexistent_room(self, client):
+        response = client.get("/chat/room/no-such-room/status")
+        assert response.status_code == 404
+
+    def test_messages_endpoint_includes_room_timers(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.get(f"/chat/room/{room_id}/messages")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert "room_expires_in_seconds" in data
+        assert "message_ttl_seconds" in data
+        assert data["message_ttl_seconds"] == simple_chat_routes.MESSAGE_RETENTION_SECONDS
+
 
 # ---------------------------------------------------------------------------
 # HTTP routes – direct messages
@@ -358,6 +383,7 @@ class TestBugFixes:
         body = response.data.decode()
         assert "chat-room.js" in body
         assert "addEventListener" not in body
+        assert "onclick=" not in body
 
     def test_chat_room_passes_room_id_via_data_attribute(self, client):
         """room_id must be available as a data-room-id attribute, not inlined in JS."""
@@ -365,6 +391,14 @@ class TestBugFixes:
         response = client.get(f"/chat/room/{room_id}")
         body = response.data.decode()
         assert f'data-room-id="{room_id}"' in body
+
+    def test_chat_room_renders_expiry_status_elements(self, client):
+        """Room UI should include elements for expiry and burn-window status."""
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.get(f"/chat/room/{room_id}")
+        body = response.data.decode()
+        assert 'id="roomExpiry"' in body
+        assert 'id="messageBurnTime"' in body
 
     # -- Bug 4: Encrypted messages must be accepted by the server -----------
 

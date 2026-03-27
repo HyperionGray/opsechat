@@ -5,6 +5,7 @@ let encryptionEnabled = false;
 let encryptionKey = null;
 let pollInterval = null;
 let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+let roomStatusInterval = null;
 
 // Encrypted message prefix (ASCII-safe, recognised by both client and server)
 const ENC_PREFIX = 'ENC:';
@@ -27,6 +28,41 @@ function acceptSecurityWarning() {
     document.getElementById('messageInput').focus();
 }
 
+function formatDuration(totalSeconds) {
+    const seconds = Math.max(0, Number(totalSeconds) || 0);
+    const minutes = Math.floor(seconds / 60);
+    const remaining = seconds % 60;
+    return `${minutes}m ${remaining.toString().padStart(2, '0')}s`;
+}
+
+function updateRoomExpiryDisplay(seconds) {
+    const roomExpiry = document.getElementById('roomExpiry');
+    if (!roomExpiry) return;
+    roomExpiry.textContent = `Room expires in: ${formatDuration(seconds)}`;
+}
+
+function updateMessageBurnDisplay(seconds) {
+    const messageBurnTime = document.getElementById('messageBurnTime');
+    if (!messageBurnTime) return;
+    messageBurnTime.textContent = `Messages burn after: ${formatDuration(seconds)}`;
+}
+
+async function pollRoomStatus() {
+    try {
+        const response = await fetch(`/chat/room/${roomId}/status`);
+        if (!response.ok) {
+            return;
+        }
+        const data = await response.json();
+        updateRoomExpiryDisplay(data.expires_in_seconds);
+        if (typeof data.message_ttl_seconds === 'number') {
+            updateMessageBurnDisplay(data.message_ttl_seconds);
+        }
+    } catch (error) {
+        // Silently fail for polling errors
+    }
+}
+
 // Automated key exchange - fetch room's shared key
 async function fetchRoomKey() {
     try {
@@ -42,24 +78,6 @@ async function fetchRoomKey() {
         console.error('Failed to fetch room key:', e);
     }
     return false;
-}
-
-// Simple encryption using AES-GCM with Web Crypto API
-async function generateKey() {
-    const key = await window.crypto.subtle.generateKey(
-        {
-            name: "AES-GCM",
-            length: 256
-        },
-        true,
-        ["encrypt", "decrypt"]
-    );
-    return key;
-}
-
-async function exportKey(key) {
-    const exported = await window.crypto.subtle.exportKey("raw", key);
-    return Array.from(new Uint8Array(exported));
 }
 
 async function importKey(keyArray) {
@@ -224,6 +242,8 @@ async function pollMessages() {
             const data = await response.json();
             await renderMessages(data.messages);
             document.getElementById('userCount').textContent = `Users: ${data.user_count}`;
+            updateRoomExpiryDisplay(data.room_expires_in_seconds);
+            updateMessageBurnDisplay(data.message_ttl_seconds);
         }
     } catch (error) {
         // Silently fail for polling errors
@@ -286,6 +306,8 @@ window.addEventListener('load', async function() {
     // Start polling
     await pollMessages();
     pollInterval = setInterval(pollMessages, 2000);
+    await pollRoomStatus();
+    roomStatusInterval = setInterval(pollRoomStatus, 5000);
 });
 
 // Cleanup on unload
@@ -293,7 +315,12 @@ window.addEventListener('beforeunload', function() {
     if (pollInterval) {
         clearInterval(pollInterval);
     }
+    if (roomStatusInterval) {
+        clearInterval(roomStatusInterval);
+    }
 });
 
-// Expose acceptSecurityWarning for the HTML onclick attribute
-window.acceptSecurityWarning = acceptSecurityWarning;
+const warningAcceptBtn = document.getElementById('acceptSecurityWarningBtn');
+if (warningAcceptBtn) {
+    warningAcceptBtn.addEventListener('click', acceptSecurityWarning);
+}

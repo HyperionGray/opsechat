@@ -37,6 +37,12 @@
         .header-info {
             font-size: 0.9em;
         }
+
+        .room-status {
+            margin-top: 4px;
+            color: #0ff;
+            font-size: 0.85em;
+        }
         
         .encryption-toggle {
             margin-left: 20px;
@@ -163,6 +169,10 @@
         </div>
         <div class="header-info">
             <span id="userCount" aria-live="polite">Users: 1</span>
+            <div class="room-status" aria-live="polite">
+                <div id="roomExpiry">Room expires in: --:--</div>
+                <div id="messageBurnTime">Messages burn after: --:--</div>
+            </div>
             <span class="encryption-toggle">
                 <label>
                     <input type="checkbox" id="encryptionToggle" aria-label="Toggle end-to-end encryption">
@@ -204,7 +214,7 @@
                 
                 🔒 <strong>YOUR SAFETY:</strong> Messages auto-delete after 3 minutes. Rooms expire after 1 hour. Everything in-memory only.
             </p>
-            <button onclick="acceptSecurityWarning()" style="width: 100%; padding: 15px; background: #0f0; color: #000; border: none; font-weight: bold; font-size: 1.1em; cursor: pointer; margin-top: 20px;">
+            <button id="acceptSecurityWarningBtn" style="width: 100%; padding: 15px; background: #0f0; color: #000; border: none; font-weight: bold; font-size: 1.1em; cursor: pointer; margin-top: 20px;">
                 I UNDERSTAND AND AGREE
             </button>
         </div>

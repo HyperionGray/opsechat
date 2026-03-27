@@ -76,6 +76,12 @@ These are development and testing utilities that help during development:
 - **`usability_assessment.py`** - UI/UX testing helper
 - **`comprehensive_functionality_test.py`** - Full functional test suite
 
+### JavaScript Test Utilities
+- **Playwright specs in `tests/`** are the canonical JavaScript browser tests.
+- Legacy ad-hoc scripts such as `test-server.js` and `test-ci-fix.js` were removed
+  after CI consolidation. Prefer `npm test` and focused Playwright commands from
+  `package.json` scripts.
+
 ### Main Application Files
 - **`runserver.py`** - Main entry point (legacy monolithic)
 - **`runserver_refactored.py`** - Refactored version (blueprint-based)
