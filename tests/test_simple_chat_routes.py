@@ -347,10 +347,13 @@ class TestBugFixes:
         body = response.data.decode()
         # The page should link to the external file
         assert "chat-index.js" in body
+        assert "chat-index.css" in body
         # There should be no inline event handler JS (addEventListener, fetch, etc.)
         assert "addEventListener" not in body
         assert "fetch(" not in body
         assert "onclick=" not in body
+        assert "<style>" not in body
+        assert "style=" not in body
 
     def test_chat_room_has_no_inline_script(self, client):
         """The chat room page must reference external JS, not inline script."""
@@ -358,8 +361,11 @@ class TestBugFixes:
         response = client.get(f"/chat/room/{room_id}")
         body = response.data.decode()
         assert "chat-room.js" in body
+        assert "simple-chat-room.css" in body
         assert "addEventListener" not in body
         assert "onclick=" not in body
+        assert "<style>" not in body
+        assert "style=" not in body
 
     def test_chat_room_passes_room_id_via_data_attribute(self, client):
         """room_id must be available as a data-room-id attribute, not inlined in JS."""
