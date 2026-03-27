@@ -66,15 +66,24 @@ python chat-room.py --port 8080
 
 1. Navigate to `/chat` on your server
 2. Click "Create New Chat Room"
-3. Share the room URL with trusted contacts
+3. Share the room URL or room ID with trusted contacts
 4. Optionally enable E2E encryption in the room
 
 ### Joining a Room
 
-1. Open the room URL shared with you
+1. Open the room URL shared with you, or paste the room ID into `/chat` and click **Join Existing Room**
 2. You'll be assigned a randomized username with a color
 3. Type messages in the input box
 4. Messages will appear for all users in the room
+
+### Joining by Room ID
+
+The `/chat` landing page now supports joining active rooms directly:
+
+- Paste a full room URL (for example `/chat/room/<room_id>`) or just the raw room ID.
+- Click **Join Existing Room**.
+- The client validates room existence first, then redirects only if the room is active.
+- If the room is expired or invalid, you get a clear status message instead of a 404 page.
 
 ### Enabling E2E Encryption
 
@@ -133,6 +142,12 @@ This prevents memory forensics from recovering deleted messages.
 ```
 POST /chat/create
 Response: {"success": true, "room_id": "...", "room_url": "/chat/room/..."}
+```
+
+#### Check Room Exists
+```
+GET /chat/room/exists/<room_id>
+Response: {"exists": true|false}
 ```
 
 #### Get/Post Messages

@@ -45,6 +45,8 @@ python chat-room.py --tor
 ```
 
 Access the chat at `/chat` to create rooms and share with your contacts.
+You can also paste a full room URL or just the room ID into "Join Existing Room"
+on `/chat` to rejoin active rooms quickly.
 
 ### Terminal UI (TUI)
 - ✅ **TUI Only** - No web browser required
