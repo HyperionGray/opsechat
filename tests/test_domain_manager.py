@@ -3,6 +3,7 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -174,3 +175,71 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    @patch('domain_manager.requests.Session')
+    def test_configure_and_get_config(self, _mock_session_class):
+        """Test provider configuration and sanitized config output"""
+        manager = DomainRotationManager()
+        configured = manager.configure(
+            api_key="pk1_example_key_1234",
+            api_secret="sk1_example_secret_5678",
+            monthly_budget=25.0,
+            provider="porkbun",
+        )
+
+        assert configured is True
+        cfg = manager.get_config()
+        assert cfg["active_provider"] == "porkbun"
+        assert cfg["provider_count"] == 1
+        assert cfg["monthly_budget"] == 25.0
+        assert cfg["providers"]["porkbun"]["configured"] is True
+        # Masking should preserve only trailing 4 chars
+        assert cfg["providers"]["porkbun"]["api_key"].endswith("1234")
+        assert "*" in cfg["providers"]["porkbun"]["api_key"]
+
+    def test_rotate_to_new_domain_api_response(self):
+        """Test structured API response for domain rotation"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test789.xyz",
+            "price": "1.99",
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "test789.xyz",
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=10.0)
+        result = manager.rotate_to_new_domain(max_price=2.0)
+
+        assert result["success"] is True
+        assert result["domain"].endswith(".xyz")
+        assert result["price"] == 1.99
+
+    def test_serialize_and_load_state_round_trip(self):
+        """Test state serialization/deserialization with datetime fields"""
+        manager = DomainRotationManager(monthly_budget=30.0)
+        manager.current_spending = 5.5
+        manager.active_domain = "active.example"
+        manager.active_provider = "porkbun"
+        manager.owned_domains = [{
+            "domain": "active.example",
+            "price": 5.5,
+            "provider": "porkbun",
+            "purchased_at": datetime.now(),
+            "expires_at": datetime.now(),
+        }]
+
+        state = manager.serialize_state()
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(state["owned_domains"][0]["expires_at"], str)
+
+        loaded = DomainRotationManager(monthly_budget=1.0)
+        loaded.load_state(state)
+
+        assert loaded.current_spending == 5.5
+        assert loaded.active_domain == "active.example"
+        assert loaded.active_provider == "porkbun"
+        assert isinstance(loaded.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(loaded.owned_domains[0]["expires_at"], datetime)

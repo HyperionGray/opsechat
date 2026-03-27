@@ -19,7 +19,7 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
-from domain_manager import PorkbunAPIClient, DomainRotationManager
+from domain_manager import DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
@@ -69,6 +69,9 @@ def configure_api():
         print(f"  Monthly Budget: ${config['monthly_budget']}")
     else:
         print("  Monthly Budget: Not configured")
+
+    provider = config.get('provider', 'porkbun')
+    print(f"  Provider: {provider}")
     
     print("\nEnter new values (or press Enter to keep current):\n")
     
@@ -88,6 +91,12 @@ def configure_api():
             print("Invalid budget amount, keeping previous value")
     elif 'monthly_budget' not in config:
         config['monthly_budget'] = 50.0
+
+    provider_input = input("Provider [default: porkbun]: ").strip().lower()
+    if provider_input:
+        config['provider'] = provider_input
+    elif 'provider' not in config:
+        config['provider'] = 'porkbun'
     
     save_config(config)
     print("\n✅ Configuration updated successfully!")
@@ -102,28 +111,44 @@ def get_manager():
         print("Run: python domain_rotation_cli.py config")
         sys.exit(1)
     
-    client = PorkbunAPIClient(config['api_key'], config['api_secret'])
     manager = DomainRotationManager(
-        api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+    manager.configure(
+        api_key=config['api_key'],
+        api_secret=config['api_secret'],
+        monthly_budget=config.get('monthly_budget', 50.0),
+        provider=config.get('provider', 'porkbun')
+    )
+
+    # Load saved state from the normalized state structure.
+    manager_state = config.get('manager_state')
+    if isinstance(manager_state, dict):
+        manager.load_state(manager_state)
+    else:
+        # Backward compatibility with older config keys.
+        manager.load_state({
+            "current_spending": config.get("current_spending", 0.0),
+            "owned_domains": config.get("owned_domains", []),
+            "active_domain": config.get("active_domain"),
+            "active_provider": config.get("provider", "porkbun"),
+            "monthly_budget": config.get("monthly_budget", 50.0),
+        })
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    state = manager.serialize_state()
+    config['manager_state'] = state
+    # Keep legacy keys for compatibility with existing local setups.
+    config['current_spending'] = state.get('current_spending', 0.0)
+    config['owned_domains'] = state.get('owned_domains', [])
+    config['active_domain'] = state.get('active_domain')
+    config['monthly_budget'] = state.get('monthly_budget', config.get('monthly_budget', 50.0))
+    if state.get('active_provider'):
+        config['provider'] = state['active_provider']
     save_config(config)
 
 
