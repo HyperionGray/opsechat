@@ -338,6 +338,33 @@ def get_health_status() -> Dict[str, Any]:
         }
     }
 
+
+def get_release_metadata() -> Dict[str, Any]:
+    """
+    Return runtime release metadata for operators and health probes.
+
+    This endpoint is intentionally narrow: it exposes version/build metadata
+    without disclosing sensitive runtime internals.
+    """
+    version = _read_version()
+    channel = "stable"
+    if "-" in version:
+        channel = version.split("-", 1)[1]
+
+    return {
+        "name": "opsechat",
+        "version": version,
+        "release_channel": channel,
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "uptime_seconds": time.time() - apm.metrics['system']['start_time'],
+        "endpoints": {
+            "health": "/health",
+            "version": "/version",
+            "metadata": "/metadata",
+        },
+    }
+
 # Security event logging
 class SecurityEventLogger:
     """Log security-related events for audit purposes"""

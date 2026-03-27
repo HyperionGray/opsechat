@@ -113,3 +113,37 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_version_endpoint_returns_current_version():
+    client = _test_app.test_client()
+    response = client.get("/version")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "version" in data
+    assert isinstance(data["version"], str)
+    assert len(data["version"]) > 0
+
+
+def test_metadata_endpoint_returns_release_fields():
+    client = _test_app.test_client()
+    response = client.get("/metadata")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data.get("name") == "opsechat"
+    assert "version" in data
+    assert "release_channel" in data
+    assert data.get("status") == "healthy"
+    assert "timestamp" in data
+    assert "uptime_seconds" in data
+    assert "endpoints" in data
+
+
+def test_metadata_endpoint_lists_health_and_version_routes():
+    client = _test_app.test_client()
+    response = client.get("/metadata")
+    data = response.get_json()
+    endpoints = data.get("endpoints", {})
+    assert endpoints.get("health") == "/health"
+    assert endpoints.get("version") == "/version"
+    assert endpoints.get("metadata") == "/metadata"
