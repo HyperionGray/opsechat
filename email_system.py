@@ -275,7 +275,10 @@ class BurnerEmailManager:
     def expire_burner(self, email: str) -> bool:
         """Immediately expire a burner email"""
         if email in self.burner_addresses:
+            user_id = self.burner_addresses[email].get('user_id')
             del self.burner_addresses[email]
+            if user_id and user_id in self.user_burners and email in self.user_burners[user_id]:
+                self.user_burners[user_id].remove(email)
             return True
         return False
     
