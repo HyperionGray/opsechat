@@ -181,6 +181,7 @@ Easy domain rotation for burner email service to avoid domain bans and maintain 
 ```bash
 # The CLI is included in the main repository
 chmod +x domain_rotation_cli.py
+chmod +x rotate-domain.py
 ```
 
 ### Configuration
@@ -271,6 +272,39 @@ Output:
    Price: $0.99
    Purchased: 2026-03-02 10:15
    Expires: 2027-03-02
+```
+
+### Simple Non-Interactive CLI (`rotate-domain.py`)
+
+The release plan also requested a lightweight "simple CLI" workflow for scripting.
+`rotate-domain.py` provides non-interactive commands that reuse your existing
+`domain_rotation_cli.py` configuration and state.
+
+```bash
+# Find one cheap available domain (prints key/value output)
+python rotate-domain.py --search --max-price 3.00 --max-attempts 8
+
+# Buy a specific domain for one year (or more with --years)
+python rotate-domain.py --buy example123.xyz --years 1
+
+# List current owned domains
+python rotate-domain.py --list-owned
+
+# Show pricing for a TLD
+python rotate-domain.py --get-pricing xyz
+
+# Show active domain and budget status
+python rotate-domain.py --status
+```
+
+### `domain_rotation_cli.py` Updates
+
+- Added safe datetime serialization/deserialization for persisted state, so
+  domain `list` output remains stable across multiple runs.
+- Added `--years` support to `rotate` for multi-year purchases:
+
+```bash
+python domain_rotation_cli.py rotate --years 2
 ```
 
 ### Integration with Burner Email

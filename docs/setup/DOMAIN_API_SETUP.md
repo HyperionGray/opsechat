@@ -50,6 +50,38 @@ Porkbun offers cheap domains and a simple API, making it ideal for burner email 
    - System will validate credentials
    - Check budget status display
 
+### CLI Configuration and Automation
+
+For local or headless workflows, you can configure and operate domain rotation
+from the command line:
+
+```bash
+# Interactive setup (stores config at ~/.opsechat/domain_config.json)
+python domain_rotation_cli.py config
+
+# Check budget + active domain
+python domain_rotation_cli.py status
+
+# List owned domains
+python domain_rotation_cli.py list
+
+# Rotate and purchase with a 2-year registration period
+python domain_rotation_cli.py rotate --years 2
+```
+
+For non-interactive scripting, use the simple wrapper:
+
+```bash
+# Search one candidate within limits
+python rotate-domain.py --search --max-price 3.00 --max-attempts 12
+
+# Buy a specific available domain for 2 years
+python rotate-domain.py --buy example.xyz --years 2
+
+# Retrieve registrar pricing
+python rotate-domain.py --get-pricing xyz
+```
+
 #### Recommended Domain Extensions
 
 **Cheapest Options:**

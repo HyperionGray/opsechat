@@ -112,6 +112,20 @@ class TestDomainRotationManager:
         assert result is not None
         assert result["domain"].endswith((".xyz", ".club", ".online", ".site", ".website"))
         assert result["price"] <= 5.0
+
+    def test_find_cheap_available_domain_skips_unparseable_price(self):
+        """Test skipping available domains with invalid price strings"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.side_effect = [
+            {"available": True, "price": "N/A"},
+            {"available": True, "price": "$1.99"},
+        ]
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=2)
+
+        assert result is not None
+        assert result["price"] == 1.99
     
     def test_purchase_domain_if_budget_allows_success(self):
         """Test domain purchase within budget"""
@@ -129,6 +143,34 @@ class TestDomainRotationManager:
         assert manager.current_spending == 2.99
         assert len(manager.owned_domains) == 1
         assert manager.active_domain == "test123.xyz"
+
+    def test_purchase_domain_if_budget_allows_with_multiple_years(self):
+        """Test multi-year domain purchase and expiry tracking"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "test123.xyz",
+            "order_id": "12345"
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        result = manager.purchase_domain_if_budget_allows("test123.xyz", 5.98, years=2)
+
+        assert result is True
+        mock_client.purchase_domain.assert_called_once_with("test123.xyz", years=2)
+        assert manager.current_spending == 5.98
+        assert manager.owned_domains[0]["years"] == 2
+        assert manager.owned_domains[0]["expires_at"] > manager.owned_domains[0]["purchased_at"]
+
+    def test_purchase_domain_if_budget_allows_invalid_years(self):
+        """Test rejecting invalid year values"""
+        mock_client = Mock(spec=DomainAPIClient)
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+
+        result = manager.purchase_domain_if_budget_allows("test123.xyz", 2.99, years=0)
+
+        assert result is False
+        mock_client.purchase_domain.assert_not_called()
     
     def test_purchase_domain_if_budget_allows_exceeds_budget(self):
         """Test domain purchase exceeds budget"""

@@ -171,8 +171,17 @@ class DomainRotationManager:
                 price = result.get("price", 999)
                 
                 if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
+                    # Remove common currency symbols and parse safely.
+                    try:
+                        price = float(price.replace("$", "").replace("€", "").strip())
+                    except ValueError:
+                        logger.warning(f"Could not parse price for {domain}: {price!r}")
+                        continue
+                elif isinstance(price, (int, float)):
+                    price = float(price)
+                else:
+                    logger.warning(f"Unexpected price type for {domain}: {type(price)}")
+                    continue
                 
                 if price <= max_price:
                     return {
@@ -183,13 +192,17 @@ class DomainRotationManager:
         
         return None
     
-    def purchase_domain_if_budget_allows(self, domain: str, price: float) -> bool:
+    def purchase_domain_if_budget_allows(self, domain: str, price: float, years: int = 1) -> bool:
         """
         Purchase domain if within budget
         Returns True on success
         """
         if not self.api_client:
             logger.error("No API client configured")
+            return False
+        
+        if years < 1:
+            logger.error(f"Invalid registration period: {years}")
             return False
         
         # Check budget
@@ -199,15 +212,16 @@ class DomainRotationManager:
             return False
         
         # Attempt purchase
-        result = self.api_client.purchase_domain(domain, years=1)
+        result = self.api_client.purchase_domain(domain, years=years)
         
         if result.get("success"):
             self.current_spending += price
             self.owned_domains.append({
                 "domain": domain,
                 "price": price,
+                "years": years,
                 "purchased_at": datetime.now(),
-                "expires_at": datetime.now() + timedelta(days=365)
+                "expires_at": datetime.now() + timedelta(days=365 * years)
             })
             
             # Set as active if no active domain
