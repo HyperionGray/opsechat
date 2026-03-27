@@ -59,6 +59,31 @@
             text-align: center;
             margin: 40px 0;
         }
+
+        .join-room {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .join-room input {
+            width: min(100%, 520px);
+            background-color: #001100;
+            color: #0f0;
+            border: 1px solid #0f0;
+            padding: 12px;
+            font-size: 1em;
+            font-family: 'Courier New', monospace;
+        }
+
+        .join-room-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
         
         button {
             background-color: #0f0;
@@ -140,7 +165,20 @@
         </div>
         
         <div class="create-room">
-            <button id="createRoomBtn" aria-label="Create a new secure chat room">Create New Chat Room</button>
+            <div class="join-room" role="group" aria-label="Create or join room">
+                <input
+                    type="text"
+                    id="roomIdInput"
+                    placeholder="Paste room ID to join an existing room"
+                    autocomplete="off"
+                    spellcheck="false"
+                    aria-label="Room ID to join"
+                >
+                <div class="join-room-buttons">
+                    <button id="createRoomBtn" aria-label="Create a new secure chat room">Create New Chat Room</button>
+                    <button id="joinRoomBtn" aria-label="Join existing secure chat room">Join Existing Room</button>
+                </div>
+            </div>
             <div id="status" class="status" role="status" aria-live="polite"></div>
         </div>
         

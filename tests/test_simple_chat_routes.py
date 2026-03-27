@@ -240,6 +240,23 @@ class TestChatRoutes:
         response = client.get("/chat/room/no-such-room/key")
         assert response.status_code == 404
 
+    def test_room_exists_endpoint_true_for_created_room(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.get(f"/chat/room/exists/{room_id}")
+        assert response.status_code == 200
+        assert response.get_json()["exists"] is True
+
+    def test_room_exists_endpoint_false_for_unknown_room(self, client):
+        response = client.get("/chat/room/exists/no-such-room")
+        assert response.status_code == 200
+        assert response.get_json()["exists"] is False
+
+    def test_room_exists_endpoint_handles_invalid_id_length(self, client):
+        too_long_room_id = "x" * 300
+        response = client.get(f"/chat/room/exists/{too_long_room_id}")
+        assert response.status_code == 200
+        assert response.get_json()["exists"] is False
+
 
 # ---------------------------------------------------------------------------
 # HTTP routes – direct messages
@@ -329,6 +346,13 @@ class TestBugFixes:
         r2 = client.get("/chat/")
         assert r1.status_code == r2.status_code == 200
         assert r1.data == r2.data
+
+    def test_chat_index_includes_join_existing_room_controls(self, client):
+        """Chat index should include Join Existing Room UI controls."""
+        response = client.get("/chat")
+        body = response.data.decode()
+        assert "Join Existing Room" in body
+        assert 'id="roomIdInput"' in body
 
     # -- Bug 3: VERSION file embedded in rendered page ----------------------
 

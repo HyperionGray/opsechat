@@ -305,6 +305,18 @@ def register_simple_chat_routes(app):
             "room_id": room_id,
             "room_url": f"/chat/room/{room_id}"
         })
+
+    @app.route('/chat/room/exists/<string:room_id>', methods=['GET'])
+    def chat_room_exists(room_id):
+        """Check whether a room currently exists."""
+        # Keep room ID validation strict to avoid abuse patterns.
+        if not room_id or len(room_id) > 256:
+            return jsonify({"exists": False}), 200
+
+        with rooms_lock:
+            exists = room_id in chat_rooms
+
+        return jsonify({"exists": exists}), 200
     
     @app.route('/chat/room/<string:room_id>')
     def chat_room(room_id):
