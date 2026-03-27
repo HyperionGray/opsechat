@@ -17,8 +17,8 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Absolute path to this file's directory (used for reliable VERSION lookup)
@@ -160,11 +160,28 @@ def cleanup_old_dms():
                 expired_dms.append(dm_id)
         
         for dm_id in expired_dms:
-            # Overwrite message before deletion
-            dm = direct_messages[dm_id]
-            dm["message"] = "X" * len(dm["message"])
-            dm["room_id"] = "X" * len(dm["room_id"])
-            del direct_messages[dm_id]
+            _secure_delete_dm_locked(dm_id)
+
+
+def _secure_delete_dm_locked(dm_id: str) -> bool:
+    """
+    Overwrite sensitive DM fields and remove the DM from memory.
+
+    Must be called while holding `dm_lock`.
+    Returns True when a DM existed and was removed.
+    """
+    dm = direct_messages.get(dm_id)
+    if not dm:
+        return False
+
+    for key in ("message", "room_id", "sender_name", "sender_id"):
+        value = dm.get(key)
+        if isinstance(value, str):
+            dm[key] = "X" * len(value)
+
+    dm["read"] = True
+    del direct_messages[dm_id]
+    return True
 
 
 def check_rate_limit(session_id: str, endpoint: str) -> tuple:
@@ -478,12 +495,13 @@ def register_simple_chat_routes(app):
             "success": True,
             "dm_id": dm_id,
             "dm_url": f"/chat/dm/{dm_id}",
-            "expires_in": 60
+            "expires_in": 60,
+            "one_time_read": True
         })
     
     @app.route('/chat/dm/<string:dm_id>')
     def view_dm(dm_id):
-        """View a direct message"""
+        """View a direct message (one-time read: burn after successful view)"""
         with dm_lock:
             if dm_id not in direct_messages:
                 return jsonify({"error": "DM not found or expired"}), 404
@@ -493,18 +511,24 @@ def register_simple_chat_routes(app):
             # Check if expired
             age = (datetime.datetime.now() - dm["timestamp"]).total_seconds()
             if age > 60:
+                _secure_delete_dm_locked(dm_id)
                 return jsonify({"error": "DM expired"}), 404
-            
-            # Mark as read
-            dm["read"] = True
-            
-            return jsonify({
+
+            if dm.get("read"):
+                _secure_delete_dm_locked(dm_id)
+                return jsonify({"error": "DM already viewed"}), 404
+
+            response_data = {
                 "dm_id": dm["dm_id"],
                 "sender_name": dm["sender_name"],
                 "room_id": dm["room_id"],
                 "message": dm["message"],
                 "expires_in": max(0, 60 - int(age))
-            })
+            }
+
+            # One-time semantics: securely burn as soon as it is read.
+            _secure_delete_dm_locked(dm_id)
+            return jsonify(response_data)
     
     @app.route('/chat/room/<string:room_id>/key', methods=['GET'])
     def get_room_key(room_id):

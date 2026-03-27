@@ -257,6 +257,7 @@ class TestDMRoutes:
         data = response.get_json()
         assert data["success"] is True
         assert "dm_id" in data
+        assert data["one_time_read"] is True
 
     def test_send_dm_missing_fields(self, client):
         response = client.post(
@@ -287,6 +288,20 @@ class TestDMRoutes:
         data = response.get_json()
         assert data["room_id"] == room_id
 
+    def test_view_dm_is_burned_after_first_read(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        dm_id = client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "one-time"},
+            content_type="application/json",
+        ).get_json()["dm_id"]
+
+        first = client.get(f"/chat/dm/{dm_id}")
+        assert first.status_code == 200
+
+        second = client.get(f"/chat/dm/{dm_id}")
+        assert second.status_code == 404
+
     def test_view_dm_nonexistent(self, client):
         response = client.get("/chat/dm/nonexistent-dm-id")
         assert response.status_code == 404
@@ -307,6 +322,8 @@ class TestDMRoutes:
 
         response = client.get(f"/chat/dm/{dm_id}")
         assert response.status_code == 404
+        with dm_lock:
+            assert dm_id not in direct_messages
 
 
 # ---------------------------------------------------------------------------
