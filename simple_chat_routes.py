@@ -12,6 +12,7 @@ This module provides a simplified, security-focused chat system with:
 """
 
 import re
+import os
 import datetime
 import secrets
 import threading
@@ -19,6 +20,9 @@ import base64
 from flask import render_template, request, session, jsonify, Blueprint
 from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
+
+# Absolute path to this file's directory (used for reliable VERSION lookup)
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Global room storage (in-memory only)
 chat_rooms = {}
@@ -42,6 +46,14 @@ RATE_LIMITS = {
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
+
+# Prefix for E2E-encrypted messages sent from the client.
+# The client prepends this ASCII marker before the base64 AES-GCM ciphertext.
+# The server stores the payload untouched; only the client can decrypt it.
+ENC_PREFIX = "ENC:"
+# Allow encrypted payloads to be larger: AES-GCM adds IV (12 B) + tag (16 B)
+# overhead, so a 500-char plaintext becomes ~700 chars of base64 plus the prefix.
+MAX_ENC_MESSAGE_LENGTH = MAX_MESSAGE_LENGTH * 2
 
 # Room class to manage chat state
 class ChatRoom:
@@ -255,14 +267,14 @@ def generate_secure_dm_id():
 def register_simple_chat_routes(app):
     """Register simple chat routes with the Flask app"""
     
-    @app.route('/chat')
+    @app.route('/chat', strict_slashes=False)
     def chat_index():
         """Landing page for creating/joining chat rooms"""
-        # Read version from VERSION file
+        # Read version from VERSION file (use absolute path so it works regardless of cwd)
         try:
-            with open('VERSION', 'r') as f:
+            with open(os.path.join(_BASE_DIR, 'VERSION'), 'r') as f:
                 version = f.read().strip()
-        except:
+        except (FileNotFoundError, OSError):
             version = '0.8.0-alpha'  # fallback
         
         return render_template("simple_chat_index.html", version=version)
@@ -347,24 +359,42 @@ def register_simple_chat_routes(app):
             if not message_text:
                 return jsonify({"error": "Empty message"}), 400
             
-            # Check for length cap to prevent base64 encoding of media
-            if len(message_text) > MAX_MESSAGE_LENGTH:
-                return jsonify({"error": f"Message too long. Maximum {MAX_MESSAGE_LENGTH} characters allowed."}), 400
+            # Detect E2E-encrypted messages (ASCII prefix set by the JS client)
+            is_encrypted = message_text.startswith(ENC_PREFIX)
             
-            # Detect potential base64 encoded content (basic check)
-            # Base64 has high entropy and typically lacks spaces
-            if len(message_text) > 100:
-                space_count = message_text.count(' ')
-                if space_count < len(message_text) * 0.05:  # Less than 5% spaces
-                    # Might be base64 or encoded content
-                    return jsonify({"error": "Invalid message format. Only plain text allowed."}), 400
-            
-            # Filter to ASCII only and remove emojis
-            message_text = filter_to_ascii(message_text)
-            message_text = sanitize_emojis(message_text)
-            
-            # Sanitize message (remove HTML tags)
-            message_text = re.sub(r'[<>&"\']', '', message_text)
+            if is_encrypted:
+                # Encrypted payload: only length check, no further sanitization
+                # (the payload is opaque base64 AES-GCM ciphertext)
+                payload = message_text[len(ENC_PREFIX):]
+                if not payload:
+                    return jsonify({"error": "Empty encrypted payload"}), 400
+                if len(message_text) > MAX_ENC_MESSAGE_LENGTH:
+                    return jsonify({"error": "Encrypted message too long."}), 400
+                # Validate that the payload looks like valid base64
+                try:
+                    base64.b64decode(payload, validate=True)
+                except Exception:
+                    return jsonify({"error": "Invalid encrypted message format."}), 400
+            else:
+                # Plain-text path: apply all sanitization and content checks
+                # Check for length cap to prevent base64 encoding of media
+                if len(message_text) > MAX_MESSAGE_LENGTH:
+                    return jsonify({"error": f"Message too long. Maximum {MAX_MESSAGE_LENGTH} characters allowed."}), 400
+                
+                # Detect potential base64 encoded content (basic check)
+                # Base64 has high entropy and typically lacks spaces
+                if len(message_text) > 100:
+                    space_count = message_text.count(' ')
+                    if space_count < len(message_text) * 0.05:  # Less than 5% spaces
+                        # Might be base64 or encoded content
+                        return jsonify({"error": "Invalid message format. Only plain text allowed."}), 400
+                
+                # Filter to ASCII only and remove emojis
+                message_text = filter_to_ascii(message_text)
+                message_text = sanitize_emojis(message_text)
+                
+                # Sanitize message (remove HTML tags)
+                message_text = re.sub(r'[<>&"\']', '', message_text)
             
             # Add message to room
             room.add_message(

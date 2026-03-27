@@ -4,7 +4,12 @@ Tests for simple_chat_routes.py
 Covers: room creation, messaging, direct messages, room key exchange,
         input validation, rate-limit logic, and helper utilities.
 """
+import base64
+import datetime
+import os
+import re
 import pytest
+import simple_chat_routes
 from unittest.mock import patch
 from app_factory import create_app
 from simple_chat_routes import (
@@ -97,7 +102,6 @@ class TestChatRoom:
         assert room.get_user_count() == 2
 
     def test_room_key_is_base64(self):
-        import base64
         room = ChatRoom("test-room")
         key = room.get_room_key()
         # Should not raise
@@ -105,7 +109,6 @@ class TestChatRoom:
         assert len(decoded) == 32
 
     def test_cleanup_old_messages(self):
-        import datetime
         room = ChatRoom("test-room")
         room.add_message("u1", "Alice", [255, 0, 0], "old message")
         # Force the message timestamp to be old
@@ -289,7 +292,6 @@ class TestDMRoutes:
         assert response.status_code == 404
 
     def test_view_dm_expired(self, client):
-        import datetime
         from simple_chat_routes import direct_messages, dm_lock
 
         room_id = client.post("/chat/create").get_json()["room_id"]
@@ -305,3 +307,146 @@ class TestDMRoutes:
 
         response = client.get(f"/chat/dm/{dm_id}")
         assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Bug fixes: trailing slash, VERSION path, encrypted messages, CSP
+# ---------------------------------------------------------------------------
+
+class TestBugFixes:
+    """Tests covering the four bugs found during end-to-end testing."""
+
+    # -- Bug 2: /chat/ trailing slash should not 404 -----------------------
+
+    def test_chat_index_trailing_slash_returns_200(self, client):
+        """GET /chat/ (with trailing slash) must not return 404."""
+        response = client.get("/chat/")
+        assert response.status_code == 200
+
+    def test_chat_index_and_trailing_slash_same_content(self, client):
+        """Both /chat and /chat/ should render the same page."""
+        r1 = client.get("/chat")
+        r2 = client.get("/chat/")
+        assert r1.status_code == r2.status_code == 200
+        assert r1.data == r2.data
+
+    # -- Bug 3: VERSION file embedded in rendered page ----------------------
+
+    def test_chat_index_contains_version(self, client):
+        """The chat index page must include a version string."""
+        response = client.get("/chat")
+        assert response.status_code == 200
+        body = response.data.decode()
+        assert re.search(r'\d+\.\d+\.\d+', body), "No version string found in page"
+
+    # -- Bug 1: CSP – templates must NOT contain inline scripts -------------
+
+    def test_chat_index_has_no_inline_script(self, client):
+        """The chat index page must reference external JS, not inline script."""
+        response = client.get("/chat")
+        body = response.data.decode()
+        # The page should link to the external file
+        assert "chat-index.js" in body
+        # There should be no inline event handler JS (addEventListener, fetch, etc.)
+        assert "addEventListener" not in body
+        assert "fetch(" not in body
+
+    def test_chat_room_has_no_inline_script(self, client):
+        """The chat room page must reference external JS, not inline script."""
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.get(f"/chat/room/{room_id}")
+        body = response.data.decode()
+        assert "chat-room.js" in body
+        assert "addEventListener" not in body
+
+    def test_chat_room_passes_room_id_via_data_attribute(self, client):
+        """room_id must be available as a data-room-id attribute, not inlined in JS."""
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.get(f"/chat/room/{room_id}")
+        body = response.data.decode()
+        assert f'data-room-id="{room_id}"' in body
+
+    # -- Bug 4: Encrypted messages must be accepted by the server -----------
+
+    def test_encrypted_message_accepted(self, client):
+        """Messages with 'ENC:' prefix (AES-GCM base64) must be stored as-is."""
+        room_id = client.post("/chat/create").get_json()["room_id"]
+
+        # Simulate AES-GCM output: 12-byte IV + ciphertext
+        payload = base64.b64encode(os.urandom(12) + os.urandom(64)).decode()
+        enc_msg = "ENC:" + payload
+
+        response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": enc_msg},
+            content_type="application/json",
+        )
+        assert response.status_code == 200, response.get_json()
+
+    def test_encrypted_message_stored_intact(self, client):
+        """The server must store the encrypted payload without modification."""
+        room_id = client.post("/chat/create").get_json()["room_id"]
+
+        payload = base64.b64encode(os.urandom(12) + os.urandom(64)).decode()
+        enc_msg = "ENC:" + payload
+
+        client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": enc_msg},
+            content_type="application/json",
+        )
+
+        messages = client.get(f"/chat/room/{room_id}/messages").get_json()["messages"]
+        assert messages, "No messages returned"
+        assert messages[-1]["message"] == enc_msg
+
+    def test_encrypted_message_too_long_rejected(self, client):
+        """Encrypted payloads exceeding the max length must be rejected."""
+        room_id = client.post("/chat/create").get_json()["room_id"]
+
+        # Build a payload that exceeds MAX_ENC_MESSAGE_LENGTH
+        oversize = os.urandom(simple_chat_routes.MAX_ENC_MESSAGE_LENGTH)
+        payload = base64.b64encode(oversize).decode()
+        enc_msg = "ENC:" + payload
+
+        response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": enc_msg},
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+
+    def test_invalid_encrypted_payload_rejected(self, client):
+        """'ENC:' prefix with non-base64 data must be rejected."""
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "ENC:!!!not-valid-base64???"},
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+
+    def test_encrypted_empty_payload_rejected(self, client):
+        """'ENC:' with no payload must be rejected."""
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "ENC:"},
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+
+    def test_plaintext_base64_still_rejected(self, client):
+        """Long base64-looking plaintext (without ENC: prefix) is still blocked."""
+        room_id = client.post("/chat/create").get_json()["room_id"]
+
+        # A raw base64 blob with no prefix and no spaces (old attack vector)
+        payload = base64.b64encode(os.urandom(80)).decode()
+        assert len(payload) > 100
+
+        response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": payload},
+            content_type="application/json",
+        )
+        assert response.status_code == 400
