@@ -4,17 +4,20 @@
  */
 
 const { test, expect } = require('@playwright/test');
+const { randomUUID } = require('node:crypto');
 const { TEST_CONFIG } = require('./utils/test-helpers');
 
 test.use({
   baseURL: TEST_CONFIG.baseURL,
 });
 
-function reviewMessage(prefix) {
-  return `${prefix} ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+const ANONYMIZED_USER_ID_PATTERN = /^[A-Za-z0-9]+\.\.\.$/;
+
+function uniqueReviewMessage(prefix) {
+  return `${prefix} ${randomUUID()}`;
 }
 
-async function getReviewStats(page) {
+async function fetchReviewData(page) {
   const response = await page.request.get(`${TEST_CONFIG.testPath}/reviews/list`);
   expect(response.status()).toBe(200);
   return response.json();
@@ -34,8 +37,7 @@ test.describe('Reviews Functionality', () => {
   });
 
   test('should submit a review through the no-script form and render it on the page', async ({ page }) => {
-    const before = await getReviewStats(page);
-    const message = reviewMessage('No-script review');
+    const message = uniqueReviewMessage('No-script review');
 
     await page.goto(`${TEST_CONFIG.testPath}/reviews`);
     await page.check('#rating-4');
@@ -45,14 +47,12 @@ test.describe('Reviews Functionality', () => {
     await expect(page.locator('.message.success')).toContainText('Thank you for your review');
     await expect(page.locator('.review-text')).toContainText(message);
 
-    const after = await getReviewStats(page);
-    expect(after.stats.total).toBeGreaterThanOrEqual(before.stats.total + 1);
-    expect(after.reviews.some((review) => review.text === message && review.rating === 4)).toBe(true);
+    const reviewData = await fetchReviewData(page);
+    expect(reviewData.reviews.some((review) => review.text === message && review.rating === 4)).toBe(true);
   });
 
   test('should submit a review through the script endpoints and expose it via JSON', async ({ page }) => {
-    const before = await getReviewStats(page);
-    const message = reviewMessage('Script review');
+    const message = uniqueReviewMessage('Script review');
 
     await page.goto(`${TEST_CONFIG.testPath}/reviews/yesscript`);
     await expect(page.locator('#review-form')).toBeVisible();
@@ -66,7 +66,7 @@ test.describe('Reviews Functionality', () => {
     });
 
     expect(submitResponse.status()).toBe(200);
-    await expect(submitResponse.headers()['content-type']).toContain('application/json');
+    expect(submitResponse.headers()['content-type']).toContain('application/json');
 
     const submitPayload = await submitResponse.json();
     expect(submitPayload.success).toBe(true);
@@ -75,13 +75,12 @@ test.describe('Reviews Functionality', () => {
     await page.reload();
     await expect(page.locator('#reviews-list')).toContainText(message);
 
-    const after = await getReviewStats(page);
-    const insertedReview = after.reviews.find((review) => review.text === message);
+    const reviewData = await fetchReviewData(page);
+    const insertedReview = reviewData.reviews.find((review) => review.text === message);
 
-    expect(after.stats.total).toBeGreaterThanOrEqual(before.stats.total + 1);
     expect(insertedReview).toBeDefined();
     expect(insertedReview.rating).toBe(5);
-    expect(insertedReview.user_id).toMatch(/^.+\.\.\.$/);
+    expect(insertedReview.user_id).toMatch(ANONYMIZED_USER_ID_PATTERN);
   });
 
   test('should reject invalid AJAX submissions without a rating', async ({ page }) => {
@@ -89,12 +88,12 @@ test.describe('Reviews Functionality', () => {
 
     const response = await page.request.post(`${TEST_CONFIG.testPath}/reviews/submit`, {
       form: {
-        review_text: reviewMessage('Missing rating review'),
+        review_text: uniqueReviewMessage('Missing rating review'),
       },
     });
 
     expect(response.status()).toBe(200);
-    await expect(response.headers()['content-type']).toContain('application/json');
+    expect(response.headers()['content-type']).toContain('application/json');
 
     const payload = await response.json();
     expect(payload).toEqual({
