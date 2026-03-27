@@ -40,8 +40,7 @@ src/amazon_q/
 #### Refactored Structure
 ```
 tests/
-├── e2e.spec.js (25 lines) - Deprecation notice
-├── e2e.spec.js.deprecated - Original preserved
+├── e2e.spec.js (25 lines) - Deprecated placeholder pointing to split specs
 ├── landing-page.e2e.spec.js (88 lines)
 ├── chat-interface.e2e.spec.js (165 lines)
 ├── email-burner.e2e.spec.js (78 lines)

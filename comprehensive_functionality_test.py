@@ -206,20 +206,20 @@ def test_domain_manager():
         domain_mgr = DomainRotationManager()
         
         # Test domain generation
-        test_domain = domain_mgr.generate_domain_name()
+        test_domain = domain_mgr.generate_random_domain()
         assert "." in test_domain
         assert len(test_domain) > 5
         print("✅ Domain name generation works")
-        
+
         # Test budget tracking
-        domain_mgr.set_monthly_budget(100.0)
+        domain_mgr.monthly_budget = 100.0
         assert domain_mgr.monthly_budget == 100.0
         print("✅ Budget management works")
         
         # Test PorkbunAPIClient (without actual API calls)
         api_client = PorkbunAPIClient("test_key", "test_secret")
         assert api_client.api_key == "test_key"
-        assert api_client.secret_key == "test_secret"
+        assert api_client.api_secret == "test_secret"
         print("✅ API client initialization works")
         
         return True
