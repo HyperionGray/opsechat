@@ -1,16 +1,25 @@
 """
 Tests for email configuration and domain rotation routes.
 """
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from flask import Flask
 
-from app_factory import create_app
+from email_routes import register_email_routes
 
 
 @pytest.fixture
 def app():
-    application = create_app()
+    template_dir = Path(__file__).resolve().parents[1] / "templates"
+    application = Flask(__name__, template_folder=str(template_dir))
+    application.secret_key = "test-secret-key"
+    register_email_routes(
+        application,
+        id_generator=lambda size=16: "test-session-id",
+        get_random_color=lambda: [0, 255, 0],
+    )
     application.config["TESTING"] = True
     application.config["path"] = "testpath"
     application.config["hostname"] = "localhost"

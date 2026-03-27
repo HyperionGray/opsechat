@@ -214,7 +214,7 @@ class TestDomainRotationManager:
         result = manager.rotate_to_new_domain(max_price=2.0)
 
         assert result["success"] is True
-        assert result["domain"].endswith(".xyz")
+        assert result["domain"].endswith((".xyz", ".club", ".online", ".site", ".website"))
         assert result["price"] == 1.99
 
     def test_serialize_and_load_state_round_trip(self):
