@@ -76,6 +76,14 @@ These are development and testing utilities that help during development:
 - **`usability_assessment.py`** - UI/UX testing helper
 - **`comprehensive_functionality_test.py`** - Full functional test suite
 
+### CI tooling cleanup
+Legacy one-off CI helper scripts previously kept in the repository root
+(`test-ci-fix.js`, `test-server.js`, `test_fix.sh`) were removed after the
+Playwright workflow was stabilized. CI now uses:
+
+- `.github/workflows/playwright-tests.yml`
+- `tests/mock_server.py`
+
 ### Main Application Files
 - **`runserver.py`** - Main entry point (legacy monolithic)
 - **`runserver_refactored.py`** - Refactored version (blueprint-based)
