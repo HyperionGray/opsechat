@@ -10,7 +10,6 @@ import os
 import re
 import pytest
 import simple_chat_routes
-from unittest.mock import patch
 from app_factory import create_app
 from simple_chat_routes import (
     generate_secure_room_id,
@@ -286,6 +285,31 @@ class TestDMRoutes:
         assert response.status_code == 200
         data = response.get_json()
         assert data["room_id"] == room_id
+        assert data["single_use"] is True
+
+    def test_view_dm_is_single_use(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        dm_id = client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "read once"},
+            content_type="application/json",
+        ).get_json()["dm_id"]
+
+        first = client.get(f"/chat/dm/{dm_id}")
+        assert first.status_code == 200
+
+        second = client.get(f"/chat/dm/{dm_id}")
+        assert second.status_code == 404
+
+    def test_send_dm_response_marks_single_use(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "single-use metadata"},
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        assert response.get_json()["single_use"] is True
 
     def test_view_dm_nonexistent(self, client):
         response = client.get("/chat/dm/nonexistent-dm-id")
@@ -358,6 +382,7 @@ class TestBugFixes:
         body = response.data.decode()
         assert "chat-room.js" in body
         assert "addEventListener" not in body
+        assert "onclick=" not in body
 
     def test_chat_room_passes_room_id_via_data_attribute(self, client):
         """room_id must be available as a data-room-id attribute, not inlined in JS."""

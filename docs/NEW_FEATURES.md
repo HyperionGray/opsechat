@@ -35,7 +35,8 @@ Previously, users had to manually share encryption keys. Now, each chat room aut
 Simple, ephemeral messaging for sharing room IDs with specific users. DMs are designed for one purpose: **sharing chat room URLs securely**.
 
 ### Features
-- **1-minute expiry** - Messages disappear after 60 seconds
+- **Single-read burn-after-read** - DM is deleted immediately after first successful view
+- **1-minute max lifetime** - Message also expires after 60 seconds if unread
 - **Simple text only** - Max 200 characters
 - **Memory overwriting** - Data is overwritten before deletion
 - **Non-discoverable** - Cryptographically secure DM IDs
@@ -57,7 +58,8 @@ Response:
   "success": true,
   "dm_id": "14gvVa4l3SPsLJc1Ijb_sA",
   "dm_url": "/chat/dm/14gvVa4l3SPsLJc1Ijb_sA",
-  "expires_in": 60
+  "expires_in": 60,
+  "single_use": true
 }
 ```
 
@@ -71,9 +73,12 @@ Response:
   "sender_name": "SilentWolf4523",
   "room_id": "wWR_qXjnWQlr4oXqlR2JLxA...",
   "message": "Join me in the secure room...",
-  "expires_in": 45
+  "expires_in": 45,
+  "single_use": true
 }
 ```
+
+After this successful view, the same `dm_id` returns `404` and cannot be reused.
 
 ### Example Workflow
 ```python

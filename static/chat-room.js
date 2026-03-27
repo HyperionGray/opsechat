@@ -232,6 +232,7 @@ async function pollMessages() {
 
 // Event listeners
 document.getElementById('sendBtn').addEventListener('click', sendMessage);
+document.getElementById('acceptSecurityWarningBtn').addEventListener('click', acceptSecurityWarning);
 
 document.getElementById('messageInput').addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {
@@ -295,5 +296,3 @@ window.addEventListener('beforeunload', function() {
     }
 });
 
-// Expose acceptSecurityWarning for the HTML onclick attribute
-window.acceptSecurityWarning = acceptSecurityWarning;
