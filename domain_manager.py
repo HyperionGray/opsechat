@@ -134,6 +134,95 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+        self.last_budget_reset_period = self._get_budget_period()
+
+    @staticmethod
+    def _get_budget_period(now: Optional[datetime] = None) -> str:
+        """Return the YYYY-MM budget period string for a datetime."""
+        reference = now or datetime.now()
+        return reference.strftime("%Y-%m")
+
+    @staticmethod
+    def _parse_budget_period(period: str):
+        """Parse YYYY-MM period to comparable tuple, else None."""
+        if not isinstance(period, str):
+            return None
+        parts = period.split("-")
+        if len(parts) != 2:
+            return None
+        try:
+            year = int(parts[0])
+            month = int(parts[1])
+        except ValueError:
+            return None
+        if month < 1 or month > 12:
+            return None
+        return (year, month)
+
+    @staticmethod
+    def _coerce_float(value, default: float = 0.0) -> float:
+        """Coerce numeric/string values to float safely."""
+        if value is None:
+            return default
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            cleaned = value.strip().replace("$", "").replace("€", "")
+            if not cleaned:
+                return default
+            try:
+                return float(cleaned)
+            except ValueError:
+                return default
+        return default
+
+    @staticmethod
+    def _coerce_datetime(value) -> Optional[datetime]:
+        """Convert datetime/ISO string to datetime, or None."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str) and value:
+            # Handle common UTC suffix form in addition to plain ISO format.
+            normalized = value.replace("Z", "+00:00")
+            try:
+                return datetime.fromisoformat(normalized)
+            except ValueError:
+                return None
+        return None
+
+    def reset_monthly_budget_if_needed(self, now: Optional[datetime] = None) -> bool:
+        """
+        Reset monthly spending when a new month starts.
+
+        Returns:
+            bool: True when a reset occurred, otherwise False.
+        """
+        current_period = self._get_budget_period(now=now)
+        current_parsed = self._parse_budget_period(current_period)
+        last_parsed = self._parse_budget_period(self.last_budget_reset_period)
+
+        if last_parsed is None:
+            self.last_budget_reset_period = current_period
+            return False
+
+        # Reset only when state is behind the current month.
+        if last_parsed < current_parsed:
+            logger.info(
+                "Resetting monthly domain budget tracking (%s -> %s)",
+                self.last_budget_reset_period,
+                current_period,
+            )
+            self.current_spending = 0.0
+            self.last_budget_reset_period = current_period
+            return True
+
+        if last_parsed > current_parsed:
+            logger.warning(
+                "Budget period %s is ahead of current period %s; keeping spending as-is",
+                self.last_budget_reset_period,
+                current_period,
+            )
+        return False
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
@@ -191,6 +280,9 @@ class DomainRotationManager:
         if not self.api_client:
             logger.error("No API client configured")
             return False
+
+        # Ensure budget window is current before evaluating available funds.
+        self.reset_monthly_budget_if_needed()
         
         # Check budget
         if self.current_spending + price > self.monthly_budget:
@@ -254,12 +346,79 @@ class DomainRotationManager:
     
     def get_budget_status(self) -> Dict:
         """Get budget information"""
+        self.reset_monthly_budget_if_needed()
         return {
             "monthly_budget": self.monthly_budget,
             "current_spending": self.current_spending,
             "remaining": self.monthly_budget - self.current_spending,
-            "domains_owned": len(self.owned_domains)
+            "domains_owned": len(self.owned_domains),
+            "budget_period": self.last_budget_reset_period,
         }
+
+    def export_state(self) -> Dict:
+        """
+        Export manager state in JSON-serializable form.
+
+        Datetime values are emitted as ISO 8601 strings.
+        """
+        self.reset_monthly_budget_if_needed()
+        serialized_domains = []
+        for domain in self.owned_domains:
+            if not isinstance(domain, dict):
+                continue
+            serialized = domain.copy()
+            purchased_at = self._coerce_datetime(serialized.get("purchased_at"))
+            expires_at = self._coerce_datetime(serialized.get("expires_at"))
+            if purchased_at:
+                serialized["purchased_at"] = purchased_at.isoformat()
+            if expires_at:
+                serialized["expires_at"] = expires_at.isoformat()
+            if "price" in serialized:
+                serialized["price"] = self._coerce_float(serialized.get("price"))
+            serialized_domains.append(serialized)
+
+        return {
+            "current_spending": self._coerce_float(self.current_spending),
+            "owned_domains": serialized_domains,
+            "active_domain": self.active_domain,
+            "last_budget_reset_period": self.last_budget_reset_period,
+        }
+
+    def import_state(self, state: Optional[Dict]):
+        """
+        Import persisted state from a dict.
+
+        Gracefully handles missing fields and malformed values.
+        """
+        if not isinstance(state, dict):
+            return
+
+        self.current_spending = self._coerce_float(state.get("current_spending"))
+        self.active_domain = state.get("active_domain") or None
+
+        period = state.get("last_budget_reset_period")
+        if isinstance(period, str) and period:
+            self.last_budget_reset_period = period
+        else:
+            self.last_budget_reset_period = self._get_budget_period()
+
+        normalized_domains = []
+        for domain in state.get("owned_domains", []):
+            if not isinstance(domain, dict):
+                continue
+            normalized = domain.copy()
+            normalized["price"] = self._coerce_float(normalized.get("price"))
+            normalized["purchased_at"] = self._coerce_datetime(
+                normalized.get("purchased_at")
+            )
+            normalized["expires_at"] = self._coerce_datetime(
+                normalized.get("expires_at")
+            )
+            normalized_domains.append(normalized)
+        self.owned_domains = normalized_domains
+
+        # If the imported state is from an older month, reset now.
+        self.reset_monthly_budget_if_needed()
 
 
 # Global domain rotation manager

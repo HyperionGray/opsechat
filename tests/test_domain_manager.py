@@ -1,8 +1,8 @@
 """
 Tests for domain management module
 """
-import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -174,3 +174,61 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_export_state_serializes_datetimes(self):
+        """Exported state should be JSON-safe for CLI persistence."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 12.5
+        manager.active_domain = "active.xyz"
+        manager.last_budget_reset_period = datetime.now().strftime("%Y-%m")
+        manager.owned_domains = [{
+            "domain": "active.xyz",
+            "price": 2.99,
+            "purchased_at": datetime(2026, 2, 1, 12, 0, 0),
+            "expires_at": datetime(2027, 2, 1, 12, 0, 0),
+        }]
+
+        state = manager.export_state()
+
+        assert state["current_spending"] == 12.5
+        assert state["active_domain"] == "active.xyz"
+        assert state["last_budget_reset_period"] == datetime.now().strftime("%Y-%m")
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+        assert state["owned_domains"][0]["purchased_at"].startswith("2026-02-01T12:00:00")
+        assert isinstance(state["owned_domains"][0]["expires_at"], str)
+
+    def test_import_state_parses_datetimes_and_price(self):
+        """Import should normalize persisted values to runtime types."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        state = {
+            "current_spending": "7.40",
+            "active_domain": "imported.xyz",
+            "last_budget_reset_period": "2999-01",
+            "owned_domains": [{
+                "domain": "imported.xyz",
+                "price": "$1.25",
+                "purchased_at": "2026-03-10T10:00:00",
+                "expires_at": "2027-03-10T10:00:00",
+            }]
+        }
+
+        manager.import_state(state)
+
+        assert manager.current_spending == 7.4
+        assert manager.active_domain == "imported.xyz"
+        assert manager.last_budget_reset_period == "2999-01"
+        assert isinstance(manager.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(manager.owned_domains[0]["expires_at"], datetime)
+        assert manager.owned_domains[0]["price"] == 1.25
+
+    def test_import_state_resets_budget_if_period_is_old(self):
+        """Old persisted budget period should reset current spending."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.import_state({
+            "current_spending": 19.0,
+            "last_budget_reset_period": "2020-01",
+            "owned_domains": [],
+        })
+
+        assert manager.current_spending == 0.0
+        assert manager.last_budget_reset_period == datetime.now().strftime("%Y-%m")

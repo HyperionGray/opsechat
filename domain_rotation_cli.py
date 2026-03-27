@@ -19,6 +19,7 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
@@ -49,6 +50,18 @@ def save_config(config):
         print(f"Configuration saved to {CONFIG_FILE}")
     except Exception as e:
         print(f"Error saving config: {e}")
+
+def _parse_datetime_for_display(value):
+    """Best-effort datetime parser for backward compatibility in saved state."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        normalized = value.replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(normalized)
+        except ValueError:
+            return None
+    return None
 
 
 def configure_api():
@@ -103,28 +116,31 @@ def get_manager():
         sys.exit(1)
     
     client = PorkbunAPIClient(config['api_key'], config['api_secret'])
-    manager = DomainRotationManager(
-        api_client=client,
-        monthly_budget=config.get('monthly_budget', 50.0)
-    )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+    try:
+        monthly_budget = float(config.get('monthly_budget', 50.0))
+    except (TypeError, ValueError):
+        monthly_budget = 50.0
+    manager = DomainRotationManager(api_client=client, monthly_budget=monthly_budget)
+
+    # Load and normalize persisted state (datetime parsing, monthly budget reset).
+    manager.import_state(config)
     
     return manager, config
 
 
-def save_manager_state(manager, config):
+def save_manager_state(manager, config, quiet=False):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
-    save_config(config)
+    config.update(manager.export_state())
+    if quiet:
+        try:
+            CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(CONFIG_FILE, 'w') as f:
+                json.dump(config, f, indent=2)
+            os.chmod(CONFIG_FILE, 0o600)
+        except Exception as e:
+            print(f"Error saving config: {e}")
+    else:
+        save_config(config)
 
 
 def list_domains():
@@ -142,16 +158,22 @@ def list_domains():
     
     for i, domain in enumerate(domains, 1):
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
+        purchased_at = _parse_datetime_for_display(domain.get('purchased_at'))
+        expires_at = _parse_datetime_for_display(domain.get('expires_at'))
+        purchased_text = purchased_at.strftime('%Y-%m-%d %H:%M') if purchased_at else "Unknown"
+        expires_text = expires_at.strftime('%Y-%m-%d') if expires_at else "Unknown"
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {purchased_text}")
+        print(f"   Expires: {expires_text}")
         print()
 
 
 def search_domains():
     """Search for available cheap domains"""
     manager, config = get_manager()
+    # Persist normalized state and budget period updates.
+    save_manager_state(manager, config, quiet=True)
     
     print("\n=== Searching for Available Cheap Domains ===\n")
     print("Searching for domains under $5...\n")
@@ -171,6 +193,8 @@ def search_domains():
 def rotate_domain():
     """Rotate to a new domain"""
     manager, config = get_manager()
+    # Persist normalized state and budget period updates.
+    save_manager_state(manager, config, quiet=True)
     
     print("\n=== Domain Rotation ===\n")
     
@@ -216,6 +240,8 @@ def rotate_domain():
 def show_status():
     """Show current status"""
     manager, config = get_manager()
+    # Persist normalized state and budget period updates.
+    save_manager_state(manager, config, quiet=True)
     
     print("\n=== Domain Rotation Status ===\n")
     
@@ -226,6 +252,7 @@ def show_status():
     print(f"  Monthly: ${budget_status['monthly_budget']}")
     print(f"  Spent: ${budget_status['current_spending']}")
     print(f"  Remaining: ${budget_status['remaining']}")
+    print(f"  Period: {budget_status.get('budget_period', 'Unknown')}")
     print(f"\nDomains Owned: {budget_status['domains_owned']}")
     
     if manager.active_domain:
