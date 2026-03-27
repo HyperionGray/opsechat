@@ -386,6 +386,41 @@ wcBMA1234567890ABC
 - **Rotate**: Generate new and expire current in one action
 - **Delete Now**: Manually expire before 24-hour limit
 
+### 6. HTTP Mail (No SMTP/IMAP)
+
+HTTP Mail provides mailbox-style messaging entirely over HTTP, with
+address-based delivery and read-key-based access control.
+
+- No SMTP server required
+- No IMAP server required
+- In-memory only (no disk persistence)
+- Default deny for inbox reads without valid read key
+- Message deletion and full mailbox destruction supported
+
+**Access:** `/{path}/mail`
+
+#### HTTP Mail Flow
+1. Create a mailbox to receive:
+   - **Address**: shared with senders
+   - **Read key**: private secret for inbox access
+2. Sender posts a message to the mailbox address.
+3. Owner reads inbox with `?key=<read_key>`.
+4. Owner can delete individual messages or destroy mailbox.
+
+#### API Endpoints
+- `POST /{path}/mail/new` - Create mailbox (returns address + read key)
+- `POST /{path}/mail/send` - Generic send endpoint (address in body/form)
+- `POST /{path}/mail/{address}/send` - Address-specific send endpoint
+- `GET /{path}/mail/{address}/inbox?key=<read_key>` - Read inbox
+- `POST /{path}/mail/{address}/delete/{msg_id}` - Delete message (read key required)
+- `POST /{path}/mail/{address}/destroy` - Destroy mailbox (read key required)
+
+#### JavaScript / No-JavaScript behavior
+- With JavaScript enabled, the compose form auto-targets the address-specific
+  send endpoint for direct delivery.
+- Without JavaScript, the compose form posts to the generic send endpoint and
+  includes the recipient address in form data.
+
 #### With JavaScript Enabled
 1. Navigate to `/{path}/email/burner/yesscript`
 2. Watch live countdown timers update every second

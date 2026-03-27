@@ -90,6 +90,14 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox(mb.address, mb.read_key)
         assert result is True
         assert self.storage.get_mailbox(mb.address) is None
+        assert mb.destroyed is True
+
+    def test_destroyed_mailbox_rejects_new_messages(self):
+        mb = self.storage.create_mailbox()
+        assert mb.add_message("hello", "world", "alice") is not None
+        assert self.storage.delete_mailbox(mb.address, mb.read_key) is True
+        # Stale references to a destroyed mailbox should not accept writes.
+        assert mb.add_message("again", "body", "alice") is None
 
     def test_delete_mailbox_wrong_key_fails(self):
         mb = self.storage.create_mailbox()
@@ -247,6 +255,29 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_generic_endpoint_with_address_in_json(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            json={"address": addr, "subject": "Hi", "body": "Hello there", "sender": "bob"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["success"] is True
+        assert "msg_id" in data
+
+    def test_send_message_generic_endpoint_missing_address_fails(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            json={"subject": "Hi", "body": "Hello there", "sender": "bob"},
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 400
+        assert "address" in r.get_json()["error"].lower()
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")

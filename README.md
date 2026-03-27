@@ -257,6 +257,7 @@ Features
 - **Real SMTP/IMAP Integration** - Send and receive actual emails via configured email servers (see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md))
 - **Encrypted Email Inbox** - In-memory email storage with PGP support
 - **Raw Mode Editing** - Full control over email headers for security testing
+- **HTTP Mail (No SMTP/IMAP)** - Stateless mailbox addresses with private read keys for default-deny inbox access
 - **Modern Burner Email System** - Guerrillamail-style rotating anonymous email addresses with:
   - **Multi-Burner Management** - Keep multiple active burner emails simultaneously
   - **Live Countdown Timers** - Real-time expiry tracking with JavaScript
@@ -293,6 +294,18 @@ For Amazon Q setup instructions, see [Amazon Q Setup Guide](docs/setup/AMAZON_Q_
 7. View your inbox: `http://yourservice.onion/{path}/email`
 
 For full documentation, see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md).
+
+#### HTTP Mail Quick Flow (No-JS Friendly)
+1. Open `http://yourservice.onion/{path}/mail`
+2. Create a mailbox to get:
+   - a public `address` (share with senders)
+   - a private `read_key` (keep secret)
+3. Senders can post messages to either:
+   - `/{path}/mail/<address>/send` (direct route), or
+   - `/{path}/mail/send` with `address` in payload (generic form/API route)
+4. Read inbox via:
+   - `GET /{path}/mail/<address>/inbox?key=<read_key>`
+5. Delete messages or destroy mailbox from the inbox UI/API.
 
 Security & Code Quality
 =======================
