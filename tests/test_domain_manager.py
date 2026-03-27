@@ -1,10 +1,14 @@
 """
-Tests for domain management module
+Tests for domain management module.
 """
-import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
+
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient,
+    DomainRotationManager,
+    NamecheapAPIClient,
+    PorkbunAPIClient,
 )
 
 
@@ -75,6 +79,32 @@ class TestPorkbunAPIClient:
         assert result["tld"] == "com"
         assert result["registration"] == "9.99"
 
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client."""
+
+    @patch("domain_manager.requests.Session")
+    def test_search_domain_available(self, mock_session_class):
+        """Test Namecheap domain availability parsing."""
+        xml_payload = """
+<ApiResponse Status="OK">
+  <CommandResponse>
+    <DomainCheckResult Domain="example.xyz" Available="true" />
+  </CommandResponse>
+</ApiResponse>
+        """
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = xml_payload
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(api_user="user1", api_key="key1")
+        result = client.search_domain("example.xyz")
+
+        assert result["domain"] == "example.xyz"
+        assert result["available"] is True
+        assert result["provider"] == "namecheap"
 
 class TestDomainRotationManager:
     """Test domain rotation manager"""
@@ -174,3 +204,73 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_porkbun_and_get_config(self):
+        """Manager should expose runtime config for route callers."""
+        manager = DomainRotationManager(monthly_budget=5.0)
+
+        with patch("domain_manager.PorkbunAPIClient") as mock_client_cls:
+            mock_client = Mock(spec=DomainAPIClient)
+            mock_client_cls.return_value = mock_client
+            manager.configure(
+                provider="porkbun",
+                api_key="pk_test",
+                secret_key="sk_test",
+                monthly_budget=10.0,
+            )
+
+        config = manager.get_config()
+        assert config["configured"] is True
+        assert config["active_provider"] == "porkbun"
+        assert "porkbun" in config["providers"]
+        assert config["monthly_budget"] == 10.0
+
+    def test_find_domain_uses_provider_fallback(self):
+        """Search should fall back to next provider when first fails."""
+        porkbun_client = Mock(spec=DomainAPIClient)
+        porkbun_client.search_domain.return_value = {
+            "available": False,
+            "domain": "abc.xyz",
+            "price": "1.99",
+        }
+        namecheap_client = Mock(spec=DomainAPIClient)
+        namecheap_client.search_domain.return_value = {
+            "available": True,
+            "domain": "abc.xyz",
+            "price": "2.49",
+        }
+
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.add_api_client("porkbun", porkbun_client, make_active=True)
+        manager.add_api_client("namecheap", namecheap_client)
+        manager.generate_random_domain = Mock(return_value="abc.xyz")
+
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+        assert result is not None
+        assert result["provider"] == "namecheap"
+        assert result["domain"] == "abc.xyz"
+
+    def test_export_and_load_state(self):
+        """State serialization should preserve date values safely."""
+        manager = DomainRotationManager(monthly_budget=25.0)
+        manager.active_domain = "active.xyz"
+        manager.active_provider = "porkbun"
+        manager.current_spending = 3.0
+        manager.owned_domains = [
+            {
+                "domain": "active.xyz",
+                "price": 3.0,
+                "provider": "porkbun",
+                "purchased_at": datetime(2026, 3, 1, 10, 0, 0),
+                "expires_at": datetime(2027, 3, 1, 10, 0, 0),
+            }
+        ]
+
+        state = manager.export_state()
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+
+        restored = DomainRotationManager(monthly_budget=1.0)
+        restored.load_state(state)
+        assert restored.active_domain == "active.xyz"
+        assert restored.current_spending == 3.0
+        assert restored.owned_domains[0]["domain"] == "active.xyz"

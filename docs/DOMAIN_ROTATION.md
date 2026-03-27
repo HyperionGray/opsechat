@@ -8,6 +8,7 @@ OpSecChat supports automated domain rotation for burner email systems. This allo
 
 Currently supported:
 - **Porkbun** (Recommended - cheap .xyz, .club domains)
+- **Namecheap** (supported in `domain_manager.py` and `domain_rotation_cli.py`)
 - Additional registrars can be added by extending `DomainAPIClient`
 
 ## Setup
