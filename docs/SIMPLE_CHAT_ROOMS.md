@@ -131,8 +131,8 @@ This prevents memory forensics from recovering deleted messages.
 - Uses Web Crypto API (AES-GCM with 256-bit keys)
 - Simple, reviewable JavaScript implementation
 - No external dependencies beyond native browser APIs
-- Encrypted messages are prefixed with 🔒 emoji
-- Keys stored in sessionStorage (lost when tab closes)
+- Encrypted messages are prefixed with the lock icon in the UI
+- Room keys are fetched from `/chat/room/<room_id>/key` and kept in-memory for the active tab session
 
 ## Technical Details
 
@@ -255,11 +255,12 @@ python chat-room.py --port 8080
 
 The implementation is intentionally simple and reviewable:
 
-- **simple_chat_routes.py** (~260 lines): Server-side logic
-- **simple_chat_room.html** (~440 lines): Client-side UI and encryption
-- **simple_chat_index.html** (~150 lines): Landing page
+- **simple_chat_routes.py**: Server-side room/DM logic and security checks
+- **static/chat-room.js**: Client-side room behavior and encryption handling
+- **templates/simple_chat_room.html**: Chat room UI structure
+- **templates/simple_chat_index.html**: Landing page
 
-Total: ~850 lines of reviewable code for the entire system.
+Total: compact, focused code split by responsibility.
 
 ## License
 
