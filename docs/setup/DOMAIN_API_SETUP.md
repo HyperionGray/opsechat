@@ -50,6 +50,45 @@ Porkbun offers cheap domains and a simple API, making it ideal for burner email 
    - System will validate credentials
    - Check budget status display
 
+### Namecheap (Fallback / Secondary Provider)
+
+Namecheap support is now available in `domain_manager.py` and `domain_rotation_cli.py`.
+It is useful as a fallback provider when Porkbun cannot provide an eligible domain.
+
+#### Getting API Credentials
+
+1. **Enable API Access**
+   - Log in to Namecheap.
+   - Visit API access settings.
+   - Enable API and whitelist your source client IP.
+
+2. **Collect Required Values**
+   - API Key
+   - API User
+   - Username (optional; defaults to API User)
+   - Client IP (must match allowlist in Namecheap API settings)
+
+3. **Optional Sandbox**
+   - For testing, enable sandbox mode and use Namecheap sandbox credentials.
+
+#### Configure via CLI
+
+```bash
+python domain_rotation_cli.py config
+```
+
+The config flow now supports:
+- multiple providers (`porkbun`, `namecheap`)
+- primary provider selection
+- fallback provider list (comma-separated)
+
+Example strategy:
+- Primary: `porkbun`
+- Fallback: `namecheap`
+
+This allows domain search to continue automatically if the primary provider cannot return
+an available low-cost domain.
+
 #### Recommended Domain Extensions
 
 **Cheapest Options:**
@@ -78,20 +117,6 @@ Porkbun offers cheap domains and a simple API, making it ideal for burner email 
 - Covers: 100+ .xyz domains or 20+ .com domains
 
 ## Alternative Registrars
-
-### Namecheap
-
-While not directly integrated, Namecheap offers competitive pricing and API access.
-
-#### Getting Started
-- Website: [namecheap.com](https://namecheap.com)
-- API Documentation: [namecheap.com/support/api](https://www.namecheap.com/support/api/)
-- Pricing: .com domains ~$8.88/year, .xyz ~$1.98/year
-
-#### Integration Notes
-- Requires custom API client implementation
-- More complex API than Porkbun
-- Good for high-volume usage
 
 ### GoDaddy
 

@@ -191,6 +191,8 @@ python domain_rotation_cli.py config
 # You'll be prompted for:
 # - Porkbun API Key
 # - Porkbun API Secret
+# - Optional Namecheap API key + api_user + client IP
+# - Primary provider and fallback providers
 # - Monthly Budget (default: $50)
 ```
 
@@ -226,9 +228,9 @@ Output:
 Searching for domains under $5...
 
 Attempt 1/5...
-  ✅ Found: m8kl2p9x.xyz - $0.99
+  ✅ Found: m8kl2p9x.xyz - $0.99 (porkbun)
 Attempt 2/5...
-  ✅ Found: 7h3n5k2q.club - $1.99
+  ✅ Found: 7h3n5k2q.club - $1.99 (namecheap)
 ...
 ```
 
