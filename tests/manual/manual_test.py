@@ -206,7 +206,7 @@ def main():
     print("  OpSecChat Product Release Manual Testing")
     print("="*60)
     
-    os.chdir(Path(__file__).parent)
+    os.chdir(Path(__file__).resolve().parents[2])
     
     tests = [
         ("Documentation Check", check_documentation),

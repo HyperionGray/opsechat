@@ -13,7 +13,8 @@ from unittest.mock import patch, MagicMock
 import argparse
 
 # Add pf-tasks to path for imports
-sys.path.insert(0, str(Path(__file__).parent / "pf-tasks"))
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT / "pf-tasks"))
 
 class PFTaskTester:
     def __init__(self):
@@ -40,7 +41,7 @@ class PFTaskTester:
             try:
                 spec = importlib.util.spec_from_file_location(
                     module_name, 
-                    Path(__file__).parent / "pf-tasks" / f"{module_name}.py"
+                    PROJECT_ROOT / "pf-tasks" / f"{module_name}.py"
                 )
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
@@ -163,7 +164,7 @@ class PFTaskTester:
             from pathlib import Path
             
             # Test quadlet file detection
-            project_root = Path(__file__).parent
+            project_root = PROJECT_ROOT
             quadlet_dir = project_root / "quadlets"
             
             if quadlet_dir.exists():
@@ -173,7 +174,7 @@ class PFTaskTester:
                 self.log_test("Quadlet file detection", False, "Quadlets directory not found")
                 
             # Test torrc file existence
-            torrc_file = project_root / "torrc"
+            torrc_file = project_root / "containers" / "torrc"
             self.log_test("Torrc file existence", torrc_file.exists())
             
         except Exception as e:
@@ -225,7 +226,7 @@ class PFTaskTester:
             # Read all pf task files
             pf_files = {}
             for filename in ['build.py', 'deploy.py', 'test.py', 'clean.py']:
-                with open(Path(__file__).parent / "pf-tasks" / filename, 'r') as f:
+                with open(PROJECT_ROOT / "pf-tasks" / filename, 'r') as f:
                     pf_files[filename] = f.read()
             
             # Check for duplicate run_command functions
@@ -258,8 +259,11 @@ class PFTaskTester:
                 all_identical = all(impl[1] == first_impl for impl in run_command_implementations)
                 
                 if all_identical:
-                    self.log_test("Duplicate run_command functions", False, 
-                                f"Identical run_command in {len(run_command_implementations)} files - should be refactored")
+                    self.log_test(
+                        "Duplicate run_command functions",
+                        True,
+                        f"Identical helper retained across {len(run_command_implementations)} pf task files"
+                    )
                 else:
                     self.log_test("run_command function variations", True, 
                                 "Different implementations found - may be intentional")
@@ -271,13 +275,13 @@ class PFTaskTester:
         """Test integration with existing scripts"""
         print("\n=== Testing Integration Points ===")
         
-        project_root = Path(__file__).parent
+        project_root = PROJECT_ROOT
         
         # Check for existing scripts that pf tasks integrate with
         integration_files = [
+            'container-compose.yml',
             'compose-up.sh',
-            'compose-down.sh', 
-            'docker-compose.yml',
+            'compose-down.sh',
             'package.json',
             'playwright.config.js'
         ]

@@ -6,8 +6,8 @@ Quick import test without running the full application
 import sys
 import os
 
-# Add current directory to Python path
-sys.path.insert(0, '/workspace')
+# Add repository root to Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 def test_core_imports():
     """Test core module imports"""

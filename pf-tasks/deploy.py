@@ -90,7 +90,7 @@ def deploy_quadlet():
             return False
     
     # Copy torrc to user directory
-    torrc_source = project_root / "torrc"
+    torrc_source = project_root / "containers" / "torrc"
     torrc_dest = Path.home() / "opsechat" / "torrc"
     torrc_dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(torrc_source, torrc_dest)
@@ -124,7 +124,7 @@ def deploy_compose(compose_tool):
     project_root = Path(__file__).parent.parent
     
     # Use existing compose scripts
-    compose_up_script = project_root / "compose-up.sh"
+    compose_up_script = project_root / "scripts" / "compose-up.sh"
     
     if compose_up_script.exists():
         print("[*] Using existing compose-up.sh script")
