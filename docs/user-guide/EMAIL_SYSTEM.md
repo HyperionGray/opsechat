@@ -20,6 +20,28 @@ Misuse of these features may be illegal in your jurisdiction. Always obtain prop
 
 ## Core Features
 
+### HTTP Mail (Email-over-HTTP, No SMTP/IMAP)
+
+For high-deniability, low-dependency messaging, OpSecChat also supports HTTP Mail:
+
+- Create a mailbox that has:
+  - Public mailbox address (shareable for senders)
+  - Private read key (required to read/delete/destroy)
+- Default deny inbox access: invalid/missing key returns access denied
+- In-memory-only storage with 24-hour message expiry
+- Explicit mailbox lifecycle enforcement:
+  - Destroyed mailboxes are scrubbed in memory
+  - Destroyed mailbox objects reject stale-reference reads/writes
+  - Send attempts to a destroyed mailbox instance return `410 Gone`
+
+Primary routes:
+
+- `POST /{path}/mail/new` - create mailbox
+- `POST /{path}/mail/{address}/send` - send to mailbox
+- `GET /{path}/mail/{address}/inbox?key=...` - read inbox
+- `POST /{path}/mail/{address}/delete/{id}` - delete message
+- `POST /{path}/mail/{address}/destroy` - destroy mailbox
+
 ### 1. Real Email Integration (NEW!)
 
 #### SMTP Email Sending
