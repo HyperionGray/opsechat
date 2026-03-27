@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from functools import wraps
 import traceback
+from version_utils import read_version
 
 class StructuredLogger:
     """
@@ -310,24 +311,13 @@ def monitor_performance(operation_name: str):
 # Global APM instance
 apm = ApplicationPerformanceMonitor()
 
-# Health check endpoint data
-def _read_version() -> str:
-    """Read version from VERSION file, falling back to 'unknown'"""
-    version_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'VERSION')
-    try:
-        with open(version_file) as f:
-            return f.read().strip()
-    except OSError:
-        return 'unknown'
-
-
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
     return {
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
-        'version': _read_version(),
+        'version': read_version(),
         # active_rooms: this app uses a single global chat room. The field is
         # included for API consistency; it always reports 1 when the service is up.
         'active_rooms': 1,

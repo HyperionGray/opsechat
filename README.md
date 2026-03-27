@@ -190,6 +190,19 @@ Tests cover:
 
 For full testing documentation, see [Testing Guide](docs/user-guide/TESTING.md).
 
+Health & Version Endpoints
+==========================
+
+Use these lightweight endpoints for release checks and monitoring:
+
+```bash
+# Health summary (status, uptime, version, checks)
+curl http://localhost:5000/health
+
+# Version only (for scripts and release validation)
+curl http://localhost:5000/version
+```
+
 
 How it works
 ============

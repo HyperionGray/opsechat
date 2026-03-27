@@ -12,7 +12,6 @@ This module provides a simplified, security-focused chat system with:
 """
 
 import re
-import os
 import datetime
 import secrets
 import threading
@@ -20,9 +19,7 @@ import base64
 from flask import render_template, request, session, jsonify, Blueprint
 from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
-
-# Absolute path to this file's directory (used for reliable VERSION lookup)
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+from version_utils import read_version
 
 # Global room storage (in-memory only)
 chat_rooms = {}
@@ -270,13 +267,7 @@ def register_simple_chat_routes(app):
     @app.route('/chat', strict_slashes=False)
     def chat_index():
         """Landing page for creating/joining chat rooms"""
-        # Read version from VERSION file (use absolute path so it works regardless of cwd)
-        try:
-            with open(os.path.join(_BASE_DIR, 'VERSION'), 'r') as f:
-                version = f.read().strip()
-        except Exception:
-            version = '0.8.0-alpha'  # fallback
-        
+        version = read_version(fallback='0.8.0-alpha')
         return render_template("simple_chat_index.html", version=version)
     
     @app.route('/chat/create', methods=['POST'])
