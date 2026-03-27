@@ -42,7 +42,7 @@ def test_save_manager_state_serializes_datetimes():
     config = {}
     captured = {}
 
-    def fake_save_config(cfg):
+    def fake_save_config(cfg, silent=False):
         captured["cfg"] = cfg
 
     original_save = cli.save_config
