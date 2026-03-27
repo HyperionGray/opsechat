@@ -274,7 +274,7 @@ def register_simple_chat_routes(app):
         try:
             with open(os.path.join(_BASE_DIR, 'VERSION'), 'r') as f:
                 version = f.read().strip()
-        except Exception:
+        except (FileNotFoundError, OSError):
             version = '0.8.0-alpha'  # fallback
         
         return render_template("simple_chat_index.html", version=version)
