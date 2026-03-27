@@ -165,6 +165,12 @@ class TestHttpMailbox:
         result = self.mailbox.delete_message("secretkey123456789012345678901", "fakeid")
         assert result is False
 
+    def test_add_message_rejected_when_destroyed(self):
+        self.mailbox.destroyed = True
+        msg_id = self.mailbox.add_message("Subj", "Body", "alice")
+        assert msg_id is None
+        assert self.mailbox.message_count() == 0
+
     def test_message_expiry(self):
         self.mailbox.add_message("Old", "Old body", "bob")
         # Backdate the message timestamp
@@ -247,6 +253,43 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_form_fallback_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Hi",
+                "body": "Hello there",
+                "sender": "bob",
+            },
+        )
+        assert r.status_code == 200
+        assert b"Message sent." in r.data
+
+    def test_send_message_form_missing_address_fails(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={"subject": "Hi", "body": "Hello there", "sender": "bob"},
+        )
+        assert r.status_code == 400
+        assert b"Recipient mailbox address is required" in r.data
+
+    def test_send_message_form_unknown_address_fails(self):
+        r = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": "doesnotexist",
+                "subject": "Hi",
+                "body": "Hello there",
+                "sender": "bob",
+            },
+        )
+        assert r.status_code == 404
+        assert b"Mailbox not found" in r.data
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")

@@ -69,14 +69,21 @@ except ImportError as e:
     print(f"Warning: Could not import email_system: {e}")
     # Create mock objects for testing
     class MockEmailStorage:
-        def create_user_inbox(self, user_id): pass
+        def create_user_inbox(self, user_id):
+            return None
     class MockBurnerManager:
-        def cleanup_expired(self): pass
-        def generate_burner_email(self, user_id): return f"test{user_id}@example.com"
-        def rotate_burner(self, user_id, old_email): return f"test{user_id}@example.com"
-        def get_user_burners(self, user_id): return []
-        def get_user_for_burner(self, email): return None
-        def expire_burner(self, email): pass
+        def cleanup_expired(self):
+            return None
+        def generate_burner_email(self, user_id):
+            return f"test{user_id}@example.com"
+        def rotate_burner(self, user_id, old_email):
+            return f"test{user_id}@example.com"
+        def get_user_burners(self, user_id):
+            return []
+        def get_user_for_burner(self, email):
+            return None
+        def expire_burner(self, email):
+            return False
     
     email_storage = MockEmailStorage()
     burner_manager = MockBurnerManager()
