@@ -286,8 +286,8 @@ Continued use of the Service after changes constitutes acceptance of the updated
 ## 15. Legal Framework
 
 This AUP is governed by:
-- Terms of Service (see TERMS_OF_SERVICE.md)
-- Privacy Policy (see PRIVACY_POLICY.md)
+- Terms of Service (see /terms route and TERMS_OF_SERVICE.md)
+- Privacy Policy (see /privacy route and PRIVACY_POLICY.md)
 - Applicable laws of [jurisdiction TBD]
 
 In case of conflict between this AUP and other documents, the most restrictive interpretation applies for prohibited activities.
