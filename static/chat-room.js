@@ -142,7 +142,7 @@ function scrollToBottom() {
 
 async function renderMessages(messages) {
     const container = document.getElementById('messagesContainer');
-    container.innerHTML = '';
+    container.replaceChildren();
 
     for (const msg of messages) {
         const messageDiv = document.createElement('div');
@@ -233,7 +233,7 @@ async function pollMessages() {
 // Event listeners
 document.getElementById('sendBtn').addEventListener('click', sendMessage);
 
-document.getElementById('messageInput').addEventListener('keypress', function(e) {
+document.getElementById('messageInput').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') {
         sendMessage();
     }
@@ -295,5 +295,4 @@ window.addEventListener('beforeunload', function() {
     }
 });
 
-// Expose acceptSecurityWarning for the HTML onclick attribute
-window.acceptSecurityWarning = acceptSecurityWarning;
+document.getElementById('acceptSecurityWarningBtn').addEventListener('click', acceptSecurityWarning);

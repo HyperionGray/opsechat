@@ -358,6 +358,7 @@ class TestBugFixes:
         body = response.data.decode()
         assert "chat-room.js" in body
         assert "addEventListener" not in body
+        assert "onclick=" not in body
 
     def test_chat_room_passes_room_id_via_data_attribute(self, client):
         """room_id must be available as a data-room-id attribute, not inlined in JS."""
@@ -365,6 +366,14 @@ class TestBugFixes:
         response = client.get(f"/chat/room/{room_id}")
         body = response.data.decode()
         assert f'data-room-id="{room_id}"' in body
+
+    def test_chat_room_security_warning_uses_button_id_not_inline_handler(self, client):
+        """The security warning confirm button should be wired by JS, not inline HTML."""
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.get(f"/chat/room/{room_id}")
+        body = response.data.decode()
+        assert 'id="acceptSecurityWarningBtn"' in body
+        assert "onclick=" not in body
 
     # -- Bug 4: Encrypted messages must be accepted by the server -----------
 
@@ -436,6 +445,17 @@ class TestBugFixes:
         )
         assert response.status_code == 400
 
+    def test_invalid_encrypted_payload_returns_contract_error(self, client):
+        """Invalid encrypted payloads should fail with a stable API error message."""
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "ENC:not@base64"},
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        assert response.get_json() == {"error": "Invalid encrypted message format."}
+
     def test_plaintext_base64_still_rejected(self, client):
         """Long base64-looking plaintext (without ENC: prefix) is still blocked."""
         room_id = client.post("/chat/create").get_json()["room_id"]
@@ -450,3 +470,16 @@ class TestBugFixes:
             content_type="application/json",
         )
         assert response.status_code == 400
+
+
+class TestFrontendAssets:
+    def test_chat_index_script_avoids_innerhtml(self):
+        script = open(os.path.join(os.getcwd(), "static", "chat-index.js"), encoding="utf-8").read()
+        assert "innerHTML" not in script
+        assert "replaceChildren" in script
+
+    def test_chat_room_script_avoids_global_handlers_and_legacy_keypress(self):
+        script = open(os.path.join(os.getcwd(), "static", "chat-room.js"), encoding="utf-8").read()
+        assert "window.acceptSecurityWarning" not in script
+        assert "addEventListener('keypress'" not in script
+        assert "acceptSecurityWarningBtn" in script

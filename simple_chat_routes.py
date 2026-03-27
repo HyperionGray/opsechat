@@ -17,6 +17,7 @@ import datetime
 import secrets
 import threading
 import base64
+import binascii
 from flask import render_template, request, session, jsonify, Blueprint
 from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
@@ -274,7 +275,7 @@ def register_simple_chat_routes(app):
         try:
             with open(os.path.join(_BASE_DIR, 'VERSION'), 'r') as f:
                 version = f.read().strip()
-        except Exception:
+        except OSError:
             version = '0.8.0-alpha'  # fallback
         
         return render_template("simple_chat_index.html", version=version)
@@ -373,7 +374,7 @@ def register_simple_chat_routes(app):
                 # Validate that the payload looks like valid base64
                 try:
                     base64.b64decode(payload, validate=True)
-                except Exception:
+                except (binascii.Error, ValueError):
                     return jsonify({"error": "Invalid encrypted message format."}), 400
             else:
                 # Plain-text path: apply all sanitization and content checks
