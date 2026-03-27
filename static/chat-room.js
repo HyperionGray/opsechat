@@ -269,6 +269,8 @@ document.getElementById('encryptionToggle').addEventListener('change', async fun
     await pollMessages();
 });
 
+document.getElementById('acceptSecurityWarningBtn').addEventListener('click', acceptSecurityWarning);
+
 // Check for existing key on load
 window.addEventListener('load', async function() {
     // Show security warning first
@@ -295,5 +297,3 @@ window.addEventListener('beforeunload', function() {
     }
 });
 
-// Expose acceptSecurityWarning for the HTML onclick attribute
-window.acceptSecurityWarning = acceptSecurityWarning;

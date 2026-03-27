@@ -36,6 +36,7 @@ Simple, ephemeral messaging for sharing room IDs with specific users. DMs are de
 
 ### Features
 - **1-minute expiry** - Messages disappear after 60 seconds
+- **One-time read links** - DM is securely burned immediately after the first successful view
 - **Simple text only** - Max 200 characters
 - **Memory overwriting** - Data is overwritten before deletion
 - **Non-discoverable** - Cryptographically secure DM IDs
@@ -57,7 +58,8 @@ Response:
   "success": true,
   "dm_id": "14gvVa4l3SPsLJc1Ijb_sA",
   "dm_url": "/chat/dm/14gvVa4l3SPsLJc1Ijb_sA",
-  "expires_in": 60
+  "expires_in": 60,
+  "one_time_read": true
 }
 ```
 
@@ -93,6 +95,10 @@ POST /chat/dm/send
 # User B accesses the DM
 GET /chat/dm/xyz789
 → Gets room ID and joins the chat
+
+# Any subsequent attempt to access the same DM URL
+GET /chat/dm/xyz789
+→ 404 (already viewed and burned)
 ```
 
 ---
@@ -462,7 +468,7 @@ curl http://localhost:5001/chat/dm/{dm_id}
 ## ⚠️ Important Security Notes
 
 1. **Room IDs are sensitive** - Treat them as secrets, share only over secure channels
-2. **DMs are ephemeral** - Screenshot or save important room IDs before they expire
+2. **DMs are one-time and ephemeral** - Save important room IDs before they expire or are first viewed
 3. **Rate limits are per-user** - Each session has independent limits
 4. **Domain rotation requires DNS** - New domains need proper DNS configuration
 5. **Auto-restart is aggressive** - Monitor logs for repeated crashes

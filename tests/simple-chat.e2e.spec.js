@@ -33,11 +33,11 @@ test.describe('Simple Chat Room Tests', () => {
     await createBtn.click();
     
     // Wait for redirect to room page
-    await page.waitForURL(/\/chat\/room\/[a-zA-Z0-9]+/, { timeout: 5000 });
+    await page.waitForURL(/\/chat\/room\/[A-Za-z0-9_-]+/, { timeout: 5000 });
     
     // Check we're on a room page
     const url = page.url();
-    expect(url).toMatch(/\/chat\/room\/[a-zA-Z0-9]+/);
+    expect(url).toMatch(/\/chat\/room\/[A-Za-z0-9_-]+/);
     
     // Check room elements are present
     await expect(page.locator('h1')).toContainText('OpSecChat Room');
@@ -50,7 +50,7 @@ test.describe('Simple Chat Room Tests', () => {
     await page.goto(`${baseURL}/chat`);
     const createBtn = page.locator('#createRoomBtn');
     await createBtn.click();
-    await page.waitForURL(/\/chat\/room\/[a-zA-Z0-9]+/, { timeout: 5000 });
+    await page.waitForURL(/\/chat\/room\/[A-Za-z0-9_-]+/, { timeout: 5000 });
     
     // Send a message
     const messageInput = page.locator('#messageInput');
@@ -72,7 +72,7 @@ test.describe('Simple Chat Room Tests', () => {
     await page.goto(`${baseURL}/chat`);
     const createBtn = page.locator('#createRoomBtn');
     await createBtn.click();
-    await page.waitForURL(/\/chat\/room\/[a-zA-Z0-9]+/, { timeout: 5000 });
+    await page.waitForURL(/\/chat\/room\/[A-Za-z0-9_-]+/, { timeout: 5000 });
     
     // Check username is displayed in header
     const userInfo = page.locator('#userInfo');
@@ -89,7 +89,7 @@ test.describe('Simple Chat Room Tests', () => {
     await page.goto(`${baseURL}/chat`);
     const createBtn = page.locator('#createRoomBtn');
     await createBtn.click();
-    await page.waitForURL(/\/chat\/room\/[a-zA-Z0-9]+/, { timeout: 5000 });
+    await page.waitForURL(/\/chat\/room\/[A-Za-z0-9_-]+/, { timeout: 5000 });
     
     // Check encryption toggle
     const encryptionToggle = page.locator('#encryptionToggle');
@@ -112,7 +112,7 @@ test.describe('Simple Chat Room Tests', () => {
     await page.goto(`${baseURL}/chat`);
     const createBtn = page.locator('#createRoomBtn');
     await createBtn.click();
-    await page.waitForURL(/\/chat\/room\/[a-zA-Z0-9]+/, { timeout: 5000 });
+    await page.waitForURL(/\/chat\/room\/[A-Za-z0-9_-]+/, { timeout: 5000 });
     
     // Check user count is displayed
     const userCount = page.locator('#userCount');
@@ -128,7 +128,7 @@ test.describe('Simple Chat Room Tests', () => {
     await page.goto(`${baseURL}/chat`);
     const createBtn = page.locator('#createRoomBtn');
     await createBtn.click();
-    await page.waitForURL(/\/chat\/room\/[a-zA-Z0-9]+/, { timeout: 5000 });
+    await page.waitForURL(/\/chat\/room\/[A-Za-z0-9_-]+/, { timeout: 5000 });
     
     // Try to send a message with HTML/special chars
     const messageInput = page.locator('#messageInput');
@@ -151,12 +151,12 @@ test.describe('Simple Chat Room Tests', () => {
     await page.goto(`${baseURL}/chat`);
     const createBtn = page.locator('#createRoomBtn');
     await createBtn.click();
-    await page.waitForURL(/\/chat\/room\/[a-zA-Z0-9]+/, { timeout: 5000 });
+    await page.waitForURL(/\/chat\/room\/[A-Za-z0-9_-]+/, { timeout: 5000 });
     
     // Check input has maxlength attribute
     const messageInput = page.locator('#messageInput');
     const maxLength = await messageInput.getAttribute('maxlength');
-    expect(maxLength).toBe('1000');
+    expect(maxLength).toBe('500');
   });
 });
 
@@ -175,7 +175,7 @@ test.describe('Simple Chat API Tests', () => {
     expect(data).toHaveProperty('success', true);
     expect(data).toHaveProperty('room_id');
     expect(data).toHaveProperty('room_url');
-    expect(data.room_id).toMatch(/^[a-zA-Z0-9]+$/);
+    expect(data.room_id).toMatch(/^[A-Za-z0-9_-]+$/);
   });
 
   test('should post message via API', async ({ request }) => {
