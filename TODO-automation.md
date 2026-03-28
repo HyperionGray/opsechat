@@ -8,6 +8,10 @@
 - Removed push/PR triggers from scheduled workflows
 - Added concurrency controls to prevent duplicate runs
 - Created comprehensive documentation
+- Removed additional stale duplicate workflows from `.github/workflows/`:
+  - `auto-gpt5-implementation.yml`
+  - `auto-label-comment-prs.yml`
+  - `auto-sec-scan.yml`
 
 ## Still To Do
 

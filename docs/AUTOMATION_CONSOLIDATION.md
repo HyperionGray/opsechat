@@ -48,7 +48,7 @@ The following 13 workflows were removed as they created noise by running on ever
 12. `auto-sec-scan.yml` - Duplicate of security-scan.yml
 13. `test.yml` - Duplicate test workflow
 
-### 4. Workflows Kept (22 remaining)
+### 4. Workflows Kept (19 remaining)
 
 #### Core CI/Testing (5)
 - `ci.yml` - **NEW**: Required CI workflow
@@ -64,7 +64,7 @@ The following 13 workflows were removed as they created noise by running on ever
 - `auto-llm-issue-review.yml` - Triggered by issue labels
 - `auto-label.yml` - Triggered when issues are opened
 
-#### Scheduled/Manual (12)
+#### Scheduled/Manual (11)
 - `autonomous-progress.yml` - Every 6 hours (continuous progress)
 - `auto-advance-ball.yml` - Every 6 hours
 - `auto-complete-cicd-review.yml` - Every 12 hours + manual
@@ -77,6 +77,15 @@ The following 13 workflows were removed as they created noise by running on ever
 - `standardize-labels.yml` - Manual only
 - `trigger-all-repos.yml` - Manual only
 - `workflows-sync-template-backup.yml` - Daily backup
+
+### 5. Follow-up Cleanup (2026-03-28)
+
+The following remaining duplicates/noisy workflows were removed from
+`.github/workflows/`:
+
+1. `auto-gpt5-implementation.yml`
+2. `auto-label-comment-prs.yml`
+3. `auto-sec-scan.yml`
 
 ## Impact
 

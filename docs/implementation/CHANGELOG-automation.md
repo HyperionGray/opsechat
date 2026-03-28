@@ -5,6 +5,21 @@
 ### Summary
 Major cleanup and consolidation of GitHub Actions workflows to reduce automation noise and improve CI/CD reliability.
 
+## 2026-03-28 - Workflow Cleanup Follow-up
+
+### Summary
+Removed remaining duplicate/noisy automation workflows that were still present in
+`.github/workflows/` after the consolidation work.
+
+### Removed
+- `auto-gpt5-implementation.yml`
+- `auto-label-comment-prs.yml`
+- `auto-sec-scan.yml`
+
+### Notes
+- These files were already tracked as removable in consolidation documentation.
+- Current workflow set is now aligned with the reduced-noise automation direction.
+
 ### Statistics
 - **Before**: 33 workflows, 16 auto-triggered on every PR/push
 - **After**: 22 workflows, 3 auto-triggered on PR/push
