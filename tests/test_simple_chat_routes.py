@@ -141,6 +141,28 @@ class TestCheckRateLimit:
         assert allowed is True
 
 
+class TestRateLimitStatus:
+    def test_rate_limit_status_unknown_endpoint(self):
+        status = simple_chat_routes.get_rate_limit_status("sess-status-unknown", "not_configured")
+        assert status["configured"] is False
+        assert status["requests_used"] == 0
+        assert status["reset_in_seconds"] == 0
+
+    def test_rate_limit_status_tracks_usage(self):
+        session_id = "sess-status-usage"
+        for _ in range(3):
+            check_rate_limit(session_id, "chat_message")
+
+        status = simple_chat_routes.get_rate_limit_status(session_id, "chat_message")
+        assert status["configured"] is True
+        assert status["endpoint"] == "chat_message"
+        assert status["max_requests"] == RATE_LIMITS["chat_message"]["max_requests"]
+        assert status["window_seconds"] == RATE_LIMITS["chat_message"]["window_seconds"]
+        assert status["requests_used"] == 3
+        assert status["requests_remaining"] == RATE_LIMITS["chat_message"]["max_requests"] - 3
+        assert status["reset_in_seconds"] >= 1
+
+
 # ---------------------------------------------------------------------------
 # HTTP routes – chat rooms
 # ---------------------------------------------------------------------------
@@ -239,6 +261,33 @@ class TestChatRoutes:
     def test_get_room_key_nonexistent_room(self, client):
         response = client.get("/chat/room/no-such-room/key")
         assert response.status_code == 404
+
+    def test_rate_limit_status_endpoint_returns_all_limits(self, client):
+        response = client.get("/chat/rate-limit-status")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert "session_id" in data
+        assert "limits" in data
+        for endpoint in ("chat_create", "chat_message", "dm_send"):
+            assert endpoint in data["limits"]
+            assert data["limits"][endpoint]["configured"] is True
+            assert "requests_used" in data["limits"][endpoint]
+            assert "requests_remaining" in data["limits"][endpoint]
+
+    def test_chat_create_rate_limit_429_includes_retry_after_header(self, client):
+        # Hit limit in the same session (10 requests allowed, 11th blocked)
+        for _ in range(RATE_LIMITS["chat_create"]["max_requests"]):
+            assert client.post("/chat/create").status_code == 200
+
+        blocked = client.post("/chat/create")
+        assert blocked.status_code == 429
+        body = blocked.get_json()
+        assert "retry_after" in body
+        assert body["retry_after"] >= 1
+        assert blocked.headers.get("Retry-After") is not None
+        assert int(blocked.headers["Retry-After"]) >= 1
+        assert "rate_limit" in body
+        assert body["rate_limit"]["endpoint"] == "chat_create"
 
 
 # ---------------------------------------------------------------------------

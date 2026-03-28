@@ -5,6 +5,7 @@ let encryptionEnabled = false;
 let encryptionKey = null;
 let pollInterval = null;
 let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+let sendBackoffUntil = 0;
 
 // Encrypted message prefix (ASCII-safe, recognised by both client and server)
 const ENC_PREFIX = 'ENC:';
@@ -135,6 +136,19 @@ function showStatus(message, duration = 3000) {
     }, duration);
 }
 
+function parseRetryAfterSeconds(response, bodyData) {
+    if (bodyData && Number.isFinite(Number(bodyData.retry_after))) {
+        return Math.max(1, Number(bodyData.retry_after));
+    }
+
+    const retryHeader = response.headers.get('Retry-After');
+    const parsed = Number(retryHeader);
+    if (Number.isFinite(parsed) && parsed > 0) {
+        return Math.max(1, parsed);
+    }
+    return 1;
+}
+
 function scrollToBottom() {
     const container = document.getElementById('messagesContainer');
     container.scrollTop = container.scrollHeight;
@@ -184,6 +198,12 @@ async function renderMessages(messages) {
 }
 
 async function sendMessage() {
+    if (Date.now() < sendBackoffUntil) {
+        const secondsLeft = Math.max(1, Math.ceil((sendBackoffUntil - Date.now()) / 1000));
+        showStatus(`Rate limited. Try again in ${secondsLeft}s.`);
+        return;
+    }
+
     const input = document.getElementById('messageInput');
     const message = input.value.trim();
 
@@ -209,7 +229,22 @@ async function sendMessage() {
             input.value = '';
             await pollMessages();
         } else {
-            showStatus('Error sending message');
+            let body = null;
+            try {
+                body = await response.json();
+            } catch (e) {
+                body = null;
+            }
+
+            if (response.status === 429) {
+                const retryAfter = parseRetryAfterSeconds(response, body || {});
+                sendBackoffUntil = Date.now() + (retryAfter * 1000);
+                showStatus(`Rate limited. Try again in ${retryAfter}s.`, Math.max(3000, retryAfter * 1000));
+                return;
+            }
+
+            const err = body && body.error ? body.error : 'Error sending message';
+            showStatus(err);
         }
     } catch (error) {
         showStatus('Error: ' + error.message);

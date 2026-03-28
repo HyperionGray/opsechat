@@ -142,6 +142,34 @@ POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
 
+If a write endpoint is rate-limited, the API now returns:
+- HTTP `429 Too Many Requests`
+- `Retry-After` response header (seconds)
+- JSON fields `retry_after` and `rate_limit` for client backoff logic
+
+#### Rate Limit Status (Per Session)
+```
+GET /chat/rate-limit-status
+Response: {
+  "session_id": "...",
+  "limits": {
+    "chat_create": {
+      "configured": true,
+      "max_requests": 10,
+      "window_seconds": 60,
+      "requests_used": 0,
+      "requests_remaining": 10,
+      "reset_in_seconds": 0
+    },
+    "chat_message": { ... },
+    "dm_send": { ... }
+  }
+}
+```
+
+This endpoint is useful for operational monitoring and client UX, especially
+when implementing graceful retry/backoff behavior.
+
 ### Encryption Implementation
 
 The E2E encryption uses native Web Crypto API:
