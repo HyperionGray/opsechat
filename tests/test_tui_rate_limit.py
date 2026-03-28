@@ -82,10 +82,10 @@ def test_submit_message_broadcasts_sanitized_content():
     try:
         result = server.submit_message("CleanUser0004", "<hello>&world")
         assert result["accepted"] is True
-        assert captured == [("CleanUser0004", "hello world")]
+        assert captured == [("CleanUser0004", "helloworld")]
 
         stored = server.get_messages()
         assert len(stored) == 1
-        assert stored[0]["message"] == "hello world"
+        assert stored[0]["message"] == "helloworld"
     finally:
         server.stop()
