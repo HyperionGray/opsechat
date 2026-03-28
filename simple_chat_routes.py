@@ -234,7 +234,13 @@ def cleanup_rate_limits():
             del _rate_limit_store[sid]
 
 
-def build_rate_limit_response(endpoint: str, retry_after: int, message: str):
+def build_rate_limit_response(
+    endpoint: str,
+    retry_after: int,
+    message: str,
+    max_requests: int | None = None,
+    window_seconds: int | None = None,
+):
     """
     Build a standardized 429 response with retry metadata.
 
@@ -251,15 +257,81 @@ def build_rate_limit_response(endpoint: str, retry_after: int, message: str):
     response.headers["Retry-After"] = str(retry_after)
     response.headers["Cache-Control"] = "no-store"
 
-    config = RATE_LIMITS.get(endpoint)
-    if config:
-        response.headers["X-RateLimit-Limit"] = str(config["max_requests"])
+    config = RATE_LIMITS.get(endpoint, {})
+    if max_requests is None:
+        max_requests = config.get("max_requests")
+    if window_seconds is None:
+        window_seconds = config.get("window_seconds")
+
+    if max_requests is not None:
+        response.headers["X-RateLimit-Limit"] = str(max_requests)
         response.headers["X-RateLimit-Remaining"] = "0"
-        response.headers["X-RateLimit-Window"] = str(config["window_seconds"])
+    if window_seconds is not None:
+        response.headers["X-RateLimit-Window"] = str(window_seconds)
         reset_epoch = int(datetime.datetime.now().timestamp()) + retry_after
         response.headers["X-RateLimit-Reset"] = str(reset_epoch)
 
     return response
+
+
+def _resolve_rate_limited_endpoint():
+    """Map current request to a simple-chat endpoint key when applicable."""
+    if request.method != "POST":
+        return None
+    if request.path == "/chat/create":
+        return "chat_create"
+    if request.path == "/chat/dm/send":
+        return "dm_send"
+    if re.fullmatch(r"/chat/room/[^/]+/messages", request.path):
+        return "chat_message"
+    return None
+
+
+def _parse_limiter_description(description: str):
+    """
+    Parse Flask-Limiter descriptions like '3 per 1 minute'.
+
+    Returns (max_requests, window_seconds) when parseable, otherwise (None, None).
+    """
+    if not description:
+        return None, None
+    match = re.search(
+        r"(\d+)\s+per\s+(\d+)\s*(second|minute|hour|day)s?",
+        description,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None, None
+
+    max_requests = int(match.group(1))
+    interval_value = int(match.group(2))
+    unit = match.group(3).lower()
+    multiplier = {
+        "second": 1,
+        "minute": 60,
+        "hour": 3600,
+        "day": 86400,
+    }.get(unit)
+    if multiplier is None:
+        return None, None
+
+    return max_requests, interval_value * multiplier
+
+
+def _extract_retry_after_seconds(error, fallback_window: int):
+    """Best-effort extraction of retry-after from limiter exceptions."""
+    retry_after = getattr(error, "retry_after", None)
+    if retry_after is None:
+        return max(fallback_window, 1)
+
+    if isinstance(retry_after, datetime.datetime):
+        delta = (retry_after - datetime.datetime.now(retry_after.tzinfo)).total_seconds()
+        return max(int(delta), 1)
+
+    try:
+        return max(int(retry_after), 1)
+    except (TypeError, ValueError):
+        return max(fallback_window, 1)
 
 
 # Background cleanup thread
@@ -294,6 +366,37 @@ def generate_secure_dm_id():
 
 def register_simple_chat_routes(app):
     """Register simple chat routes with the Flask app"""
+
+    @app.errorhandler(429)
+    def handle_rate_limit_error(error):
+        """
+        Standardize 429 payloads for simple-chat write endpoints.
+
+        Flask-Limiter can reject requests before route handlers execute. This
+        ensures clients still receive consistent retry metadata.
+        """
+        endpoint = _resolve_rate_limited_endpoint()
+        if endpoint is None:
+            return error
+
+        parsed_limit, parsed_window = _parse_limiter_description(
+            getattr(error, "description", "")
+        )
+        config = RATE_LIMITS.get(endpoint, {})
+        max_requests = parsed_limit if parsed_limit is not None else config.get("max_requests")
+        window_seconds = parsed_window if parsed_window is not None else config.get("window_seconds", 60)
+        retry_after = _extract_retry_after_seconds(error, window_seconds)
+        description = getattr(error, "description", "")
+        detail = f" {description}." if description else ""
+        message = f"Rate limit exceeded.{detail} Try again in {retry_after} seconds."
+
+        return build_rate_limit_response(
+            endpoint,
+            retry_after,
+            message,
+            max_requests=max_requests,
+            window_seconds=window_seconds,
+        )
     
     @app.route('/chat', strict_slashes=False)
     def chat_index():
