@@ -285,6 +285,8 @@ After rotating domains, update your email configuration:
 - CLI tracks spending automatically
 - Prevents purchases that would exceed budget
 - Resets monthly (manual reset required)
+- Owned domain state now persists with JSON-safe timestamps and is backward-compatible
+  with previously saved datetime formats
 
 ---
 
