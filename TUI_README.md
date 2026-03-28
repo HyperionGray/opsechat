@@ -15,6 +15,7 @@ This is a serious privacy and opsec tool for serious privacy and opsec people. I
 ✅ **Zero Disk** - Nothing touches disk except the application code  
 ✅ **Tor Integration** - Full support for Tor hidden services (.onion)  
 ✅ **SOCKS Proxy** - Client supports connecting via Tor SOCKS proxy  
+✅ **Per-User Rate Limiting** - Default 20 messages / 60 seconds (server-enforced)
 
 ## Quick Start
 
@@ -135,10 +136,24 @@ sudo systemctl start tor
 
 - **Max message length**: 1000 characters
 - **Message lifetime**: 4 minutes (240 seconds)
+- **Message rate limit**: 20 messages per 60 seconds per user (default)
 - **Max chat history**: 200 messages in client (memory management)
 - **No images**: Text only, no exceptions
 - **No video**: Text only, no exceptions
 - **No b64 encoding**: Large base64-like strings are rejected
+
+### Rate Limit Configuration
+
+You can tune the TUI server anti-spam limits:
+
+```bash
+python tui-server.py --rate-limit-count 30 --rate-limit-window 60
+```
+
+- `--rate-limit-count`: max messages per user in the window
+- `--rate-limit-window`: window size in seconds
+
+When exceeded, the server sends a system warning to that client with retry timing.
 
 ## Architecture
 
@@ -241,9 +256,8 @@ Messages are:
 
 **No.** This is by design. Messages burn after 4 minutes, **no negotiation, no config**. If you need longer persistence, this tool is not for you.
 
-## Coming Soon
+## Planned Next
 
-- [ ] Full Tor hidden service integration
 - [ ] PGP encryption support (optional)
 - [ ] Multi-room support
 - [ ] Message signing/verification

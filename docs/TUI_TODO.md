@@ -26,17 +26,17 @@ This file tracks what needs to be done for the TUI chat system.
 - [x] Basic testing and validation
 - [x] Create TUI_README.md documentation
 
-## 🔄 IN PROGRESS (Phase 2: Tor Integration)
+## ✅ COMPLETED (Phase 2: Tor Integration)
 
-- [ ] Integrate Tor hidden service in TUI server
-  - [ ] Modify `src/tui/server.py` to support Tor
-  - [ ] Add ephemeral hidden service creation
-  - [ ] Display .onion address to share
-  - [ ] Handle Tor connection failures gracefully
-- [ ] Update client for Tor connections
-  - [ ] Support connecting to .onion addresses
-  - [ ] Add SOCKS proxy support
-  - [ ] Connection status indicator
+- [x] Integrate Tor hidden service in TUI server
+  - [x] Modify `src/tui/server.py` to support Tor
+  - [x] Add ephemeral hidden service creation
+  - [x] Display .onion address to share
+  - [x] Handle Tor connection failures gracefully
+- [x] Update client for Tor connections
+  - [x] Support connecting to .onion addresses
+  - [x] Add SOCKS proxy support
+  - [x] Connection status indicator
 
 ## 📋 TODO (Phase 3: Security & OpSec)
 
@@ -59,10 +59,10 @@ This file tracks what needs to be done for the TUI chat system.
 - [ ] Implement message overwrite verification
   - [ ] Test memory overwriting actually works
   - [ ] Add optional wipe methods (zeros, random)
-- [ ] Add message rate limiting
-  - [ ] Prevent spam/flooding
-  - [ ] Per-user limits
-  - [ ] Configurable thresholds
+- [x] Add message rate limiting
+  - [x] Prevent spam/flooding
+  - [x] Per-user limits
+  - [x] Configurable thresholds
 - [ ] Improve message history management
   - [ ] Server-side message limit (not just client)
   - [ ] Memory usage monitoring
@@ -157,12 +157,11 @@ This file tracks what needs to be done for the TUI chat system.
 
 ## 🎯 Next Steps (Priority Order)
 
-1. **Tor Integration** (HIGH) - Complete Phase 2
-2. **PGP Encryption** (HIGH) - Add optional E2E encryption
-3. **Security Testing** (HIGH) - Penetration testing, code review
-4. **Multi-Room** (MEDIUM) - Support multiple chat rooms
-5. **Admin Tools** (MEDIUM) - Basic moderation capabilities
-6. **Performance** (LOW) - Only if issues arise
+1. **PGP Encryption** (HIGH) - Add optional E2E encryption
+2. **Security Testing** (HIGH) - Penetration testing, code review
+3. **Multi-Room** (MEDIUM) - Support multiple chat rooms
+4. **Admin Tools** (MEDIUM) - Basic moderation capabilities
+5. **Performance** (LOW) - Only if issues arise
 
 ## 🔒 Security Considerations
 
@@ -172,9 +171,9 @@ This file tracks what needs to be done for the TUI chat system.
 - ✅ Message overwriting on delete
 - ✅ Randomized usernames
 - ✅ Text-only validation
+- ✅ Per-user message rate limiting
 - ⚠️ No E2E encryption yet (transport only via Tor)
 - ⚠️ No authentication (ephemeral by design)
-- ⚠️ No rate limiting yet
 
 ### Future Improvements
 - Add PGP for E2E encryption
@@ -186,5 +185,5 @@ This file tracks what needs to be done for the TUI chat system.
 ---
 
 **Created**: 2026-02-26  
-**Last Updated**: 2026-02-26  
-**Status**: Phase 1 Complete, Phase 2 In Progress
+**Last Updated**: 2026-03-28  
+**Status**: Phase 2 complete, Phase 3 in progress

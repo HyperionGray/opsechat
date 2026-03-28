@@ -48,6 +48,7 @@ You should see:
 [*] OpSecChat TUI Server running on 127.0.0.1:5555
 [*] Messages burn after 240 seconds
 [*] Max message length: 1000 chars
+[*] Rate limit: 20 messages per 60 seconds per user
 [*] Press Ctrl+C to stop
 ```
 
