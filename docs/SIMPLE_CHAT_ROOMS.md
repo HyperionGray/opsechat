@@ -15,6 +15,8 @@ OpSecChat now includes a simple, security-focused web-based chat room system des
 - **Text-Only**: No media, images, or file sharing
 - **In-Memory Storage**: Zero disk writes
 - **Tor Ready**: Works seamlessly with Tor hidden services
+- **Rate-Limit Backoff Metadata**: 429 responses include `Retry-After` and
+  `rate_limit` JSON details so clients can show accurate retry timing
 
 ## Quick Start
 
@@ -133,6 +135,28 @@ This prevents memory forensics from recovering deleted messages.
 ```
 POST /chat/create
 Response: {"success": true, "room_id": "...", "room_url": "/chat/room/..."}
+```
+
+When near or over limits, responses include:
+
+- `X-RateLimit-Limit`: max requests allowed in current window
+- `X-RateLimit-Remaining`: requests left in the current window
+- `X-RateLimit-Window`: sliding-window duration in seconds
+- `Retry-After`: seconds to wait before retrying (on HTTP 429)
+
+429 bodies also include structured metadata:
+
+```json
+{
+  "error": "Rate limit exceeded. Try again in 17 seconds.",
+  "rate_limit": {
+    "endpoint": "chat_create",
+    "limit": 10,
+    "remaining": 0,
+    "window_seconds": 60,
+    "retry_after_seconds": 17
+  }
+}
 ```
 
 #### Get/Post Messages

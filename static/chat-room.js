@@ -135,6 +135,23 @@ function showStatus(message, duration = 3000) {
     }, duration);
 }
 
+function parseRetryAfterSeconds(response, data) {
+    const header = response.headers.get('Retry-After');
+    if (header) {
+        const parsed = Number.parseInt(header, 10);
+        if (Number.isFinite(parsed) && parsed > 0) {
+            return parsed;
+        }
+    }
+
+    const bodyValue = data?.rate_limit?.retry_after_seconds;
+    if (Number.isFinite(bodyValue) && bodyValue > 0) {
+        return bodyValue;
+    }
+
+    return null;
+}
+
 function scrollToBottom() {
     const container = document.getElementById('messagesContainer');
     container.scrollTop = container.scrollHeight;
@@ -209,7 +226,26 @@ async function sendMessage() {
             input.value = '';
             await pollMessages();
         } else {
-            showStatus('Error sending message');
+            let errorMessage = 'Error sending message';
+            let responseBody = null;
+            try {
+                responseBody = await response.json();
+            } catch (_err) {
+                // ignore parse failures; we'll use generic text
+            }
+
+            if (response.status === 429) {
+                const retryAfter = parseRetryAfterSeconds(response, responseBody);
+                if (retryAfter) {
+                    errorMessage = `Rate limit reached. Retry in ${retryAfter}s.`;
+                } else {
+                    errorMessage = 'Rate limit reached. Please wait before retrying.';
+                }
+            } else if (responseBody && responseBody.error) {
+                errorMessage = responseBody.error;
+            }
+
+            showStatus(errorMessage, 4000);
         }
     } catch (error) {
         showStatus('Error: ' + error.message);

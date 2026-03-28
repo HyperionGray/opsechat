@@ -32,14 +32,14 @@ def test_post_is_rate_limited_get_is_not():
             r = client.get("/")
             assert r.status_code == 200, f"GET / should never be throttled, got {r.status_code}"
 
-        # POST /chat/create: limit is 3 per minute per client.
-        # First 3 calls must succeed; the 4th must be rejected with 429.
-        for i in range(3):
+        # POST /chat/create: simple_chat_routes in-memory limit is 10/minute.
+        # First 10 calls must succeed; the 11th must be rejected with 429.
+        for i in range(10):
             r = client.post("/chat/create", content_type="application/json")
             assert r.status_code == 200, f"Request {i + 1} should succeed, got {r.status_code}"
 
         r = client.post("/chat/create", content_type="application/json")
-        assert r.status_code == 429, f"4th POST should be rate-limited (429), got {r.status_code}"
+        assert r.status_code == 429, f"11th POST should be rate-limited (429), got {r.status_code}"
 
     print("✅ POST /chat/create is rate-limited after 3 requests; GET / is never throttled")
 
@@ -50,8 +50,8 @@ def test_separate_sessions_have_independent_limits():
     app = _make_app()
 
     with app.test_client() as client_a:
-        # Exhaust session A's limit (3 per minute)
-        for i in range(3):
+        # Exhaust session A's limit (10 per minute)
+        for i in range(10):
             r = client_a.post("/chat/create", content_type="application/json")
             assert r.status_code == 200, f"Client A request {i + 1} failed: {r.status_code}"
 

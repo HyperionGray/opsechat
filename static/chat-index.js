@@ -12,7 +12,25 @@ document.getElementById('createRoomBtn').addEventListener('click', async functio
         });
 
         if (!response.ok) {
-            throw new Error('Failed to create room');
+            let message = 'Failed to create room';
+            if (response.status === 429) {
+                const retryAfter = response.headers.get('Retry-After');
+                if (retryAfter) {
+                    message = `Rate limited. Retry in ${retryAfter}s.`;
+                } else {
+                    message = 'Rate limited. Please retry shortly.';
+                }
+            } else {
+                try {
+                    const errorData = await response.json();
+                    if (errorData && errorData.error) {
+                        message = errorData.error;
+                    }
+                } catch (_) {
+                    // Keep fallback message when response body is not JSON.
+                }
+            }
+            throw new Error(message);
         }
 
         const data = await response.json();

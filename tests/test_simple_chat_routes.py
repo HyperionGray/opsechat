@@ -140,6 +140,31 @@ class TestCheckRateLimit:
         allowed, _ = check_rate_limit("sess-002", "nonexistent_endpoint")
         assert allowed is True
 
+    def test_include_details_when_allowed(self):
+        allowed, retry_after, details = check_rate_limit(
+            "sess-003", "chat_create", include_details=True
+        )
+        assert allowed is True
+        assert retry_after == 0
+        assert details["endpoint"] == "chat_create"
+        assert details["limit"] == RATE_LIMITS["chat_create"]["max_requests"]
+        assert details["window_seconds"] == RATE_LIMITS["chat_create"]["window_seconds"]
+        assert details["remaining"] >= 0
+
+    def test_include_details_when_blocked(self):
+        session_id = "sess-details-blocked"
+        limit = RATE_LIMITS["chat_create"]["max_requests"]
+        for _ in range(limit):
+            check_rate_limit(session_id, "chat_create")
+
+        allowed, retry_after, details = check_rate_limit(
+            session_id, "chat_create", include_details=True
+        )
+        assert allowed is False
+        assert retry_after >= 1
+        assert details["remaining"] == 0
+        assert details["retry_after_seconds"] >= 1
+
 
 # ---------------------------------------------------------------------------
 # HTTP routes – chat rooms
@@ -157,6 +182,9 @@ class TestChatRoutes:
         assert data["success"] is True
         assert "room_id" in data
         assert data["room_url"].startswith("/chat/room/")
+        assert "X-RateLimit-Limit" in response.headers
+        assert "X-RateLimit-Remaining" in response.headers
+        assert "X-RateLimit-Window" in response.headers
 
     def test_create_room_id_unique(self, client):
         r1 = client.post("/chat/create").get_json()["room_id"]
@@ -189,6 +217,9 @@ class TestChatRoutes:
         )
         assert response.status_code == 200
         assert response.get_json()["success"] is True
+        assert "X-RateLimit-Limit" in response.headers
+        assert "X-RateLimit-Remaining" in response.headers
+        assert "X-RateLimit-Window" in response.headers
 
     def test_post_message_missing_body(self, client):
         room_id = client.post("/chat/create").get_json()["room_id"]
@@ -257,6 +288,23 @@ class TestDMRoutes:
         data = response.get_json()
         assert data["success"] is True
         assert "dm_id" in data
+        assert "X-RateLimit-Limit" in response.headers
+        assert "X-RateLimit-Remaining" in response.headers
+        assert "X-RateLimit-Window" in response.headers
+
+    def test_create_room_rate_limited_returns_retry_metadata(self, client):
+        # chat_create limit is 10/min in app limiter and in-memory limiter.
+        for _ in range(10):
+            response = client.post("/chat/create")
+            assert response.status_code == 200
+
+        blocked = client.post("/chat/create")
+        assert blocked.status_code == 429
+        payload = blocked.get_json()
+        assert "rate_limit" in payload
+        assert payload["rate_limit"]["endpoint"] == "chat_create"
+        assert payload["rate_limit"]["retry_after_seconds"] >= 1
+        assert "Retry-After" in blocked.headers
 
     def test_send_dm_missing_fields(self, client):
         response = client.post(

@@ -76,6 +76,34 @@ def test_rate_limit_unknown_endpoint_always_allows():
         assert allowed is True
 
 
+def test_rate_limit_details_included_for_known_endpoint():
+    _clear_store()
+    allowed, retry_after, details = check_rate_limit(
+        "session-details", "dm_send", include_details=True
+    )
+    assert allowed is True
+    assert retry_after == 0
+    assert details["endpoint"] == "dm_send"
+    assert details["limit"] == 5
+    assert details["window_seconds"] == 60
+    assert details["remaining"] == 4
+    assert details["retry_after_seconds"] == 0
+
+
+def test_rate_limit_details_included_for_blocked_request():
+    _clear_store()
+    sid = "session-details-blocked"
+    for _ in range(5):
+        check_rate_limit(sid, "dm_send")
+    allowed, retry_after, details = check_rate_limit(
+        sid, "dm_send", include_details=True
+    )
+    assert allowed is False
+    assert retry_after >= 1
+    assert details["remaining"] == 0
+    assert details["retry_after_seconds"] == retry_after
+
+
 def test_rate_limit_chat_message_limit():
     _clear_store()
     # chat_message: 30 requests per 60 seconds
