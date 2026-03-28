@@ -38,11 +38,12 @@ The project now includes comprehensive testing using Playwright for both headles
 
 ```
 tests/
+├── *.e2e.spec.js          # End-to-end browser tests (split by feature)
 ├── basic.spec.js          # Basic structure and module tests
-├── e2e.spec.js            # End-to-end functional tests (NEW)
 ├── mock-server.spec.js    # Mock server integration tests
 ├── ui-headless.spec.js    # UI tests in headless mode
 ├── ui-headed.spec.js      # UI tests in headed mode
+├── test_*.py              # Python unit/integration tests
 └── mock_server.py         # Mock Flask server for testing
 ```
 
@@ -53,6 +54,16 @@ tests/
 Run all tests:
 ```bash
 npm test
+```
+
+Run Python unit/integration tests:
+```bash
+python -m pytest
+```
+
+Run legal page route coverage only:
+```bash
+python -m pytest tests/test_legal_routes.py
 ```
 
 ### Headless Tests
@@ -242,7 +253,7 @@ Current test coverage includes:
 
 ### New E2E Test Suite
 
-The new `e2e.spec.js` test suite provides comprehensive end-to-end testing that validates:
+The E2E suite (`*.e2e.spec.js`) provides comprehensive end-to-end testing that validates:
 
 1. **HTTP Status Codes AND Content**: Every test checks both the status code (200, 404, 302) and validates the actual response content
 2. **User Workflows**: Tests simulate real user interactions:

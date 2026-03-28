@@ -75,9 +75,9 @@
 ### 5. Legal Document Integration
 - [ ] **CRITICAL:** Send AUP and ToS to legal counsel for review
 - [ ] Incorporate legal feedback
-- [ ] Create separate Privacy Policy document
+- [x] Create separate Privacy Policy document
 - [ ] Add policy acceptance checkbox to signup flow
-- [ ] Create policy display pages (`/terms`, `/privacy`, `/aup`)
+- [x] Create policy display pages (`/terms`, `/privacy`, `/aup`)
 - [ ] Add policy links to all page footers
 - [ ] Implement policy version tracking
 - [ ] Add "Last Updated" dates to all policies
@@ -151,7 +151,7 @@
 - [ ] Signup/login flow tests (blocked: auth not yet implemented)
 - [ ] Key management UI tests (blocked: UI not yet implemented)
 - [ ] Dashboard navigation tests (blocked: dashboard not yet implemented)
-- [ ] Policy acceptance tests (blocked: legal pages not yet implemented)
+- [ ] Policy acceptance tests (blocked: signup flow not yet implemented)
 - [ ] Spam filtering tests (blocked: spam filter not yet implemented)
 - [ ] Load testing
   - [ ] Set up load testing framework (Locust or k6)

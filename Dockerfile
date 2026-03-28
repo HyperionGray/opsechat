@@ -27,6 +27,7 @@ RUN pip install --no-cache-dir -r requirements.txt || \
 # Copy application code
 COPY runserver.py .
 COPY app_factory.py .
+COPY legal_routes.py .
 COPY rate_limiter.py .
 COPY utils.py .
 COPY chat_routes.py .
@@ -43,6 +44,7 @@ COPY MANIFEST.in .
 # Copy static files and templates
 COPY static/ static/
 COPY templates/ templates/
+COPY docs/legal/ docs/legal/
 
 # Expose Flask port
 EXPOSE 5000

@@ -2,3 +2,5 @@ templates/
 *.html
 static/
 *.ico
+docs/legal/
+*.md
