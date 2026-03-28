@@ -36,6 +36,7 @@ Simple, ephemeral messaging for sharing room IDs with specific users. DMs are de
 
 ### Features
 - **1-minute expiry** - Messages disappear after 60 seconds
+- **Single-view retrieval** - DM is burned immediately after first successful read
 - **Simple text only** - Max 200 characters
 - **Memory overwriting** - Data is overwritten before deletion
 - **Non-discoverable** - Cryptographically secure DM IDs
@@ -71,9 +72,12 @@ Response:
   "sender_name": "SilentWolf4523",
   "room_id": "wWR_qXjnWQlr4oXqlR2JLxA...",
   "message": "Join me in the secure room...",
-  "expires_in": 45
+  "expires_in": 45,
+  "burned_after_read": true
 }
 ```
+
+After a successful read, requesting the same `dm_id` again returns `404`.
 
 ### Example Workflow
 ```python
