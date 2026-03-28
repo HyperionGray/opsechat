@@ -18,7 +18,6 @@ import json
 import os
 import sys
 from pathlib import Path
-from getpass import getpass
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
