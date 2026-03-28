@@ -5,6 +5,7 @@ let encryptionEnabled = false;
 let encryptionKey = null;
 let pollInterval = null;
 let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+let sendDisabledTimer = null;
 
 // Encrypted message prefix (ASCII-safe, recognised by both client and server)
 const ENC_PREFIX = 'ENC:';
@@ -140,6 +141,38 @@ function scrollToBottom() {
     container.scrollTop = container.scrollHeight;
 }
 
+function disableSendButton(seconds) {
+    const sendBtn = document.getElementById('sendBtn');
+    const input = document.getElementById('messageInput');
+    const safeSeconds = Math.max(1, Number(seconds) || 1);
+
+    if (sendDisabledTimer) {
+        clearInterval(sendDisabledTimer);
+        sendDisabledTimer = null;
+    }
+
+    sendBtn.disabled = true;
+    input.disabled = true;
+
+    let remaining = safeSeconds;
+    showStatus(`Rate limited. You can send again in ${remaining}s.`, 1100);
+
+    sendDisabledTimer = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+            clearInterval(sendDisabledTimer);
+            sendDisabledTimer = null;
+            sendBtn.disabled = false;
+            if (securityWarningAccepted) {
+                input.disabled = false;
+            }
+            showStatus('Rate limit window reset. You can send now.', 1500);
+            return;
+        }
+        showStatus(`Rate limited. You can send again in ${remaining}s.`, 1100);
+    }, 1000);
+}
+
 async function renderMessages(messages) {
     const container = document.getElementById('messagesContainer');
     container.innerHTML = '';
@@ -205,11 +238,20 @@ async function sendMessage() {
             body: JSON.stringify({ message: messageToSend })
         });
 
+        const body = await response.json().catch(() => ({}));
+
         if (response.ok) {
             input.value = '';
             await pollMessages();
+        } else if (response.status === 429) {
+            const retryHeader = Number(response.headers.get('Retry-After'));
+            const retryBody = Number(body.retry_after_seconds);
+            const retryAfter = Number.isFinite(retryHeader) && retryHeader > 0
+                ? retryHeader
+                : (Number.isFinite(retryBody) && retryBody > 0 ? retryBody : 1);
+            disableSendButton(retryAfter);
         } else {
-            showStatus('Error sending message');
+            showStatus(body.error || 'Error sending message');
         }
     } catch (error) {
         showStatus('Error: ' + error.message);

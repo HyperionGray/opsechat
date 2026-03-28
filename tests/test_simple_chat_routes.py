@@ -21,6 +21,7 @@ from simple_chat_routes import (
     check_rate_limit,
     RATE_LIMITS,
     MAX_MESSAGE_LENGTH,
+    check_rate_limit_with_metadata,
 )
 
 
@@ -140,6 +141,14 @@ class TestCheckRateLimit:
         allowed, _ = check_rate_limit("sess-002", "nonexistent_endpoint")
         assert allowed is True
 
+    def test_metadata_returns_headers_shape(self):
+        rate = check_rate_limit_with_metadata("sess-meta-001", "chat_create")
+        assert rate["allowed"] is True
+        assert rate["retry_after"] == 0
+        assert rate["limit"] == RATE_LIMITS["chat_create"]["max_requests"]
+        assert isinstance(rate["remaining"], int)
+        assert isinstance(rate["reset_epoch"], int)
+
 
 # ---------------------------------------------------------------------------
 # HTTP routes – chat rooms
@@ -157,6 +166,11 @@ class TestChatRoutes:
         assert data["success"] is True
         assert "room_id" in data
         assert data["room_url"].startswith("/chat/room/")
+        assert response.headers.get("X-RateLimit-Limit") == str(
+            RATE_LIMITS["chat_create"]["max_requests"]
+        )
+        assert response.headers.get("X-RateLimit-Remaining") is not None
+        assert response.headers.get("X-RateLimit-Reset") is not None
 
     def test_create_room_id_unique(self, client):
         r1 = client.post("/chat/create").get_json()["room_id"]
@@ -257,6 +271,11 @@ class TestDMRoutes:
         data = response.get_json()
         assert data["success"] is True
         assert "dm_id" in data
+        assert response.headers.get("X-RateLimit-Limit") == str(
+            RATE_LIMITS["dm_send"]["max_requests"]
+        )
+        assert response.headers.get("X-RateLimit-Remaining") is not None
+        assert response.headers.get("X-RateLimit-Reset") is not None
 
     def test_send_dm_missing_fields(self, client):
         response = client.post(
@@ -450,3 +469,29 @@ class TestBugFixes:
             content_type="application/json",
         )
         assert response.status_code == 400
+
+    def test_chat_message_rate_limit_429_has_retry_metadata(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        for _ in range(RATE_LIMITS["chat_message"]["max_requests"]):
+            ok_resp = client.post(
+                f"/chat/room/{room_id}/messages",
+                json={"message": "ok message with spaces"},
+                content_type="application/json",
+            )
+            assert ok_resp.status_code == 200
+
+        blocked = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "another ok message"},
+            content_type="application/json",
+        )
+        assert blocked.status_code == 429
+        body = blocked.get_json()
+        assert isinstance(body.get("retry_after_seconds"), int)
+        assert body["retry_after_seconds"] >= 1
+        assert blocked.headers.get("Retry-After") == str(body["retry_after_seconds"])
+        assert blocked.headers.get("X-RateLimit-Limit") == str(
+            RATE_LIMITS["chat_message"]["max_requests"]
+        )
+        assert blocked.headers.get("X-RateLimit-Remaining") == "0"
+        assert blocked.headers.get("X-RateLimit-Reset") is not None

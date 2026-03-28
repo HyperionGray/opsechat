@@ -135,12 +135,26 @@ POST /chat/create
 Response: {"success": true, "room_id": "...", "room_url": "/chat/room/..."}
 ```
 
+Rate-limit metadata for automated clients:
+
+- Success responses include:
+  - `X-RateLimit-Limit`
+  - `X-RateLimit-Remaining`
+  - `X-RateLimit-Reset` (unix epoch seconds)
+- `429 Too Many Requests` responses include:
+  - JSON field: `retry_after_seconds`
+  - Header: `Retry-After`
+
 #### Get/Post Messages
 ```
 GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
+
+`POST /chat/room/<room_id>/messages` follows the same rate-limit metadata format as
+`/chat/create`. The browser client uses this to disable the Send button briefly and
+show a countdown instead of failing silently.
 
 ### Encryption Implementation
 

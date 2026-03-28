@@ -17,8 +17,8 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Absolute path to this file's directory (used for reliable VERSION lookup)
@@ -167,25 +167,27 @@ def cleanup_old_dms():
             del direct_messages[dm_id]
 
 
-def check_rate_limit(session_id: str, endpoint: str) -> tuple:
+def check_rate_limit_with_metadata(session_id: str, endpoint: str) -> dict:
     """
-    Check if a session has exceeded its rate limit for an endpoint.
-
-    Uses a sliding-window algorithm with in-memory storage.
-
-    Args:
-        session_id: Unique identifier for the requesting session.
-        endpoint: Name of the endpoint to check (must be a key in RATE_LIMITS).
+    Check rate limits and return machine-readable metadata.
 
     Returns:
-        tuple[bool, int]: (allowed, retry_after_seconds).
-            - allowed=True, retry_after=0 when the request is permitted.
-            - allowed=False, retry_after>=1 when the limit is exceeded.
-            - For unknown endpoints (not in RATE_LIMITS) always returns (True, 0).
+        dict with keys:
+            - allowed (bool)
+            - retry_after (int)
+            - limit (int|None)
+            - remaining (int|None)
+            - reset_epoch (int|None)
     """
     config = RATE_LIMITS.get(endpoint)
     if not config:
-        return True, 0
+        return {
+            "allowed": True,
+            "retry_after": 0,
+            "limit": None,
+            "remaining": None,
+            "reset_epoch": None,
+        }
 
     max_requests = config["max_requests"]
     window = config["window_seconds"]
@@ -205,13 +207,58 @@ def check_rate_limit(session_id: str, endpoint: str) -> tuple:
             ts for ts in session_limits[endpoint] if ts > cutoff
         ]
 
-        if len(session_limits[endpoint]) >= max_requests:
+        current_count = len(session_limits[endpoint])
+        if current_count >= max_requests:
             oldest = session_limits[endpoint][0]
             retry_after = int(window - (now - oldest).total_seconds()) + 1
-            return False, max(retry_after, 1)
+            retry_after = max(retry_after, 1)
+            reset_epoch = int(
+                (oldest + datetime.timedelta(seconds=window)).timestamp()
+            )
+            return {
+                "allowed": False,
+                "retry_after": retry_after,
+                "limit": max_requests,
+                "remaining": 0,
+                "reset_epoch": reset_epoch,
+            }
 
         session_limits[endpoint].append(now)
-        return True, 0
+        oldest = session_limits[endpoint][0]
+        reset_epoch = int(
+            (oldest + datetime.timedelta(seconds=window)).timestamp()
+        )
+        return {
+            "allowed": True,
+            "retry_after": 0,
+            "limit": max_requests,
+            "remaining": max_requests - len(session_limits[endpoint]),
+            "reset_epoch": reset_epoch,
+        }
+
+
+def check_rate_limit(session_id: str, endpoint: str) -> tuple:
+    """
+    Backward-compatible rate limit helper.
+
+    Returns:
+        tuple[bool, int]: (allowed, retry_after_seconds).
+    """
+    rate_data = check_rate_limit_with_metadata(session_id, endpoint)
+    return rate_data["allowed"], rate_data["retry_after"]
+
+
+def _attach_rate_limit_headers(response, rate_data: dict):
+    """Attach standard rate-limit headers to a response."""
+    if rate_data.get("limit") is None:
+        return response
+
+    response.headers["X-RateLimit-Limit"] = str(rate_data["limit"])
+    response.headers["X-RateLimit-Remaining"] = str(rate_data["remaining"])
+    response.headers["X-RateLimit-Reset"] = str(rate_data["reset_epoch"])
+    if rate_data.get("retry_after", 0) > 0:
+        response.headers["Retry-After"] = str(rate_data["retry_after"])
+    return response
 
 
 def cleanup_rate_limits():
@@ -289,22 +336,26 @@ def register_simple_chat_routes(app):
             session["username"] = generate_random_username()
             session["color"] = get_random_color_rgb()
 
-        allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
-        if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Try again in {retry_after} seconds."
-            }), 429
+        rate_data = check_rate_limit_with_metadata(session["_id"], "chat_create")
+        if not rate_data["allowed"]:
+            response = jsonify({
+                "error": f"Rate limit exceeded. Try again in {rate_data['retry_after']} seconds.",
+                "retry_after_seconds": rate_data["retry_after"],
+            })
+            response.status_code = 429
+            return _attach_rate_limit_headers(response, rate_data)
 
         room_id = generate_secure_room_id(32)
         
         with rooms_lock:
             chat_rooms[room_id] = ChatRoom(room_id)
         
-        return jsonify({
+        response = jsonify({
             "success": True,
             "room_id": room_id,
             "room_url": f"/chat/room/{room_id}"
         })
+        return _attach_rate_limit_headers(response, rate_data)
     
     @app.route('/chat/room/<string:room_id>')
     def chat_room(room_id):
@@ -342,11 +393,14 @@ def register_simple_chat_routes(app):
                 session["color"] = get_random_color_rgb()
 
             # Check rate limit before processing message
-            allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
-            if not allowed:
-                return jsonify({
-                    "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds."
-                }), 429
+            rate_data = check_rate_limit_with_metadata(session["_id"], "chat_message")
+            if not rate_data["allowed"]:
+                response = jsonify({
+                    "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {rate_data['retry_after']} seconds.",
+                    "retry_after_seconds": rate_data["retry_after"],
+                })
+                response.status_code = 429
+                return _attach_rate_limit_headers(response, rate_data)
             
             # Get message from request
             data = request.get_json()
@@ -404,7 +458,8 @@ def register_simple_chat_routes(app):
                 message_text
             )
             
-            return jsonify({"success": True})
+            response = jsonify({"success": True})
+            return _attach_rate_limit_headers(response, rate_data)
         
         else:  # GET
             messages = room.get_messages()
@@ -437,11 +492,14 @@ def register_simple_chat_routes(app):
             session["color"] = get_random_color_rgb()
 
         # Check rate limit for DMs
-        allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
-        if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds."
-            }), 429
+        rate_data = check_rate_limit_with_metadata(session["_id"], "dm_send")
+        if not rate_data["allowed"]:
+            response = jsonify({
+                "error": f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {rate_data['retry_after']} seconds.",
+                "retry_after_seconds": rate_data["retry_after"],
+            })
+            response.status_code = 429
+            return _attach_rate_limit_headers(response, rate_data)
         
         data = request.get_json()
         if not data or "room_id" not in data or "message" not in data:
@@ -474,12 +532,13 @@ def register_simple_chat_routes(app):
                 "read": False
             }
         
-        return jsonify({
+        response = jsonify({
             "success": True,
             "dm_id": dm_id,
             "dm_url": f"/chat/dm/{dm_id}",
             "expires_in": 60
         })
+        return _attach_rate_limit_headers(response, rate_data)
     
     @app.route('/chat/dm/<string:dm_id>')
     def view_dm(dm_id):
