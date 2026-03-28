@@ -76,6 +76,11 @@ These are development and testing utilities that help during development:
 - **`usability_assessment.py`** - UI/UX testing helper
 - **`comprehensive_functionality_test.py`** - Full functional test suite
 
+### JS Debug Utilities
+- The temporary debug files `test-ci-fix.js` and `test-server.js` were removed.
+- Use the primary Playwright workflow (`npm test`) and Python test suite
+  (`python -m pytest`) for ongoing validation.
+
 ### Main Application Files
 - **`runserver.py`** - Main entry point (legacy monolithic)
 - **`runserver_refactored.py`** - Refactored version (blueprint-based)

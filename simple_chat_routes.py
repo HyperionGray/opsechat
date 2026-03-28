@@ -17,8 +17,8 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Absolute path to this file's directory (used for reliable VERSION lookup)
@@ -234,6 +234,34 @@ def cleanup_rate_limits():
             del _rate_limit_store[sid]
 
 
+def build_rate_limit_response(endpoint: str, retry_after: int, message: str):
+    """
+    Build a standardized 429 response with retry metadata.
+
+    Includes Retry-After and X-RateLimit-* headers so clients can back off
+    deterministically instead of guessing when to retry.
+    """
+    retry_after = max(int(retry_after), 1)
+    payload = {
+        "error": message,
+        "retry_after": retry_after,
+    }
+    response = jsonify(payload)
+    response.status_code = 429
+    response.headers["Retry-After"] = str(retry_after)
+    response.headers["Cache-Control"] = "no-store"
+
+    config = RATE_LIMITS.get(endpoint)
+    if config:
+        response.headers["X-RateLimit-Limit"] = str(config["max_requests"])
+        response.headers["X-RateLimit-Remaining"] = "0"
+        response.headers["X-RateLimit-Window"] = str(config["window_seconds"])
+        reset_epoch = int(datetime.datetime.now().timestamp()) + retry_after
+        response.headers["X-RateLimit-Reset"] = str(reset_epoch)
+
+    return response
+
+
 # Background cleanup thread
 def cleanup_loop():
     """Continuously clean up old messages and rooms"""
@@ -291,9 +319,11 @@ def register_simple_chat_routes(app):
 
         allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Try again in {retry_after} seconds."
-            }), 429
+            return build_rate_limit_response(
+                "chat_create",
+                retry_after,
+                f"Rate limit exceeded. Try again in {retry_after} seconds."
+            )
 
         room_id = generate_secure_room_id(32)
         
@@ -344,9 +374,14 @@ def register_simple_chat_routes(app):
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
             if not allowed:
-                return jsonify({
-                    "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds."
-                }), 429
+                return build_rate_limit_response(
+                    "chat_message",
+                    retry_after,
+                    (
+                        "Rate limit exceeded. Maximum 30 messages per minute. "
+                        f"Try again in {retry_after} seconds."
+                    ),
+                )
             
             # Get message from request
             data = request.get_json()
@@ -439,9 +474,14 @@ def register_simple_chat_routes(app):
         # Check rate limit for DMs
         allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds."
-            }), 429
+            return build_rate_limit_response(
+                "dm_send",
+                retry_after,
+                (
+                    "Rate limit exceeded. Maximum 5 DMs per minute. "
+                    f"Try again in {retry_after} seconds."
+                ),
+            )
         
         data = request.get_json()
         if not data or "room_id" not in data or "message" not in data:

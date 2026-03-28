@@ -142,6 +142,28 @@ POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
 
+#### Rate-limit backoff contract (429 responses)
+When write endpoints are throttled (`/chat/create`, `/chat/room/<id>/messages` POST,
+`/chat/dm/send`), the API now returns deterministic retry metadata:
+
+```
+Status: 429 Too Many Requests
+Body: {
+  "error": "Rate limit exceeded ...",
+  "retry_after": <seconds>
+}
+Headers:
+  Retry-After: <seconds>
+  Cache-Control: no-store
+  X-RateLimit-Limit: <max_requests_for_endpoint>
+  X-RateLimit-Remaining: 0
+  X-RateLimit-Window: <window_seconds>
+  X-RateLimit-Reset: <unix_epoch_seconds>
+```
+
+Clients should use `retry_after` / `Retry-After` for backoff timing rather than
+hard-coding endpoint-specific retry delays.
+
 ### Encryption Implementation
 
 The E2E encryption uses native Web Crypto API:
