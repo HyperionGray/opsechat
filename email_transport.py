@@ -340,6 +340,27 @@ class EmailTransportManager:
             'imap': self.imap_transport is not None
         }
 
+    def get_config(self) -> Dict:
+        """
+        Return non-secret transport configuration details.
+        Passwords are intentionally omitted.
+        """
+        config = self.is_configured()
+
+        if self.smtp_transport:
+            config["smtp_server"] = self.smtp_transport.smtp_server
+            config["smtp_port"] = self.smtp_transport.smtp_port
+            config["smtp_username"] = self.smtp_transport.username
+            config["smtp_use_tls"] = self.smtp_transport.use_tls
+
+        if self.imap_transport:
+            config["imap_server"] = self.imap_transport.imap_server
+            config["imap_port"] = self.imap_transport.imap_port
+            config["imap_username"] = self.imap_transport.username
+            config["imap_use_ssl"] = self.imap_transport.use_ssl
+
+        return config
+
 
 # Global transport manager
 transport_manager = EmailTransportManager()

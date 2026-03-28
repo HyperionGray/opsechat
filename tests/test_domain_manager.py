@@ -4,7 +4,10 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient,
+    PorkbunAPIClient,
+    NamecheapAPIClient,
+    DomainRotationManager,
 )
 
 
@@ -35,6 +38,7 @@ class TestPorkbunAPIClient:
         assert result["available"] is True
         assert result["domain"] == "test123.xyz"
         assert result["price"] == "2.99"
+        assert result["registrar"] == "porkbun"
     
     @patch('domain_manager.requests.Session')
     def test_search_domain_unavailable(self, mock_session_class):
@@ -174,3 +178,105 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_porkbun(self):
+        """Manager supports runtime Porkbun config."""
+        manager = DomainRotationManager()
+        config = manager.configure(
+            api_key="pk_test_123",
+            secret_key="sk_test_456",
+            monthly_budget=25.0,
+            registrar="porkbun",
+        )
+
+        assert config["configured"] is True
+        assert config["registrar"] == "porkbun"
+        assert config["monthly_budget"] == 25.0
+        assert config["api_key_configured"] is True
+        assert config["secret_key_configured"] is True
+
+    def test_configure_namecheap(self):
+        """Manager supports runtime Namecheap config."""
+        manager = DomainRotationManager()
+        config = manager.configure(
+            api_key="nc_api_key",
+            secret_key="nc_username",
+            monthly_budget=30.0,
+            registrar="namecheap",
+            api_username="nc_username",
+            client_ip="10.0.0.1",
+            use_sandbox=True,
+        )
+
+        assert config["configured"] is True
+        assert config["registrar"] == "namecheap"
+        assert config["monthly_budget"] == 30.0
+        assert config["api_username_configured"] is True
+        assert config["use_sandbox"] is True
+
+    def test_find_cheap_available_domain_includes_registrar(self):
+        """Search result includes registrar and selected client."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.registrar_name = "porkbun"
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "testabc.xyz",
+            "price": "2.49",
+            "registrar": "porkbun",
+        }
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["registrar"] == "porkbun"
+        assert result["domain"] == "testabc.xyz"
+        assert result["price"] == 2.49
+        assert result["api_client"] == mock_client
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client behavior."""
+
+    @patch("domain_manager.requests.Session")
+    def test_search_domain_available(self, mock_session_class):
+        """Domain availability is parsed from Namecheap XML response."""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<ApiResponse Status="OK">'
+            '<CommandResponse Type="namecheap.domains.check">'
+            '<DomainCheckResult Domain="example123.xyz" Available="true" />'
+            "</CommandResponse>"
+            "</ApiResponse>"
+        )
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_key="test_key",
+            api_username="test_user",
+            client_ip="127.0.0.1",
+            use_sandbox=True,
+        )
+        result = client.search_domain("example123.xyz")
+
+        assert result["domain"] == "example123.xyz"
+        assert result["available"] is True
+        assert result["registrar"] == "namecheap"
+
+    @patch("domain_manager.requests.Session")
+    def test_purchase_domain_is_disabled(self, mock_session_class):
+        """Automated purchase intentionally disabled for Namecheap."""
+        mock_session_class.return_value = Mock()
+
+        client = NamecheapAPIClient(
+            api_key="test_key",
+            api_username="test_user",
+            client_ip="127.0.0.1",
+        )
+        result = client.purchase_domain("example123.xyz")
+
+        assert result["success"] is False
+        assert "disabled" in result["message"].lower()

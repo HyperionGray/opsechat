@@ -93,11 +93,11 @@ def create_email_security_blueprint(id_generator, get_random_color):
                 smtp_config = {
                     "smtp_server": request.form.get("smtp_server", "").strip(),
                     "smtp_port": int(request.form.get("smtp_port", 587)),
-                    "smtp_username": request.form.get("smtp_username", "").strip(),
-                    "smtp_password": request.form.get("smtp_password", "").strip(),
+                    "username": request.form.get("smtp_username", "").strip(),
+                    "password": request.form.get("smtp_password", "").strip(),
                     "use_tls": request.form.get("use_tls") == "on"
                 }
-                
+
                 try:
                     transport_manager.configure_smtp(**smtp_config)
                     message = {"type": "success", "text": "SMTP configuration saved successfully"}
@@ -108,8 +108,8 @@ def create_email_security_blueprint(id_generator, get_random_color):
                 imap_config = {
                     "imap_server": request.form.get("imap_server", "").strip(),
                     "imap_port": int(request.form.get("imap_port", 993)),
-                    "imap_username": request.form.get("imap_username", "").strip(),
-                    "imap_password": request.form.get("imap_password", "").strip(),
+                    "username": request.form.get("imap_username", "").strip(),
+                    "password": request.form.get("imap_password", "").strip(),
                     "use_ssl": request.form.get("use_ssl") == "on"
                 }
                 
