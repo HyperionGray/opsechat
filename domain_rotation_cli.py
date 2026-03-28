@@ -19,10 +19,53 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _parse_datetime(value):
+    """Parse persisted datetime values from config"""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _normalize_domain_entries(entries):
+    """Convert persisted owned domain entries into runtime-friendly shape"""
+    normalized = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        normalized_entry = dict(entry)
+        for field in ("purchased_at", "expires_at"):
+            parsed = _parse_datetime(normalized_entry.get(field))
+            if parsed is not None:
+                normalized_entry[field] = parsed
+        normalized.append(normalized_entry)
+    return normalized
+
+
+def _serialize_domain_entries(entries):
+    """Convert owned domain entries into JSON-safe shape"""
+    serialized = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        serialized_entry = dict(entry)
+        for field in ("purchased_at", "expires_at"):
+            value = serialized_entry.get(field)
+            if isinstance(value, datetime):
+                serialized_entry[field] = value.isoformat()
+        serialized.append(serialized_entry)
+    return serialized
 
 
 def load_config():
@@ -110,9 +153,9 @@ def get_manager():
     
     # Load saved state
     if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
+        manager.current_spending = float(config['current_spending'])
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = _normalize_domain_entries(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +165,7 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = _serialize_domain_entries(manager.owned_domains)
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -144,8 +187,16 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        purchased = _parse_datetime(domain.get('purchased_at'))
+        expires = _parse_datetime(domain.get('expires_at'))
+        if purchased:
+            print(f"   Purchased: {purchased.strftime('%Y-%m-%d %H:%M')}")
+        else:
+            print(f"   Purchased: {domain.get('purchased_at', 'unknown')}")
+        if expires:
+            print(f"   Expires: {expires.strftime('%Y-%m-%d')}")
+        else:
+            print(f"   Expires: {domain.get('expires_at', 'unknown')}")
         print()
 
 

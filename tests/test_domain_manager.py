@@ -174,3 +174,65 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_and_get_config(self):
+        """Test runtime manager configuration snapshot"""
+        manager = DomainRotationManager()
+
+        config = manager.configure(
+            api_key="pk_test_key",
+            secret_key="sk_test_secret",
+            monthly_budget=25.0
+        )
+
+        assert config["configured"] is True
+        assert config["active_provider"] == "porkbun"
+        assert "porkbun" in config["available_providers"]
+        assert config["monthly_budget"] == 25.0
+        assert config["remaining_budget"] == 25.0
+        assert config["test_mode"] is False
+
+    def test_configure_rejects_invalid_budget(self):
+        """Test configuration budget validation"""
+        manager = DomainRotationManager()
+
+        with pytest.raises(ValueError):
+            manager.configure(
+                api_key="pk_test_key",
+                secret_key="sk_test_secret",
+                monthly_budget=0
+            )
+
+    def test_test_mode_purchase_simulates_without_api_call(self):
+        """Test purchase simulation mode skips registrar call"""
+        mock_client = Mock(spec=DomainAPIClient)
+        manager = DomainRotationManager(mock_client, monthly_budget=10.0)
+        manager.set_test_mode(True)
+
+        success = manager.purchase_domain_if_budget_allows("simtest.xyz", 2.5)
+
+        assert success is True
+        assert manager.current_spending == 2.5
+        assert manager.active_domain == "simtest.xyz"
+        mock_client.purchase_domain.assert_not_called()
+
+    def test_rotate_to_new_domain_returns_rich_payload(self):
+        """Test compatibility rotate helper detailed payload"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "newrotation.xyz",
+            "price": "2.99"
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "newrotation.xyz"
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        result = manager.rotate_to_new_domain()
+
+        assert result["success"] is True
+        assert result["domain"] == "newrotation.xyz"
+        assert result["cost"] == 2.99
+        assert result["provider"] == "default"
