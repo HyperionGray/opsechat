@@ -17,8 +17,8 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Absolute path to this file's directory (used for reliable VERSION lookup)
@@ -162,9 +162,16 @@ def cleanup_old_dms():
         for dm_id in expired_dms:
             # Overwrite message before deletion
             dm = direct_messages[dm_id]
-            dm["message"] = "X" * len(dm["message"])
-            dm["room_id"] = "X" * len(dm["room_id"])
+            _burn_direct_message(dm)
             del direct_messages[dm_id]
+
+
+def _burn_direct_message(dm_data):
+    """Overwrite sensitive DM fields before deletion."""
+    dm_data["message"] = "X" * len(dm_data.get("message", ""))
+    dm_data["room_id"] = "X" * len(dm_data.get("room_id", ""))
+    dm_data["sender_name"] = "X" * len(dm_data.get("sender_name", ""))
+    dm_data["sender_id"] = "X" * len(dm_data.get("sender_id", ""))
 
 
 def check_rate_limit(session_id: str, endpoint: str) -> tuple:
@@ -483,7 +490,7 @@ def register_simple_chat_routes(app):
     
     @app.route('/chat/dm/<string:dm_id>')
     def view_dm(dm_id):
-        """View a direct message"""
+        """View a direct message once, then burn it."""
         with dm_lock:
             if dm_id not in direct_messages:
                 return jsonify({"error": "DM not found or expired"}), 404
@@ -493,18 +500,23 @@ def register_simple_chat_routes(app):
             # Check if expired
             age = (datetime.datetime.now() - dm["timestamp"]).total_seconds()
             if age > 60:
+                _burn_direct_message(dm)
+                del direct_messages[dm_id]
                 return jsonify({"error": "DM expired"}), 404
             
-            # Mark as read
-            dm["read"] = True
-            
-            return jsonify({
+            response_payload = {
                 "dm_id": dm["dm_id"],
                 "sender_name": dm["sender_name"],
                 "room_id": dm["room_id"],
                 "message": dm["message"],
                 "expires_in": max(0, 60 - int(age))
-            })
+            }
+
+            # One-time read semantics: burn and remove immediately after retrieval.
+            _burn_direct_message(dm)
+            del direct_messages[dm_id]
+
+            return jsonify(response_payload)
     
     @app.route('/chat/room/<string:room_id>/key', methods=['GET'])
     def get_room_key(room_id):

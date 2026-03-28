@@ -214,3 +214,5 @@ class TestDirectMessageCleanup:
         cleanup_old_dms()
         assert dm["message"] == "X" * len(original_message)
         assert dm["room_id"] == "X" * len(original_room_id)
+        assert dm["sender_name"] == "X" * len("Alice")
+        assert dm["sender_id"] == "X" * len("u1")

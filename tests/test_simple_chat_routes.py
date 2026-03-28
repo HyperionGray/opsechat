@@ -286,6 +286,25 @@ class TestDMRoutes:
         assert response.status_code == 200
         data = response.get_json()
         assert data["room_id"] == room_id
+        # DMs are one-time read: second read must fail.
+        response2 = client.get(f"/chat/dm/{dm_id}")
+        assert response2.status_code == 404
+
+    def test_view_dm_burns_message_from_memory(self, client):
+        from simple_chat_routes import direct_messages, dm_lock
+
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        dm_id = client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "read once"},
+            content_type="application/json",
+        ).get_json()["dm_id"]
+
+        first = client.get(f"/chat/dm/{dm_id}")
+        assert first.status_code == 200
+
+        with dm_lock:
+            assert dm_id not in direct_messages
 
     def test_view_dm_nonexistent(self, client):
         response = client.get("/chat/dm/nonexistent-dm-id")
@@ -307,6 +326,8 @@ class TestDMRoutes:
 
         response = client.get(f"/chat/dm/{dm_id}")
         assert response.status_code == 404
+        with dm_lock:
+            assert dm_id not in direct_messages
 
 
 # ---------------------------------------------------------------------------

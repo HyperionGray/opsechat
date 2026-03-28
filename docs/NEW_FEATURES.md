@@ -36,6 +36,7 @@ Simple, ephemeral messaging for sharing room IDs with specific users. DMs are de
 
 ### Features
 - **1-minute expiry** - Messages disappear after 60 seconds
+- **One-time read** - Message is burned from memory immediately after first successful view
 - **Simple text only** - Max 200 characters
 - **Memory overwriting** - Data is overwritten before deletion
 - **Non-discoverable** - Cryptographically secure DM IDs
@@ -61,7 +62,7 @@ Response:
 }
 ```
 
-#### View a DM
+#### View a DM (one-time)
 ```bash
 GET /chat/dm/{dm_id}
 
@@ -74,6 +75,9 @@ Response:
   "expires_in": 45
 }
 ```
+
+After a successful response, the same DM URL will return `404` on the next
+request because the DM has been burned.
 
 ### Example Workflow
 ```python

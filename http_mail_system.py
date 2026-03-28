@@ -65,9 +65,14 @@ class HttpMailbox:
         self.messages: List[HttpMessage] = []
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
+        self.destroyed = False
 
     def add_message(self, subject: str, body: str, sender_handle: str) -> str:
         """Add a message; returns the new message ID."""
+        # Refuse writes after mailbox destruction to prevent stale references
+        # from resurrecting message state.
+        if self.destroyed:
+            raise RuntimeError("Mailbox has been destroyed")
         msg_id = _generate_id(12)  # 12 bytes → 16 URL-safe chars
         msg = HttpMessage(
             msg_id=msg_id,
@@ -146,9 +151,8 @@ class HttpMailStorage:
         - We then overwrite and clear messages under the per-mailbox lock
           to avoid races with concurrent send/add operations.
 
-        Checklist (follow-ups outside this class):
-        - [ ] Ensure HttpMailbox exposes a `lock` used by all writers.
-        - [ ] Ensure add_message (or equivalent) checks a `destroyed` flag.
+        This implementation marks the mailbox as destroyed so future writes
+        through stale references are rejected.
         """
         # First, look up and authenticate the mailbox under the global lock.
         with self._lock:
