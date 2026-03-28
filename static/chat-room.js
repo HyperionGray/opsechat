@@ -5,6 +5,10 @@ let encryptionEnabled = false;
 let encryptionKey = null;
 let pollInterval = null;
 let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+let lastSeenMessageId = 0;
+let cachedMessages = [];
+let pollCount = 0;
+const FULL_SYNC_INTERVAL_POLLS = 15;
 
 // Encrypted message prefix (ASCII-safe, recognised by both client and server)
 const ENC_PREFIX = 'ENC:';
@@ -42,24 +46,6 @@ async function fetchRoomKey() {
         console.error('Failed to fetch room key:', e);
     }
     return false;
-}
-
-// Simple encryption using AES-GCM with Web Crypto API
-async function generateKey() {
-    const key = await window.crypto.subtle.generateKey(
-        {
-            name: "AES-GCM",
-            length: 256
-        },
-        true,
-        ["encrypt", "decrypt"]
-    );
-    return key;
-}
-
-async function exportKey(key) {
-    const exported = await window.crypto.subtle.exportKey("raw", key);
-    return Array.from(new Uint8Array(exported));
 }
 
 async function importKey(keyArray) {
@@ -183,6 +169,15 @@ async function renderMessages(messages) {
     scrollToBottom();
 }
 
+function pruneExpiredCachedMessages() {
+    const expiryMs = 180 * 1000;
+    const nowMs = Date.now();
+    cachedMessages = cachedMessages.filter((msg) => {
+        const ts = Date.parse(msg.timestamp);
+        return Number.isFinite(ts) && nowMs - ts < expiryMs;
+    });
+}
+
 async function sendMessage() {
     const input = document.getElementById('messageInput');
     const message = input.value.trim();
@@ -209,20 +204,54 @@ async function sendMessage() {
             input.value = '';
             await pollMessages();
         } else {
-            showStatus('Error sending message');
+            let errorText = 'Error sending message';
+            try {
+                const data = await response.json();
+                if (data && data.error) {
+                    errorText = data.error;
+                }
+            } catch (e) {
+                // Ignore JSON parsing issues and keep generic error text.
+            }
+            showStatus(errorText);
         }
     } catch (error) {
         showStatus('Error: ' + error.message);
     }
 }
 
-async function pollMessages() {
+async function pollMessages(forceFullSync = false) {
     try {
-        const response = await fetch(`/chat/room/${roomId}/messages`);
+        pollCount += 1;
+        const shouldFullSync = forceFullSync || pollCount % FULL_SYNC_INTERVAL_POLLS === 0;
+        let endpoint = `/chat/room/${roomId}/messages`;
+        if (!shouldFullSync && lastSeenMessageId > 0) {
+            endpoint += `?since=${encodeURIComponent(lastSeenMessageId)}`;
+        }
+        const response = await fetch(endpoint);
 
         if (response.ok) {
             const data = await response.json();
-            await renderMessages(data.messages);
+            const messages = Array.isArray(data.messages) ? data.messages : [];
+
+            if (shouldFullSync || lastSeenMessageId === 0) {
+                cachedMessages = messages;
+            } else if (messages.length > 0) {
+                const seenIds = new Set(cachedMessages.map((m) => m.message_id));
+                for (const msg of messages) {
+                    if (!seenIds.has(msg.message_id)) {
+                        cachedMessages.push(msg);
+                        seenIds.add(msg.message_id);
+                    }
+                }
+            }
+
+            if (Number.isInteger(data.last_message_id) && data.last_message_id >= 0) {
+                lastSeenMessageId = data.last_message_id;
+            }
+
+            pruneExpiredCachedMessages();
+            await renderMessages(cachedMessages);
             document.getElementById('userCount').textContent = `Users: ${data.user_count}`;
         }
     } catch (error) {
@@ -269,6 +298,11 @@ document.getElementById('encryptionToggle').addEventListener('change', async fun
     await pollMessages();
 });
 
+const acceptWarningButton = document.getElementById('acceptSecurityWarningBtn');
+if (acceptWarningButton) {
+    acceptWarningButton.addEventListener('click', acceptSecurityWarning);
+}
+
 // Check for existing key on load
 window.addEventListener('load', async function() {
     // Show security warning first
@@ -295,5 +329,3 @@ window.addEventListener('beforeunload', function() {
     }
 });
 
-// Expose acceptSecurityWarning for the HTML onclick attribute
-window.acceptSecurityWarning = acceptSecurityWarning;

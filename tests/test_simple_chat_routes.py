@@ -178,6 +178,7 @@ class TestChatRoutes:
         assert response.status_code == 200
         data = response.get_json()
         assert data["messages"] == []
+        assert data["last_message_id"] == 0
         assert isinstance(data["user_count"], int)
 
     def test_post_message_success(self, client):
@@ -189,6 +190,18 @@ class TestChatRoutes:
         )
         assert response.status_code == 200
         assert response.get_json()["success"] is True
+
+    def test_post_message_returns_last_message_id(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "hello world"},
+            content_type="application/json",
+        )
+        data = response.get_json()
+        assert response.status_code == 200
+        assert data["success"] is True
+        assert data["last_message_id"] == 1
 
     def test_post_message_missing_body(self, client):
         room_id = client.post("/chat/create").get_json()["room_id"]
@@ -239,6 +252,30 @@ class TestChatRoutes:
     def test_get_room_key_nonexistent_room(self, client):
         response = client.get("/chat/room/no-such-room/key")
         assert response.status_code == 404
+
+    def test_get_messages_since_filters(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "m1"},
+            content_type="application/json",
+        )
+        client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "m2"},
+            content_type="application/json",
+        )
+        response = client.get(f"/chat/room/{room_id}/messages?since=1")
+        data = response.get_json()
+        assert response.status_code == 200
+        assert [msg["message"] for msg in data["messages"]] == ["m2"]
+        assert [msg["message_id"] for msg in data["messages"]] == [2]
+        assert data["last_message_id"] == 2
+
+    def test_get_messages_since_invalid_rejected(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.get(f"/chat/room/{room_id}/messages?since=nan")
+        assert response.status_code == 400
 
 
 # ---------------------------------------------------------------------------
@@ -358,6 +395,7 @@ class TestBugFixes:
         body = response.data.decode()
         assert "chat-room.js" in body
         assert "addEventListener" not in body
+        assert "onclick=" not in body
 
     def test_chat_room_passes_room_id_via_data_attribute(self, client):
         """room_id must be available as a data-room-id attribute, not inlined in JS."""

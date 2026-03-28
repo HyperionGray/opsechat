@@ -142,6 +142,25 @@ POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
 
+#### Incremental Message Sync (NEW)
+
+To reduce polling bandwidth, clients can request only messages newer than a
+known message cursor:
+
+```
+GET /chat/room/<room_id>/messages?since=<message_id>
+```
+
+- `since` must be an integer >= 0.
+- Response always includes:
+  - `messages`: list of matching messages
+  - `last_message_id`: highest message id currently in the room
+- Invalid `since` values return HTTP 400.
+
+This keeps polling efficient while preserving backward compatibility:
+- Existing clients can continue calling `GET /messages` without `since`.
+- New clients can use `last_message_id` as a cursor for delta fetches.
+
 ### Encryption Implementation
 
 The E2E encryption uses native Web Crypto API:

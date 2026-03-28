@@ -26,6 +26,7 @@ OpSecChat now includes both **Web-Based Chat Rooms** and **Terminal UI (TUI)** f
 ### Web Chat Rooms
 - ✅ **Simple Room Creation** - One command to create a secure chat room
 - ✅ **Automated E2E Encryption** - Automatic key exchange, no manual setup
+- ✅ **Incremental Message Sync** - Poll only new messages with message cursor API
 - ✅ **Terminal-Style UI** - Clean, minimal interface with no flashy elements
 - ✅ **Messages Burn** - Auto-delete after 3 minutes with memory overwriting
 - ✅ **Randomized Usernames** - Color-coded for easy distinction

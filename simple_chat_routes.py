@@ -17,8 +17,8 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Absolute path to this file's directory (used for reliable VERSION lookup)
@@ -65,6 +65,7 @@ class ChatRoom:
         self.users = {}
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
+        self._next_message_id = 1
         # Auto-generated shared encryption key for the room
         self.room_key = base64.b64encode(secrets.token_bytes(32)).decode('utf-8')
     
@@ -76,6 +77,7 @@ class ChatRoom:
         """Add a message to the room"""
         with self.lock:
             msg = {
+                "message_id": self._next_message_id,
                 "message": message_text,
                 "user_id": user_id,
                 "username": username,
@@ -83,6 +85,7 @@ class ChatRoom:
                 "timestamp": datetime.datetime.now()
             }
             self.messages.append(msg)
+            self._next_message_id += 1
             
             # Track user
             if user_id not in self.users:
@@ -111,11 +114,20 @@ class ChatRoom:
             
             self.messages = new_messages
     
-    def get_messages(self):
-        """Get all current messages"""
+    def get_messages(self, since_id=None):
+        """Get current messages, optionally filtered by message ID cursor"""
         self.cleanup_old_messages()
         with self.lock:
-            return self.messages.copy()
+            if since_id is None:
+                return self.messages.copy()
+            return [msg for msg in self.messages if msg["message_id"] > since_id]
+
+    def get_last_message_id(self):
+        """Get the latest message id in this room, or 0 if empty"""
+        with self.lock:
+            if not self.messages:
+                return 0
+            return self.messages[-1]["message_id"]
     
     def get_user_count(self):
         """Get count of active users (seen in last 5 minutes)"""
@@ -404,15 +416,30 @@ def register_simple_chat_routes(app):
                 message_text
             )
             
-            return jsonify({"success": True})
+            return jsonify({
+                "success": True,
+                "last_message_id": room.get_last_message_id()
+            })
         
         else:  # GET
-            messages = room.get_messages()
+            since_param = request.args.get("since")
+            since_id = None
+            if since_param is not None:
+                try:
+                    since_id = int(since_param)
+                except (TypeError, ValueError):
+                    return jsonify({"error": "Invalid 'since' parameter. Must be an integer >= 0."}), 400
+                if since_id < 0:
+                    return jsonify({"error": "Invalid 'since' parameter. Must be an integer >= 0."}), 400
+
+            messages = room.get_messages(since_id=since_id)
             user_count = room.get_user_count()
+            last_message_id = room.get_last_message_id()
             
             return jsonify({
                 "messages": [
                     {
+                        "message_id": msg["message_id"],
                         "username": msg["username"],
                         "color": msg["color"],
                         "message": msg["message"],
@@ -423,7 +450,8 @@ def register_simple_chat_routes(app):
                 ],
                 "user_count": user_count,
                 "my_username": session.get("username"),
-                "my_color": session.get("color")
+                "my_color": session.get("color"),
+                "last_message_id": last_message_id
             })
     
     @app.route('/chat/dm/send', methods=['POST'])

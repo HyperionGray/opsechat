@@ -62,6 +62,24 @@ class TestChatRoom:
         assert len(messages) == 1
         assert messages[0]["message"] == "hello world"
         assert messages[0]["username"] == "SwiftRaven0001"
+        assert messages[0]["message_id"] == 1
+
+    def test_message_ids_increment_per_room(self):
+        room = ChatRoom("msg-id-test")
+        room.add_message("u1", "one", [1, 2, 3], "first")
+        room.add_message("u2", "two", [4, 5, 6], "second")
+        messages = room.get_messages()
+        assert [m["message_id"] for m in messages] == [1, 2]
+        assert room.get_last_message_id() == 2
+
+    def test_get_messages_since_filters_older_messages(self):
+        room = ChatRoom("msg-since-test")
+        room.add_message("u1", "one", [1, 2, 3], "m1")
+        room.add_message("u2", "two", [4, 5, 6], "m2")
+        room.add_message("u3", "three", [7, 8, 9], "m3")
+        messages = room.get_messages(since_id=1)
+        assert [m["message"] for m in messages] == ["m2", "m3"]
+        assert [m["message_id"] for m in messages] == [2, 3]
 
     def test_get_messages_returns_copy(self):
         room = ChatRoom("copy-test")

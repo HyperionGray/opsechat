@@ -104,6 +104,7 @@ class TestChatMessagesEndpoint:
         assert resp.status_code == 200
         data = resp.get_json()
         assert data["messages"] == []
+        assert data["last_message_id"] == 0
 
     def test_post_message_success(self):
         resp = self.client.post(
@@ -187,8 +188,46 @@ class TestChatMessagesEndpoint:
         resp = self.client.get(f"/chat/room/{self.room_id}/messages")
         data = resp.get_json()
         msg = data["messages"][0]
-        for field in ("username", "color", "message", "timestamp", "is_mine"):
+        for field in ("message_id", "username", "color", "message", "timestamp", "is_mine"):
             assert field in msg, f"Missing field: {field}"
+
+    def test_post_message_returns_last_message_id(self):
+        resp = self.client.post(
+            f"/chat/room/{self.room_id}/messages",
+            json={"message": "id capture"},
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["success"] is True
+        assert data["last_message_id"] == 1
+
+    def test_get_messages_since_returns_only_new_messages(self):
+        self.client.post(f"/chat/room/{self.room_id}/messages", json={"message": "m1"})
+        self.client.post(f"/chat/room/{self.room_id}/messages", json={"message": "m2"})
+        self.client.post(f"/chat/room/{self.room_id}/messages", json={"message": "m3"})
+
+        resp = self.client.get(f"/chat/room/{self.room_id}/messages?since=1")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert [m["message"] for m in data["messages"]] == ["m2", "m3"]
+        assert [m["message_id"] for m in data["messages"]] == [2, 3]
+        assert data["last_message_id"] == 3
+
+    def test_get_messages_since_equal_last_returns_empty_delta(self):
+        self.client.post(f"/chat/room/{self.room_id}/messages", json={"message": "m1"})
+        resp = self.client.get(f"/chat/room/{self.room_id}/messages?since=1")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["messages"] == []
+        assert data["last_message_id"] == 1
+
+    def test_get_messages_since_negative_rejected(self):
+        resp = self.client.get(f"/chat/room/{self.room_id}/messages?since=-1")
+        assert resp.status_code == 400
+
+    def test_get_messages_since_non_integer_rejected(self):
+        resp = self.client.get(f"/chat/room/{self.room_id}/messages?since=abc")
+        assert resp.status_code == 400
 
 
 # ===========================================================================
