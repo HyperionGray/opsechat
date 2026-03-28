@@ -135,6 +135,29 @@ function showStatus(message, duration = 3000) {
     }, duration);
 }
 
+async function extractApiError(response, fallbackMessage) {
+    let message = fallbackMessage;
+    let retryAfter = 0;
+    try {
+        const data = await response.json();
+        if (data && typeof data.error === 'string' && data.error.trim()) {
+            message = data.error;
+        }
+        if (data && Number.isFinite(data.retry_after)) {
+            retryAfter = Number(data.retry_after);
+        }
+    } catch (_err) {
+        // Best-effort JSON parse; fall back to generic text.
+    }
+    if (!retryAfter) {
+        const header = response.headers.get('Retry-After');
+        if (header && !Number.isNaN(Number(header))) {
+            retryAfter = Number(header);
+        }
+    }
+    return { message, retryAfter };
+}
+
 function scrollToBottom() {
     const container = document.getElementById('messagesContainer');
     container.scrollTop = container.scrollHeight;
@@ -209,7 +232,12 @@ async function sendMessage() {
             input.value = '';
             await pollMessages();
         } else {
-            showStatus('Error sending message');
+            const apiError = await extractApiError(response, 'Error sending message');
+            if (response.status === 429 && apiError.retryAfter > 0) {
+                showStatus(`Rate limited. Wait ${apiError.retryAfter}s before sending again.`, 5000);
+            } else {
+                showStatus(apiError.message);
+            }
         }
     } catch (error) {
         showStatus('Error: ' + error.message);

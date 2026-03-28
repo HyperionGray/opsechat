@@ -228,6 +228,34 @@ class TestChatRoutes:
         )
         assert response.status_code == 404
 
+    def test_post_message_rate_limit_response_contains_retry_metadata(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        url = f"/chat/room/{room_id}/messages"
+
+        # Exhaust chat_message (30 requests per 60 seconds)
+        for _ in range(30):
+            response = client.post(
+                url,
+                json={"message": "hello message"},
+                content_type="application/json",
+            )
+            assert response.status_code == 200
+
+        blocked = client.post(
+            url,
+            json={"message": "this should be blocked"},
+            content_type="application/json",
+        )
+        assert blocked.status_code == 429
+        data = blocked.get_json()
+        assert isinstance(data.get("retry_after"), int)
+        assert data.get("retry_after") >= 1
+        assert data.get("endpoint") == "chat_message"
+        assert data.get("violations_in_window") >= 1
+        assert "backoff_seconds" in data
+        assert blocked.headers.get("Retry-After") == str(data["retry_after"])
+        assert blocked.headers.get("X-RateLimit-Endpoint") == "chat_message"
+
     def test_get_room_key_returns_key(self, client):
         room_id = client.post("/chat/create").get_json()["room_id"]
         response = client.get(f"/chat/room/{room_id}/key")
@@ -273,6 +301,30 @@ class TestDMRoutes:
             content_type="application/json",
         )
         assert response.status_code == 400
+
+    def test_send_dm_rate_limit_response_includes_retry_metadata(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        for _ in range(5):
+            response = client.post(
+                "/chat/dm/send",
+                json={"room_id": room_id, "message": "join me"},
+                content_type="application/json",
+            )
+            assert response.status_code == 200
+
+        blocked = client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "blocked"},
+            content_type="application/json",
+        )
+        assert blocked.status_code == 429
+        data = blocked.get_json()
+        assert isinstance(data.get("retry_after"), int)
+        assert data.get("endpoint") == "dm_send"
+        assert blocked.headers.get("Retry-After") == str(data["retry_after"])
+        assert blocked.headers.get("X-RateLimit-Endpoint") == "dm_send"
+        assert blocked.headers.get("X-RateLimit-Violations") == "1"
+        assert blocked.headers.get("X-RateLimit-Backoff") == "0"
 
     def test_view_dm_success(self, client):
         room_id = client.post("/chat/create").get_json()["room_id"]

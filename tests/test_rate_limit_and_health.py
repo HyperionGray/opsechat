@@ -10,7 +10,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_violations,
+    _rate_limit_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -24,6 +29,7 @@ def _clear_store():
     """Helper: wipe the rate limit store between tests."""
     with _rate_limit_lock:
         _rate_limit_store.clear()
+        _rate_limit_violations.clear()
 
 
 def test_rate_limit_allows_requests_within_window():
@@ -85,6 +91,53 @@ def test_rate_limit_chat_message_limit():
     allowed, retry_after = check_rate_limit("session-msg", "chat_message")
     assert allowed is False
     assert retry_after >= 1
+
+
+def test_rate_limit_metadata_includes_violation_context():
+    _clear_store()
+    sid = "session-meta"
+    for _ in range(5):
+        allowed, retry_after, violations, backoff = check_rate_limit(
+            sid, "dm_send", include_metadata=True
+        )
+        assert allowed is True
+        assert retry_after == 0
+        assert violations == 0
+        assert backoff == 0
+
+    allowed, retry_after, violations, backoff = check_rate_limit(
+        sid, "dm_send", include_metadata=True
+    )
+    assert allowed is False
+    assert retry_after >= 1
+    assert violations == 1
+    assert backoff == 0
+
+
+def test_rate_limit_adaptive_backoff_grows_with_repeated_violations():
+    _clear_store()
+    sid = "session-backoff"
+    for _ in range(5):
+        check_rate_limit(sid, "dm_send")
+
+    _, retry_1, violations_1, backoff_1 = check_rate_limit(
+        sid, "dm_send", include_metadata=True
+    )
+    _, retry_2, violations_2, backoff_2 = check_rate_limit(
+        sid, "dm_send", include_metadata=True
+    )
+    _, retry_3, violations_3, backoff_3 = check_rate_limit(
+        sid, "dm_send", include_metadata=True
+    )
+
+    assert violations_1 == 1
+    assert backoff_1 == 0
+    assert violations_2 == 2
+    assert backoff_2 == 1
+    assert violations_3 == 3
+    assert backoff_3 == 3
+    assert retry_2 >= retry_1
+    assert retry_3 >= retry_2
 
 
 # ---------------------------------------------------------------------------

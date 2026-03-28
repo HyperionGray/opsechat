@@ -135,12 +135,20 @@ POST /chat/create
 Response: {"success": true, "room_id": "...", "room_url": "/chat/room/..."}
 ```
 
+When room creation is rate-limited, the API returns HTTP `429` with:
+- JSON fields: `retry_after`, `endpoint`, `violations_in_window`, `backoff_seconds`
+- Headers: `Retry-After`, `X-RateLimit-Endpoint`, `X-RateLimit-Violations`, `X-RateLimit-Backoff`
+
 #### Get/Post Messages
 ```
 GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
+
+Write endpoints (`/chat/create`, `/chat/room/<id>/messages` POST, `/chat/dm/send`) use
+sliding-window limits with adaptive backoff: repeated violations in the same window increase
+the wait period to slow automated abuse while still preserving short waits for normal users.
 
 ### Encryption Implementation
 
