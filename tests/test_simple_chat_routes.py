@@ -21,6 +21,7 @@ from simple_chat_routes import (
     check_rate_limit,
     RATE_LIMITS,
     MAX_MESSAGE_LENGTH,
+    ROOM_INACTIVITY_TIMEOUT_SECONDS,
 )
 
 
@@ -117,6 +118,24 @@ class TestChatRoom:
         room.cleanup_old_messages()
         assert room.get_messages() == []
 
+    def test_touch_user_counts_as_active_without_message(self):
+        room = ChatRoom("test-room")
+        room.touch_user("u1", "Alice", [255, 0, 0])
+        assert room.get_user_count() == 1
+        assert room.get_message_count() == 0
+
+    def test_get_status_contains_presence_and_expiry_fields(self):
+        room = ChatRoom("test-room")
+        room.touch_user("u1", "Alice", [255, 0, 0])
+        status = room.get_status()
+        assert status["room_id"] == "test-room"
+        assert "created_at" in status
+        assert "last_activity_at" in status
+        assert status["message_count"] == 0
+        assert status["user_count"] == 1
+        assert status["expires_in_seconds"] <= ROOM_INACTIVITY_TIMEOUT_SECONDS
+        assert status["expires_in_seconds"] >= 0
+
 
 # ---------------------------------------------------------------------------
 # Rate-limit helper
@@ -179,6 +198,35 @@ class TestChatRoutes:
         data = response.get_json()
         assert data["messages"] == []
         assert isinstance(data["user_count"], int)
+        assert "room_expires_in_seconds" in data
+
+    def test_join_room_counts_presence_without_sending_message(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        join_response = client.get(f"/chat/room/{room_id}")
+        assert join_response.status_code == 200
+
+        messages_response = client.get(f"/chat/room/{room_id}/messages")
+        assert messages_response.status_code == 200
+        data = messages_response.get_json()
+        assert data["user_count"] >= 1
+        assert data["room_expires_in_seconds"] <= ROOM_INACTIVITY_TIMEOUT_SECONDS
+
+    def test_room_status_endpoint_returns_metadata(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        client.get(f"/chat/room/{room_id}")  # establish session + presence
+        response = client.get(f"/chat/room/{room_id}/status")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["room_id"] == room_id
+        assert data["user_count"] >= 1
+        assert "last_activity_at" in data
+        assert "message_count" in data
+        assert data["expires_in_seconds"] <= ROOM_INACTIVITY_TIMEOUT_SECONDS
+        assert data["expires_in_seconds"] >= 0
+
+    def test_room_status_endpoint_404_for_missing_room(self, client):
+        response = client.get("/chat/room/missing-room/status")
+        assert response.status_code == 404
 
     def test_post_message_success(self, client):
         room_id = client.post("/chat/create").get_json()["room_id"]

@@ -44,6 +44,9 @@ RATE_LIMITS = {
     "dm_send": {"max_requests": 5, "window_seconds": 60},
 }
 
+USER_ACTIVE_WINDOW_SECONDS = 300
+ROOM_INACTIVITY_TIMEOUT_SECONDS = 3600
+
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
 
@@ -71,28 +74,39 @@ class ChatRoom:
     def get_room_key(self):
         """Get the room's shared encryption key (for automatic key exchange)"""
         return self.room_key
-    
+
+    def _touch_user_locked(self, user_id, username, color, now):
+        """Update room user presence; caller must hold self.lock."""
+        if user_id not in self.users:
+            self.users[user_id] = {
+                "username": username,
+                "color": color,
+                "last_seen": now
+            }
+        else:
+            self.users[user_id]["username"] = username
+            self.users[user_id]["color"] = color
+            self.users[user_id]["last_seen"] = now
+
+    def touch_user(self, user_id, username, color):
+        """Mark a user as active in the room even without sending a message."""
+        with self.lock:
+            self._touch_user_locked(user_id, username, color, datetime.datetime.now())
+
     def add_message(self, user_id, username, color, message_text):
         """Add a message to the room"""
         with self.lock:
+            now = datetime.datetime.now()
             msg = {
                 "message": message_text,
                 "user_id": user_id,
                 "username": username,
                 "color": color,
-                "timestamp": datetime.datetime.now()
+                "timestamp": now
             }
             self.messages.append(msg)
-            
-            # Track user
-            if user_id not in self.users:
-                self.users[user_id] = {
-                    "username": username,
-                    "color": color,
-                    "last_seen": datetime.datetime.now()
-                }
-            else:
-                self.users[user_id]["last_seen"] = datetime.datetime.now()
+
+            self._touch_user_locked(user_id, username, color, now)
     
     def cleanup_old_messages(self):
         """Remove messages older than 3 minutes and overwrite memory"""
@@ -122,8 +136,47 @@ class ChatRoom:
         with self.lock:
             now = datetime.datetime.now()
             active_users = sum(1 for u in self.users.values() 
-                             if (now - u["last_seen"]).total_seconds() < 300)
+                             if (now - u["last_seen"]).total_seconds() < USER_ACTIVE_WINDOW_SECONDS)
             return active_users
+
+    def get_last_activity(self):
+        """Get the most recent activity timestamp for room expiry tracking."""
+        with self.lock:
+            latest = self.created_at
+            if self.messages:
+                latest = max(latest, max(msg["timestamp"] for msg in self.messages))
+            if self.users:
+                latest = max(latest, max(u["last_seen"] for u in self.users.values()))
+            return latest
+
+    def get_message_count(self):
+        """Get current message count after applying expiry cleanup."""
+        self.cleanup_old_messages()
+        with self.lock:
+            return len(self.messages)
+
+    def get_status(self):
+        """Return status metadata for room monitoring and UI."""
+        now = datetime.datetime.now()
+        last_activity = self.get_last_activity()
+        expires_in_seconds = max(
+            ROOM_INACTIVITY_TIMEOUT_SECONDS - int((now - last_activity).total_seconds()),
+            0,
+        )
+        return {
+            "room_id": self.room_id,
+            "created_at": self.created_at.isoformat(),
+            "last_activity_at": last_activity.isoformat(),
+            "message_count": self.get_message_count(),
+            "user_count": self.get_user_count(),
+            "expires_in_seconds": expires_in_seconds,
+            "encryption_enabled": True,
+        }
+
+
+def get_room_expiry_seconds(room):
+    """Compute room inactivity expiry countdown."""
+    return room.get_status()["expires_in_seconds"]
 
 
 def cleanup_old_rooms():
@@ -133,12 +186,9 @@ def cleanup_old_rooms():
         rooms_to_delete = []
         
         for room_id, room in chat_rooms.items():
-            # Check if room has been inactive for > 1 hour
-            if room.messages:
-                last_msg_time = max(msg["timestamp"] for msg in room.messages)
-                if (now - last_msg_time).total_seconds() > 3600:
-                    rooms_to_delete.append(room_id)
-            elif (now - room.created_at).total_seconds() > 3600:
+            # Count message traffic and user presence as room activity.
+            last_activity = room.get_last_activity()
+            if (now - last_activity).total_seconds() > ROOM_INACTIVITY_TIMEOUT_SECONDS:
                 rooms_to_delete.append(room_id)
         
         for room_id in rooms_to_delete:
@@ -313,12 +363,15 @@ def register_simple_chat_routes(app):
             if room_id not in chat_rooms:
                 return render_template("simple_chat_error.html", 
                                      error="Room not found or expired"), 404
+            room = chat_rooms[room_id]
         
         # Initialize user session
         if "_id" not in session:
             session["_id"] = generate_secure_dm_id()
             session["username"] = generate_random_username()
             session["color"] = get_random_color_rgb()
+
+        room.touch_user(session["_id"], session["username"], session["color"])
         
         return render_template("simple_chat_room.html", 
                              room_id=room_id,
@@ -333,14 +386,15 @@ def register_simple_chat_routes(app):
             if room_id not in chat_rooms:
                 return jsonify({"error": "Room not found"}), 404
             room = chat_rooms[room_id]
+
+        # Ensure user has session and count passive users as active.
+        if "_id" not in session:
+            session["_id"] = generate_secure_dm_id()
+            session["username"] = generate_random_username()
+            session["color"] = get_random_color_rgb()
+        room.touch_user(session["_id"], session["username"], session["color"])
         
         if request.method == 'POST':
-            # Ensure user has session
-            if "_id" not in session:
-                session["_id"] = generate_secure_dm_id()
-                session["username"] = generate_random_username()
-                session["color"] = get_random_color_rgb()
-
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
             if not allowed:
@@ -422,6 +476,7 @@ def register_simple_chat_routes(app):
                     for msg in messages
                 ],
                 "user_count": user_count,
+                "room_expires_in_seconds": get_room_expiry_seconds(room),
                 "my_username": session.get("username"),
                 "my_color": session.get("color")
             })
@@ -518,6 +573,21 @@ def register_simple_chat_routes(app):
                 "room_id": room_id,
                 "encryption_key": room.get_room_key()
             })
+
+    @app.route('/chat/room/<string:room_id>/status', methods=['GET'])
+    def room_status(room_id):
+        """Get room status metadata for presence and expiry visibility."""
+        with rooms_lock:
+            if room_id not in chat_rooms:
+                return jsonify({"error": "Room not found"}), 404
+            room = chat_rooms[room_id]
+
+        if "_id" not in session:
+            session["_id"] = generate_secure_dm_id()
+            session["username"] = generate_random_username()
+            session["color"] = get_random_color_rgb()
+        room.touch_user(session["_id"], session["username"], session["color"])
+        return jsonify(room.get_status())
 
 
 def generate_random_username():

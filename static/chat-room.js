@@ -140,6 +140,13 @@ function scrollToBottom() {
     container.scrollTop = container.scrollHeight;
 }
 
+function formatDuration(seconds) {
+    const clamped = Math.max(0, Number(seconds) || 0);
+    const minutes = Math.floor(clamped / 60);
+    const remaining = clamped % 60;
+    return `${minutes}m ${remaining}s`;
+}
+
 async function renderMessages(messages) {
     const container = document.getElementById('messagesContainer');
     container.innerHTML = '';
@@ -223,7 +230,9 @@ async function pollMessages() {
         if (response.ok) {
             const data = await response.json();
             await renderMessages(data.messages);
-            document.getElementById('userCount').textContent = `Users: ${data.user_count}`;
+            const userCount = Number(data.user_count) || 0;
+            const expiresIn = formatDuration(data.room_expires_in_seconds);
+            document.getElementById('userCount').textContent = `Users: ${userCount} | Room expires in: ${expiresIn}`;
         }
     } catch (error) {
         // Silently fail for polling errors

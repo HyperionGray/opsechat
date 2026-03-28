@@ -15,6 +15,8 @@ OpSecChat now includes a simple, security-focused web-based chat room system des
 - **Text-Only**: No media, images, or file sharing
 - **In-Memory Storage**: Zero disk writes
 - **Tor Ready**: Works seamlessly with Tor hidden services
+- **Live Presence Metadata**: Passive participants are counted as active users
+- **Room Expiry Visibility**: Client shows inactivity expiry countdown in real time
 
 ## Quick Start
 
@@ -141,6 +143,35 @@ GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
+
+`GET /chat/room/<room_id>/messages` returns:
+- `messages`: current non-expired messages
+- `user_count`: active users seen in last 5 minutes
+- `room_expires_in_seconds`: inactivity countdown until room auto-expiry
+
+#### Get Room Status
+```
+GET /chat/room/<room_id>/status
+Response: {
+  "room_id": "...",
+  "created_at": "...",
+  "last_activity_at": "...",
+  "message_count": 0,
+  "user_count": 1,
+  "expires_in_seconds": 3598,
+  "encryption_enabled": true
+}
+```
+
+This endpoint is useful for operational monitoring and external clients.
+
+### Presence Behavior
+
+- Joining a room marks a user as active immediately (no message required)
+- Polling the room updates that participant's activity timestamp
+- Room inactivity expiry now considers both:
+  - most recent message timestamp
+  - most recent active-user timestamp
 
 ### Encryption Implementation
 
