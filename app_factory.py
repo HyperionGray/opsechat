@@ -82,8 +82,7 @@ def create_app():
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
+        # Inline script/style usage should be validated by template and E2E tests.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
