@@ -174,3 +174,84 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_and_get_config(self):
+        """Test manager credential configuration and config reporting"""
+        manager = DomainRotationManager()
+        config = manager.configure(
+            api_key="pk_test_1234",
+            secret_key="sk_test_5678",
+            monthly_budget=25.0,
+        )
+
+        assert config["configured"] is True
+        assert config["provider"] == "porkbun"
+        assert config["monthly_budget"] == 25.0
+        assert manager.api_client is not None
+
+        safe_config = manager.get_config()
+        assert "api_key" not in safe_config
+        assert "api_secret" not in safe_config
+
+        full_config = manager.get_config(include_sensitive=True)
+        assert full_config["api_key"] == "pk_test_1234"
+        assert full_config["api_secret"] == "sk_test_5678"
+
+    def test_search_cheap_domains_returns_multiple_results(self):
+        """Test search_cheap_domains collects multiple domains"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": "1.99",
+        }
+        manager = DomainRotationManager(mock_client)
+
+        results = manager.search_cheap_domains(tlds=["xyz"], max_price=2.5, limit=3)
+
+        assert len(results) == 3
+        assert all(item["domain"].endswith(".xyz") for item in results)
+        assert all(item["price"] <= 2.5 for item in results)
+
+    def test_rotate_to_new_domain_structured_success(self):
+        """Test structured rotate_to_new_domain success payload"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": 2.0,
+        }
+        mock_client.purchase_domain.return_value = {"success": True}
+        manager = DomainRotationManager(mock_client, monthly_budget=10.0)
+
+        result = manager.rotate_to_new_domain(max_price=3.0)
+
+        assert result["success"] is True
+        assert "domain" in result
+        assert result["cost"] == 2.0
+        assert result["test_mode"] is False
+
+    def test_rotate_to_new_domain_test_mode(self):
+        """Test test mode bypasses registrar purchase"""
+        mock_client = Mock(spec=DomainAPIClient)
+        manager = DomainRotationManager(mock_client, monthly_budget=10.0)
+        manager.set_test_mode(True)
+
+        result = manager.rotate_to_new_domain()
+
+        assert result["success"] is True
+        assert result["cost"] == 0.0
+        assert result["test_mode"] is True
+        mock_client.purchase_domain.assert_not_called()
+
+    def test_configure_domain_dns_stores_records(self):
+        """Test local DNS record storage helper"""
+        manager = DomainRotationManager()
+
+        result = manager.configure_domain_dns(
+            domain="example.xyz",
+            mx_records=[{"priority": 10, "host": "mail.example.xyz"}],
+            a_records=[{"host": "@", "ip": "1.2.3.4"}],
+        )
+
+        assert result["success"] is True
+        assert "example.xyz" in manager.domain_dns_records
+        assert manager.domain_dns_records["example.xyz"]["mx_records"][0]["host"] == "mail.example.xyz"

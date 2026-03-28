@@ -47,18 +47,34 @@ export DOMAIN_BUDGET="10"  # Monthly budget in USD
 
 ## Domain Rotation
 
+Note on API compatibility: this guide now matches the current
+`DomainRotationManager` implementation, including:
+- `configure(...)` / `get_config(...)`
+- `search_cheap_domains(...)`
+- `rotate_to_new_domain(...)`
+- `budget_manager` compatibility helpers
+- `set_test_mode(...)`
+- `configure_domain_dns(...)` local record storage
+
 ### Manual Rotation
 
 ```python
 from domain_manager import domain_rotation_manager
 
+# Configure API credentials once at startup
+domain_rotation_manager.configure(
+    api_key="pk1_your_key",
+    secret_key="sk1_your_secret",
+    monthly_budget=10.0,
+)
+
 # Check available domains
-available_domains = domain_rotation_manager.search_cheap_domains()
+available_domains = domain_rotation_manager.search_cheap_domains(limit=5)
 print(available_domains)
 
-# Purchase a domain
+# Purchase and rotate
 result = domain_rotation_manager.rotate_to_new_domain()
-if result['success']:
+if result["success"]:
     print(f"New domain: {result['domain']}")
     print(f"Cost: ${result['cost']}")
 else:
@@ -70,18 +86,19 @@ else:
 ```bash
 # Check available cheap domains
 python -c "from domain_manager import domain_rotation_manager; \
-    print(domain_rotation_manager.search_cheap_domains(tlds=['xyz', 'club', 'online']))"
+domain_rotation_manager.configure(api_key='pk1_x', secret_key='sk1_y'); \
+print(domain_rotation_manager.search_cheap_domains(tlds=['xyz', 'club', 'online']))"
 
 # Get current budget status
 python -c "from domain_manager import domain_rotation_manager; \
-    print(f'Budget: ${domain_rotation_manager.budget_manager.monthly_budget}'); \
-    print(f'Spent: ${domain_rotation_manager.budget_manager.get_month_spending()}'); \
-    print(f'Remaining: ${domain_rotation_manager.budget_manager.get_remaining_budget()}')"
+print(f'Budget: ${domain_rotation_manager.budget_manager.monthly_budget}'); \
+print(f'Spent: ${domain_rotation_manager.budget_manager.get_month_spending()}'); \
+print(f'Remaining: ${domain_rotation_manager.budget_manager.get_remaining_budget()}')"
 
 # Rotate to new domain
 python -c "from domain_manager import domain_rotation_manager; \
-    result = domain_rotation_manager.rotate_to_new_domain(); \
-    print(result)"
+result = domain_rotation_manager.rotate_to_new_domain(); \
+print(result)"
 ```
 
 ### Automated Rotation
@@ -93,7 +110,7 @@ Set up a cron job for weekly rotation:
 crontab -e
 
 # Add rotation job (runs every Sunday at 2 AM)
-0 2 * * 0 cd /path/to/opsechat && python -c "from domain_manager import domain_rotation_manager; domain_rotation_manager.rotate_to_new_domain()"
+0 2 * * 0 cd /path/to/opsechat && python -c "from domain_manager import domain_rotation_manager; domain_rotation_manager.configure(api_key='pk1_x', secret_key='sk1_y'); domain_rotation_manager.rotate_to_new_domain()"
 ```
 
 ## Budget Management
