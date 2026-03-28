@@ -163,6 +163,17 @@ class TestChatRoutes:
         r2 = client.post("/chat/create").get_json()["room_id"]
         assert r1 != r2
 
+    def test_create_room_rate_limit_sets_retry_after_header(self, client):
+        # In-memory limiter allows 10/minute for chat_create in this route.
+        for _ in range(3):
+            response = client.post("/chat/create")
+            assert response.status_code == 200
+
+        blocked = client.post("/chat/create")
+        assert blocked.status_code == 429
+        assert blocked.headers.get("Retry-After") is not None
+        assert int(blocked.headers["Retry-After"]) >= 1
+
     def test_join_nonexistent_room_returns_404(self, client):
         response = client.get("/chat/room/nonexistent-room-id-xyz")
         assert response.status_code == 404
@@ -274,6 +285,26 @@ class TestDMRoutes:
         )
         assert response.status_code == 400
 
+    def test_send_dm_rate_limit_sets_retry_after_header(self, client):
+        # In-memory limiter allows 5/minute for dm_send.
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        for _ in range(5):
+            response = client.post(
+                "/chat/dm/send",
+                json={"room_id": room_id, "message": "join me"},
+                content_type="application/json",
+            )
+            assert response.status_code == 200
+
+        blocked = client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "join me"},
+            content_type="application/json",
+        )
+        assert blocked.status_code == 429
+        assert blocked.headers.get("Retry-After") is not None
+        assert int(blocked.headers["Retry-After"]) >= 1
+
     def test_view_dm_success(self, client):
         room_id = client.post("/chat/create").get_json()["room_id"]
         dm_id = client.post(
@@ -358,6 +389,8 @@ class TestBugFixes:
         body = response.data.decode()
         assert "chat-room.js" in body
         assert "addEventListener" not in body
+        assert "onclick=" not in body
+        assert 'id="acceptSecurityWarningBtn"' in body
 
     def test_chat_room_passes_room_id_via_data_attribute(self, client):
         """room_id must be available as a data-room-id attribute, not inlined in JS."""

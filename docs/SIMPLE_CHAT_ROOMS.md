@@ -135,12 +135,20 @@ POST /chat/create
 Response: {"success": true, "room_id": "...", "room_url": "/chat/room/..."}
 ```
 
+When a create request is rate-limited, the API returns:
+- HTTP `429 Too Many Requests`
+- JSON error body with retry guidance
+- `Retry-After` response header (seconds)
+
 #### Get/Post Messages
 ```
 GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
+
+When message or DM sends are rate-limited, responses include a `Retry-After`
+header so clients can back off deterministically.
 
 ### Encryption Implementation
 
@@ -241,6 +249,11 @@ python chat-room.py --port 8080
 - Ensure both users have enabled encryption toggle
 - Check browser console for errors
 - Verify Web Crypto API is available (requires HTTPS or localhost)
+
+### Security Warning Dialog Does Not Close
+- Ensure `/static/chat-room.js` is loading successfully
+- The accept button is bound by external JavaScript (`id="acceptSecurityWarningBtn"`)
+- Inline event handlers are intentionally not used to remain compatible with strict CSP (`script-src 'self'`)
 
 ## Code Review
 

@@ -27,6 +27,14 @@ function acceptSecurityWarning() {
     document.getElementById('messageInput').focus();
 }
 
+function bindSecurityWarningHandlers() {
+    const acceptButton = document.getElementById('acceptSecurityWarningBtn');
+    if (!acceptButton) {
+        return;
+    }
+    acceptButton.addEventListener('click', acceptSecurityWarning);
+}
+
 // Automated key exchange - fetch room's shared key
 async function fetchRoomKey() {
     try {
@@ -209,7 +217,16 @@ async function sendMessage() {
             input.value = '';
             await pollMessages();
         } else {
-            showStatus('Error sending message');
+            let detail = 'Error sending message';
+            try {
+                const data = await response.json();
+                if (data && data.error) {
+                    detail = data.error;
+                }
+            } catch (e) {
+                // Keep default message when body is not JSON.
+            }
+            showStatus(detail);
         }
     } catch (error) {
         showStatus('Error: ' + error.message);
@@ -271,6 +288,7 @@ document.getElementById('encryptionToggle').addEventListener('change', async fun
 
 // Check for existing key on load
 window.addEventListener('load', async function() {
+    bindSecurityWarningHandlers();
     // Show security warning first
     showSecurityWarning();
 
@@ -295,5 +313,3 @@ window.addEventListener('beforeunload', function() {
     }
 });
 
-// Expose acceptSecurityWarning for the HTML onclick attribute
-window.acceptSecurityWarning = acceptSecurityWarning;
