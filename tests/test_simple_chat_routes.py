@@ -21,6 +21,7 @@ from simple_chat_routes import (
     check_rate_limit,
     RATE_LIMITS,
     MAX_MESSAGE_LENGTH,
+    MESSAGE_TTL_SECONDS,
 )
 
 
@@ -178,6 +179,7 @@ class TestChatRoutes:
         assert response.status_code == 200
         data = response.get_json()
         assert data["messages"] == []
+        assert data["message_ttl_seconds"] == MESSAGE_TTL_SECONDS
         assert isinstance(data["user_count"], int)
 
     def test_post_message_success(self, client):
@@ -399,6 +401,26 @@ class TestBugFixes:
         messages = client.get(f"/chat/room/{room_id}/messages").get_json()["messages"]
         assert messages, "No messages returned"
         assert messages[-1]["message"] == enc_msg
+
+    def test_message_includes_expiry_metadata(self, client):
+        """Each message should expose API expiry metadata for countdown UIs."""
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "metadata test"},
+            content_type="application/json",
+        )
+
+        response = client.get(f"/chat/room/{room_id}/messages")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["message_ttl_seconds"] == MESSAGE_TTL_SECONDS
+        assert data["messages"], "Expected at least one message"
+
+        msg = data["messages"][-1]
+        assert "expires_at" in msg
+        assert "expires_in_seconds" in msg
+        assert 0 <= msg["expires_in_seconds"] <= MESSAGE_TTL_SECONDS
 
     def test_encrypted_message_too_long_rejected(self, client):
         """Encrypted payloads exceeding the max length must be rejected."""

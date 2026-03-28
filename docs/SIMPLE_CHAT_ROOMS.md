@@ -97,6 +97,23 @@ python chat-room.py --port 8080
 - The timer starts when the message is sent
 - Deleted messages are overwritten in memory before removal
 
+The message API now also returns explicit expiry metadata for each message so
+clients can render a countdown without guessing timestamps:
+
+```json
+{
+  "messages": [
+    {
+      "message": "hello",
+      "timestamp": "2026-03-28T20:55:10.123456",
+      "expires_at": "2026-03-28T20:58:10.123456",
+      "expires_in_seconds": 173
+    }
+  ],
+  "message_ttl_seconds": 180
+}
+```
+
 ### Memory Overwriting
 When messages expire:
 ```python

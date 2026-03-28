@@ -47,6 +47,9 @@ RATE_LIMITS = {
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
 
+# Message retention policy (ephemeral by design)
+MESSAGE_TTL_SECONDS = 180  # 3 minutes
+
 # Prefix for E2E-encrypted messages sent from the client.
 # The client prepends this ASCII marker before the base64 AES-GCM ciphertext.
 # The server stores the payload untouched; only the client can decrypt it.
@@ -102,7 +105,7 @@ class ChatRoom:
             
             for msg in self.messages:
                 age = (now - msg["timestamp"]).total_seconds()
-                if age < 180:  # 3 minutes
+                if age < MESSAGE_TTL_SECONDS:
                     new_messages.append(msg)
                 else:
                     # Overwrite message data before deletion (security)
@@ -410,17 +413,28 @@ def register_simple_chat_routes(app):
             messages = room.get_messages()
             user_count = room.get_user_count()
             
-            return jsonify({
-                "messages": [
+            now = datetime.datetime.now()
+            serialized_messages = []
+            for msg in messages:
+                age_seconds = int((now - msg["timestamp"]).total_seconds())
+                expires_in_seconds = max(0, MESSAGE_TTL_SECONDS - age_seconds)
+                serialized_messages.append(
                     {
                         "username": msg["username"],
                         "color": msg["color"],
                         "message": msg["message"],
                         "timestamp": msg["timestamp"].isoformat(),
-                        "is_mine": msg["user_id"] == session.get("_id")
+                        "expires_at": (
+                            msg["timestamp"] + datetime.timedelta(seconds=MESSAGE_TTL_SECONDS)
+                        ).isoformat(),
+                        "expires_in_seconds": expires_in_seconds,
+                        "is_mine": msg["user_id"] == session.get("_id"),
                     }
-                    for msg in messages
-                ],
+                )
+
+            return jsonify({
+                "messages": serialized_messages,
+                "message_ttl_seconds": MESSAGE_TTL_SECONDS,
                 "user_count": user_count,
                 "my_username": session.get("username"),
                 "my_color": session.get("color")

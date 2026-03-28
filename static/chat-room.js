@@ -140,6 +140,18 @@ function scrollToBottom() {
     container.scrollTop = container.scrollHeight;
 }
 
+function formatExpiry(secondsRemaining) {
+    if (secondsRemaining <= 0) {
+        return '[expired]';
+    }
+    if (secondsRemaining < 60) {
+        return `[expires in ${secondsRemaining}s]`;
+    }
+    const minutes = Math.floor(secondsRemaining / 60);
+    const seconds = secondsRemaining % 60;
+    return `[expires in ${minutes}m ${seconds}s]`;
+}
+
 async function renderMessages(messages) {
     const container = document.getElementById('messagesContainer');
     container.innerHTML = '';
@@ -176,6 +188,14 @@ async function renderMessages(messages) {
         messageDiv.appendChild(usernameSpan);
         messageDiv.appendChild(document.createTextNode(' '));
         messageDiv.appendChild(messageText);
+        messageDiv.appendChild(document.createTextNode(' '));
+
+        const expiryText = document.createElement('span');
+        expiryText.className = 'message-expiry';
+        expiryText.style.opacity = '0.7';
+        expiryText.style.fontSize = '0.8em';
+        expiryText.textContent = formatExpiry(msg.expires_in_seconds ?? 0);
+        messageDiv.appendChild(expiryText);
 
         container.appendChild(messageDiv);
     }
