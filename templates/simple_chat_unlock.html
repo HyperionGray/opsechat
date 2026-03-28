@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpSecChat - Unlock Room</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .panel {
+            width: 100%;
+            max-width: 520px;
+            border: 1px solid #0f0;
+            background: #001100;
+            padding: 24px;
+        }
+
+        h1 {
+            font-size: 1.4em;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        p {
+            margin-bottom: 14px;
+            color: #9f9;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        input[type="password"] {
+            width: 100%;
+            background-color: #000;
+            color: #0f0;
+            border: 1px solid #0f0;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 1em;
+            margin-bottom: 14px;
+        }
+
+        button {
+            width: 100%;
+            background-color: #0f0;
+            color: #000;
+            border: none;
+            padding: 12px;
+            font-size: 1em;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background-color: #0d0;
+        }
+
+        .status {
+            margin-top: 14px;
+            min-height: 1.2em;
+            color: #ff0;
+        }
+
+        .meta {
+            margin-top: 16px;
+            font-size: 0.9em;
+            color: #0a0;
+        }
+    </style>
+</head>
+<body data-room-id="{{ room_id }}">
+    <div class="panel" role="main">
+        <h1>Room Locked</h1>
+        <p>This chat room requires a passphrase before messages can be read or sent.</p>
+        <p>User: <strong>{{ username }}</strong></p>
+        <label for="passphraseInput">Room passphrase</label>
+        <input
+            id="passphraseInput"
+            type="password"
+            autocomplete="off"
+            maxlength="128"
+            aria-label="Room passphrase"
+        >
+        <button id="unlockBtn" aria-label="Unlock room">Unlock Room</button>
+        <div id="status" class="status" role="status" aria-live="polite"></div>
+        <div class="meta">Room ID: {{ room_id }}</div>
+    </div>
+
+    <script src="/static/chat-unlock.js"></script>
+</body>
+</html>

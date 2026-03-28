@@ -59,6 +59,38 @@
             text-align: center;
             margin: 40px 0;
         }
+
+        .create-room-options {
+            margin: 20px auto 0;
+            max-width: 460px;
+            text-align: left;
+            border: 1px solid #0a0;
+            background-color: #000a00;
+            padding: 12px;
+        }
+
+        .create-room-options label {
+            display: block;
+            margin-bottom: 6px;
+            color: #9f9;
+            font-size: 0.95em;
+        }
+
+        .create-room-options input[type="password"] {
+            width: 100%;
+            background-color: #001100;
+            color: #0f0;
+            border: 1px solid #0f0;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 1em;
+            margin-bottom: 6px;
+        }
+
+        .create-room-options small {
+            color: #0a0;
+            display: block;
+        }
         
         button {
             background-color: #0f0;
@@ -141,6 +173,21 @@
         
         <div class="create-room">
             <button id="createRoomBtn" aria-label="Create a new secure chat room">Create New Chat Room</button>
+            <div class="create-room-options" role="group" aria-label="Optional room protection">
+                <label for="roomPassphrase">Optional room passphrase</label>
+                <input
+                    id="roomPassphrase"
+                    type="password"
+                    minlength="8"
+                    maxlength="128"
+                    autocomplete="off"
+                    placeholder="Leave blank for open room"
+                    aria-describedby="roomPassphraseHelp"
+                >
+                <small id="roomPassphraseHelp">
+                    If set, participants must unlock the room with this passphrase.
+                </small>
+            </div>
             <div id="status" class="status" role="status" aria-live="polite"></div>
         </div>
         

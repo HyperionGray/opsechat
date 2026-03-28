@@ -209,7 +209,16 @@ async function sendMessage() {
             input.value = '';
             await pollMessages();
         } else {
-            showStatus('Error sending message');
+            let errorMessage = 'Error sending message';
+            try {
+                const data = await response.json();
+                if (data && data.error) {
+                    errorMessage = data.error;
+                }
+            } catch (e) {
+                // keep generic error message
+            }
+            showStatus(errorMessage);
         }
     } catch (error) {
         showStatus('Error: ' + error.message);
@@ -231,6 +240,11 @@ async function pollMessages() {
 }
 
 // Event listeners
+const securityWarningBtn = document.getElementById('acceptSecurityWarningBtn');
+if (securityWarningBtn) {
+    securityWarningBtn.addEventListener('click', acceptSecurityWarning);
+}
+
 document.getElementById('sendBtn').addEventListener('click', sendMessage);
 
 document.getElementById('messageInput').addEventListener('keypress', function(e) {
@@ -295,5 +309,3 @@ window.addEventListener('beforeunload', function() {
     }
 });
 
-// Expose acceptSecurityWarning for the HTML onclick attribute
-window.acceptSecurityWarning = acceptSecurityWarning;

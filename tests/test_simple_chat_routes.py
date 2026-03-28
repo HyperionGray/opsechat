@@ -21,6 +21,8 @@ from simple_chat_routes import (
     check_rate_limit,
     RATE_LIMITS,
     MAX_MESSAGE_LENGTH,
+    MIN_ROOM_PASSPHRASE_LENGTH,
+    MAX_ROOM_PASSPHRASE_LENGTH,
 )
 
 
@@ -157,6 +159,44 @@ class TestChatRoutes:
         assert data["success"] is True
         assert "room_id" in data
         assert data["room_url"].startswith("/chat/room/")
+        assert data["protected"] is False
+
+    def test_create_room_with_passphrase_returns_protected(self, client):
+        response = client.post(
+            "/chat/create",
+            json={"room_passphrase": "secret-pass-123"},
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["success"] is True
+        assert data["protected"] is True
+
+    def test_create_room_with_short_passphrase_rejected(self, client):
+        response = client.post(
+            "/chat/create",
+            json={"room_passphrase": "short"},
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        data = response.get_json()
+        assert str(MIN_ROOM_PASSPHRASE_LENGTH) in data["error"]
+
+    def test_create_room_with_long_passphrase_rejected(self, client):
+        response = client.post(
+            "/chat/create",
+            json={"room_passphrase": "a" * (MAX_ROOM_PASSPHRASE_LENGTH + 1)},
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+
+    def test_create_room_with_non_ascii_passphrase_rejected(self, client):
+        response = client.post(
+            "/chat/create",
+            json={"room_passphrase": "秘密-secret-pass"},
+            content_type="application/json",
+        )
+        assert response.status_code == 400
 
     def test_create_room_id_unique(self, client):
         r1 = client.post("/chat/create").get_json()["room_id"]
@@ -239,6 +279,61 @@ class TestChatRoutes:
     def test_get_room_key_nonexistent_room(self, client):
         response = client.get("/chat/room/no-such-room/key")
         assert response.status_code == 404
+
+    def test_protected_room_shows_unlock_page_for_other_session(self, client, app):
+        room_id = client.post(
+            "/chat/create",
+            json={"room_passphrase": "shared-secret-987"},
+            content_type="application/json",
+        ).get_json()["room_id"]
+
+        with app.test_client() as other_client:
+            resp = other_client.get(f"/chat/room/{room_id}")
+            assert resp.status_code == 200
+            assert b"Room Locked" in resp.data
+
+    def test_protected_room_blocks_messages_until_unlocked(self, client, app):
+        room_id = client.post(
+            "/chat/create",
+            json={"room_passphrase": "shared-secret-987"},
+            content_type="application/json",
+        ).get_json()["room_id"]
+
+        with app.test_client() as other_client:
+            resp = other_client.get(f"/chat/room/{room_id}/messages")
+            assert resp.status_code == 403
+
+    def test_protected_room_unlock_and_message_flow(self, client, app):
+        room_id = client.post(
+            "/chat/create",
+            json={"room_passphrase": "shared-secret-987"},
+            content_type="application/json",
+        ).get_json()["room_id"]
+
+        with app.test_client() as other_client:
+            unlock_fail = other_client.post(
+                f"/chat/room/{room_id}/unlock",
+                json={"passphrase": "wrong-pass"},
+                content_type="application/json",
+            )
+            assert unlock_fail.status_code == 403
+
+            unlock_ok = other_client.post(
+                f"/chat/room/{room_id}/unlock",
+                json={"passphrase": "shared-secret-987"},
+                content_type="application/json",
+            )
+            assert unlock_ok.status_code == 200
+
+            post_msg = other_client.post(
+                f"/chat/room/{room_id}/messages",
+                json={"message": "after unlock"},
+                content_type="application/json",
+            )
+            assert post_msg.status_code == 200
+
+            key_resp = other_client.get(f"/chat/room/{room_id}/key")
+            assert key_resp.status_code == 200
 
 
 # ---------------------------------------------------------------------------

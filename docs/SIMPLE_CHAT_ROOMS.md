@@ -7,6 +7,7 @@ OpSecChat now includes a simple, security-focused web-based chat room system des
 ## Key Features
 
 - **Simple Room Creation**: Create secure chat rooms with a single command
+- **Optional Room Passphrase**: Add per-room access control before users can read/send messages
 - **E2E Encryption**: Optional end-to-end encryption using Web Crypto API
 - **Terminal-Style UI**: Clean, minimal interface with no flashy elements
 - **3-Minute Message Expiry**: Messages automatically delete after 3 minutes
@@ -66,8 +67,22 @@ python chat-room.py --port 8080
 
 1. Navigate to `/chat` on your server
 2. Click "Create New Chat Room"
-3. Share the room URL with trusted contacts
-4. Optionally enable E2E encryption in the room
+3. (Optional) Set a room passphrase before creating the room
+4. Share the room URL and passphrase with trusted contacts
+5. Optionally enable E2E encryption in the room
+
+### Unlocking a Protected Room
+
+If the room creator set a passphrase:
+
+1. Open the shared room URL
+2. Enter the room passphrase on the unlock screen
+3. After successful unlock, the room is accessible for that browser session
+
+Protected-room behavior:
+- Message reads/writes are blocked until unlock
+- Room key retrieval (`/chat/room/<room_id>/key`) is blocked until unlock
+- Unprotected rooms continue to work exactly as before
 
 ### Joining a Room
 
@@ -132,7 +147,15 @@ This prevents memory forensics from recovering deleted messages.
 #### Create Room
 ```
 POST /chat/create
-Response: {"success": true, "room_id": "...", "room_url": "/chat/room/..."}
+Body (optional): {"room_passphrase": "your-shared-passphrase"}
+Response: {"success": true, "room_id": "...", "room_url": "/chat/room/...", "protected": true|false}
+```
+
+#### Unlock Protected Room
+```
+POST /chat/room/<room_id>/unlock
+Body: {"passphrase": "..."}
+Response: {"success": true}
 ```
 
 #### Get/Post Messages

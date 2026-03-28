@@ -17,8 +17,10 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+import hashlib
+import hmac
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Absolute path to this file's directory (used for reliable VERSION lookup)
@@ -46,6 +48,8 @@ RATE_LIMITS = {
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
+MIN_ROOM_PASSPHRASE_LENGTH = 8
+MAX_ROOM_PASSPHRASE_LENGTH = 128
 
 # Prefix for E2E-encrypted messages sent from the client.
 # The client prepends this ASCII marker before the base64 AES-GCM ciphertext.
@@ -59,18 +63,66 @@ MAX_ENC_MESSAGE_LENGTH = MAX_MESSAGE_LENGTH * 2
 class ChatRoom:
     """Manages a single chat room with message expiry and memory overwriting"""
     
-    def __init__(self, room_id):
+    def __init__(self, room_id, passphrase=None):
         self.room_id = room_id
         self.messages = []
         self.users = {}
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
+        self.authorized_sessions = set()
         # Auto-generated shared encryption key for the room
         self.room_key = base64.b64encode(secrets.token_bytes(32)).decode('utf-8')
+        self.room_salt = None
+        self.room_passphrase_hash = None
+        if passphrase:
+            self.room_salt = secrets.token_bytes(16)
+            self.room_passphrase_hash = self._hash_passphrase(passphrase, self.room_salt)
     
     def get_room_key(self):
         """Get the room's shared encryption key (for automatic key exchange)"""
         return self.room_key
+
+    @staticmethod
+    def _hash_passphrase(passphrase, salt):
+        """Derive a stable key from room passphrase for verification."""
+        return hashlib.pbkdf2_hmac(
+            "sha256",
+            passphrase.encode("utf-8"),
+            salt,
+            200_000,
+        )
+
+    def requires_passphrase(self):
+        """Whether this room requires unlock before reading/writing."""
+        return self.room_passphrase_hash is not None
+
+    def verify_passphrase(self, candidate):
+        """Verify room passphrase using constant-time comparison."""
+        if not self.requires_passphrase():
+            return True
+        if not isinstance(candidate, str):
+            return False
+        candidate = candidate.strip()
+        if not candidate:
+            return False
+        candidate_hash = self._hash_passphrase(candidate, self.room_salt)
+        return hmac.compare_digest(candidate_hash, self.room_passphrase_hash)
+
+    def authorize_session(self, session_id):
+        """Mark a session as authorized for this room."""
+        if not session_id:
+            return
+        with self.lock:
+            self.authorized_sessions.add(session_id)
+
+    def is_session_authorized(self, session_id):
+        """Check if a session can access this room."""
+        if not self.requires_passphrase():
+            return True
+        if not session_id:
+            return False
+        with self.lock:
+            return session_id in self.authorized_sessions
     
     def add_message(self, user_id, username, color, message_text):
         """Add a message to the room"""
@@ -264,6 +316,46 @@ def generate_secure_dm_id():
     return secrets.token_urlsafe(16)
 
 
+def _ensure_chat_session():
+    """Initialize per-session identity used by chat routes."""
+    if "_id" not in session:
+        session["_id"] = generate_secure_dm_id()
+        session["username"] = generate_random_username()
+        session["color"] = get_random_color_rgb()
+
+
+def _normalize_room_passphrase(raw_passphrase):
+    """
+    Validate optional room passphrase.
+
+    Returns:
+        tuple[str|None, str|None]: (normalized_passphrase, error_message)
+    """
+    if raw_passphrase is None:
+        return None, None
+    if not isinstance(raw_passphrase, str):
+        return None, "Room passphrase must be a string."
+
+    passphrase = raw_passphrase.strip()
+    if not passphrase:
+        return None, None
+
+    if len(passphrase) < MIN_ROOM_PASSPHRASE_LENGTH:
+        return None, (
+            f"Room passphrase must be at least "
+            f"{MIN_ROOM_PASSPHRASE_LENGTH} characters."
+        )
+    if len(passphrase) > MAX_ROOM_PASSPHRASE_LENGTH:
+        return None, (
+            f"Room passphrase must be at most "
+            f"{MAX_ROOM_PASSPHRASE_LENGTH} characters."
+        )
+    if not all(32 <= ord(ch) <= 126 for ch in passphrase):
+        return None, "Room passphrase must use printable ASCII characters."
+
+    return passphrase, None
+
+
 def register_simple_chat_routes(app):
     """Register simple chat routes with the Flask app"""
     
@@ -283,11 +375,7 @@ def register_simple_chat_routes(app):
     @limiter.limit("10 per hour; 3 per minute")
     def chat_create():
         """Create a new chat room with cryptographically secure ID"""
-        # Ensure session exists for rate limiting
-        if "_id" not in session:
-            session["_id"] = generate_secure_dm_id()
-            session["username"] = generate_random_username()
-            session["color"] = get_random_color_rgb()
+        _ensure_chat_session()
 
         allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
         if not allowed:
@@ -295,15 +383,25 @@ def register_simple_chat_routes(app):
                 "error": f"Rate limit exceeded. Try again in {retry_after} seconds."
             }), 429
 
+        payload = request.get_json(silent=True) or {}
+        room_passphrase, passphrase_error = _normalize_room_passphrase(
+            payload.get("room_passphrase")
+        )
+        if passphrase_error:
+            return jsonify({"error": passphrase_error}), 400
+
         room_id = generate_secure_room_id(32)
         
         with rooms_lock:
-            chat_rooms[room_id] = ChatRoom(room_id)
+            room = ChatRoom(room_id, passphrase=room_passphrase)
+            room.authorize_session(session["_id"])
+            chat_rooms[room_id] = room
         
         return jsonify({
             "success": True,
             "room_id": room_id,
-            "room_url": f"/chat/room/{room_id}"
+            "room_url": f"/chat/room/{room_id}",
+            "protected": bool(room_passphrase),
         })
     
     @app.route('/chat/room/<string:room_id>')
@@ -313,17 +411,46 @@ def register_simple_chat_routes(app):
             if room_id not in chat_rooms:
                 return render_template("simple_chat_error.html", 
                                      error="Room not found or expired"), 404
-        
-        # Initialize user session
-        if "_id" not in session:
-            session["_id"] = generate_secure_dm_id()
-            session["username"] = generate_random_username()
-            session["color"] = get_random_color_rgb()
+            room = chat_rooms[room_id]
+
+        _ensure_chat_session()
+        if room.requires_passphrase() and not room.is_session_authorized(session["_id"]):
+            return render_template(
+                "simple_chat_unlock.html",
+                room_id=room_id,
+                username=session["username"],
+            )
         
         return render_template("simple_chat_room.html", 
                              room_id=room_id,
                              username=session["username"],
                              color=session["color"])
+
+    @app.route('/chat/room/<string:room_id>/unlock', methods=['POST'])
+    @limiter.limit("15 per hour; 8 per minute")
+    def unlock_chat_room(room_id):
+        """Unlock a passphrase-protected room for the current session."""
+        _ensure_chat_session()
+
+        with rooms_lock:
+            if room_id not in chat_rooms:
+                return jsonify({"error": "Room not found"}), 404
+            room = chat_rooms[room_id]
+
+        if not room.requires_passphrase():
+            room.authorize_session(session["_id"])
+            return jsonify({"success": True, "already_unlocked": True})
+
+        data = request.get_json(silent=True) or {}
+        passphrase = data.get("passphrase")
+        if not isinstance(passphrase, str):
+            return jsonify({"error": "Missing passphrase"}), 400
+
+        if not room.verify_passphrase(passphrase):
+            return jsonify({"error": "Invalid room passphrase."}), 403
+
+        room.authorize_session(session["_id"])
+        return jsonify({"success": True})
     
     @app.route('/chat/room/<string:room_id>/messages', methods=['GET', 'POST'])
     @limiter.limit("60 per minute", methods=["POST"])
@@ -333,14 +460,12 @@ def register_simple_chat_routes(app):
             if room_id not in chat_rooms:
                 return jsonify({"error": "Room not found"}), 404
             room = chat_rooms[room_id]
+
+        _ensure_chat_session()
+        if room.requires_passphrase() and not room.is_session_authorized(session["_id"]):
+            return jsonify({"error": "Room is locked. Unlock required."}), 403
         
         if request.method == 'POST':
-            # Ensure user has session
-            if "_id" not in session:
-                session["_id"] = generate_secure_dm_id()
-                session["username"] = generate_random_username()
-                session["color"] = get_random_color_rgb()
-
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
             if not allowed:
@@ -514,6 +639,9 @@ def register_simple_chat_routes(app):
                 return jsonify({"error": "Room not found"}), 404
             
             room = chat_rooms[room_id]
+            _ensure_chat_session()
+            if room.requires_passphrase() and not room.is_session_authorized(session["_id"]):
+                return jsonify({"error": "Room is locked. Unlock required."}), 403
             return jsonify({
                 "room_id": room_id,
                 "encryption_key": room.get_room_key()
