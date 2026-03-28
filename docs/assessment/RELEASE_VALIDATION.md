@@ -281,9 +281,9 @@ All required API endpoints are implemented and tested.
 - Color-coded messages
 
 **Areas for Enhancement:**
-- Add inline help commands
+- Extend command system beyond core slash commands
 - Improve error messages
-- Add connection status indicator
+- Expand status indicators (encryption/Tor state details)
 
 ### Documentation Quality
 
@@ -344,7 +344,7 @@ All required API endpoints are implemented and tested.
 2. Domain rotation CLI tool
 3. Improved key management UX
 4. Enhanced error messages
-5. Inline help system
+5. Advanced slash commands (/encrypt and richer status reporting)
 
 ---
 

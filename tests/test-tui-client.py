@@ -9,12 +9,14 @@ import os
 import socket
 import json
 import time
+import threading
 
 # Add parent directory's src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+from tui.server import ChatServer
 
-def test_client(host='127.0.0.1', port=5555):
-    """Test basic client functionality"""
+def run_connectivity_check(host='127.0.0.1', port=5555):
+    """Run a basic connectivity check and return True/False."""
     print(f"[*] Connecting to {host}:{port}...")
     
     try:
@@ -70,6 +72,35 @@ def test_client(host='127.0.0.1', port=5555):
         print(f"[✗] Test failed: {e}")
         return False
 
+
+def _get_free_port():
+    """Reserve and return an available localhost TCP port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(('127.0.0.1', 0))
+        return sock.getsockname()[1]
+
+
+def test_client():
+    """
+    Pytest entrypoint for the connectivity check.
+
+    The assertion keeps this as a proper test (instead of returning bool),
+    which avoids PytestReturnNotNoneWarning.
+    """
+    port = _get_free_port()
+    server = ChatServer(host='127.0.0.1', port=port)
+    server_thread = threading.Thread(target=server.start, daemon=True)
+    server_thread.start()
+
+    # Give the server a brief moment to bind/listen.
+    time.sleep(0.2)
+
+    try:
+        assert run_connectivity_check('127.0.0.1', port)
+    finally:
+        server.stop()
+        server_thread.join(timeout=1)
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Test TUI Chat Client')
@@ -77,5 +108,5 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=int, default=5555, help='Server port')
     args = parser.parse_args()
     
-    success = test_client(args.host, args.port)
+    success = run_connectivity_check(args.host, args.port)
     sys.exit(0 if success else 1)

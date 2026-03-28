@@ -11,10 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- TUI slash commands: `/help`, `/status`, `/users`, `/quit`
+- New unit tests for TUI command protocol in `tests/test_tui_commands.py`
 
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- Improved TUI client footer status with connection state and connected user count
+- Reworked `tests/test-tui-client.py` to use assertion-based pytest entrypoint
+
+### Removed
+- Removed stale duplicate server entrypoint `runserver_refactored.py` (same content as `runserver.py`)
+- Removed obsolete CI debug scripts `test-ci-fix.js` and `test-server.js`
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022

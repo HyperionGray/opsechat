@@ -69,16 +69,13 @@ opsechat/
 ### Python Files in Root (Dev Tools)
 These are development and testing utilities that help during development:
 
-- **`manual-test.py`** - Manual testing script for interactive testing
-- **`simple_test.py`** - Quick sanity checks
-- **`quick_import_test.py`** - Test Python imports
 - **`review_performance.py`** - Performance benchmarking tool
 - **`usability_assessment.py`** - UI/UX testing helper
 - **`comprehensive_functionality_test.py`** - Full functional test suite
+- **`tests/test_tui_commands.py`** - TUI slash-command unit tests (`/help`, `/status`, `/users`, `/quit`)
 
 ### Main Application Files
-- **`runserver.py`** - Main entry point (legacy monolithic)
-- **`runserver_refactored.py`** - Refactored version (blueprint-based)
+- **`runserver.py`** - Main entry point (app factory + blueprint registration)
 - **`app_factory.py`** - Flask app factory pattern
 - **`chat-room.py`** - Standalone chat room creator
 - **`tui-server.py`** - Terminal UI server

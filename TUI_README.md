@@ -81,6 +81,15 @@ The client will automatically use Tor SOCKS proxy if:
 - Your username is randomly assigned (e.g., `PhantomRaven4523`)
 - Messages automatically disappear after 4 minutes
 
+### Inline Commands
+
+The TUI now supports inline slash commands:
+
+- `/help` - show available commands
+- `/status` - show connection state, active users, message count, and burn timer
+- `/users` - show currently connected user count
+- `/quit` - graceful disconnect from the server
+
 ## Privacy & Security Features
 
 ### In-Memory Only

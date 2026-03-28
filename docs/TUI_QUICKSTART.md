@@ -81,6 +81,15 @@ You'll see the TUI interface:
 3. Messages appear in the main window
 4. Press **Ctrl+C** to quit
 
+### Slash Commands
+
+The TUI client supports inline commands:
+
+- `/help` - Show available commands
+- `/status` - Show connection/server status snapshot
+- `/users` - Show number of connected users
+- `/quit` - Graceful disconnect and exit
+
 **Try opening multiple clients** to test multi-user chat!
 
 ## Production Use (With Tor)
