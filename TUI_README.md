@@ -15,6 +15,7 @@ This is a serious privacy and opsec tool for serious privacy and opsec people. I
 ✅ **Zero Disk** - Nothing touches disk except the application code  
 ✅ **Tor Integration** - Full support for Tor hidden services (.onion)  
 ✅ **SOCKS Proxy** - Client supports connecting via Tor SOCKS proxy  
+✅ **Anti-Spam Rate Limiting** - Per-user throttle (20 messages / 60 seconds)  
 
 ## Quick Start
 
@@ -139,6 +140,7 @@ sudo systemctl start tor
 - **No images**: Text only, no exceptions
 - **No video**: Text only, no exceptions
 - **No b64 encoding**: Large base64-like strings are rejected
+- **Rate limit**: 20 messages per user per 60 seconds
 
 ## Architecture
 
@@ -173,6 +175,9 @@ python -c "from src.tui.server import ChatServer; s = ChatServer(); print(s.gene
 
 # Test imports
 python -c "from src.tui import client, server; print('✓ Imports OK')"
+
+# Test TUI rate limiting
+python -m pytest tests/test_tui_rate_limit.py
 ```
 
 ### Code Structure
@@ -243,7 +248,6 @@ Messages are:
 
 ## Coming Soon
 
-- [ ] Full Tor hidden service integration
 - [ ] PGP encryption support (optional)
 - [ ] Multi-room support
 - [ ] Message signing/verification

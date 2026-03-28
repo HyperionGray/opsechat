@@ -140,6 +140,7 @@ The client automatically detects `.onion` and uses Tor SOCKS proxy.
 
 ### ✅ Security Features
 - **Message Validation** - Max 1000 chars
+- **Message Rate Limiting** - 20 messages per 60 seconds per user
 - **Secure Deletion** - Overwrite before delete
 - **No Configuration Files** - Ephemeral by design
 - **No Logs** - Zero persistence
@@ -241,6 +242,9 @@ python tui-client.py --host <server> --tor-port 9150
 ```bash
 # Run automated test
 python tests/test-tui-client.py
+
+# Run TUI server rate-limit unit tests
+python -m pytest tests/test_tui_rate_limit.py
 
 # Should output:
 # [✓] Connected to server

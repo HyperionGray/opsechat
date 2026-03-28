@@ -217,6 +217,19 @@ class ChatClient:
             username = msg.get('username', 'Unknown')
             message = msg.get('message', '')
             self.add_message(username, message)
+
+        elif msg_type == 'rate_limit':
+            retry_after = msg.get('retry_after', 1)
+            message = msg.get('message', 'Rate limit exceeded.')
+            self.add_message(
+                "System",
+                f"{message} Retry in {retry_after}s.",
+                is_system=True,
+            )
+
+        elif msg_type == 'validation_error':
+            message = msg.get('message', 'Message rejected by server validation.')
+            self.add_message("System", message, is_system=True)
     
     def update_footer(self):
         """Update the footer with current username"""
