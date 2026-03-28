@@ -21,6 +21,8 @@ from simple_chat_routes import (
     check_rate_limit,
     RATE_LIMITS,
     MAX_MESSAGE_LENGTH,
+    MESSAGE_TTL_SECONDS,
+    ROOM_TTL_SECONDS,
 )
 
 
@@ -179,6 +181,11 @@ class TestChatRoutes:
         data = response.get_json()
         assert data["messages"] == []
         assert isinstance(data["user_count"], int)
+        assert "room_metadata" in data
+        metadata = data["room_metadata"]
+        assert metadata["room_ttl_seconds"] == ROOM_TTL_SECONDS
+        assert metadata["message_ttl_seconds"] == MESSAGE_TTL_SECONDS
+        assert metadata["message_count"] == 0
 
     def test_post_message_success(self, client):
         room_id = client.post("/chat/create").get_json()["room_id"]
@@ -239,6 +246,44 @@ class TestChatRoutes:
     def test_get_room_key_nonexistent_room(self, client):
         response = client.get("/chat/room/no-such-room/key")
         assert response.status_code == 404
+
+    def test_get_room_metadata_returns_lifecycle_fields(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.get(f"/chat/room/{room_id}/metadata")
+        assert response.status_code == 200
+        data = response.get_json()
+
+        assert data["room_id"] == room_id
+        assert data["room_ttl_seconds"] == ROOM_TTL_SECONDS
+        assert data["message_ttl_seconds"] == MESSAGE_TTL_SECONDS
+        assert "created_at" in data
+        assert "last_activity_at" in data
+        assert "expires_at" in data
+        assert isinstance(data["expires_in_seconds"], int)
+        assert data["expires_in_seconds"] >= 0
+        assert data["message_count"] == 0
+        assert data["active_user_count"] >= 0
+
+    def test_get_room_metadata_nonexistent_room(self, client):
+        response = client.get("/chat/room/no-such-room/metadata")
+        assert response.status_code == 404
+
+    def test_message_response_contains_expires_in_seconds(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        post = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "hello metadata"},
+            content_type="application/json",
+        )
+        assert post.status_code == 200
+
+        response = client.get(f"/chat/room/{room_id}/messages")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["messages"], "Expected at least one message"
+        last_message = data["messages"][-1]
+        assert "expires_in_seconds" in last_message
+        assert 0 <= last_message["expires_in_seconds"] <= MESSAGE_TTL_SECONDS
 
 
 # ---------------------------------------------------------------------------

@@ -142,6 +142,35 @@ POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
 
+#### Get Room Metadata
+```
+GET /chat/room/<room_id>/metadata
+Response:
+{
+  "room_id": "...",
+  "created_at": "ISO-8601",
+  "last_activity_at": "ISO-8601",
+  "expires_at": "ISO-8601",
+  "expires_in_seconds": 3520,
+  "room_ttl_seconds": 3600,
+  "message_ttl_seconds": 180,
+  "message_count": 4,
+  "active_user_count": 2
+}
+```
+
+### Lifecycle Metadata (NEW)
+
+The room UI now displays live lifecycle state from the API:
+
+- Room expiry countdown (`expires_in_seconds`)
+- Message TTL (`message_ttl_seconds`)
+- Total messages currently in memory (`message_count`)
+- Active users seen recently (`active_user_count`)
+
+Message polling responses also include per-message `expires_in_seconds`, so clients can
+render exact burn timers without inferring them locally.
+
 ### Encryption Implementation
 
 The E2E encryption uses native Web Crypto API:

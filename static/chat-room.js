@@ -5,6 +5,7 @@ let encryptionEnabled = false;
 let encryptionKey = null;
 let pollInterval = null;
 let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+let roomMetadata = null;
 
 // Encrypted message prefix (ASCII-safe, recognised by both client and server)
 const ENC_PREFIX = 'ENC:';
@@ -140,6 +141,36 @@ function scrollToBottom() {
     container.scrollTop = container.scrollHeight;
 }
 
+function formatDuration(seconds) {
+    const safe = Math.max(0, Number(seconds) || 0);
+    const mins = Math.floor(safe / 60);
+    const secs = safe % 60;
+    return `${mins}:${String(secs).padStart(2, '0')}`;
+}
+
+function renderRoomMetadata(metadata) {
+    roomMetadata = metadata || roomMetadata;
+    if (!roomMetadata) return;
+
+    const ttlEl = document.getElementById('messageTtl');
+    const expiresInEl = document.getElementById('roomExpiresIn');
+    const messageCountEl = document.getElementById('messageCount');
+    const activeUsersEl = document.getElementById('activeUsers');
+
+    if (ttlEl) {
+        ttlEl.textContent = formatDuration(roomMetadata.message_ttl_seconds || 0);
+    }
+    if (expiresInEl) {
+        expiresInEl.textContent = formatDuration(roomMetadata.expires_in_seconds || 0);
+    }
+    if (messageCountEl) {
+        messageCountEl.textContent = String(roomMetadata.message_count || 0);
+    }
+    if (activeUsersEl) {
+        activeUsersEl.textContent = String(roomMetadata.active_user_count || 0);
+    }
+}
+
 async function renderMessages(messages) {
     const container = document.getElementById('messagesContainer');
     container.innerHTML = '';
@@ -224,9 +255,21 @@ async function pollMessages() {
             const data = await response.json();
             await renderMessages(data.messages);
             document.getElementById('userCount').textContent = `Users: ${data.user_count}`;
+            renderRoomMetadata(data.room_metadata);
         }
     } catch (error) {
         // Silently fail for polling errors
+    }
+}
+
+async function pollRoomMetadata() {
+    try {
+        const response = await fetch(`/chat/room/${roomId}/metadata`);
+        if (!response.ok) return;
+        const data = await response.json();
+        renderRoomMetadata(data);
+    } catch (error) {
+        // Keep metadata refresh best-effort
     }
 }
 
@@ -284,8 +327,10 @@ window.addEventListener('load', async function() {
     }
 
     // Start polling
+    await pollRoomMetadata();
     await pollMessages();
     pollInterval = setInterval(pollMessages, 2000);
+    setInterval(pollRoomMetadata, 15000);
 });
 
 // Cleanup on unload
@@ -295,5 +340,4 @@ window.addEventListener('beforeunload', function() {
     }
 });
 
-// Expose acceptSecurityWarning for the HTML onclick attribute
-window.acceptSecurityWarning = acceptSecurityWarning;
+document.getElementById('acceptSecurityWarningBtn').addEventListener('click', acceptSecurityWarning);

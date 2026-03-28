@@ -36,10 +36,13 @@
         
         .header-info {
             font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 15px;
         }
         
         .encryption-toggle {
-            margin-left: 20px;
+            margin-left: 5px;
         }
         
         .encryption-toggle label {
@@ -137,6 +140,11 @@
         .encryption-status.enabled {
             color: #0f0;
         }
+
+        .room-lifecycle {
+            color: #0ff;
+            font-size: 0.85em;
+        }
         
         ::-webkit-scrollbar {
             width: 10px;
@@ -163,6 +171,12 @@
         </div>
         <div class="header-info">
             <span id="userCount" aria-live="polite">Users: 1</span>
+            <span id="roomLifecycle" class="room-lifecycle" aria-live="polite">
+                Room expires in: <span id="roomExpiresIn">--:--</span>
+                | Msg TTL: <span id="messageTtl">--:--</span>
+                | Msgs: <span id="messageCount">0</span>
+                | Active: <span id="activeUsers">0</span>
+            </span>
             <span class="encryption-toggle">
                 <label>
                     <input type="checkbox" id="encryptionToggle" aria-label="Toggle end-to-end encryption">
@@ -204,7 +218,7 @@
                 
                 🔒 <strong>YOUR SAFETY:</strong> Messages auto-delete after 3 minutes. Rooms expire after 1 hour. Everything in-memory only.
             </p>
-            <button onclick="acceptSecurityWarning()" style="width: 100%; padding: 15px; background: #0f0; color: #000; border: none; font-weight: bold; font-size: 1.1em; cursor: pointer; margin-top: 20px;">
+            <button id="acceptSecurityWarningBtn" style="width: 100%; padding: 15px; background: #0f0; color: #000; border: none; font-weight: bold; font-size: 1.1em; cursor: pointer; margin-top: 20px;">
                 I UNDERSTAND AND AGREE
             </button>
         </div>

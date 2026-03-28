@@ -17,8 +17,8 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Absolute path to this file's directory (used for reliable VERSION lookup)
@@ -43,6 +43,11 @@ RATE_LIMITS = {
     "chat_message": {"max_requests": 30, "window_seconds": 60},
     "dm_send": {"max_requests": 5, "window_seconds": 60},
 }
+
+# Message and room lifecycle limits (in seconds)
+MESSAGE_TTL_SECONDS = 180  # 3 minutes
+ROOM_TTL_SECONDS = 3600  # 1 hour
+DM_TTL_SECONDS = 60  # 1 minute
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
@@ -102,7 +107,7 @@ class ChatRoom:
             
             for msg in self.messages:
                 age = (now - msg["timestamp"]).total_seconds()
-                if age < 180:  # 3 minutes
+                if age < MESSAGE_TTL_SECONDS:
                     new_messages.append(msg)
                 else:
                     # Overwrite message data before deletion (security)
@@ -125,6 +130,13 @@ class ChatRoom:
                              if (now - u["last_seen"]).total_seconds() < 300)
             return active_users
 
+    def get_last_activity_time(self):
+        """Return the room's most recent activity time"""
+        with self.lock:
+            if self.messages:
+                return max(msg["timestamp"] for msg in self.messages)
+            return self.created_at
+
 
 def cleanup_old_rooms():
     """Remove rooms inactive for more than 1 hour"""
@@ -136,9 +148,9 @@ def cleanup_old_rooms():
             # Check if room has been inactive for > 1 hour
             if room.messages:
                 last_msg_time = max(msg["timestamp"] for msg in room.messages)
-                if (now - last_msg_time).total_seconds() > 3600:
+                if (now - last_msg_time).total_seconds() > ROOM_TTL_SECONDS:
                     rooms_to_delete.append(room_id)
-            elif (now - room.created_at).total_seconds() > 3600:
+            elif (now - room.created_at).total_seconds() > ROOM_TTL_SECONDS:
                 rooms_to_delete.append(room_id)
         
         for room_id in rooms_to_delete:
@@ -156,7 +168,7 @@ def cleanup_old_dms():
         
         for dm_id, dm_data in direct_messages.items():
             age = (now - dm_data["timestamp"]).total_seconds()
-            if age > 60:  # 1 minute expiry
+            if age > DM_TTL_SECONDS:
                 expired_dms.append(dm_id)
         
         for dm_id in expired_dms:
@@ -232,6 +244,28 @@ def cleanup_rate_limits():
 
         for sid in stale_sessions:
             del _rate_limit_store[sid]
+
+
+def _serialize_room_metadata(room, now=None, message_count=None, active_user_count=None):
+    """Build lifecycle metadata for a room."""
+    now = now or datetime.datetime.now()
+    last_activity = room.get_last_activity_time()
+    expires_at = last_activity + datetime.timedelta(seconds=ROOM_TTL_SECONDS)
+    expires_in = int((expires_at - now).total_seconds())
+    if message_count is None:
+        message_count = len(room.get_messages())
+    if active_user_count is None:
+        active_user_count = room.get_user_count()
+    return {
+        "created_at": room.created_at.isoformat(),
+        "last_activity_at": last_activity.isoformat(),
+        "expires_at": expires_at.isoformat(),
+        "expires_in_seconds": max(0, expires_in),
+        "room_ttl_seconds": ROOM_TTL_SECONDS,
+        "message_ttl_seconds": MESSAGE_TTL_SECONDS,
+        "message_count": message_count,
+        "active_user_count": active_user_count,
+    }
 
 
 # Background cleanup thread
@@ -409,6 +443,13 @@ def register_simple_chat_routes(app):
         else:  # GET
             messages = room.get_messages()
             user_count = room.get_user_count()
+            now = datetime.datetime.now()
+            metadata = _serialize_room_metadata(
+                room,
+                now=now,
+                message_count=len(messages),
+                active_user_count=user_count,
+            )
             
             return jsonify({
                 "messages": [
@@ -417,13 +458,18 @@ def register_simple_chat_routes(app):
                         "color": msg["color"],
                         "message": msg["message"],
                         "timestamp": msg["timestamp"].isoformat(),
+                        "expires_in_seconds": max(
+                            0,
+                            MESSAGE_TTL_SECONDS - int((now - msg["timestamp"]).total_seconds()),
+                        ),
                         "is_mine": msg["user_id"] == session.get("_id")
                     }
                     for msg in messages
                 ],
                 "user_count": user_count,
                 "my_username": session.get("username"),
-                "my_color": session.get("color")
+                "my_color": session.get("color"),
+                "room_metadata": metadata
             })
     
     @app.route('/chat/dm/send', methods=['POST'])
@@ -478,7 +524,7 @@ def register_simple_chat_routes(app):
             "success": True,
             "dm_id": dm_id,
             "dm_url": f"/chat/dm/{dm_id}",
-            "expires_in": 60
+            "expires_in": DM_TTL_SECONDS
         })
     
     @app.route('/chat/dm/<string:dm_id>')
@@ -492,7 +538,7 @@ def register_simple_chat_routes(app):
             
             # Check if expired
             age = (datetime.datetime.now() - dm["timestamp"]).total_seconds()
-            if age > 60:
+            if age > DM_TTL_SECONDS:
                 return jsonify({"error": "DM expired"}), 404
             
             # Mark as read
@@ -503,7 +549,7 @@ def register_simple_chat_routes(app):
                 "sender_name": dm["sender_name"],
                 "room_id": dm["room_id"],
                 "message": dm["message"],
-                "expires_in": max(0, 60 - int(age))
+                "expires_in": max(0, DM_TTL_SECONDS - int(age))
             })
     
     @app.route('/chat/room/<string:room_id>/key', methods=['GET'])
@@ -518,6 +564,20 @@ def register_simple_chat_routes(app):
                 "room_id": room_id,
                 "encryption_key": room.get_room_key()
             })
+
+    @app.route('/chat/room/<string:room_id>/metadata', methods=['GET'])
+    def room_metadata(room_id):
+        """Get room lifecycle metadata (expiry, TTL, activity)."""
+        with rooms_lock:
+            if room_id not in chat_rooms:
+                return jsonify({"error": "Room not found"}), 404
+            room = chat_rooms[room_id]
+            metadata = _serialize_room_metadata(room)
+
+        return jsonify({
+            "room_id": room_id,
+            **metadata
+        })
 
 
 def generate_random_username():

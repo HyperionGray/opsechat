@@ -42,6 +42,7 @@ Documentation for end users and operators.
 - [PGP Usage](user-guide/PGP_USAGE.md) - PGP encryption guide
 - [PGP Test Examples](user-guide/PGP_TEST_EXAMPLE.md) - PGP testing examples
 - [Testing Guide](user-guide/TESTING.md) - How to run tests
+- [Simple Chat Rooms](../SIMPLE_CHAT_ROOMS.md) - Web chat rooms and lifecycle metadata API
 
 ### 👨‍💻 Development
 Information for developers contributing to the project.
