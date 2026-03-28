@@ -19,10 +19,96 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _parse_datetime(value: Any) -> Optional[datetime]:
+    """Parse persisted datetime values from multiple legacy formats."""
+    if isinstance(value, datetime):
+        return value
+
+    if isinstance(value, (int, float)):
+        try:
+            # Stored as Unix timestamp
+            return datetime.fromtimestamp(value, tz=timezone.utc).replace(tzinfo=None)
+        except (OverflowError, OSError, ValueError):
+            return None
+
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+
+        # Support RFC3339-style trailing Z.
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+
+        try:
+            dt = datetime.fromisoformat(text)
+            if dt.tzinfo is not None:
+                dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+            return dt
+        except ValueError:
+            pass
+
+        # Legacy fallback formats
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(text, fmt)
+            except ValueError:
+                continue
+
+    return None
+
+
+def _serialize_owned_domains(owned_domains: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Convert in-memory domain state into JSON-safe values."""
+    serialized: List[Dict[str, Any]] = []
+
+    for item in owned_domains:
+        if not isinstance(item, dict):
+            continue
+        normalized = dict(item)
+        for field in ("purchased_at", "expires_at"):
+            if isinstance(normalized.get(field), datetime):
+                normalized[field] = normalized[field].isoformat()
+        serialized.append(normalized)
+
+    return serialized
+
+
+def _deserialize_owned_domains(raw_owned_domains: Any) -> List[Dict[str, Any]]:
+    """Load persisted domain state while migrating legacy date formats."""
+    if not isinstance(raw_owned_domains, list):
+        return []
+
+    hydrated: List[Dict[str, Any]] = []
+    for item in raw_owned_domains:
+        if not isinstance(item, dict):
+            continue
+        normalized = dict(item)
+        for field in ("purchased_at", "expires_at"):
+            parsed = _parse_datetime(normalized.get(field))
+            if parsed is not None:
+                normalized[field] = parsed
+        hydrated.append(normalized)
+
+    return hydrated
+
+
+def _format_date(value: Any, fmt: str, fallback: str = "unknown") -> str:
+    """Safely format datetime-like values for CLI display."""
+    parsed = _parse_datetime(value)
+    if parsed is not None:
+        return parsed.strftime(fmt)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return fallback
 
 
 def load_config():
@@ -103,16 +189,21 @@ def get_manager():
         sys.exit(1)
     
     client = PorkbunAPIClient(config['api_key'], config['api_secret'])
-    manager = DomainRotationManager(
-        api_client=client,
-        monthly_budget=config.get('monthly_budget', 50.0)
-    )
+    try:
+        monthly_budget = float(config.get('monthly_budget', 50.0))
+    except (TypeError, ValueError):
+        monthly_budget = 50.0
+
+    manager = DomainRotationManager(api_client=client, monthly_budget=monthly_budget)
     
     # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
+    if config.get('current_spending') is not None:
+        try:
+            manager.current_spending = float(config['current_spending'])
+        except (TypeError, ValueError):
+            manager.current_spending = 0.0
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = _deserialize_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +213,7 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = _serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -144,8 +235,8 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_date(domain.get('purchased_at'), '%Y-%m-%d %H:%M')}")
+        print(f"   Expires: {_format_date(domain.get('expires_at'), '%Y-%m-%d')}")
         print()
 
 
