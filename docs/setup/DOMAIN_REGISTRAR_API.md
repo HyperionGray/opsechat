@@ -8,7 +8,7 @@ Opsechat supports automated domain purchasing for rotating burner email addresse
 
 ## Supported Registrars
 
-### Porkbun (Recommended)
+### Porkbun (Recommended for automated purchasing)
 
 **Why Porkbun?**
 - Competitive pricing on cheap TLDs (.xyz from $1.99/yr)
@@ -59,14 +59,32 @@ Key endpoints used by opsechat:
 - `pricing/get` - Get TLD pricing
 - `domain/listAll` - List owned domains
 
+### Namecheap (supported for search/pricing)
+
+Opsechat now supports Namecheap API configuration in the domain manager and CLI.
+
+Current support includes:
+- Domain availability checks
+- Pricing lookups
+- Registrar selection in `domain_rotation_cli.py`
+
+Automated purchasing is intentionally disabled in the current Namecheap flow because
+registrations require full contact profile data and compliance-related fields.
+That should be implemented in a dedicated, explicit purchase path.
+
+#### Getting Namecheap API Access
+
+1. Enable API access in Namecheap account settings.
+2. Add your server/client IP in Namecheap API whitelist.
+3. Collect:
+   - API key
+   - API username
+   - Client IP
+4. Optionally use sandbox mode for safe testing.
+
 ## Other Registrars (Future Support)
 
 The opsechat domain manager is designed to be extensible. Future registrar support may include:
-
-### Namecheap
-- API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
-- Cheap TLDs: .xyz, .club, .online
 
 ### Namesilo
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)
@@ -110,6 +128,10 @@ Environment=DOMAIN_MONTHLY_BUDGET=50.0
 ```
 
 Then modify the runserver.py to read these on startup.
+
+For Namecheap-based setups, use equivalent variables in your deployment tooling
+(for example `NAMECHEAP_API_KEY`, `NAMECHEAP_API_USERNAME`, `NAMECHEAP_CLIENT_IP`)
+and pass them into app configuration at startup.
 
 ## Budget Management
 
@@ -183,6 +205,17 @@ Possible causes:
 - Account suspended
 
 Solution: Verify credentials in registrar dashboard
+
+### Namecheap client IP error
+
+Possible causes:
+- The request IP is not whitelisted in Namecheap API settings
+- Client IP is misconfigured in opsechat
+
+Solution:
+1. Confirm your server egress IP
+2. Add it to Namecheap API whitelist
+3. Update `client_ip` in your opsechat domain configuration
 
 ## Example: Complete Setup
 
