@@ -66,12 +66,16 @@ opsechat/
 
 ## Development Tools
 
-### Python Files in Root (Dev Tools)
-These are development and testing utilities that help during development:
+### Development Utility Scripts
+Development/testing helpers are organized under `scripts/dev/`:
 
-- **`manual-test.py`** - Manual testing script for interactive testing
-- **`simple_test.py`** - Quick sanity checks
-- **`quick_import_test.py`** - Test Python imports
+- **`scripts/dev/manual-test.py`** - Manual testing script for interactive testing
+- **`scripts/dev/simple_test.py`** - Quick sanity checks
+- **`scripts/dev/quick_import_test.py`** - Test Python imports
+- **`scripts/dev/test_imports.py`** - Core import and smoke test helper
+- **`scripts/dev/test_fix.sh`** - Targeted pytest helper for runserver helpers
+- **`scripts/dev/test-ci-fix.js`** - CI startup/connectivity validation helper
+- **`scripts/dev/test-server.js`** - Mock server startup debug helper
 - **`review_performance.py`** - Performance benchmarking tool
 - **`usability_assessment.py`** - UI/UX testing helper
 - **`comprehensive_functionality_test.py`** - Full functional test suite

@@ -206,7 +206,9 @@ def main():
     print("  OpSecChat Product Release Manual Testing")
     print("="*60)
     
-    os.chdir(Path(__file__).parent)
+    # Run from repository root even when invoked from scripts/dev/
+    repo_root = Path(__file__).resolve().parents[2]
+    os.chdir(repo_root)
     
     tests = [
         ("Documentation Check", check_documentation),

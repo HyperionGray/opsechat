@@ -11,7 +11,7 @@ async function testServer() {
   console.log('Testing mock server startup...');
   
   // Start the mock server
-  const serverProcess = spawn('python3', ['tests/mock_server.py'], {
+  const serverProcess = spawn('python3', ['/workspace/tests/mock_server.py'], {
     stdio: 'pipe'
   });
 
