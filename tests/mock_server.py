@@ -13,6 +13,7 @@ import os
 import datetime
 import string
 import random
+import secrets
 
 # Add parent directory to Python path for imports
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -20,7 +21,11 @@ if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
 from flask import Flask, session
-from mock_routes import create_mock_routes
+try:
+    from mock_routes import create_mock_routes
+except ImportError:
+    # Support importing this module as tests.mock_server in unit tests.
+    from tests.mock_routes import create_mock_routes
 
 # Create Flask app with absolute paths for better CI compatibility
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -62,24 +67,103 @@ def get_random_color():
     return random.choice(colors)
 
 
+class FallbackEmailStorage:
+    """Minimal in-memory email storage used when email_system import fails."""
+
+    def __init__(self):
+        self.emails = {}
+
+    def create_user_inbox(self, user_id):
+        self.emails.setdefault(user_id, [])
+
+
+class FallbackBurnerManager:
+    """In-memory burner manager used by mock server fallback mode."""
+
+    def __init__(self):
+        self.burner_addresses = {}
+        self.user_burners = {}
+
+    def cleanup_expired(self):
+        now = datetime.datetime.now()
+        expired = [
+            email for email, info in self.burner_addresses.items()
+            if info["expires_at"] <= now
+        ]
+        for email in expired:
+            self.expire_burner(email)
+
+    def generate_burner_email(self, user_id, domain="example.com", hours_valid=24):
+        self.cleanup_expired()
+        if hours_valid <= 0:
+            hours_valid = 1
+        local_part = secrets.token_hex(6)
+        email = f"{local_part}@{domain}"
+        now = datetime.datetime.now()
+        self.burner_addresses[email] = {
+            "user_id": user_id,
+            "created_at": now,
+            "expires_at": now + datetime.timedelta(hours=hours_valid),
+        }
+        self.user_burners.setdefault(user_id, []).append(email)
+        return email
+
+    def rotate_burner(self, user_id, old_email=None):
+        if old_email:
+            self.expire_burner(old_email)
+        return self.generate_burner_email(user_id)
+
+    def get_user_burners(self, user_id):
+        self.cleanup_expired()
+        emails = self.user_burners.get(user_id, [])
+        result = []
+        now = datetime.datetime.now()
+        for email in emails:
+            info = self.burner_addresses.get(email)
+            if not info:
+                continue
+            result.append(
+                {
+                    "email": email,
+                    "created_at": info["created_at"],
+                    "expires_at": info["expires_at"],
+                    "time_remaining_seconds": max(
+                        0, int((info["expires_at"] - now).total_seconds())
+                    ),
+                }
+            )
+        return result
+
+    def get_user_for_burner(self, email):
+        self.cleanup_expired()
+        info = self.burner_addresses.get(email)
+        if not info:
+            return None
+        return info["user_id"]
+
+    def expire_burner(self, email):
+        info = self.burner_addresses.pop(email, None)
+        if not info:
+            return False
+
+        user_id = info["user_id"]
+        if user_id in self.user_burners:
+            self.user_burners[user_id] = [
+                existing for existing in self.user_burners[user_id]
+                if existing != email
+            ]
+            if not self.user_burners[user_id]:
+                del self.user_burners[user_id]
+        return True
+
+
 # Import email system with fallback for testing
 try:
     from email_system import email_storage, burner_manager
 except ImportError as e:
     print(f"Warning: Could not import email_system: {e}")
-    # Create mock objects for testing
-    class MockEmailStorage:
-        def create_user_inbox(self, user_id): pass
-    class MockBurnerManager:
-        def cleanup_expired(self): pass
-        def generate_burner_email(self, user_id): return f"test{user_id}@example.com"
-        def rotate_burner(self, user_id, old_email): return f"test{user_id}@example.com"
-        def get_user_burners(self, user_id): return []
-        def get_user_for_burner(self, email): return None
-        def expire_burner(self, email): pass
-    
-    email_storage = MockEmailStorage()
-    burner_manager = MockBurnerManager()
+    email_storage = FallbackEmailStorage()
+    burner_manager = FallbackBurnerManager()
 
 
 # Add security headers

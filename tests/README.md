@@ -10,6 +10,7 @@ This directory contains the automated test suite for opsechat.
 - **ui-headless.spec.js** - UI tests that run in headless browser mode (no visible window)
 - **ui-headed.spec.js** - UI tests that run in headed mode (with visible browser window) for visual validation
 - **mock_server.py** - A lightweight Flask server that simulates opsechat without requiring Tor
+- **test_mock_server_fallback.py** - Unit tests for mock server fallback email/burner behavior
 
 ## Running Tests
 
