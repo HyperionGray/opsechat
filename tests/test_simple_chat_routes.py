@@ -19,6 +19,7 @@ from simple_chat_routes import (
     get_random_color_rgb,
     ChatRoom,
     check_rate_limit,
+    get_rate_limit_status,
     RATE_LIMITS,
     MAX_MESSAGE_LENGTH,
 )
@@ -140,6 +141,22 @@ class TestCheckRateLimit:
         allowed, _ = check_rate_limit("sess-002", "nonexistent_endpoint")
         assert allowed is True
 
+    def test_get_rate_limit_status_unknown_endpoint(self):
+        status = get_rate_limit_status("sess-003", "nonexistent_endpoint")
+        assert status["configured"] is False
+        assert status["endpoint"] == "nonexistent_endpoint"
+
+    def test_get_rate_limit_status_does_not_consume_quota(self):
+        session_id = "sess-status-no-consume"
+        check_rate_limit(session_id, "chat_create")
+
+        status_before = get_rate_limit_status(session_id, "chat_create")
+        status_after = get_rate_limit_status(session_id, "chat_create")
+
+        assert status_before["used_requests"] == 1
+        assert status_after["used_requests"] == 1
+        assert status_after["remaining_requests"] == RATE_LIMITS["chat_create"]["max_requests"] - 1
+
 
 # ---------------------------------------------------------------------------
 # HTTP routes – chat rooms
@@ -239,6 +256,65 @@ class TestChatRoutes:
     def test_get_room_key_nonexistent_room(self, client):
         response = client.get("/chat/room/no-such-room/key")
         assert response.status_code == 404
+
+    def test_chat_limits_endpoint_returns_constraints_and_limits(self, client):
+        response = client.get("/chat/limits")
+        assert response.status_code == 200
+
+        data = response.get_json()
+        assert "limits" in data
+        assert "constraints" in data
+        assert "generated_at" in data
+
+        limits = data["limits"]
+        assert set(limits.keys()) == {"chat_create", "chat_message", "dm_send"}
+        for endpoint, endpoint_limits in limits.items():
+            assert endpoint_limits["endpoint"] == endpoint
+            assert endpoint_limits["configured"] is True
+            assert endpoint_limits["max_requests"] > 0
+            assert endpoint_limits["window_seconds"] > 0
+            assert endpoint_limits["used_requests"] >= 0
+            assert endpoint_limits["remaining_requests"] >= 0
+            assert isinstance(endpoint_limits["is_limited"], bool)
+
+        constraints = data["constraints"]
+        assert constraints["max_message_length"] == simple_chat_routes.MAX_MESSAGE_LENGTH
+        assert constraints["max_encrypted_message_length"] == simple_chat_routes.MAX_ENC_MESSAGE_LENGTH
+        assert constraints["max_dm_length"] == 200
+
+    def test_chat_limits_reflects_chat_message_usage(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+
+        for _ in range(2):
+            response = client.post(
+                f"/chat/room/{room_id}/messages",
+                json={"message": "hello"},
+                content_type="application/json",
+            )
+            assert response.status_code == 200
+
+        limits = client.get("/chat/limits").get_json()["limits"]["chat_message"]
+        assert limits["used_requests"] == 2
+        assert limits["remaining_requests"] == RATE_LIMITS["chat_message"]["max_requests"] - 2
+        assert limits["is_limited"] is False
+
+    def test_chat_limits_reports_limited_dm_quota(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        dm_limit = RATE_LIMITS["dm_send"]["max_requests"]
+
+        for _ in range(dm_limit):
+            response = client.post(
+                "/chat/dm/send",
+                json={"room_id": room_id, "message": "join"},
+                content_type="application/json",
+            )
+            assert response.status_code == 200
+
+        limits = client.get("/chat/limits").get_json()["limits"]["dm_send"]
+        assert limits["used_requests"] == dm_limit
+        assert limits["remaining_requests"] == 0
+        assert limits["is_limited"] is True
+        assert limits["retry_after_seconds"] > 0
 
 
 # ---------------------------------------------------------------------------

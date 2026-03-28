@@ -135,6 +135,37 @@ POST /chat/create
 Response: {"success": true, "room_id": "...", "room_url": "/chat/room/..."}
 ```
 
+#### Session Quotas and Limits
+```
+GET /chat/limits
+Response: {
+  "limits": {
+    "chat_create": {
+      "endpoint": "chat_create",
+      "configured": true,
+      "max_requests": 10,
+      "window_seconds": 60,
+      "used_requests": 0,
+      "remaining_requests": 10,
+      "retry_after_seconds": 0,
+      "is_limited": false
+    },
+    "chat_message": { "...": "same shape" },
+    "dm_send": { "...": "same shape" }
+  },
+  "constraints": {
+    "max_message_length": 500,
+    "max_encrypted_message_length": 1000,
+    "max_dm_length": 200
+  },
+  "generated_at": "2026-03-28T18:00:00.000000"
+}
+```
+
+This endpoint lets clients show live quota usage and retry timing without
+consuming quota. It is session-scoped and uses the same in-memory sliding window
+as write endpoints.
+
 #### Get/Post Messages
 ```
 GET  /chat/room/<room_id>/messages
