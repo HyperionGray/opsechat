@@ -383,7 +383,7 @@ All required API endpoints are implemented and tested.
 
 **Test Files:**
 - `tests/product-release.spec.js` - 93 automated tests
-- `manual-test.py` - 7 manual validation tests
+- `scripts/dev/manual-test.py` - 7 manual validation tests
 - `playwright-release.config.js` - Test configuration
 
 **Test Results:**
