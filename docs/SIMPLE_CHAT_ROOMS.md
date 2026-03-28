@@ -142,6 +142,38 @@ POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
 
+#### Rate-Limit Backoff Contract
+
+Write endpoints use per-session sliding-window limits and return a structured
+`429` response for backoff-aware clients:
+
+- `POST /chat/create` (`chat_create`)
+- `POST /chat/room/<room_id>/messages` (`chat_message`)
+- `POST /chat/dm/send` (`dm_send`)
+
+Example `429` response:
+
+```json
+{
+  "error": "Rate limit exceeded.",
+  "code": "rate_limited",
+  "retry_after": 12,
+  "limit": {
+    "endpoint": "chat_message",
+    "max_requests": 30,
+    "window_seconds": 60
+  }
+}
+```
+
+Headers:
+
+- `Retry-After: <seconds>`
+- `Cache-Control: no-store`
+
+The web clients now parse `Retry-After`/`retry_after`, show a countdown, and
+delay retries until the server window resets.
+
 ### Encryption Implementation
 
 The E2E encryption uses native Web Crypto API:

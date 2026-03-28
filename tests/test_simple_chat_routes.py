@@ -21,6 +21,8 @@ from simple_chat_routes import (
     check_rate_limit,
     RATE_LIMITS,
     MAX_MESSAGE_LENGTH,
+    _rate_limit_store,
+    _rate_limit_lock,
 )
 
 
@@ -307,6 +309,86 @@ class TestDMRoutes:
 
         response = client.get(f"/chat/dm/{dm_id}")
         assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# HTTP routes – rate limit response contract
+# ---------------------------------------------------------------------------
+
+class TestRateLimitResponses:
+    @staticmethod
+    def _prime_rate_limit(session_id: str, endpoint: str):
+        """Fill the in-memory sliding window so next call is rate limited."""
+        max_requests = RATE_LIMITS[endpoint]["max_requests"]
+        now = datetime.datetime.now()
+        with _rate_limit_lock:
+            _rate_limit_store[session_id] = {endpoint: [now] * max_requests}
+
+    def test_chat_create_rate_limit_includes_retry_after_header(self, client):
+        with _rate_limit_lock:
+            _rate_limit_store.clear()
+
+        session_id = "rl-create-session"
+        with client.session_transaction() as sess:
+            sess["_id"] = session_id
+            sess["username"] = "Tester"
+            sess["color"] = [255, 255, 255]
+
+        self._prime_rate_limit(session_id, "chat_create")
+        response = client.post("/chat/create")
+
+        assert response.status_code == 429
+        data = response.get_json()
+        assert data["code"] == "rate_limited"
+        assert data["limit"]["endpoint"] == "chat_create"
+        assert data["retry_after"] >= 1
+        assert response.headers.get("Retry-After") == str(data["retry_after"])
+
+    def test_chat_message_rate_limit_includes_retry_after_header(self, client):
+        with _rate_limit_lock:
+            _rate_limit_store.clear()
+
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        with client.session_transaction() as sess:
+            session_id = sess["_id"]
+
+        self._prime_rate_limit(session_id, "chat_message")
+        response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "hello"},
+            content_type="application/json",
+        )
+
+        assert response.status_code == 429
+        data = response.get_json()
+        assert data["code"] == "rate_limited"
+        assert data["limit"]["endpoint"] == "chat_message"
+        assert data["retry_after"] >= 1
+        assert response.headers.get("Retry-After") == str(data["retry_after"])
+
+    def test_dm_send_rate_limit_includes_retry_after_header(self, client):
+        with _rate_limit_lock:
+            _rate_limit_store.clear()
+
+        session_id = "rl-dm-session"
+        with client.session_transaction() as sess:
+            sess["_id"] = session_id
+            sess["username"] = "Tester"
+            sess["color"] = [255, 255, 255]
+
+        self._prime_rate_limit(session_id, "dm_send")
+        response = client.post(
+            "/chat/dm/send",
+            json={"room_id": "example-room", "message": "join"},
+            content_type="application/json",
+        )
+
+        assert response.status_code == 429
+        data = response.get_json()
+        assert data["code"] == "rate_limited"
+        assert data["limit"]["endpoint"] == "dm_send"
+        assert data["retry_after"] >= 1
+        assert response.headers.get("Retry-After") == str(data["retry_after"])
 
 
 # ---------------------------------------------------------------------------

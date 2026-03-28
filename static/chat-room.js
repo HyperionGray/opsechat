@@ -8,6 +8,26 @@ let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') 
 
 // Encrypted message prefix (ASCII-safe, recognised by both client and server)
 const ENC_PREFIX = 'ENC:';
+let sendBlockedUntil = 0;
+
+function nowEpochSeconds() {
+    return Math.floor(Date.now() / 1000);
+}
+
+function parseRetryAfter(response, payload) {
+    const headerValue = response.headers.get('Retry-After');
+    const headerSeconds = Number.parseInt(headerValue, 10);
+    if (Number.isInteger(headerSeconds) && headerSeconds > 0) {
+        return headerSeconds;
+    }
+
+    const bodySeconds = Number.parseInt(payload?.retry_after, 10);
+    if (Number.isInteger(bodySeconds) && bodySeconds > 0) {
+        return bodySeconds;
+    }
+
+    return 1;
+}
 
 // Show security warning on first load
 function showSecurityWarning() {
@@ -188,6 +208,11 @@ async function sendMessage() {
     const message = input.value.trim();
 
     if (!message) return;
+    if (nowEpochSeconds() < sendBlockedUntil) {
+        const wait = sendBlockedUntil - nowEpochSeconds();
+        showStatus(`Rate limited. Retry in ${wait}s.`, 1500);
+        return;
+    }
 
     let messageToSend = message;
 
@@ -208,6 +233,21 @@ async function sendMessage() {
         if (response.ok) {
             input.value = '';
             await pollMessages();
+            sendBlockedUntil = 0;
+            return;
+        }
+
+        if (response.status === 429) {
+            const payload = await response.json().catch(() => ({}));
+            const retryAfter = parseRetryAfter(response, payload);
+            sendBlockedUntil = nowEpochSeconds() + retryAfter;
+            showStatus(`Rate limited. Retry in ${retryAfter}s.`, 3000);
+            return;
+        }
+
+        const errorPayload = await response.json().catch(() => ({}));
+        if (errorPayload?.error) {
+            showStatus(errorPayload.error);
         } else {
             showStatus('Error sending message');
         }
