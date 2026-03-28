@@ -58,6 +58,8 @@ class ChatClient:
         self.username = "Unknown"
         self.running = False
         self.message_buffer = ""
+        self.connected_users = 0
+        self.connection_state = "Disconnected"
         
         # UI components
         self.messages_walker = urwid.SimpleFocusListWalker([])
@@ -85,10 +87,18 @@ class ChatClient:
         footer_text = [
             ('info', 'Enter'),
             ': Send | ',
+            ('info', '/help'),
+            ': Commands | ',
             ('info', 'Ctrl+C'),
             ': Quit | ',
             ('warn', 'Your username: '),
-            ('username', self.username)
+            ('username', self.username),
+            ' | ',
+            ('info', 'State: '),
+            ('username', self.connection_state),
+            ' | ',
+            ('info', 'Users: '),
+            ('username', str(self.connected_users))
         ]
         footer = urwid.AttrMap(urwid.Text(footer_text), 'footer')
         
@@ -155,6 +165,8 @@ class ChatClient:
     def connect(self):
         """Connect to the chat server"""
         try:
+            self.connection_state = "Connecting"
+            self.update_footer()
             if self.use_tor:
                 self.add_message("System", f"Connecting via Tor to {self.host}:{self.port}...", is_system=True)
             else:
@@ -162,6 +174,8 @@ class ChatClient:
             
             self.socket = create_socket_connection(self.host, self.port, self.use_tor, self.tor_port)
             self.running = True
+            self.connection_state = "Connected"
+            self.update_footer()
             
             # Start receive thread
             receive_thread = threading.Thread(target=self.receive_messages, daemon=True)
@@ -169,9 +183,13 @@ class ChatClient:
             
             return True
         except ImportError as e:
+            self.connection_state = "Disconnected"
+            self.update_footer()
             self.add_message("System", f"Missing dependency: {e}. Install with: pip install PySocks", is_system=True)
             return False
         except Exception as e:
+            self.connection_state = "Disconnected"
+            self.update_footer()
             self.add_message("System", f"Failed to connect: {e}", is_system=True)
             return False
     
@@ -185,6 +203,8 @@ class ChatClient:
                 if not data:
                     self.add_message("System", "Disconnected from server", is_system=True)
                     self.running = False
+                    self.connection_state = "Disconnected"
+                    self.update_footer()
                     break
                 
                 buffer += data
@@ -201,6 +221,8 @@ class ChatClient:
                 if self.running:
                     self.add_message("System", f"Connection error: {e}", is_system=True)
                 self.running = False
+                self.connection_state = "Disconnected"
+                self.update_footer()
                 break
     
     def handle_server_message(self, msg):
@@ -217,19 +239,101 @@ class ChatClient:
             username = msg.get('username', 'Unknown')
             message = msg.get('message', '')
             self.add_message(username, message)
+
+        elif msg_type == 'system':
+            self.add_message("System", msg.get('message', ''), is_system=True)
+
+        elif msg_type == 'status':
+            self.connected_users = int(msg.get('connected_users', self.connected_users))
+            message_count = int(msg.get('message_count', 0))
+            burn_seconds = int(msg.get('message_lifetime_seconds', 0))
+            self.update_footer()
+            self.add_message(
+                "System",
+                (
+                    f"Status: {self.connection_state}, users={self.connected_users}, "
+                    f"messages={message_count}, burn={burn_seconds}s"
+                ),
+                is_system=True
+            )
     
     def update_footer(self):
         """Update the footer with current username"""
         footer_text = [
             ('info', 'Enter'),
             ': Send | ',
+            ('info', '/help'),
+            ': Commands | ',
             ('info', 'Ctrl+C'),
             ': Quit | ',
             ('warn', 'Your username: '),
-            ('username', self.username)
+            ('username', self.username),
+            ' | ',
+            ('info', 'State: '),
+            ('username', self.connection_state),
+            ' | ',
+            ('info', 'Users: '),
+            ('username', str(self.connected_users))
         ]
         footer = urwid.AttrMap(urwid.Text(footer_text), 'footer')
         self.frame.footer = footer
+
+    def send_command(self, command):
+        """Send a slash command request to the server."""
+        if not command or not self.socket:
+            return False
+
+        try:
+            msg_obj = {
+                'type': 'command',
+                'command': command
+            }
+            self.socket.send((json.dumps(msg_obj) + '\n').encode())
+            return True
+        except Exception as e:
+            self.add_message("System", f"Failed to send command: {e}", is_system=True)
+            return False
+
+    def handle_command_input(self, raw_input):
+        """
+        Handle slash commands entered in the input field.
+
+        Returns:
+            bool: True if the caller should exit main loop.
+        """
+        command_text = (raw_input or "").strip()
+        if not command_text.startswith('/'):
+            return False
+
+        command_name = command_text[1:].strip().split(" ", 1)[0].lower()
+        if not command_name:
+            self.add_message("System", "Empty command. Try /help.", is_system=True)
+            return False
+
+        if command_name == 'help':
+            self.add_message(
+                "System",
+                "Commands: /help, /status, /users, /quit",
+                is_system=True
+            )
+            self.send_command('help')
+            return False
+
+        if command_name in {'status', 'users'}:
+            self.send_command(command_name)
+            return False
+
+        if command_name == 'quit':
+            self.send_command('quit')
+            self.add_message("System", "Disconnecting...", is_system=True)
+            self.running = False
+            self.connection_state = "Disconnected"
+            self.update_footer()
+            self.cleanup()
+            return True
+
+        self.add_message("System", f"Unknown command '/{command_name}'. Try /help.", is_system=True)
+        return False
     
     def send_message(self, message):
         """Send a message to the server"""
@@ -255,7 +359,14 @@ class ChatClient:
         if key == 'enter':
             message = self.input_box.get_edit_text()
             if message.strip():
-                self.send_message(message.strip())
+                command = message.strip()
+                if command.startswith('/'):
+                    should_exit = self.handle_command_input(command)
+                    self.input_box.set_edit_text("")
+                    if should_exit:
+                        raise urwid.ExitMainLoop()
+                    return
+                self.send_message(command)
                 self.input_box.set_edit_text("")
             return
         
@@ -284,6 +395,8 @@ class ChatClient:
     def cleanup(self):
         """Clean up resources"""
         self.running = False
+        self.connection_state = "Disconnected"
+        self.update_footer()
         if self.socket:
             try:
                 self.socket.close()

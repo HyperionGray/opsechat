@@ -39,6 +39,14 @@ class ChatServer:
         # Start cleanup thread
         self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
         self.cleanup_thread.start()
+
+    def _send_json(self, client_socket: socket.socket, payload: Dict[str, Any]) -> bool:
+        """Best-effort JSON sender for a single client."""
+        try:
+            client_socket.send((json.dumps(payload) + '\n').encode())
+            return True
+        except (OSError, socket.error):
+            return False
     
     def generate_username(self) -> str:
         """Generate a random username - no user choice allowed"""
@@ -100,6 +108,65 @@ class ChatServer:
                 return self.messages.copy()
             else:
                 return [msg for msg in self.messages if msg['timestamp'] > since]
+
+    def handle_command(self, client_socket: socket.socket, command: str):
+        """Handle slash-command requests from clients."""
+        command = (command or "").strip().lower()
+
+        if command == "users":
+            with self.lock:
+                connected_users = len(self.clients)
+            self._send_json(
+                client_socket,
+                {
+                    "type": "system",
+                    "message": f"{connected_users} user(s) currently connected.",
+                },
+            )
+            return
+
+        if command == "status":
+            with self.lock:
+                connected_users = len(self.clients)
+                message_count = len(self.messages)
+            self._send_json(
+                client_socket,
+                {
+                    "type": "status",
+                    "connected_users": connected_users,
+                    "message_count": message_count,
+                    "message_lifetime_seconds": self.MESSAGE_LIFETIME,
+                },
+            )
+            return
+
+        if command == "help":
+            self._send_json(
+                client_socket,
+                {
+                    "type": "system",
+                    "message": "Available commands: /help, /status, /users, /quit",
+                },
+            )
+            return
+
+        if command == "quit":
+            self._send_json(
+                client_socket,
+                {
+                    "type": "system",
+                    "message": "Disconnecting. Stay safe.",
+                },
+            )
+            return
+
+        self._send_json(
+            client_socket,
+            {
+                "type": "system",
+                "message": f"Unknown command '{command}'. Try /help.",
+            },
+        )
     
     def handle_client(self, client_socket: socket.socket, addr):
         """Handle a client connection"""
@@ -113,9 +180,12 @@ class ChatServer:
             welcome = {
                 'type': 'welcome',
                 'username': username,
-                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
+                'message': (
+                    f'Welcome! You are {username}. Messages burn in 3 minutes. '
+                    'Commands: /help /status /users /quit'
+                )
             }
-            client_socket.send((json.dumps(welcome) + '\n').encode())
+            self._send_json(client_socket, welcome)
             
             # Send existing messages
             messages = self.get_messages()
@@ -142,11 +212,17 @@ class ChatServer:
                         if line:
                             try:
                                 msg_obj = json.loads(line)
-                                if msg_obj.get('type') == 'message':
+                                msg_type = msg_obj.get('type')
+                                if msg_type == 'message':
                                     message = msg_obj.get('message', '')
                                     if self.add_message(username, message):
                                         # Broadcast to all clients
                                         self.broadcast_message(username, message)
+                                elif msg_type == 'command':
+                                    command = msg_obj.get('command', '')
+                                    self.handle_command(client_socket, command)
+                                    if (command or "").strip().lower() == 'quit':
+                                        return
                             except json.JSONDecodeError:
                                 pass
                 
