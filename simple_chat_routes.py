@@ -54,6 +54,7 @@ ENC_PREFIX = "ENC:"
 # Allow encrypted payloads to be larger: AES-GCM adds IV (12 B) + tag (16 B)
 # overhead, so a 500-char plaintext becomes ~700 chars of base64 plus the prefix.
 MAX_ENC_MESSAGE_LENGTH = MAX_MESSAGE_LENGTH * 2
+MAX_MESSAGE_FETCH_LIMIT = 500
 
 # Room class to manage chat state
 class ChatRoom:
@@ -234,6 +235,60 @@ def cleanup_rate_limits():
             del _rate_limit_store[sid]
 
 
+def _parse_message_fetch_limit(raw_limit: str):
+    """
+    Parse optional GET ?limit= value for message retrieval.
+
+    Returns:
+        int | None: None when not provided, otherwise a validated positive int.
+
+    Raises:
+        ValueError: When the value is not a valid integer in the accepted range.
+    """
+    if raw_limit is None:
+        return None
+
+    try:
+        parsed_limit = int(raw_limit)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("limit must be an integer") from exc
+
+    if parsed_limit <= 0:
+        raise ValueError("limit must be greater than 0")
+    if parsed_limit > MAX_MESSAGE_FETCH_LIMIT:
+        raise ValueError(
+            f"limit must be <= {MAX_MESSAGE_FETCH_LIMIT}"
+        )
+    return parsed_limit
+
+
+def _parse_since_timestamp(raw_since: str):
+    """
+    Parse optional GET ?since= ISO timestamp filter.
+
+    Returns:
+        datetime.datetime | None
+
+    Raises:
+        ValueError: When the timestamp is malformed.
+    """
+    if raw_since is None:
+        return None
+
+    normalized = raw_since.strip()
+    if not normalized:
+        raise ValueError("since cannot be empty")
+
+    # Accept "Z" suffix by normalizing to +00:00 for fromisoformat().
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+
+    try:
+        return datetime.datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise ValueError("since must be an ISO-8601 timestamp") from exc
+
+
 # Background cleanup thread
 def cleanup_loop():
     """Continuously clean up old messages and rooms"""
@@ -408,7 +463,23 @@ def register_simple_chat_routes(app):
         
         else:  # GET
             messages = room.get_messages()
+            total_messages = len(messages)
             user_count = room.get_user_count()
+
+            try:
+                fetch_limit = _parse_message_fetch_limit(request.args.get("limit"))
+                since_dt = _parse_since_timestamp(request.args.get("since"))
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+
+            # Optional incremental sync window: return only messages newer than
+            # the client's last timestamp and/or only the most recent N entries.
+            if since_dt is not None:
+                messages = [
+                    msg for msg in messages if msg["timestamp"] > since_dt
+                ]
+            if fetch_limit is not None:
+                messages = messages[-fetch_limit:]
             
             return jsonify({
                 "messages": [
@@ -421,6 +492,8 @@ def register_simple_chat_routes(app):
                     }
                     for msg in messages
                 ],
+                "returned_count": len(messages),
+                "total_messages": total_messages,
                 "user_count": user_count,
                 "my_username": session.get("username"),
                 "my_color": session.get("color")

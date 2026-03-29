@@ -5,6 +5,7 @@ let encryptionEnabled = false;
 let encryptionKey = null;
 let pollInterval = null;
 let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+let lastMessageTimestamp = null;
 
 // Encrypted message prefix (ASCII-safe, recognised by both client and server)
 const ENC_PREFIX = 'ENC:';
@@ -140,43 +141,47 @@ function scrollToBottom() {
     container.scrollTop = container.scrollHeight;
 }
 
+async function buildMessageElement(msg) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message' + (msg.is_mine ? ' mine' : '');
+
+    const usernameSpan = document.createElement('span');
+    usernameSpan.className = 'username';
+    usernameSpan.style.color = `rgb(${msg.color[0]}, ${msg.color[1]}, ${msg.color[2]})`;
+    usernameSpan.textContent = msg.username + ':';
+
+    const messageText = document.createElement('span');
+
+    // Check if message is encrypted
+    if (isEncrypted(msg.message)) {
+        const lockIcon = document.createElement('span');
+        lockIcon.className = 'lock-icon';
+        lockIcon.textContent = '\uD83D\uDD12 ';
+        messageText.appendChild(lockIcon);
+
+        if (encryptionEnabled && encryptionKey) {
+            const encryptedData = msg.message.substring(ENC_PREFIX.length);
+            const decrypted = await decryptMessage(encryptedData, encryptionKey);
+            messageText.appendChild(document.createTextNode(decrypted));
+        } else {
+            messageText.appendChild(document.createTextNode('[Encrypted - Enable encryption to view]'));
+        }
+    } else {
+        messageText.textContent = msg.message;
+    }
+
+    messageDiv.appendChild(usernameSpan);
+    messageDiv.appendChild(document.createTextNode(' '));
+    messageDiv.appendChild(messageText);
+    return messageDiv;
+}
+
 async function renderMessages(messages) {
     const container = document.getElementById('messagesContainer');
     container.innerHTML = '';
 
     for (const msg of messages) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'message' + (msg.is_mine ? ' mine' : '');
-
-        const usernameSpan = document.createElement('span');
-        usernameSpan.className = 'username';
-        usernameSpan.style.color = `rgb(${msg.color[0]}, ${msg.color[1]}, ${msg.color[2]})`;
-        usernameSpan.textContent = msg.username + ':';
-
-        const messageText = document.createElement('span');
-
-        // Check if message is encrypted
-        if (isEncrypted(msg.message)) {
-            const lockIcon = document.createElement('span');
-            lockIcon.className = 'lock-icon';
-            lockIcon.textContent = '\uD83D\uDD12 ';
-            messageText.appendChild(lockIcon);
-
-            if (encryptionEnabled && encryptionKey) {
-                const encryptedData = msg.message.substring(ENC_PREFIX.length);
-                const decrypted = await decryptMessage(encryptedData, encryptionKey);
-                messageText.appendChild(document.createTextNode(decrypted));
-            } else {
-                messageText.appendChild(document.createTextNode('[Encrypted - Enable encryption to view]'));
-            }
-        } else {
-            messageText.textContent = msg.message;
-        }
-
-        messageDiv.appendChild(usernameSpan);
-        messageDiv.appendChild(document.createTextNode(' '));
-        messageDiv.appendChild(messageText);
-
+        const messageDiv = await buildMessageElement(msg);
         container.appendChild(messageDiv);
     }
 
@@ -218,11 +223,42 @@ async function sendMessage() {
 
 async function pollMessages() {
     try {
-        const response = await fetch(`/chat/room/${roomId}/messages`);
+        const params = new URLSearchParams({ limit: '200' });
+        if (lastMessageTimestamp) {
+            params.set('since', lastMessageTimestamp);
+        }
+        const isIncremental = params.has('since');
+        const response = await fetch(`/chat/room/${roomId}/messages?${params.toString()}`);
 
         if (response.ok) {
             const data = await response.json();
-            await renderMessages(data.messages);
+            const hasMessages = data.messages && data.messages.length > 0;
+            if (hasMessages) {
+                const newest = data.messages[data.messages.length - 1];
+                lastMessageTimestamp = newest.timestamp;
+            }
+
+            // For incremental polling (since=...), append only newly returned messages.
+            // For initial load with no since value, render the returned history.
+            if (isIncremental) {
+                if (!hasMessages) {
+                    document.getElementById('userCount').textContent = `Users: ${data.user_count}`;
+                    return;
+                }
+                const container = document.getElementById('messagesContainer');
+                const existingMessages = Array.from(container.querySelectorAll('.message')).length;
+                if (existingMessages === 0) {
+                    await renderMessages(data.messages);
+                } else {
+                    for (const msg of data.messages) {
+                        const messageDiv = await buildMessageElement(msg);
+                        container.appendChild(messageDiv);
+                    }
+                    scrollToBottom();
+                }
+            } else {
+                await renderMessages(data.messages);
+            }
             document.getElementById('userCount').textContent = `Users: ${data.user_count}`;
         }
     } catch (error) {
@@ -265,7 +301,9 @@ document.getElementById('encryptionToggle').addEventListener('change', async fun
         statusSpan.className = 'encryption-status';
     }
 
-    // Re-render messages with new encryption status
+    // Force a full refresh so existing encrypted/plaintext messages re-render
+    // correctly after toggling encryption state.
+    lastMessageTimestamp = null;
     await pollMessages();
 });
 

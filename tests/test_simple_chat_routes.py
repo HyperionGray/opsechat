@@ -45,6 +45,27 @@ def client(app):
             yield c
 
 
+@pytest.fixture(autouse=True)
+def reset_simple_chat_state():
+    """Ensure in-memory chat state does not leak across tests."""
+    from simple_chat_routes import (
+        chat_rooms,
+        direct_messages,
+        _rate_limit_store,
+        rooms_lock,
+        dm_lock,
+        _rate_limit_lock,
+    )
+
+    with rooms_lock:
+        chat_rooms.clear()
+    with dm_lock:
+        direct_messages.clear()
+    with _rate_limit_lock:
+        _rate_limit_store.clear()
+    yield
+
+
 # ---------------------------------------------------------------------------
 # Helper utilities
 # ---------------------------------------------------------------------------
@@ -178,7 +199,65 @@ class TestChatRoutes:
         assert response.status_code == 200
         data = response.get_json()
         assert data["messages"] == []
+        assert data["returned_count"] == 0
+        assert data["total_messages"] == 0
         assert isinstance(data["user_count"], int)
+
+    def test_get_messages_limit_returns_latest_n(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        for i in range(5):
+            response = client.post(
+                f"/chat/room/{room_id}/messages",
+                json={"message": f"msg-{i}"},
+                content_type="application/json",
+            )
+            assert response.status_code == 200
+
+        response = client.get(f"/chat/room/{room_id}/messages?limit=2")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["returned_count"] == 2
+        assert data["total_messages"] == 5
+        assert [m["message"] for m in data["messages"]] == ["msg-3", "msg-4"]
+
+    def test_get_messages_since_returns_only_newer(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+
+        for msg in ("first", "second", "third"):
+            response = client.post(
+                f"/chat/room/{room_id}/messages",
+                json={"message": msg},
+                content_type="application/json",
+            )
+            assert response.status_code == 200
+
+        all_messages = client.get(f"/chat/room/{room_id}/messages").get_json()["messages"]
+        second_ts = all_messages[1]["timestamp"]
+
+        response = client.get(f"/chat/room/{room_id}/messages?since={second_ts}")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["returned_count"] == 1
+        assert data["total_messages"] == 3
+        assert [m["message"] for m in data["messages"]] == ["third"]
+
+    def test_get_messages_invalid_limit_returns_400(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.get(f"/chat/room/{room_id}/messages?limit=abc")
+        assert response.status_code == 400
+        assert "limit must be an integer" in response.get_json()["error"]
+
+    def test_get_messages_too_large_limit_returns_400(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.get(f"/chat/room/{room_id}/messages?limit=501")
+        assert response.status_code == 400
+        assert "limit must be <= 500" in response.get_json()["error"]
+
+    def test_get_messages_invalid_since_returns_400(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.get(f"/chat/room/{room_id}/messages?since=not-a-timestamp")
+        assert response.status_code == 400
+        assert "since must be an ISO-8601 timestamp" in response.get_json()["error"]
 
     def test_post_message_success(self, client):
         room_id = client.post("/chat/create").get_json()["room_id"]

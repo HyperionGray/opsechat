@@ -142,6 +142,19 @@ POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
 
+Optional GET query parameters:
+- `limit` (int, `1..500`): return only the latest N messages from the current room view.
+- `since` (ISO-8601 timestamp): return only messages newer than the provided timestamp.
+
+Example incremental poll:
+```
+GET /chat/room/<room_id>/messages?limit=200&since=2026-03-29T12:00:00.000000
+```
+
+Response metadata now includes:
+- `returned_count`: number of messages in this response
+- `total_messages`: total messages currently retained in room memory
+
 ### Encryption Implementation
 
 The E2E encryption uses native Web Crypto API:
