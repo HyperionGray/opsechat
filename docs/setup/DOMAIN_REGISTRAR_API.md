@@ -59,14 +59,21 @@ Key endpoints used by opsechat:
 - `pricing/get` - Get TLD pricing
 - `domain/listAll` - List owned domains
 
-## Other Registrars (Future Support)
+## Additional Registrars
 
-The opsechat domain manager is designed to be extensible. Future registrar support may include:
+The opsechat domain manager is designed to be extensible. Namecheap is now
+implemented alongside Porkbun. Additional registrar support may include:
 
-### Namecheap
+### Namecheap (Implemented)
 - API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
-- Cheap TLDs: .xyz, .club, .online
+- Requires API whitelist setup for your public client IP
+- Credentials needed by OpSecChat:
+  - `api_key`
+  - `api_user`
+  - optional `username` (defaults to `api_user`)
+  - `client_ip`
+- Supports domain check, pricing lookup, list domains, and purchase attempts
+  (purchase success depends on Namecheap account/profile requirements)
 
 ### Namesilo
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)
@@ -92,20 +99,28 @@ The opsechat domain manager is designed to be extensible. Future registrar suppo
    ```
 
 2. Under "Domain API Configuration":
-   - Enter your API Key
-   - Enter your API Secret
+   - Choose registrar (Porkbun or Namecheap)
+   - Enter registrar credentials
    - Set monthly budget limit (recommended: start with $20-50)
 
 3. Click "Configure"
 
 ### Via Environment Variables (Advanced)
 
-For container deployments, you can set:
+For container deployments, you can set registrar-specific values:
 
 ```bash
-# In docker-compose.yml or quadlet
+# Porkbun
 Environment=PORKBUN_API_KEY=pk1_xxxxx
 Environment=PORKBUN_API_SECRET=sk1_xxxxx
+
+# Namecheap
+Environment=NAMECHEAP_API_KEY=nc_key_xxxxx
+Environment=NAMECHEAP_API_USER=api_username
+Environment=NAMECHEAP_USERNAME=account_username
+Environment=NAMECHEAP_CLIENT_IP=203.0.113.10
+
+# Shared
 Environment=DOMAIN_MONTHLY_BUDGET=50.0
 ```
 
