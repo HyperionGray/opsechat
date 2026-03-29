@@ -217,6 +217,8 @@
         let encryptionKey = null;
         let pollInterval = null;
         let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+        let lastSeenSeq = 0;
+        let pollInFlight = false;
         
         // Show security warning on first load
         function showSecurityWarning() {
@@ -349,20 +351,34 @@
             container.scrollTop = container.scrollHeight;
         }
         
-        async function renderMessages(messages) {
+        function createMessageElement(msg) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message' + (msg.is_mine ? ' mine' : '');
+            if (typeof msg.seq === 'number') {
+                messageDiv.dataset.seq = String(msg.seq);
+            }
+            
+            const usernameSpan = document.createElement('span');
+            usernameSpan.className = 'username';
+            usernameSpan.style.color = `rgb(${msg.color[0]}, ${msg.color[1]}, ${msg.color[2]})`;
+            usernameSpan.textContent = msg.username + ':';
+            
+            const messageText = document.createElement('span');
+            messageDiv.appendChild(usernameSpan);
+            messageDiv.appendChild(document.createTextNode(' '));
+            messageDiv.appendChild(messageText);
+            
+            return { messageDiv, messageText };
+        }
+        
+        async function renderMessages(messages, replaceExisting = true) {
             const container = document.getElementById('messagesContainer');
-            container.innerHTML = '';
+            if (replaceExisting) {
+                container.innerHTML = '';
+            }
             
             for (const msg of messages) {
-                const messageDiv = document.createElement('div');
-                messageDiv.className = 'message' + (msg.is_mine ? ' mine' : '');
-                
-                const usernameSpan = document.createElement('span');
-                usernameSpan.className = 'username';
-                usernameSpan.style.color = `rgb(${msg.color[0]}, ${msg.color[1]}, ${msg.color[2]})`;
-                usernameSpan.textContent = msg.username + ':';
-                
-                const messageText = document.createElement('span');
+                const { messageDiv, messageText } = createMessageElement(msg);
                 
                 // Check if message is encrypted
                 if (isEncrypted(msg.message)) {
@@ -382,14 +398,25 @@
                     messageText.textContent = msg.message;
                 }
                 
-                messageDiv.appendChild(usernameSpan);
-                messageDiv.appendChild(document.createTextNode(' '));
-                messageDiv.appendChild(messageText);
-                
                 container.appendChild(messageDiv);
             }
             
             scrollToBottom();
+        }
+        
+        function hasPrunedMessagesInDom(prunedThroughSeq) {
+            if (!Number.isInteger(prunedThroughSeq) || prunedThroughSeq <= 0) {
+                return false;
+            }
+            
+            const rendered = document.querySelectorAll('#messagesContainer .message[data-seq]');
+            for (const node of rendered) {
+                const seq = parseInt(node.dataset.seq, 10);
+                if (!Number.isNaN(seq) && seq <= prunedThroughSeq) {
+                    return true;
+                }
+            }
+            return false;
         }
         
         async function sendMessage() {
@@ -425,17 +452,51 @@
             }
         }
         
-        async function pollMessages() {
+        async function fetchMessages(sinceSeq = null) {
+            const query = sinceSeq !== null ? `?since=${sinceSeq}` : '';
+            const response = await fetch(`/chat/room/${roomId}/messages${query}`);
+            if (!response.ok) {
+                return null;
+            }
+            return response.json();
+        }
+        
+        async function pollMessages(options = {}) {
+            const forceFull = options.forceFull === true;
+            if (pollInFlight) {
+                return;
+            }
+            pollInFlight = true;
+            
             try {
-                const response = await fetch(`/chat/room/${roomId}/messages`);
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    await renderMessages(data.messages);
-                    document.getElementById('userCount').textContent = `Users: ${data.user_count}`;
+                const useIncremental = !forceFull && lastSeenSeq > 0;
+                const sinceSeq = useIncremental ? lastSeenSeq : null;
+                const data = await fetchMessages(sinceSeq);
+                if (!data) {
+                    return;
                 }
+                
+                if (
+                    useIncremental &&
+                    hasPrunedMessagesInDom(data.pruned_through_seq)
+                ) {
+                    const fullData = await fetchMessages(null);
+                    if (!fullData) {
+                        return;
+                    }
+                    await renderMessages(fullData.messages, true);
+                    lastSeenSeq = fullData.latest_seq || 0;
+                    document.getElementById('userCount').textContent = `Users: ${fullData.user_count}`;
+                    return;
+                }
+                
+                await renderMessages(data.messages, !useIncremental);
+                lastSeenSeq = data.latest_seq || 0;
+                document.getElementById('userCount').textContent = `Users: ${data.user_count}`;
             } catch (error) {
                 // Silently fail for polling errors
+            } finally {
+                pollInFlight = false;
             }
         }
         
@@ -475,7 +536,7 @@
             }
             
             // Re-render messages with new encryption status
-            await pollMessages();
+            await pollMessages({ forceFull: true });
         });
         
         // Check for existing key on load
@@ -493,7 +554,7 @@
             }
             
             // Start polling
-            await pollMessages();
+            await pollMessages({ forceFull: true });
             pollInterval = setInterval(pollMessages, 2000);
         });
         
