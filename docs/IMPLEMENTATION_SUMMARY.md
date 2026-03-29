@@ -47,6 +47,7 @@ docs/NEW_FEATURES.md        - NEW: Complete documentation
 ### 💬 Direct Messages
 - Purpose: Share room IDs securely
 - Expiry: 1 minute
+- Single-use retrieval: DM is deleted immediately after first successful read
 - Max length: 200 characters
 - API: `POST /chat/dm/send`, `GET /chat/dm/{dm_id}`
 
@@ -165,6 +166,8 @@ Response: {
 }
 ```
 
+Note: this endpoint is single-use. A second read of the same `dm_id` returns `404`.
+
 ---
 
 ## Security Features
@@ -273,8 +276,9 @@ systemctl --user restart opsechat-app
 2. User A: `POST /chat/dm/send` with room_id
 3. User A gets dm_id: `xyz789`
 4. User A shares DM URL with User B (out-of-band)
-5. User B: `GET /chat/dm/xyz789` (within 60 seconds)
+5. User B: `GET /chat/dm/xyz789` (within 60 seconds, first read only)
 6. User B gets room_id and joins chat
+7. Any second read of `/chat/dm/xyz789` returns `404` (already consumed)
 
 ### Rotating Burner Email Domain
 1. Admin: `python domain_rotation_cli.py search`

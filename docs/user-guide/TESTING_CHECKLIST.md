@@ -86,12 +86,14 @@ curl -X POST http://localhost:5001/chat/dm/send \
 ```
 2. Note the `dm_id` from response
 3. View DM immediately: `curl http://localhost:5001/chat/dm/{dm_id}`
-4. Wait 65 seconds
-5. Try to view again: `curl http://localhost:5001/chat/dm/{dm_id}`
+4. Try to view again immediately: `curl http://localhost:5001/chat/dm/{dm_id}`
+5. Send another DM and wait 65 seconds
+6. Try to view expired DM: `curl http://localhost:5001/chat/dm/{dm_id}`
 
 **Expected Results:**
 - [ ] DM created with unique dm_id
 - [ ] Immediate viewing succeeds (within 60s)
+- [ ] Second view immediately returns "DM not found or expired"
 - [ ] Viewing after 60s returns "DM expired" error
 - [ ] DM disappears from storage
 
@@ -112,6 +114,11 @@ curl -X POST http://localhost:5001/chat/dm/send \
   "room_id": "test123",
   "message": "Join the secure room!",
   "expires_in": 45
+}
+
+// View DM response (second read attempt)
+{
+  "error": "DM not found or expired"
 }
 
 // View DM response (after 60s)
@@ -313,15 +320,17 @@ systemctl --user status opsechat-tor
 1. User A creates room
 2. User A sends DM to User B with room ID
 3. User B views DM (within 60s)
-4. User B joins room
-5. Both users enable encryption (automatic key fetch)
-6. Users exchange encrypted messages
-7. Wait 3 minutes
-8. Verify old messages disappeared
+4. User B tries to open same DM again (must fail)
+5. User B joins room
+6. Both users enable encryption (automatic key fetch)
+7. Users exchange encrypted messages
+8. Wait 3 minutes
+9. Verify old messages disappeared
 
 **Expected Results:**
 - [ ] Room creation successful
 - [ ] DM delivery successful
+- [ ] DM is single-use (second read blocked)
 - [ ] DM expires after 60s
 - [ ] Both users can join room
 - [ ] Encryption enabled automatically for both

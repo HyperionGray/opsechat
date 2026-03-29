@@ -35,7 +35,8 @@ Previously, users had to manually share encryption keys. Now, each chat room aut
 Simple, ephemeral messaging for sharing room IDs with specific users. DMs are designed for one purpose: **sharing chat room URLs securely**.
 
 ### Features
-- **1-minute expiry** - Messages disappear after 60 seconds
+- **Single-use retrieval** - Message is destroyed immediately after first successful read
+- **1-minute expiry** - Unread messages disappear after 60 seconds
 - **Simple text only** - Max 200 characters
 - **Memory overwriting** - Data is overwritten before deletion
 - **Non-discoverable** - Cryptographically secure DM IDs
@@ -72,6 +73,14 @@ Response:
   "room_id": "wWR_qXjnWQlr4oXqlR2JLxA...",
   "message": "Join me in the secure room...",
   "expires_in": 45
+}
+```
+
+After the first successful `GET`, the same `dm_id` returns:
+
+```json
+{
+  "error": "DM not found or expired"
 }
 ```
 

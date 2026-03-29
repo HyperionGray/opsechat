@@ -286,6 +286,10 @@ class TestDMRoutes:
         assert response.status_code == 200
         data = response.get_json()
         assert data["room_id"] == room_id
+        # DM is single-use and should be removed after first successful read
+        second = client.get(f"/chat/dm/{dm_id}")
+        assert second.status_code == 404
+        assert second.get_json()["error"] == "DM not found or expired"
 
     def test_view_dm_nonexistent(self, client):
         response = client.get("/chat/dm/nonexistent-dm-id")
