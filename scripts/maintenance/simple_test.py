@@ -4,11 +4,11 @@ Simple test to check pf task imports and basic functionality
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Add pf-tasks to path
-sys.path.insert(0, str(Path(__file__).parent / "pf-tasks"))
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT / "pf-tasks"))
 
 def test_basic_imports():
     """Test basic imports of all pf task modules"""
@@ -45,7 +45,7 @@ def test_file_structure():
     """Test that all expected files exist"""
     print("\nTesting file structure...")
     
-    project_root = Path(__file__).parent
+    project_root = PROJECT_ROOT
     
     # Check pf-tasks directory
     pf_tasks_dir = project_root / "pf-tasks"

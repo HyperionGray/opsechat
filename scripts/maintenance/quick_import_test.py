@@ -5,9 +5,11 @@ Quick import test without running the full application
 
 import sys
 import os
+from pathlib import Path
 
 # Add current directory to Python path
-sys.path.insert(0, '/workspace')
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT))
 
 def test_core_imports():
     """Test core module imports"""

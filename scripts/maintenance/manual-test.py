@@ -7,10 +7,11 @@ Run this to manually test all features before release.
 """
 
 import sys
-import os
 import subprocess
 import time
 from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 def print_section(title):
     print("\n" + "="*60)
@@ -206,7 +207,7 @@ def main():
     print("  OpSecChat Product Release Manual Testing")
     print("="*60)
     
-    os.chdir(Path(__file__).parent)
+    os.chdir(PROJECT_ROOT)
     
     tests = [
         ("Documentation Check", check_documentation),

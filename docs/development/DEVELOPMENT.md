@@ -66,12 +66,12 @@ opsechat/
 
 ## Development Tools
 
-### Python Files in Root (Dev Tools)
-These are development and testing utilities that help during development:
+### Maintenance Scripts
+Maintenance and ad-hoc validation utilities live under `scripts/maintenance/`:
 
-- **`manual-test.py`** - Manual testing script for interactive testing
-- **`simple_test.py`** - Quick sanity checks
-- **`quick_import_test.py`** - Test Python imports
+- **`scripts/maintenance/manual-test.py`** - Manual testing script for interactive testing
+- **`scripts/maintenance/simple_test.py`** - Quick sanity checks
+- **`scripts/maintenance/quick_import_test.py`** - Test Python imports
 - **`review_performance.py`** - Performance benchmarking tool
 - **`usability_assessment.py`** - UI/UX testing helper
 - **`comprehensive_functionality_test.py`** - Full functional test suite
