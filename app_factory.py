@@ -6,7 +6,8 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+import secrets
+from flask import Flask, jsonify, g, request
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -66,24 +67,90 @@ def create_app():
     
     def add_review_wrapper(user_id, rating, review_text):
         return add_review(reviews, user_id, rating, review_text)
+
+    def _get_csp_mode() -> str:
+        """
+        Get requested CSP mode from environment.
+
+        Supported values:
+        - compatible (default): allows inline script/style for legacy templates
+        - strict: blocks inline script/style, requires nonce for inline blocks
+        - report-only: enforces compatible policy and emits strict policy in
+          Content-Security-Policy-Report-Only for migration visibility
+        """
+        mode = os.getenv("OPSECHAT_CSP_MODE", "compatible").strip().lower()
+        if mode not in {"compatible", "strict", "report-only"}:
+            return "compatible"
+        return mode
+
+    def _effective_csp_mode(path: str) -> str:
+        """
+        Determine the effective mode for this response.
+
+        By default, /chat routes run strict CSP because they are maintained
+        to be nonce-safe. Other routes remain compatible unless strict is
+        explicitly requested globally.
+        """
+        configured = _get_csp_mode()
+        if configured in {"strict", "report-only"}:
+            return configured
+        if path.startswith("/chat"):
+            return "strict"
+        return "compatible"
+
+    @app.before_request
+    def set_csp_nonce():
+        """Generate a per-request nonce for strict CSP responses."""
+        g.csp_nonce = secrets.token_urlsafe(16)
+
+    @app.context_processor
+    def inject_security_context():
+        """Expose CSP nonce to Jinja templates."""
+        return {"csp_nonce": getattr(g, "csp_nonce", "")}
     
     # Add security headers after every response
     @app.after_request
     def add_security_headers(response):
-        response.headers["Server"] = ""
-        response.headers["Date"] = ""
-        # Content Security Policy: restrict resources to same origin, block inline scripts
-        response.headers["Content-Security-Policy"] = (
+        nonce = getattr(g, "csp_nonce", "")
+        strict_csp = (
             "default-src 'self'; "
-            "script-src 'self'; "
-            "style-src 'self'; "
+            "base-uri 'self'; "
+            "object-src 'none'; "
+            "frame-ancestors 'none'; "
+            f"script-src 'self' 'nonce-{nonce}'; "
+            f"style-src 'self' 'nonce-{nonce}'; "
             "img-src 'self' data:; "
             "font-src 'self'; "
             "connect-src 'self'; "
-            "frame-ancestors 'none';"
+            "form-action 'self';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
+        compatible_csp = (
+            "default-src 'self'; "
+            "base-uri 'self'; "
+            "object-src 'none'; "
+            "frame-ancestors 'none'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; "
+            "font-src 'self'; "
+            "connect-src 'self'; "
+            "form-action 'self';"
+        )
+        csp_mode = _effective_csp_mode(request.path)
+
+        response.headers["Server"] = ""
+        response.headers["Date"] = ""
+
+        if csp_mode == "strict":
+            response.headers["Content-Security-Policy"] = strict_csp
+            response.headers.pop("Content-Security-Policy-Report-Only", None)
+        elif csp_mode == "report-only":
+            response.headers["Content-Security-Policy"] = compatible_csp
+            response.headers["Content-Security-Policy-Report-Only"] = strict_csp
+        else:
+            response.headers["Content-Security-Policy"] = compatible_csp
+            response.headers.pop("Content-Security-Policy-Report-Only", None)
+
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"

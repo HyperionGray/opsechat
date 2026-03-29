@@ -147,6 +147,25 @@ npm run lint
 ./scripts/security-scan.sh
 ```
 
+## Content Security Policy (CSP) Modes
+
+The application now supports configurable CSP behavior controlled by
+`OPSECHAT_CSP_MODE`:
+
+- `compatible` (default): keeps legacy templates working by allowing
+  inline script/style on non-chat pages.
+- `strict`: enforces nonce-based script/style policy globally.
+- `report-only`: serves the compatible enforcement policy but also emits
+  a strict nonce policy via `Content-Security-Policy-Report-Only`.
+
+Additional behavior:
+
+- `/chat` routes default to strict nonce-based CSP even when the global mode
+  is `compatible`. This lets actively maintained chat templates stay hardened
+  while older pages migrate incrementally.
+- Templates can reference `{{ csp_nonce }}` for nonce-enabled inline blocks
+  when needed.
+
 ## Development Workflow
 
 1. **Create a feature branch**

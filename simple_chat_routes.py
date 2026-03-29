@@ -55,6 +55,21 @@ ENC_PREFIX = "ENC:"
 # overhead, so a 500-char plaintext becomes ~700 chars of base64 plus the prefix.
 MAX_ENC_MESSAGE_LENGTH = MAX_MESSAGE_LENGTH * 2
 
+# Stable color classes used by templates and client JS to avoid inline style
+# attributes, allowing stricter CSP on /chat routes.
+COLOR_CLASS_MAP = {
+    "255,85,85": "user-color-red",
+    "85,170,255": "user-color-blue",
+    "85,255,85": "user-color-green",
+    "255,170,85": "user-color-orange",
+    "255,85,255": "user-color-purple",
+    "170,85,0": "user-color-brown",
+    "255,170,255": "user-color-pink",
+    "170,170,170": "user-color-gray",
+    "170,170,0": "user-color-olive",
+    "85,255,255": "user-color-cyan",
+}
+
 # Room class to manage chat state
 class ChatRoom:
     """Manages a single chat room with message expiry and memory overwriting"""
@@ -323,7 +338,8 @@ def register_simple_chat_routes(app):
         return render_template("simple_chat_room.html", 
                              room_id=room_id,
                              username=session["username"],
-                             color=session["color"])
+                             color=session["color"],
+                             color_class=get_color_class(session["color"]))
     
     @app.route('/chat/room/<string:room_id>/messages', methods=['GET', 'POST'])
     @limiter.limit("60 per minute", methods=["POST"])
@@ -545,3 +561,9 @@ def get_random_color_rgb():
         [85, 255, 255],   # cyan
     ]
     return secrets.choice(colors)
+
+
+def get_color_class(color):
+    """Map an RGB triplet to a stable CSS class."""
+    key = ",".join(str(channel) for channel in color)
+    return COLOR_CLASS_MAP.get(key, "user-color-default")

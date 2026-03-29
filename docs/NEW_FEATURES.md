@@ -342,6 +342,52 @@ The systemd units provide:
 
 ## 🔐 Cryptographic Security Improvements
 
+## 🛡️ CSP Nonce and Strict Mode (New)
+
+### What Changed
+
+The app now supports configurable Content Security Policy modes and uses
+per-request nonces for strict pages:
+
+- **`compatible`** (default): legacy pages continue to work with inline script/style
+- **`strict`**: blocks inline script/style and requires nonced blocks
+- **`report-only`**: serves compatible policy while sending strict policy in
+  `Content-Security-Policy-Report-Only`
+
+By default, `/chat` routes run with strict CSP while older legacy routes remain
+compatible. This allows incremental hardening without breaking existing templates.
+
+### Environment Variable
+
+```bash
+# Default if unset
+OPSECHAT_CSP_MODE=compatible
+
+# Force strict everywhere
+OPSECHAT_CSP_MODE=strict
+
+# Migration mode: compatible enforcement + strict report-only
+OPSECHAT_CSP_MODE=report-only
+```
+
+### Template Support
+
+`app_factory.py` injects `csp_nonce` into templates automatically, so nonced
+blocks can be rendered as:
+
+```html
+<style nonce="{{ csp_nonce }}">...</style>
+<script nonce="{{ csp_nonce }}" src="/static/chat-room.js"></script>
+```
+
+### Why This Matters
+
+- Prevents execution of injected inline JavaScript on hardened pages
+- Supports an incremental migration path for older templates
+- Gives strong defaults for modern `/chat` endpoints without large refactors
+
+---
+
 ### Room ID Generation
 **Before:**
 ```python

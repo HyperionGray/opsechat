@@ -1,11 +1,9 @@
 """
 Tests for HTTP security headers set by the Flask app (app_factory.py).
-
-Verifies: CSP (no unsafe-inline), X-Frame-Options, Referrer-Policy,
-X-Content-Type-Options, and Server header suppression.
 """
 
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -33,9 +31,23 @@ class TestSecurityHeaders:
         assert "Content-Security-Policy" in h
 
     def test_csp_disallows_inline_scripts(self):
-        csp = self._headers()["Content-Security-Policy"]
-        # Must not contain 'unsafe-inline' for scripts
+        csp = self._headers("/chat")["Content-Security-Policy"]
+        # /chat routes run strict CSP by default and should not allow unsafe inline
         assert "unsafe-inline" not in csp
+        assert "script-src 'self' 'nonce-" in csp
+        assert "style-src 'self' 'nonce-" in csp
+
+    def test_chat_csp_nonce_changes_per_request(self):
+        csp_1 = self._headers("/chat")["Content-Security-Policy"]
+        csp_2 = self._headers("/chat")["Content-Security-Policy"]
+        nonce_1 = re.search(r"script-src 'self' 'nonce-([^']+)'", csp_1).group(1)
+        nonce_2 = re.search(r"script-src 'self' 'nonce-([^']+)'", csp_2).group(1)
+        assert nonce_1 != nonce_2
+
+    def test_non_chat_csp_stays_compatible_by_default(self):
+        csp = self._headers()["Content-Security-Policy"]
+        assert "script-src 'self' 'unsafe-inline'" in csp
+        assert "style-src 'self' 'unsafe-inline'" in csp
 
     def test_x_content_type_options(self):
         h = self._headers()

@@ -18,7 +18,7 @@ document.getElementById('createRoomBtn').addEventListener('click', async functio
         const data = await response.json();
 
         if (data.success) {
-            statusDiv.innerHTML = `Room created! Redirecting...<br><a href="${data.room_url}">${window.location.origin}${data.room_url}</a>`;
+            statusDiv.textContent = 'Room created! Redirecting...';
             setTimeout(() => {
                 window.location.href = data.room_url;
             }, 1000);

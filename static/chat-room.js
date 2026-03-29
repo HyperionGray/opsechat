@@ -126,6 +126,23 @@ function isEncrypted(message) {
     return message.startsWith(ENC_PREFIX);
 }
 
+function getColorClassFromRgb(color) {
+    const key = `${color[0]},${color[1]},${color[2]}`;
+    const map = {
+        '255,85,85': 'user-color-red',
+        '85,170,255': 'user-color-blue',
+        '85,255,85': 'user-color-green',
+        '255,170,85': 'user-color-orange',
+        '255,85,255': 'user-color-purple',
+        '170,85,0': 'user-color-brown',
+        '255,170,255': 'user-color-pink',
+        '170,170,170': 'user-color-gray',
+        '170,170,0': 'user-color-olive',
+        '85,255,255': 'user-color-cyan'
+    };
+    return map[key] || 'user-color-default';
+}
+
 // UI functions
 function showStatus(message, duration = 3000) {
     const statusMsg = document.getElementById('statusMsg');
@@ -149,8 +166,7 @@ async function renderMessages(messages) {
         messageDiv.className = 'message' + (msg.is_mine ? ' mine' : '');
 
         const usernameSpan = document.createElement('span');
-        usernameSpan.className = 'username';
-        usernameSpan.style.color = `rgb(${msg.color[0]}, ${msg.color[1]}, ${msg.color[2]})`;
+        usernameSpan.className = `username ${getColorClassFromRgb(msg.color)}`;
         usernameSpan.textContent = msg.username + ':';
 
         const messageText = document.createElement('span');
@@ -295,5 +311,8 @@ window.addEventListener('beforeunload', function() {
     }
 });
 
-// Expose acceptSecurityWarning for the HTML onclick attribute
-window.acceptSecurityWarning = acceptSecurityWarning;
+// Bind security warning acceptance without inline JS handlers.
+const securityWarningAcceptBtn = document.getElementById('securityWarningAcceptBtn');
+if (securityWarningAcceptBtn) {
+    securityWarningAcceptBtn.addEventListener('click', acceptSecurityWarning);
+}

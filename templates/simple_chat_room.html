@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OpSecChat Room</title>
-    <style>
+    <style nonce="{{ csp_nonce }}">
         * {
             margin: 0;
             padding: 0;
@@ -67,6 +67,18 @@
             font-weight: bold;
             margin-right: 5px;
         }
+
+        .user-color-default { color: rgb(85, 255, 85); }
+        .user-color-red { color: rgb(255, 85, 85); }
+        .user-color-blue { color: rgb(85, 170, 255); }
+        .user-color-green { color: rgb(85, 255, 85); }
+        .user-color-orange { color: rgb(255, 170, 85); }
+        .user-color-purple { color: rgb(255, 85, 255); }
+        .user-color-brown { color: rgb(170, 85, 0); }
+        .user-color-pink { color: rgb(255, 170, 255); }
+        .user-color-gray { color: rgb(170, 170, 170); }
+        .user-color-olive { color: rgb(170, 170, 0); }
+        .user-color-cyan { color: rgb(85, 255, 255); }
         
         .message.mine {
             text-align: right;
@@ -153,13 +165,56 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #0d0;
         }
+
+        .security-warning-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            padding: 20px;
+        }
+
+        .security-warning-panel {
+            max-width: 600px;
+            margin: 50px auto;
+            background: #001100;
+            border: 2px solid #f00;
+            padding: 30px;
+            color: #0f0;
+        }
+
+        .security-warning-title {
+            color: #f00;
+            text-align: center;
+        }
+
+        .security-warning-body {
+            margin: 20px 0;
+            line-height: 1.6;
+        }
+
+        .security-warning-accept {
+            width: 100%;
+            padding: 15px;
+            background: #0f0;
+            color: #000;
+            border: none;
+            font-weight: bold;
+            font-size: 1.1em;
+            cursor: pointer;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body data-room-id="{{ room_id }}">
     <div class="header" role="banner">
         <div>
             <h1>🔒 OpSecChat Room</h1>
-            <span id="userInfo">You are: <span style="color: rgb({{ color[0] }}, {{ color[1] }}, {{ color[2] }})" aria-label="Your username">{{ username }}</span></span>
+            <span id="userInfo">You are: <span id="currentUsername" class="{{ color_class }}" aria-label="Your username">{{ username }}</span></span>
         </div>
         <div class="header-info">
             <span id="userCount" aria-live="polite">Users: 1</span>
@@ -184,11 +239,11 @@
     <div class="status" id="statusMsg" role="status" aria-live="polite"></div>
     
     <!-- Security Warning Modal -->
-    <div id="securityWarning" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 1000; padding: 20px;"
+    <div id="securityWarning" class="security-warning-overlay"
          role="dialog" aria-modal="true" aria-labelledby="securityWarningTitle" aria-describedby="securityWarningBody">
-        <div style="max-width: 600px; margin: 50px auto; background: #001100; border: 2px solid #f00; padding: 30px; color: #0f0;">
-            <h2 id="securityWarningTitle" style="color: #f00; text-align: center;">⚠️ CRITICAL SECURITY NOTICE ⚠️</h2>
-            <p id="securityWarningBody" style="margin: 20px 0; line-height: 1.6;">
+        <div class="security-warning-panel">
+            <h2 id="securityWarningTitle" class="security-warning-title">⚠️ CRITICAL SECURITY NOTICE ⚠️</h2>
+            <p id="securityWarningBody" class="security-warning-body">
                 <strong>THIS IS FOR SERIOUS OPERATIONAL SECURITY ONLY.</strong><br><br>
                 
                 ❌ <strong>NO MEDIA SHARING</strong> - Text only. Images, videos, or any encoded content is STRICTLY PROHIBITED.<br><br>
@@ -204,12 +259,12 @@
                 
                 🔒 <strong>YOUR SAFETY:</strong> Messages auto-delete after 3 minutes. Rooms expire after 1 hour. Everything in-memory only.
             </p>
-            <button onclick="acceptSecurityWarning()" style="width: 100%; padding: 15px; background: #0f0; color: #000; border: none; font-weight: bold; font-size: 1.1em; cursor: pointer; margin-top: 20px;">
+            <button id="securityWarningAcceptBtn" class="security-warning-accept">
                 I UNDERSTAND AND AGREE
             </button>
         </div>
     </div>
     
-    <script src="/static/chat-room.js"></script>
+    <script nonce="{{ csp_nonce }}" src="/static/chat-room.js"></script>
 </body>
 </html>

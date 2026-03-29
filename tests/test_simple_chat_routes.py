@@ -324,11 +324,16 @@ class TestBugFixes:
         assert response.status_code == 200
 
     def test_chat_index_and_trailing_slash_same_content(self, client):
-        """Both /chat and /chat/ should render the same page."""
+        """Both /chat and /chat/ should render the same page shape."""
         r1 = client.get("/chat")
         r2 = client.get("/chat/")
         assert r1.status_code == r2.status_code == 200
-        assert r1.data == r2.data
+        b1 = r1.data.decode()
+        b2 = r2.data.decode()
+        # Nonces are generated per request, so compare normalized HTML.
+        b1 = re.sub(r'nonce="[^"]+"', 'nonce="NONCE"', b1)
+        b2 = re.sub(r'nonce="[^"]+"', 'nonce="NONCE"', b2)
+        assert b1 == b2
 
     # -- Bug 3: VERSION file embedded in rendered page ----------------------
 
@@ -347,6 +352,7 @@ class TestBugFixes:
         body = response.data.decode()
         # The page should link to the external file
         assert "chat-index.js" in body
+        assert "nonce=" in body
         # There should be no inline event handler JS (addEventListener, fetch, etc.)
         assert "addEventListener" not in body
         assert "fetch(" not in body
@@ -357,6 +363,7 @@ class TestBugFixes:
         response = client.get(f"/chat/room/{room_id}")
         body = response.data.decode()
         assert "chat-room.js" in body
+        assert "nonce=" in body
         assert "addEventListener" not in body
 
     def test_chat_room_passes_room_id_via_data_attribute(self, client):
