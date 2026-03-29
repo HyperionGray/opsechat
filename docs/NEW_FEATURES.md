@@ -75,6 +75,43 @@ Response:
 }
 ```
 
+#### Check DM Read Status (sender-only)
+```bash
+GET /chat/dm/{dm_id}/status
+
+Response:
+{
+  "dm_id": "14gvVa4l3SPsLJc1Ijb_sA",
+  "read": true,
+  "expires_in": 37
+}
+```
+
+#### List Sent DMs and Read/Unread Counts (sender-only)
+```bash
+GET /chat/dm/sent
+
+Response:
+{
+  "total_sent": 2,
+  "read": 1,
+  "unread": 1,
+  "messages": [
+    {
+      "dm_id": "14gvVa4l3SPsLJc1Ijb_sA",
+      "room_id": "wWR_qXjnWQlr4oXqlR2JLxA...",
+      "read": true,
+      "expires_in": 37,
+      "timestamp": "2026-03-29T03:12:20.123456"
+    }
+  ]
+}
+```
+
+Notes:
+- DM status endpoints are intentionally sender-scoped to avoid metadata leakage.
+- Expired DMs return `404` and are overwritten in memory before deletion.
+
 ### Example Workflow
 ```python
 # User A creates a room
