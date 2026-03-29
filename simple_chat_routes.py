@@ -71,6 +71,25 @@ class ChatRoom:
     def get_room_key(self):
         """Get the room's shared encryption key (for automatic key exchange)"""
         return self.room_key
+
+    def _touch_user_unlocked(self, user_id, username, color):
+        """Update room presence tracking for a user (lock must be held)."""
+        if user_id not in self.users:
+            self.users[user_id] = {
+                "username": username,
+                "color": color,
+                "last_seen": datetime.datetime.now()
+            }
+            return
+
+        self.users[user_id]["username"] = username
+        self.users[user_id]["color"] = color
+        self.users[user_id]["last_seen"] = datetime.datetime.now()
+
+    def touch_user(self, user_id, username, color):
+        """Update user activity without requiring a message post."""
+        with self.lock:
+            self._touch_user_unlocked(user_id, username, color)
     
     def add_message(self, user_id, username, color, message_text):
         """Add a message to the room"""
@@ -83,16 +102,9 @@ class ChatRoom:
                 "timestamp": datetime.datetime.now()
             }
             self.messages.append(msg)
-            
-            # Track user
-            if user_id not in self.users:
-                self.users[user_id] = {
-                    "username": username,
-                    "color": color,
-                    "last_seen": datetime.datetime.now()
-                }
-            else:
-                self.users[user_id]["last_seen"] = datetime.datetime.now()
+
+            # Track active user presence for accurate room counts
+            self._touch_user_unlocked(user_id, username, color)
     
     def cleanup_old_messages(self):
         """Remove messages older than 3 minutes and overwrite memory"""
@@ -310,7 +322,8 @@ def register_simple_chat_routes(app):
     def chat_room(room_id):
         """Chat room interface"""
         with rooms_lock:
-            if room_id not in chat_rooms:
+            room = chat_rooms.get(room_id)
+            if room is None:
                 return render_template("simple_chat_error.html", 
                                      error="Room not found or expired"), 404
         
@@ -319,6 +332,9 @@ def register_simple_chat_routes(app):
             session["_id"] = generate_secure_dm_id()
             session["username"] = generate_random_username()
             session["color"] = get_random_color_rgb()
+
+        # Count users who only read/poll; don't require posting a message first.
+        room.touch_user(session["_id"], session["username"], session["color"])
         
         return render_template("simple_chat_room.html", 
                              room_id=room_id,
@@ -333,14 +349,17 @@ def register_simple_chat_routes(app):
             if room_id not in chat_rooms:
                 return jsonify({"error": "Room not found"}), 404
             room = chat_rooms[room_id]
+
+        # Ensure user has a session for both GET and POST flows
+        if "_id" not in session:
+            session["_id"] = generate_secure_dm_id()
+            session["username"] = generate_random_username()
+            session["color"] = get_random_color_rgb()
+
+        # Presence heartbeat: polling users should be reflected in user_count.
+        room.touch_user(session["_id"], session["username"], session["color"])
         
         if request.method == 'POST':
-            # Ensure user has session
-            if "_id" not in session:
-                session["_id"] = generate_secure_dm_id()
-                session["username"] = generate_random_username()
-                session["color"] = get_random_color_rgb()
-
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
             if not allowed:

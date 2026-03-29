@@ -82,9 +82,9 @@ python chat-room.py --port 8080
 2. All your messages will be encrypted using AES-GCM
 3. Other users must also enable encryption to read your messages
 4. The encryption key is stored in your browser's sessionStorage
-5. Keys are NOT shared - this is for protection against server compromise
+5. The room key is fetched automatically from `/chat/room/<room_id>/key`
 
-**Important**: E2E encryption is per-user. If you want to chat with encrypted messages:
+**Important**: the room uses a shared key with automatic key exchange:
 - All participants should enable encryption
 - The encryption protects against server compromise
 - Messages are still deleted after 3 minutes
@@ -112,6 +112,11 @@ This prevents memory forensics from recovering deleted messages.
 - All message data is overwritten before room deletion
 - No persistent storage - everything is in-memory
 
+### Active Presence Tracking
+- Opening a room marks the user as active immediately
+- Polling `/chat/room/<room_id>/messages` refreshes user activity heartbeat
+- Active user count includes users who are reading but have not sent a message
+
 ### Username Randomization
 - Usernames are server-generated and non-reusable
 - Format: `[Adjective][Noun][4-digit-number]`
@@ -122,7 +127,7 @@ This prevents memory forensics from recovering deleted messages.
 - Uses Web Crypto API (AES-GCM with 256-bit keys)
 - Simple, reviewable JavaScript implementation
 - No external dependencies beyond native browser APIs
-- Encrypted messages are prefixed with 🔒 emoji
+- Encrypted payloads are prefixed with `ENC:` on the wire
 - Keys stored in sessionStorage (lost when tab closes)
 
 ## Technical Details

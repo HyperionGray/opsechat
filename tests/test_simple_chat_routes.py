@@ -180,6 +180,34 @@ class TestChatRoutes:
         assert data["messages"] == []
         assert isinstance(data["user_count"], int)
 
+    def test_joining_room_updates_user_count_without_posting(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+
+        # Entering and polling a room should count as active presence.
+        join_response = client.get(f"/chat/room/{room_id}")
+        assert join_response.status_code == 200
+
+        messages_response = client.get(f"/chat/room/{room_id}/messages")
+        assert messages_response.status_code == 200
+        data = messages_response.get_json()
+        assert data["user_count"] == 1
+
+    def test_multiple_polling_users_counted_without_messages(self, app):
+        client1 = app.test_client()
+        client2 = app.test_client()
+        room_id = client1.post("/chat/create").get_json()["room_id"]
+
+        assert client1.get(f"/chat/room/{room_id}").status_code == 200
+        assert client2.get(f"/chat/room/{room_id}").status_code == 200
+
+        # Polling also updates activity heartbeat for each session.
+        assert client1.get(f"/chat/room/{room_id}/messages").status_code == 200
+        assert client2.get(f"/chat/room/{room_id}/messages").status_code == 200
+
+        final = client1.get(f"/chat/room/{room_id}/messages")
+        assert final.status_code == 200
+        assert final.get_json()["user_count"] == 2
+
     def test_post_message_success(self, client):
         room_id = client.post("/chat/create").get_json()["room_id"]
         response = client.post(
