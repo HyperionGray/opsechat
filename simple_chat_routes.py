@@ -17,8 +17,8 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Absolute path to this file's directory (used for reliable VERSION lookup)
@@ -152,19 +152,37 @@ def cleanup_old_dms():
     """Remove DMs older than 1 minute"""
     with dm_lock:
         now = datetime.datetime.now()
-        expired_dms = []
-        
-        for dm_id, dm_data in direct_messages.items():
-            age = (now - dm_data["timestamp"]).total_seconds()
-            if age > 60:  # 1 minute expiry
-                expired_dms.append(dm_id)
-        
+        expired_dms = [
+            dm_id
+            for dm_id, dm_data in direct_messages.items()
+            if (now - dm_data["timestamp"]).total_seconds() > 60
+        ]
+
         for dm_id in expired_dms:
-            # Overwrite message before deletion
-            dm = direct_messages[dm_id]
-            dm["message"] = "X" * len(dm["message"])
-            dm["room_id"] = "X" * len(dm["room_id"])
-            del direct_messages[dm_id]
+            _delete_dm_securely(dm_id)
+
+
+def _delete_dm_securely(dm_id: str):
+    """
+    Overwrite sensitive DM fields before deleting the entry.
+
+    Caller must hold dm_lock.
+    """
+    dm = direct_messages.get(dm_id)
+    if not dm:
+        return
+    dm["message"] = "X" * len(dm["message"])
+    dm["room_id"] = "X" * len(dm["room_id"])
+    dm["sender_name"] = "X" * len(dm["sender_name"])
+    del direct_messages[dm_id]
+
+
+def _ensure_chat_session():
+    """Ensure session has identifiers used by chat/DM routes."""
+    if "_id" not in session:
+        session["_id"] = generate_secure_dm_id()
+        session["username"] = generate_random_username()
+        session["color"] = get_random_color_rgb()
 
 
 def check_rate_limit(session_id: str, endpoint: str) -> tuple:
@@ -284,10 +302,7 @@ def register_simple_chat_routes(app):
     def chat_create():
         """Create a new chat room with cryptographically secure ID"""
         # Ensure session exists for rate limiting
-        if "_id" not in session:
-            session["_id"] = generate_secure_dm_id()
-            session["username"] = generate_random_username()
-            session["color"] = get_random_color_rgb()
+        _ensure_chat_session()
 
         allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
         if not allowed:
@@ -315,10 +330,7 @@ def register_simple_chat_routes(app):
                                      error="Room not found or expired"), 404
         
         # Initialize user session
-        if "_id" not in session:
-            session["_id"] = generate_secure_dm_id()
-            session["username"] = generate_random_username()
-            session["color"] = get_random_color_rgb()
+        _ensure_chat_session()
         
         return render_template("simple_chat_room.html", 
                              room_id=room_id,
@@ -336,10 +348,7 @@ def register_simple_chat_routes(app):
         
         if request.method == 'POST':
             # Ensure user has session
-            if "_id" not in session:
-                session["_id"] = generate_secure_dm_id()
-                session["username"] = generate_random_username()
-                session["color"] = get_random_color_rgb()
+            _ensure_chat_session()
 
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
@@ -431,10 +440,7 @@ def register_simple_chat_routes(app):
     def send_dm():
         """Send a direct message (for sharing room IDs) - expires in 1 minute"""
         # Initialize user session if needed
-        if "_id" not in session:
-            session["_id"] = generate_secure_dm_id()
-            session["username"] = generate_random_username()
-            session["color"] = get_random_color_rgb()
+        _ensure_chat_session()
 
         # Check rate limit for DMs
         allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
@@ -478,6 +484,7 @@ def register_simple_chat_routes(app):
             "success": True,
             "dm_id": dm_id,
             "dm_url": f"/chat/dm/{dm_id}",
+            "status_url": f"/chat/dm/{dm_id}/status",
             "expires_in": 60
         })
     
@@ -493,6 +500,7 @@ def register_simple_chat_routes(app):
             # Check if expired
             age = (datetime.datetime.now() - dm["timestamp"]).total_seconds()
             if age > 60:
+                _delete_dm_securely(dm_id)
                 return jsonify({"error": "DM expired"}), 404
             
             # Mark as read
@@ -504,6 +512,70 @@ def register_simple_chat_routes(app):
                 "room_id": dm["room_id"],
                 "message": dm["message"],
                 "expires_in": max(0, 60 - int(age))
+            })
+
+    @app.route('/chat/dm/<string:dm_id>/status')
+    def dm_status(dm_id):
+        """
+        Return DM delivery/read status for the sender.
+
+        This enables lightweight read receipts without exposing DM content.
+        """
+        _ensure_chat_session()
+
+        with dm_lock:
+            dm = direct_messages.get(dm_id)
+            if not dm:
+                return jsonify({"error": "DM not found or expired"}), 404
+
+            age = (datetime.datetime.now() - dm["timestamp"]).total_seconds()
+            if age > 60:
+                _delete_dm_securely(dm_id)
+                return jsonify({"error": "DM expired"}), 404
+
+            if dm["sender_id"] != session["_id"]:
+                return jsonify({"error": "Forbidden"}), 403
+
+            return jsonify({
+                "dm_id": dm["dm_id"],
+                "read": dm["read"],
+                "expires_in": max(0, 60 - int(age))
+            })
+
+    @app.route('/chat/dm/sent')
+    def sent_dm_summary():
+        """
+        Return sender-only DM summary with read/unread counts.
+
+        Useful for polling read receipts on links shared out-of-band.
+        """
+        _ensure_chat_session()
+        now = datetime.datetime.now()
+
+        with dm_lock:
+            sender_dms = []
+            for dm in direct_messages.values():
+                if dm["sender_id"] != session["_id"]:
+                    continue
+                age = (now - dm["timestamp"]).total_seconds()
+                if age > 60:
+                    continue
+                sender_dms.append({
+                    "dm_id": dm["dm_id"],
+                    "room_id": dm["room_id"],
+                    "read": dm["read"],
+                    "expires_in": max(0, 60 - int(age)),
+                    "timestamp": dm["timestamp"].isoformat()
+                })
+
+            read_count = sum(1 for dm in sender_dms if dm["read"])
+            unread_count = len(sender_dms) - read_count
+
+            return jsonify({
+                "total_sent": len(sender_dms),
+                "read": read_count,
+                "unread": unread_count,
+                "messages": sender_dms
             })
     
     @app.route('/chat/room/<string:room_id>/key', methods=['GET'])

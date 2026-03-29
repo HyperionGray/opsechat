@@ -21,6 +21,8 @@ from simple_chat_routes import (
     check_rate_limit,
     RATE_LIMITS,
     MAX_MESSAGE_LENGTH,
+    direct_messages,
+    dm_lock,
 )
 
 
@@ -292,8 +294,6 @@ class TestDMRoutes:
         assert response.status_code == 404
 
     def test_view_dm_expired(self, client):
-        from simple_chat_routes import direct_messages, dm_lock
-
         room_id = client.post("/chat/create").get_json()["room_id"]
         dm_id = client.post(
             "/chat/dm/send",
@@ -306,6 +306,73 @@ class TestDMRoutes:
             direct_messages[dm_id]["timestamp"] -= datetime.timedelta(minutes=5)
 
         response = client.get(f"/chat/dm/{dm_id}")
+        assert response.status_code == 404
+
+    def test_dm_status_sender_only_and_read_transition(self, app):
+        sender = app.test_client()
+        receiver = app.test_client()
+
+        room_id = sender.post("/chat/create").get_json()["room_id"]
+        dm_id = sender.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "join me"},
+            content_type="application/json",
+        ).get_json()["dm_id"]
+
+        initial = sender.get(f"/chat/dm/{dm_id}/status")
+        assert initial.status_code == 200
+        assert initial.get_json()["read"] is False
+
+        # Non-sender cannot access sender status metadata.
+        forbidden = receiver.get(f"/chat/dm/{dm_id}/status")
+        assert forbidden.status_code == 403
+
+        read_response = receiver.get(f"/chat/dm/{dm_id}")
+        assert read_response.status_code == 200
+
+        after_read = sender.get(f"/chat/dm/{dm_id}/status")
+        assert after_read.status_code == 200
+        assert after_read.get_json()["read"] is True
+
+    def test_sent_dm_summary_read_unread_counts(self, app):
+        sender = app.test_client()
+        receiver = app.test_client()
+
+        room_id = sender.post("/chat/create").get_json()["room_id"]
+        dm_id_1 = sender.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "first"},
+            content_type="application/json",
+        ).get_json()["dm_id"]
+        dm_id_2 = sender.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "second"},
+            content_type="application/json",
+        ).get_json()["dm_id"]
+
+        assert receiver.get(f"/chat/dm/{dm_id_1}").status_code == 200
+
+        summary = sender.get("/chat/dm/sent")
+        assert summary.status_code == 200
+        data = summary.get_json()
+        assert data["total_sent"] == 2
+        assert data["read"] == 1
+        assert data["unread"] == 1
+        returned_ids = {item["dm_id"] for item in data["messages"]}
+        assert returned_ids == {dm_id_1, dm_id_2}
+
+    def test_dm_status_expired_returns_404(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        dm_id = client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "ephemeral"},
+            content_type="application/json",
+        ).get_json()["dm_id"]
+
+        with dm_lock:
+            direct_messages[dm_id]["timestamp"] -= datetime.timedelta(minutes=5)
+
+        response = client.get(f"/chat/dm/{dm_id}/status")
         assert response.status_code == 404
 
 
