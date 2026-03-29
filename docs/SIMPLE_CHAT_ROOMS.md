@@ -142,6 +142,25 @@ POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
 
+#### Incremental Message Sync (New)
+```
+GET /chat/room/<room_id>/messages?since=<seq>
+```
+
+The `since` parameter allows clients to request only messages newer than a
+known sequence number.
+
+- `since` must be a non-negative integer.
+- Each message now includes a monotonic `seq` field.
+- Response includes:
+  - `latest_seq`: highest sequence currently known by the room
+  - `pruned_through_seq`: highest sequence that has been removed by expiry
+- If `since` is omitted, the endpoint returns the full active message list.
+
+This enables efficient polling without re-downloading full history every 2s,
+while still allowing clients to detect when a full refresh is needed after
+message expiry.
+
 ### Encryption Implementation
 
 The E2E encryption uses native Web Crypto API:

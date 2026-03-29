@@ -17,8 +17,8 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Global room storage (in-memory only)
@@ -154,6 +154,10 @@ class ChatRoom:
         self.users = {}
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
+        # Monotonic sequence number used for incremental polling.
+        self.next_seq = 1
+        # Highest message sequence removed due to expiry.
+        self.pruned_through_seq = 0
         # Auto-generated shared encryption key for the room
         self.room_key = base64.b64encode(secrets.token_bytes(32)).decode('utf-8')
     
@@ -165,6 +169,7 @@ class ChatRoom:
         """Add a message to the room"""
         with self.lock:
             msg = {
+                "seq": self.next_seq,
                 "message": message_text,
                 "user_id": user_id,
                 "username": username,
@@ -172,6 +177,7 @@ class ChatRoom:
                 "timestamp": datetime.datetime.now()
             }
             self.messages.append(msg)
+            self.next_seq += 1
             
             # Track user
             if user_id not in self.users:
@@ -194,17 +200,31 @@ class ChatRoom:
                 if age < 180:  # 3 minutes
                     new_messages.append(msg)
                 else:
+                    self.pruned_through_seq = max(
+                        self.pruned_through_seq,
+                        msg.get("seq", 0),
+                    )
                     # Overwrite message data before deletion (security)
                     msg["message"] = "X" * len(msg["message"])
                     msg["username"] = "X" * len(msg["username"])
             
             self.messages = new_messages
     
-    def get_messages(self):
-        """Get all current messages"""
+    def get_messages(self, since_seq=None):
+        """Get current messages, optionally only those newer than a sequence."""
         self.cleanup_old_messages()
         with self.lock:
+            if since_seq is not None:
+                return [m.copy() for m in self.messages if m.get("seq", 0) > since_seq]
             return self.messages.copy()
+
+    def get_sync_state(self):
+        """Return room message sync metadata for incremental polling clients."""
+        with self.lock:
+            return {
+                "latest_seq": self.next_seq - 1,
+                "pruned_through_seq": self.pruned_through_seq,
+            }
     
     def get_user_count(self):
         """Get count of active users (seen in last 5 minutes)"""
@@ -479,12 +499,26 @@ def register_simple_chat_routes(app):
             return jsonify({"success": True})
         
         else:  # GET
-            messages = room.get_messages()
+            since_raw = request.args.get("since")
+            since_seq = None
+            if since_raw is not None:
+                try:
+                    since_seq = int(since_raw)
+                    if since_seq < 0:
+                        raise ValueError
+                except (TypeError, ValueError):
+                    return jsonify({
+                        "error": "Invalid 'since' parameter. Must be a non-negative integer."
+                    }), 400
+
+            messages = room.get_messages(since_seq=since_seq)
             user_count = room.get_user_count()
+            sync_state = room.get_sync_state()
             
             return jsonify({
                 "messages": [
                     {
+                        "seq": msg.get("seq", 0),
                         "username": msg["username"],
                         "color": msg["color"],
                         "message": msg["message"],
@@ -493,6 +527,8 @@ def register_simple_chat_routes(app):
                     }
                     for msg in messages
                 ],
+                "latest_seq": sync_state["latest_seq"],
+                "pruned_through_seq": sync_state["pruned_through_seq"],
                 "user_count": user_count,
                 "my_username": session.get("username"),
                 "my_color": session.get("color")
