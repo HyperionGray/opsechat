@@ -135,6 +135,7 @@ sudo systemctl start tor
 
 - **Max message length**: 1000 characters
 - **Message lifetime**: 4 minutes (240 seconds)
+- **Server-side rate limiting**: 10 messages per 10 seconds per username
 - **Max chat history**: 200 messages in client (memory management)
 - **No images**: Text only, no exceptions
 - **No video**: Text only, no exceptions
