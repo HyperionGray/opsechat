@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- Implemented robust domain configuration workflow in `email_routes.py` and `domain_manager.py`:
+  - Added in-memory domain API configuration (`configure`, `get_config`)
+  - Added state export/import helpers for serialized runtime state
+  - Added domain rotation and IMAP fetch endpoints used by `/email/config`
+  - Added safer price normalization and credential masking for UI display
+  - Added tests for domain manager state/config and email config route behavior
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022

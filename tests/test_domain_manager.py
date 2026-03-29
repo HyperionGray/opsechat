@@ -174,3 +174,65 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    @patch("domain_manager.PorkbunAPIClient")
+    def test_configure_sets_client_and_budget(self, mock_porkbun_client):
+        """Test manager configure() sets API client and budget"""
+        manager = DomainRotationManager()
+        manager.configure("pk1_test", "sk1_test", monthly_budget=25.5)
+
+        mock_porkbun_client.assert_called_once_with("pk1_test", "sk1_test")
+        assert manager.monthly_budget == 25.5
+        assert manager.api_client is mock_porkbun_client.return_value
+
+    def test_configure_rejects_invalid_values(self):
+        """Test configure() input validation"""
+        manager = DomainRotationManager()
+
+        with pytest.raises(ValueError):
+            manager.configure("", "secret", 10)
+        with pytest.raises(ValueError):
+            manager.configure("api", "", 10)
+        with pytest.raises(ValueError):
+            manager.configure("api", "secret", 0)
+
+    def test_get_config_masks_credentials(self):
+        """Test safe config metadata returns masked secrets"""
+        manager = DomainRotationManager()
+        manager._api_key = "pk1_supersecret"
+        manager._secret_key = "sk1_evenmoresecret"
+        manager.api_client = Mock(spec=DomainAPIClient)
+        manager.active_domain = "active.xyz"
+
+        cfg = manager.get_config()
+        assert cfg["configured"] is True
+        assert cfg["provider"] == "porkbun"
+        assert cfg["active_domain"] == "active.xyz"
+        assert cfg["api_key_masked"].endswith("cret")
+        assert "*" in cfg["api_key_masked"]
+        assert cfg["secret_key_masked"].endswith("cret")
+        assert "*" in cfg["secret_key_masked"]
+
+    def test_export_import_state_round_trip(self):
+        """Test state export/import keeps values and datetimes"""
+        manager = DomainRotationManager(monthly_budget=60.0)
+        manager.current_spending = 12.34
+        manager.owned_domains = [{
+            "domain": "example.xyz",
+            "price": 2.99,
+            "purchased_at": __import__("datetime").datetime.now(),
+            "expires_at": __import__("datetime").datetime.now(),
+        }]
+        manager.active_domain = "example.xyz"
+
+        state = manager.export_state()
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(state["owned_domains"][0]["expires_at"], str)
+
+        restored = DomainRotationManager()
+        restored.import_state(state)
+        assert restored.monthly_budget == 60.0
+        assert restored.current_spending == 12.34
+        assert restored.active_domain == "example.xyz"
+        assert len(restored.owned_domains) == 1
+        assert restored.owned_domains[0]["domain"] == "example.xyz"

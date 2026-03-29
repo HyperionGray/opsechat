@@ -228,7 +228,11 @@
 
     <!-- Domain API Configuration -->
     <div class="config-section">
-        <h2>Domain API (Porkbun) - Burner Email Domains</h2>
+        <h2>Domain API (Porkbun) - Burner Email Domains
+            <span class="status {% if domain_config.configured %}configured{% else %}not-configured{% endif %}">
+                {% if domain_config.configured %}✓ Configured{% else %}✗ Not Configured{% endif %}
+            </span>
+        </h2>
         
         <div class="info-box">
             <strong>Info:</strong> Configure Porkbun API to automatically purchase cheap domains for burner email rotation.
@@ -242,6 +246,14 @@
         </div>
         {% endif %}
 
+        {% if domain_config.configured %}
+        <div class="budget-info">
+            <strong>Provider:</strong> {{ domain_config.provider|default('porkbun') }}
+            <br><strong>API Key:</strong> {{ domain_config.api_key_masked or "(in memory)" }}
+            <br><strong>Secret Key:</strong> {{ domain_config.secret_key_masked or "(in memory)" }}
+        </div>
+        {% endif %}
+
         <div class="budget-info">
             <strong>Budget Status:</strong>
             <br>Monthly Budget: ${{ "%.2f"|format(budget_status.monthly_budget) }}
@@ -250,7 +262,7 @@
             <br>Domains Owned: {{ budget_status.domains_owned }}
             
             <div class="budget-bar">
-                <div class="budget-bar-fill" style="width: {{ (budget_status.current_spending / budget_status.monthly_budget * 100)|round|int }}%"></div>
+                <div class="budget-bar-fill" style="width: {{ ((budget_status.current_spending / budget_status.monthly_budget * 100) if budget_status.monthly_budget > 0 else 0)|round|int }}%"></div>
             </div>
         </div>
 
@@ -259,17 +271,17 @@
             
             <div class="form-group">
                 <label>Porkbun API Key:</label>
-                <input type="text" name="api_key" placeholder="pk1_..." required>
+                <input type="text" name="api_key" placeholder="{{ domain_config.api_key_masked or 'pk1_...' }}" required>
             </div>
             
             <div class="form-group">
                 <label>Porkbun API Secret:</label>
-                <input type="password" name="api_secret" placeholder="sk1_..." required>
+                <input type="password" name="api_secret" placeholder="{{ domain_config.secret_key_masked or 'sk1_...' }}" required>
             </div>
             
             <div class="form-group">
                 <label>Monthly Budget (USD):</label>
-                <input type="number" name="monthly_budget" value="50" step="0.01" min="1" required>
+                <input type="number" name="monthly_budget" value="{{ domain_config.monthly_budget|default(50) }}" step="0.01" min="1" required>
             </div>
             
             <button type="submit">Configure Domain API</button>
