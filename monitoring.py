@@ -8,6 +8,7 @@ import json
 import time
 import sys
 import os
+import threading
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from functools import wraps
@@ -105,6 +106,7 @@ class ApplicationPerformanceMonitor:
     """
     
     def __init__(self):
+        self._lock = threading.RLock()
         self.metrics = {
             'requests': {
                 'total': 0,
@@ -139,28 +141,29 @@ class ApplicationPerformanceMonitor:
     
     def record_request(self, endpoint: str, method: str, response_time: float, status_code: int):
         """Record HTTP request metrics"""
-        self.metrics['requests']['total'] += 1
-        
-        endpoint_key = f"{method} {endpoint}"
-        if endpoint_key not in self.metrics['requests']['by_endpoint']:
-            self.metrics['requests']['by_endpoint'][endpoint_key] = {
-                'count': 0,
-                'total_time': 0.0,
-                'errors': 0
-            }
-        
-        endpoint_metrics = self.metrics['requests']['by_endpoint'][endpoint_key]
-        endpoint_metrics['count'] += 1
-        endpoint_metrics['total_time'] += response_time
-        
-        if status_code >= 400:
-            endpoint_metrics['errors'] += 1
-            self.metrics['requests']['errors'] += 1
-        
-        # Keep only last 1000 response times for memory efficiency
-        self.metrics['requests']['response_times'].append(response_time)
-        if len(self.metrics['requests']['response_times']) > 1000:
-            self.metrics['requests']['response_times'] = self.metrics['requests']['response_times'][-1000:]
+        with self._lock:
+            self.metrics['requests']['total'] += 1
+
+            endpoint_key = f"{method} {endpoint}"
+            if endpoint_key not in self.metrics['requests']['by_endpoint']:
+                self.metrics['requests']['by_endpoint'][endpoint_key] = {
+                    'count': 0,
+                    'total_time': 0.0,
+                    'errors': 0
+                }
+
+            endpoint_metrics = self.metrics['requests']['by_endpoint'][endpoint_key]
+            endpoint_metrics['count'] += 1
+            endpoint_metrics['total_time'] += response_time
+
+            if status_code >= 400:
+                endpoint_metrics['errors'] += 1
+                self.metrics['requests']['errors'] += 1
+
+            # Keep only last 1000 response times for memory efficiency
+            self.metrics['requests']['response_times'].append(response_time)
+            if len(self.metrics['requests']['response_times']) > 1000:
+                self.metrics['requests']['response_times'] = self.metrics['requests']['response_times'][-1000:]
         
         # Log slow requests
         if response_time > 2.0:
@@ -172,14 +175,15 @@ class ApplicationPerformanceMonitor:
     
     def record_tor_event(self, event_type: str, success: bool = True, details: Optional[Dict] = None):
         """Record Tor-related events"""
-        if event_type == 'connection':
-            self.metrics['tor']['connection_attempts'] += 1
-            if not success:
-                self.metrics['tor']['connection_failures'] += 1
-        elif event_type == 'hidden_service':
-            self.metrics['tor']['hidden_service_creations'] += 1
-            if not success:
-                self.metrics['tor']['hidden_service_failures'] += 1
+        with self._lock:
+            if event_type == 'connection':
+                self.metrics['tor']['connection_attempts'] += 1
+                if not success:
+                    self.metrics['tor']['connection_failures'] += 1
+            elif event_type == 'hidden_service':
+                self.metrics['tor']['hidden_service_creations'] += 1
+                if not success:
+                    self.metrics['tor']['hidden_service_failures'] += 1
         
         self.logger.log_event('info' if success else 'error', 
                             f'tor_{event_type}', 
@@ -188,23 +192,25 @@ class ApplicationPerformanceMonitor:
     
     def record_chat_event(self, event_type: str, details: Optional[Dict] = None):
         """Record chat-related events"""
-        if event_type == 'message_sent':
-            self.metrics['chat']['messages_sent'] += 1
-        elif event_type == 'cleanup':
-            self.metrics['chat']['cleanup_operations'] += 1
+        with self._lock:
+            if event_type == 'message_sent':
+                self.metrics['chat']['messages_sent'] += 1
+            elif event_type == 'cleanup':
+                self.metrics['chat']['cleanup_operations'] += 1
         
         self.logger.log_event('info', f'chat_{event_type}', **(details or {}))
     
     def record_email_event(self, event_type: str, details: Optional[Dict] = None):
         """Record email-related events"""
-        if event_type == 'composed':
-            self.metrics['email']['emails_composed'] += 1
-        elif event_type == 'sent':
-            self.metrics['email']['emails_sent'] += 1
-        elif event_type == 'burner_created':
-            self.metrics['email']['burner_emails_created'] += 1
-        elif event_type == 'security_scan':
-            self.metrics['email']['security_scans_performed'] += 1
+        with self._lock:
+            if event_type == 'composed':
+                self.metrics['email']['emails_composed'] += 1
+            elif event_type == 'sent':
+                self.metrics['email']['emails_sent'] += 1
+            elif event_type == 'burner_created':
+                self.metrics['email']['burner_emails_created'] += 1
+            elif event_type == 'security_scan':
+                self.metrics['email']['security_scans_performed'] += 1
         
         self.logger.log_event('info', f'email_{event_type}', **(details or {}))
     
@@ -213,62 +219,125 @@ class ApplicationPerformanceMonitor:
         try:
             import psutil
             process = psutil.Process()
-            self.metrics['system']['memory_usage_mb'] = process.memory_info().rss / 1024 / 1024
+            with self._lock:
+                self.metrics['system']['memory_usage_mb'] = process.memory_info().rss / 1024 / 1024
         except ImportError:
             # psutil not available, skip memory monitoring
             pass
         
-        self.metrics['system']['uptime_seconds'] = time.time() - self.metrics['system']['start_time']
+        with self._lock:
+            self.metrics['system']['uptime_seconds'] = time.time() - self.metrics['system']['start_time']
     
     def get_metrics_summary(self) -> Dict[str, Any]:
         """Get summarized metrics for reporting"""
         self.update_system_metrics()
-        
-        summary = {
-            'timestamp': datetime.now(timezone.utc).isoformat(),
-            'uptime_seconds': self.metrics['system']['uptime_seconds'],
-            'requests': {
-                'total': self.metrics['requests']['total'],
-                'error_rate': 0.0,
-                'avg_response_time': 0.0
-            },
-            'tor': {
-                'connection_success_rate': 0.0,
-                'hidden_service_success_rate': 0.0
-            },
-            'activity': {
-                'chat_messages': self.metrics['chat']['messages_sent'],
-                'emails_composed': self.metrics['email']['emails_composed'],
-                'burner_emails': self.metrics['email']['burner_emails_created']
+
+        with self._lock:
+            requests_total = self.metrics['requests']['total']
+            requests_errors = self.metrics['requests']['errors']
+            response_times = list(self.metrics['requests']['response_times'])
+            tor_attempts = self.metrics['tor']['connection_attempts']
+            tor_failures = self.metrics['tor']['connection_failures']
+            hs_creations = self.metrics['tor']['hidden_service_creations']
+            hs_failures = self.metrics['tor']['hidden_service_failures']
+
+            summary = {
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'uptime_seconds': self.metrics['system']['uptime_seconds'],
+                'requests': {
+                    'total': requests_total,
+                    'error_rate': 0.0,
+                    'avg_response_time': 0.0
+                },
+                'tor': {
+                    'connection_success_rate': 0.0,
+                    'hidden_service_success_rate': 0.0
+                },
+                'activity': {
+                    'chat_messages': self.metrics['chat']['messages_sent'],
+                    'emails_composed': self.metrics['email']['emails_composed'],
+                    'burner_emails': self.metrics['email']['burner_emails_created']
+                }
             }
-        }
-        
-        # Calculate request metrics
-        if self.metrics['requests']['total'] > 0:
-            summary['requests']['error_rate'] = (
-                self.metrics['requests']['errors'] / self.metrics['requests']['total']
-            ) * 100
-        
-        if self.metrics['requests']['response_times']:
-            summary['requests']['avg_response_time'] = (
-                sum(self.metrics['requests']['response_times']) / 
-                len(self.metrics['requests']['response_times'])
+
+            # Calculate request metrics
+            if requests_total > 0:
+                summary['requests']['error_rate'] = (
+                    requests_errors / requests_total
+                ) * 100
+
+            if response_times:
+                summary['requests']['avg_response_time'] = (
+                    sum(response_times) / len(response_times)
+                )
+
+            # Calculate Tor success rates
+            if tor_attempts > 0:
+                summary['tor']['connection_success_rate'] = (
+                    (tor_attempts - tor_failures) / tor_attempts
+                ) * 100
+
+            if hs_creations > 0:
+                summary['tor']['hidden_service_success_rate'] = (
+                    (hs_creations - hs_failures) / hs_creations
+                ) * 100
+
+            return summary
+
+    def get_detailed_metrics(self) -> Dict[str, Any]:
+        """
+        Return detailed endpoint-level metrics for diagnostics dashboards.
+        """
+        self.update_system_metrics()
+        with self._lock:
+            response_times = list(self.metrics['requests']['response_times'])
+            by_endpoint = {}
+            for endpoint_key, values in self.metrics['requests']['by_endpoint'].items():
+                count = values['count']
+                avg_time = (values['total_time'] / count) if count else 0.0
+                error_rate = ((values['errors'] / count) * 100) if count else 0.0
+                by_endpoint[endpoint_key] = {
+                    'count': count,
+                    'errors': values['errors'],
+                    'error_rate': error_rate,
+                    'avg_response_time': avg_time,
+                    'total_time': values['total_time'],
+                }
+
+            total_requests = self.metrics['requests']['total']
+            total_errors = self.metrics['requests']['errors']
+            aggregate_error_rate = (
+                (total_errors / total_requests) * 100 if total_requests else 0.0
             )
-        
-        # Calculate Tor success rates
-        if self.metrics['tor']['connection_attempts'] > 0:
-            summary['tor']['connection_success_rate'] = (
-                (self.metrics['tor']['connection_attempts'] - self.metrics['tor']['connection_failures']) /
-                self.metrics['tor']['connection_attempts']
-            ) * 100
-        
-        if self.metrics['tor']['hidden_service_creations'] > 0:
-            summary['tor']['hidden_service_success_rate'] = (
-                (self.metrics['tor']['hidden_service_creations'] - self.metrics['tor']['hidden_service_failures']) /
-                self.metrics['tor']['hidden_service_creations']
-            ) * 100
-        
-        return summary
+            aggregate_avg = (
+                (sum(response_times) / len(response_times)) if response_times else 0.0
+            )
+
+            return {
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'uptime_seconds': self.metrics['system']['uptime_seconds'],
+                'requests': {
+                    'total': total_requests,
+                    'errors': total_errors,
+                    'error_rate': aggregate_error_rate,
+                    'avg_response_time': aggregate_avg,
+                    'response_samples': len(response_times),
+                    'by_endpoint': by_endpoint,
+                },
+                'activity': {
+                    'chat_messages': self.metrics['chat']['messages_sent'],
+                    'chat_cleanups': self.metrics['chat']['cleanup_operations'],
+                    'emails_composed': self.metrics['email']['emails_composed'],
+                    'emails_sent': self.metrics['email']['emails_sent'],
+                    'burner_emails': self.metrics['email']['burner_emails_created'],
+                    'security_scans': self.metrics['email']['security_scans_performed'],
+                },
+                'tor': dict(self.metrics['tor']),
+                'system': {
+                    'memory_usage_mb': self.metrics['system']['memory_usage_mb'],
+                    'start_time': self.metrics['system']['start_time'],
+                },
+            }
     
     def log_metrics_summary(self):
         """Log current metrics summary"""
@@ -323,14 +392,20 @@ def _read_version() -> str:
 
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
+    active_rooms = 0
+    try:
+        from simple_chat_routes import chat_rooms, rooms_lock
+        with rooms_lock:
+            active_rooms = len(chat_rooms)
+    except Exception:
+        active_rooms = 0
+
     return {
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
-        # active_rooms: this app uses a single global chat room. The field is
-        # included for API consistency; it always reports 1 when the service is up.
-        'active_rooms': 1,
+        'active_rooms': active_rooms,
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',

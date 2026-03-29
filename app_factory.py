@@ -6,7 +6,8 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+import time
+from flask import Flask, jsonify, request, g
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -36,6 +37,7 @@ def create_app():
     # Register function-based routes
     from chat_routes import register_chat_routes
     from review_routes import register_review_routes
+    from monitoring import get_health_status, apm
     from utils import add_review
     
     # Helper functions for reviews
@@ -67,9 +69,28 @@ def create_app():
     def add_review_wrapper(user_id, rating, review_text):
         return add_review(reviews, user_id, rating, review_text)
     
-    # Add security headers after every response
+    # Track request timing for APM metrics
+    @app.before_request
+    def begin_request_timer():
+        g._req_started_at = time.perf_counter()
+
+    # Add security headers and record request metrics after every response
     @app.after_request
     def add_security_headers(response):
+        # Record request metrics without allowing observability failures
+        # to impact user-facing responses.
+        try:
+            started = getattr(g, "_req_started_at", None)
+            duration = 0.0 if started is None else (time.perf_counter() - started)
+            apm.record_request(
+                endpoint=request.path,
+                method=request.method,
+                response_time=duration,
+                status_code=response.status_code,
+            )
+        except Exception:
+            pass
+
         response.headers["Server"] = ""
         response.headers["Date"] = ""
         # Content Security Policy: restrict resources to same origin, block inline scripts
@@ -109,12 +130,20 @@ def create_app():
     from http_mail_routes import register_http_mail_routes
     register_http_mail_routes(app)
     
-    # Health check endpoint
-    from monitoring import get_health_status
-
     @app.route('/health', methods=["GET"])
     def health():
         return jsonify(get_health_status())
+
+    @app.route('/metrics', methods=["GET"])
+    def metrics():
+        """
+        Read-only operational metrics endpoint.
+        Use /metrics?detailed=1 for endpoint-level counters.
+        """
+        detailed = request.args.get("detailed", "").lower() in {"1", "true", "yes"}
+        if detailed:
+            return jsonify(apm.get_detailed_metrics())
+        return jsonify(apm.get_metrics_summary())
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])

@@ -17,8 +17,8 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Absolute path to this file's directory (used for reliable VERSION lookup)
@@ -54,6 +54,24 @@ ENC_PREFIX = "ENC:"
 # Allow encrypted payloads to be larger: AES-GCM adds IV (12 B) + tag (16 B)
 # overhead, so a 500-char plaintext becomes ~700 chars of base64 plus the prefix.
 MAX_ENC_MESSAGE_LENGTH = MAX_MESSAGE_LENGTH * 2
+
+
+def _ensure_session_identity():
+    """Initialize per-session identity once for chat/DM endpoints."""
+    if "_id" not in session:
+        session["_id"] = generate_secure_dm_id()
+        session["username"] = generate_random_username()
+        session["color"] = get_random_color_rgb()
+
+
+def _record_chat_metric(event_type: str, details=None) -> None:
+    """Best-effort chat activity metric recording."""
+    try:
+        from monitoring import apm
+        apm.record_chat_event(event_type, details or {})
+    except Exception:
+        # Metrics must never break chat message flow.
+        pass
 
 # Room class to manage chat state
 class ChatRoom:
@@ -247,6 +265,7 @@ def cleanup_loop():
         with rooms_lock:
             for room in chat_rooms.values():
                 room.cleanup_old_messages()
+        _record_chat_metric("cleanup")
 
 
 # Start cleanup thread
@@ -283,11 +302,7 @@ def register_simple_chat_routes(app):
     @limiter.limit("10 per hour; 3 per minute")
     def chat_create():
         """Create a new chat room with cryptographically secure ID"""
-        # Ensure session exists for rate limiting
-        if "_id" not in session:
-            session["_id"] = generate_secure_dm_id()
-            session["username"] = generate_random_username()
-            session["color"] = get_random_color_rgb()
+        _ensure_session_identity()
 
         allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
         if not allowed:
@@ -314,11 +329,7 @@ def register_simple_chat_routes(app):
                 return render_template("simple_chat_error.html", 
                                      error="Room not found or expired"), 404
         
-        # Initialize user session
-        if "_id" not in session:
-            session["_id"] = generate_secure_dm_id()
-            session["username"] = generate_random_username()
-            session["color"] = get_random_color_rgb()
+        _ensure_session_identity()
         
         return render_template("simple_chat_room.html", 
                              room_id=room_id,
@@ -335,11 +346,7 @@ def register_simple_chat_routes(app):
             room = chat_rooms[room_id]
         
         if request.method == 'POST':
-            # Ensure user has session
-            if "_id" not in session:
-                session["_id"] = generate_secure_dm_id()
-                session["username"] = generate_random_username()
-                session["color"] = get_random_color_rgb()
+            _ensure_session_identity()
 
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
@@ -403,6 +410,7 @@ def register_simple_chat_routes(app):
                 session["color"],
                 message_text
             )
+            _record_chat_metric("message_sent", {"room_id": room_id})
             
             return jsonify({"success": True})
         
@@ -430,11 +438,7 @@ def register_simple_chat_routes(app):
     @limiter.limit("20 per hour; 5 per minute")
     def send_dm():
         """Send a direct message (for sharing room IDs) - expires in 1 minute"""
-        # Initialize user session if needed
-        if "_id" not in session:
-            session["_id"] = generate_secure_dm_id()
-            session["username"] = generate_random_username()
-            session["color"] = get_random_color_rgb()
+        _ensure_session_identity()
 
         # Check rate limit for DMs
         allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
@@ -473,6 +477,7 @@ def register_simple_chat_routes(app):
                 "timestamp": datetime.datetime.now(),
                 "read": False
             }
+        _record_chat_metric("dm_sent", {"room_id": room_id})
         
         return jsonify({
             "success": True,

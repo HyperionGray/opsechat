@@ -240,6 +240,7 @@ Features
 - **Simple Web Chat Rooms** - Create secure chat rooms with one command (`python chat-room.py`)
 - **E2E Encryption** - Optional encryption using Web Crypto API (simple, reviewable JavaScript)
 - **Terminal-Style UI** - Clean, minimal interface focused on security over aesthetics
+- **Built-in Request Metrics** - `GET /metrics` for summary metrics and `GET /metrics?detailed=1` for endpoint-level counters
 - As chat happens inside the Tor network via ephemeral hidden services, everything is encrypted and attribution of chatters is virtually impossible
 - *Nothing* touches disk except the app, everything happens in-memory, no chat, image, video, or ANYTHING caching to storage.
 - This chat is meant to help you with opsec, disappearing messages, randomized usernames, encrypted comms are the default (much more to come)

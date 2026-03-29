@@ -49,7 +49,7 @@ python runserver.py
 
 ```
 opsechat/
-├── src/                    # Python source modules (WIP - being organized)
+├── src/                    # Python source modules
 │   └── tui/               # Terminal UI implementation
 ├── templates/             # Jinja2 HTML templates
 ├── static/                # Static assets (CSS, JS)
@@ -103,6 +103,11 @@ These are development and testing utilities that help during development:
 - **`state_manager.py`** - State persistence
 - **`monitoring.py`** - Performance monitoring
 - **`performance_utils.py`** - Performance utilities
+
+### Observability Endpoints
+- **`GET /health`** - Liveness and basic status (version, uptime, active room count)
+- **`GET /metrics`** - Request/error/latency summary counters
+- **`GET /metrics?detailed=1`** - Per-endpoint request metrics and activity counters
 
 ## Testing
 

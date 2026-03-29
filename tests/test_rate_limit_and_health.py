@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
 from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import chat_rooms, rooms_lock
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -24,6 +25,12 @@ def _clear_store():
     """Helper: wipe the rate limit store between tests."""
     with _rate_limit_lock:
         _rate_limit_store.clear()
+
+
+def _clear_rooms():
+    """Helper: wipe in-memory chat rooms between tests."""
+    with rooms_lock:
+        chat_rooms.clear()
 
 
 def test_rate_limit_allows_requests_within_window():
@@ -113,3 +120,38 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_active_rooms_tracks_rooms():
+    _clear_rooms()
+    client = _test_app.test_client()
+    client.post("/chat/create")
+    client.post("/chat/create")
+    response = client.get("/health")
+    data = response.get_json()
+    assert data["active_rooms"] == 2
+
+
+def test_metrics_endpoint_summary_shape():
+    client = _test_app.test_client()
+    response = client.get("/metrics")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data is not None
+    assert "requests" in data
+    assert "activity" in data
+    assert "tor" in data
+    assert isinstance(data["requests"].get("total"), int)
+
+
+def test_metrics_endpoint_detailed_contains_endpoint_breakdown():
+    client = _test_app.test_client()
+    # Seed at least one non-metrics endpoint for deterministic endpoint stats.
+    client.get("/health")
+    response = client.get("/metrics?detailed=1")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data is not None
+    assert "requests" in data
+    assert "by_endpoint" in data["requests"]
+    assert "GET /health" in data["requests"]["by_endpoint"]

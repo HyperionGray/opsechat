@@ -40,6 +40,13 @@ curl http://localhost:5000/health
 # {"active_rooms":0,"status":"healthy","version":"0.8.0-alpha"}
 ```
 
+### Inspect live request metrics
+
+```bash
+curl http://localhost:5000/metrics
+curl "http://localhost:5000/metrics?detailed=1"
+```
+
 ---
 
 ## Prerequisites
