@@ -1,6 +1,7 @@
 """
 Tests for domain management module
 """
+from datetime import datetime, timedelta
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
@@ -174,3 +175,77 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_sets_api_client_and_budget(self):
+        """Test configure() wires Porkbun client and validates budget"""
+        manager = DomainRotationManager()
+        ok = manager.configure("pk_live_1234", "sk_live_5678", monthly_budget=25.0)
+
+        assert ok is True
+        assert manager.api_client is not None
+        assert manager.monthly_budget == 25.0
+
+    def test_configure_rejects_invalid_budget(self):
+        """Test configure() rejects invalid budget values"""
+        manager = DomainRotationManager()
+
+        with pytest.raises(ValueError):
+            manager.configure("pk_live_1234", "sk_live_5678", monthly_budget=0)
+
+        with pytest.raises(ValueError):
+            manager.configure("pk_live_1234", "sk_live_5678", monthly_budget="abc")
+
+    def test_get_config_masks_api_key(self):
+        """Test configuration status includes masked key only"""
+        manager = DomainRotationManager()
+        manager.configure("pk_test_secret_9876", "sk_test_secret_1111", monthly_budget=10.0)
+
+        config = manager.get_config()
+        assert config["has_api_client"] is True
+        assert config["provider"] == "porkbun"
+        assert config["api_key_masked"].startswith("pk_t")
+        assert "secret" not in config["api_key_masked"]
+
+    def test_export_and_load_state_roundtrip(self):
+        """Test manager state can be serialized and restored"""
+        manager = DomainRotationManager(monthly_budget=60.0)
+        manager.current_spending = 7.5
+        manager.active_domain = "active.xyz"
+        manager.owned_domains = [{
+            "domain": "active.xyz",
+            "price": 2.99,
+            "purchased_at": datetime.now(),
+            "expires_at": datetime.now() + timedelta(days=365),
+        }]
+
+        state = manager.export_state()
+        restored = DomainRotationManager()
+        restored.load_state(state)
+
+        assert restored.monthly_budget == 60.0
+        assert restored.current_spending == 7.5
+        assert restored.active_domain == "active.xyz"
+        assert len(restored.owned_domains) == 1
+        assert restored.owned_domains[0]["domain"] == "active.xyz"
+
+    def test_rotate_domain_return_details(self):
+        """Test rotate_domain(return_details=True) returns API payload"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "example.xyz",
+            "price": "2.49"
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "example.xyz"
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=10.0)
+        result = manager.rotate_domain(return_details=True)
+
+        assert result["success"] is True
+        assert result["domain"].endswith(
+            (".xyz", ".club", ".online", ".site", ".website")
+        )
+        assert result["price"] == 2.49
