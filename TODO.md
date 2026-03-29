@@ -102,7 +102,7 @@
 - [ ] Integrate second domain registrar API
   - [ ] Choose registrar (Namecheap recommended)
   - [ ] Implement API client
-  - [ ] Update domain rotation logic
+  - [x] Update domain rotation logic
   - [ ] Test automated purchasing
 - [ ] Add abuse detection
   - [ ] Keyword filtering

@@ -116,8 +116,9 @@ Then modify the runserver.py to read these on startup.
 Opsechat includes budget controls to prevent accidental overspending:
 
 - **Monthly Budget**: Maximum amount to spend per month
-- **Domain Price Limit**: Maximum price per domain (default: $5)
-- **Current Spending**: Tracked in-memory (resets on restart)
+- **Domain Price Limit**: Maximum price per domain (default: $5, configurable in code)
+- **Current Spending**: Tracked in-memory for the running process
+- **CLI State Export/Import**: `domain_rotation_cli.py` now persists rotation state safely using JSON-serializable values
 
 View budget status:
 ```
@@ -130,12 +131,15 @@ http://yourservice.onion/{path}/email/config
 2. **Generate Burner**: Creates email with current domain
 3. **Auto-Rotate**: When domain is flagged/old, rotate to new domain
 4. **Manual Rotate**: Force rotation via email config page
+5. **Review Result Details**: Rotation now returns structured results (`success`, `domain`, `previous_domain`, `price`, `remaining_budget`) for better UI/automation handling
 
 ## Security Considerations
 
 ### API Key Storage
 
-⚠️ **Important**: API keys are stored in-memory only. They are NOT persisted to disk. After restart, you must reconfigure.
+⚠️ **Important**:
+- Web app configuration is in-memory only and must be reconfigured after restart.
+- CLI configuration (`~/.opsechat/domain_config.json`) is persisted to disk with file mode `0600`.
 
 For persistent configuration:
 - Use environment variables in your deployment

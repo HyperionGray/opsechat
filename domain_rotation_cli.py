@@ -25,6 +25,15 @@ from domain_manager import PorkbunAPIClient, DomainRotationManager
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
 
 
+def _format_datetime(value):
+    """Format datetime-like values for display."""
+    if hasattr(value, "strftime"):
+        return value.strftime("%Y-%m-%d %H:%M")
+    if isinstance(value, str):
+        return value
+    return "unknown"
+
+
 def load_config():
     """Load configuration from file"""
     if not CONFIG_FILE.exists():
@@ -108,22 +117,15 @@ def get_manager():
         monthly_budget=config.get('monthly_budget', 50.0)
     )
     
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+    # Load saved state (supports datetime-safe import)
+    manager.import_state(config)
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    config.update(manager.export_state())
     save_config(config)
 
 
@@ -144,8 +146,12 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_datetime(domain.get('purchased_at'))}")
+        expires_value = domain.get("expires_at")
+        expires = _format_datetime(expires_value)
+        if isinstance(expires_value, str) and "T" in expires:
+            expires = expires.split("T")[0]
+        print(f"   Expires: {expires}")
         print()
 
 
@@ -186,7 +192,9 @@ def rotate_domain():
     
     print("Searching for available cheap domain...")
     
-    domain_info = manager.find_cheap_available_domain(max_price=min(5.0, budget_status['remaining']))
+    domain_info = manager.find_cheap_available_domain(
+        max_price=min(manager.max_domain_price, budget_status['remaining'])
+    )
     
     if not domain_info:
         print("❌ Could not find an available cheap domain within budget.")
@@ -226,6 +234,7 @@ def show_status():
     print(f"  Monthly: ${budget_status['monthly_budget']}")
     print(f"  Spent: ${budget_status['current_spending']}")
     print(f"  Remaining: ${budget_status['remaining']}")
+    print(f"  Max Domain Price: ${manager.max_domain_price}")
     print(f"\nDomains Owned: {budget_status['domains_owned']}")
     
     if manager.active_domain:
