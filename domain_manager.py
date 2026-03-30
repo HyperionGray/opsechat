@@ -382,7 +382,7 @@ class DomainRotationManager:
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
-        self.add_api_client(api_client, make_primary=True)
+        self.add_api_client(api_client, name="primary", make_primary=True)
 
     def add_api_client(
         self,
@@ -391,7 +391,16 @@ class DomainRotationManager:
         make_primary: bool = False,
     ):
         """Add a registrar client; optionally set it as primary."""
-        client_name = (name or getattr(api_client, "CLIENT_NAME", "") or api_client.__class__.__name__).lower()
+        raw_name: Optional[str] = name
+        if raw_name is None:
+            candidate = getattr(api_client, "CLIENT_NAME", None)
+            if isinstance(candidate, str):
+                raw_name = candidate
+
+        client_name = (raw_name or "").strip().lower()
+        if not client_name:
+            client_name = "primary" if not self._api_clients else f"client_{len(self._api_clients) + 1}"
+
         self._api_clients[client_name] = api_client
         if make_primary or not self.primary_registrar:
             self.primary_registrar = client_name
@@ -400,7 +409,10 @@ class DomainRotationManager:
     def get_api_client(self, name: Optional[str] = None) -> Optional[DomainAPIClient]:
         """Get a configured registrar client by name or primary if omitted."""
         if name:
-            return self._api_clients.get(name.lower())
+            key = str(name).strip().lower()
+            client = self._api_clients.get(key)
+            if client:
+                return client
         if self.primary_registrar:
             return self._api_clients.get(self.primary_registrar)
         return self.api_client
