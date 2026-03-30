@@ -14,15 +14,48 @@ Usage:
 """
 
 import argparse
+import datetime
 import json
 import os
 import sys
 from pathlib import Path
 from getpass import getpass
-from domain_manager import PorkbunAPIClient, DomainRotationManager
+from domain_manager import DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _serialize_owned_domains(domains):
+    """Convert in-memory domain metadata to JSON-safe dictionaries."""
+    serialized = []
+    for domain in domains or []:
+        item = dict(domain)
+        purchased_at = item.get('purchased_at')
+        expires_at = item.get('expires_at')
+        if isinstance(purchased_at, datetime.datetime):
+            item['purchased_at'] = purchased_at.isoformat()
+        if isinstance(expires_at, datetime.datetime):
+            item['expires_at'] = expires_at.isoformat()
+        serialized.append(item)
+    return serialized
+
+
+def _deserialize_owned_domains(domains):
+    """Convert JSON-loaded domain metadata back into runtime-friendly values."""
+    parsed = []
+    for domain in domains or []:
+        item = dict(domain)
+        for key in ('purchased_at', 'expires_at'):
+            value = item.get(key)
+            if isinstance(value, str):
+                try:
+                    item[key] = datetime.datetime.fromisoformat(value)
+                except ValueError:
+                    # Keep original value if not ISO format.
+                    pass
+        parsed.append(item)
+    return parsed
 
 
 def load_config():
@@ -54,8 +87,9 @@ def save_config(config):
 def configure_api():
     """Configure API credentials"""
     print("\n=== Domain API Configuration ===\n")
-    print("This tool supports Porkbun API for domain management.")
-    print("You can get API credentials from: https://porkbun.com/account/api\n")
+    print("This tool supports Porkbun and Namecheap API credentials.")
+    print("Porkbun API: https://porkbun.com/account/api")
+    print("Namecheap API: https://www.namecheap.com/support/api/intro/\n")
     
     config = load_config()
     
@@ -64,13 +98,31 @@ def configure_api():
         print(f"  API Key: {'*' * 20}{config['api_key'][-4:]}")
     else:
         print("  API Key: Not configured")
+
+    if config.get('registrar'):
+        print(f"  Primary Registrar: {config['registrar']}")
+    else:
+        print("  Primary Registrar: porkbun (default)")
     
     if config.get('monthly_budget'):
         print(f"  Monthly Budget: ${config['monthly_budget']}")
     else:
         print("  Monthly Budget: Not configured")
     
+    if config.get('namecheap_api_user'):
+        print(f"  Namecheap API User: {config['namecheap_api_user']}")
+    else:
+        print("  Namecheap API User: Not configured")
+
     print("\nEnter new values (or press Enter to keep current):\n")
+
+    registrar = input("Primary registrar [porkbun/namecheap/both] [default: porkbun]: ").strip().lower()
+    if registrar in {'porkbun', 'namecheap', 'both'}:
+        config['registrar'] = registrar
+    elif registrar:
+        print("Invalid registrar, keeping previous value")
+    elif 'registrar' not in config:
+        config['registrar'] = 'porkbun'
     
     api_key = input("Porkbun API Key: ").strip()
     if api_key:
@@ -79,6 +131,24 @@ def configure_api():
     api_secret = getpass("Porkbun API Secret: ").strip()
     if api_secret:
         config['api_secret'] = api_secret
+
+    namecheap_api_user = input("Namecheap API User: ").strip()
+    if namecheap_api_user:
+        config['namecheap_api_user'] = namecheap_api_user
+
+    namecheap_api_key = getpass("Namecheap API Key: ").strip()
+    if namecheap_api_key:
+        config['namecheap_api_key'] = namecheap_api_key
+
+    namecheap_username = input("Namecheap Username [optional]: ").strip()
+    if namecheap_username:
+        config['namecheap_username'] = namecheap_username
+
+    namecheap_client_ip = input("Namecheap Client IP [default: 127.0.0.1]: ").strip()
+    if namecheap_client_ip:
+        config['namecheap_client_ip'] = namecheap_client_ip
+    elif 'namecheap_client_ip' not in config:
+        config['namecheap_client_ip'] = '127.0.0.1'
     
     budget = input("Monthly Budget (USD) [default: 50]: ").strip()
     if budget:
@@ -97,22 +167,31 @@ def get_manager():
     """Get configured domain manager"""
     config = load_config()
     
-    if not config.get('api_key') or not config.get('api_secret'):
-        print("❌ Error: API credentials not configured.")
+    has_porkbun = bool(config.get('api_key') and config.get('api_secret'))
+    has_namecheap = bool(config.get('namecheap_api_user') and config.get('namecheap_api_key'))
+
+    if not has_porkbun and not has_namecheap:
+        print("❌ Error: Registrar API credentials not configured.")
         print("Run: python domain_rotation_cli.py config")
         sys.exit(1)
-    
-    client = PorkbunAPIClient(config['api_key'], config['api_secret'])
-    manager = DomainRotationManager(
-        api_client=client,
-        monthly_budget=config.get('monthly_budget', 50.0)
+
+    manager = DomainRotationManager(monthly_budget=config.get('monthly_budget', 50.0))
+    manager.configure(
+        api_key=config.get('api_key', ''),
+        secret_key=config.get('api_secret', ''),
+        monthly_budget=config.get('monthly_budget', 50.0),
+        registrar=config.get('registrar', 'porkbun'),
+        namecheap_api_user=config.get('namecheap_api_user'),
+        namecheap_api_key=config.get('namecheap_api_key'),
+        namecheap_username=config.get('namecheap_username'),
+        namecheap_client_ip=config.get('namecheap_client_ip', '127.0.0.1'),
     )
     
     # Load saved state
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = _deserialize_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +201,7 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = _serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -144,8 +223,20 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        purchased_at = domain.get('purchased_at')
+        expires_at = domain.get('expires_at')
+        if isinstance(purchased_at, datetime.datetime):
+            purchased_display = purchased_at.strftime('%Y-%m-%d %H:%M')
+        else:
+            purchased_display = str(purchased_at or 'unknown')
+        if isinstance(expires_at, datetime.datetime):
+            expires_display = expires_at.strftime('%Y-%m-%d')
+        else:
+            expires_display = str(expires_at or 'unknown')
+        print(f"   Purchased: {purchased_display}")
+        print(f"   Expires: {expires_display}")
+        if domain.get('registrar'):
+            print(f"   Registrar: {domain['registrar']}")
         print()
 
 
@@ -161,7 +252,8 @@ def search_domains():
         domain_info = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
         
         if domain_info:
-            print(f"  ✅ Found: {domain_info['domain']} - ${domain_info['price']}")
+            registrar = domain_info.get('registrar', 'unknown')
+            print(f"  ✅ Found: {domain_info['domain']} - ${domain_info['price']} ({registrar})")
         else:
             print(f"  ❌ No cheap domain found in this attempt")
     
@@ -203,11 +295,14 @@ def rotate_domain():
     print("\nPurchasing domain...")
     success = manager.purchase_domain_if_budget_allows(
         domain_info['domain'],
-        domain_info['price']
+        domain_info['price'],
+        registrar_name=domain_info.get('registrar')
     )
     
     if success:
-        print(f"\n✅ Successfully purchased and activated: {domain_info['domain']}")
+        manager.active_domain = domain_info['domain']
+        registrar = domain_info.get('registrar', 'unknown')
+        print(f"\n✅ Successfully purchased and activated: {domain_info['domain']} ({registrar})")
         save_manager_state(manager, config)
     else:
         print("\n❌ Failed to purchase domain. Check API credentials and budget.")
@@ -236,7 +331,7 @@ def show_status():
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
-        description='OpSecHat Domain Rotation CLI',
+        description='OpSecChat Domain Rotation CLI',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
