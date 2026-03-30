@@ -240,6 +240,32 @@ class TestChatRoutes:
         response = client.get("/chat/room/no-such-room/key")
         assert response.status_code == 404
 
+    def test_chat_create_rate_limit_response_has_retry_after_header(self, client):
+        """When /chat/create is rate-limited, response includes cooldown metadata."""
+        from simple_chat_routes import _rate_limit_store, _rate_limit_lock
+
+        # Prime session
+        client.post("/chat/create")
+        with client.session_transaction() as sess:
+            sid = sess["_id"]
+
+        # Force the session to be at the limit for chat_create
+        now = datetime.datetime.now()
+        limit = RATE_LIMITS["chat_create"]["max_requests"]
+        with _rate_limit_lock:
+            _rate_limit_store[sid] = {
+                "chat_create": [now for _ in range(limit)]
+            }
+
+        response = client.post("/chat/create")
+        assert response.status_code == 429
+        assert response.headers.get("Retry-After") is not None
+        data = response.get_json()
+        assert data["endpoint"] == "chat_create"
+        assert data["retry_after_seconds"] >= 1
+        assert data["limit"]["max_requests"] == RATE_LIMITS["chat_create"]["max_requests"]
+        assert data["limit"]["window_seconds"] == RATE_LIMITS["chat_create"]["window_seconds"]
+
 
 # ---------------------------------------------------------------------------
 # HTTP routes – direct messages
@@ -273,6 +299,66 @@ class TestDMRoutes:
             content_type="application/json",
         )
         assert response.status_code == 400
+
+    def test_send_dm_rate_limit_response_has_retry_after_header(self, client):
+        """When /chat/dm/send is rate-limited, response includes cooldown metadata."""
+        from simple_chat_routes import _rate_limit_store, _rate_limit_lock
+
+        # Prime session by sending a valid DM once
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "hello"},
+            content_type="application/json",
+        )
+        with client.session_transaction() as sess:
+            sid = sess["_id"]
+
+        now = datetime.datetime.now()
+        limit = RATE_LIMITS["dm_send"]["max_requests"]
+        with _rate_limit_lock:
+            _rate_limit_store[sid] = {
+                "dm_send": [now for _ in range(limit)]
+            }
+
+        response = client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "hello again"},
+            content_type="application/json",
+        )
+        assert response.status_code == 429
+        assert response.headers.get("Retry-After") is not None
+        data = response.get_json()
+        assert data["endpoint"] == "dm_send"
+        assert data["retry_after_seconds"] >= 1
+
+    def test_chat_message_rate_limit_response_has_retry_after_header(self, client):
+        """When posting chat messages is rate-limited, response includes cooldown metadata."""
+        from simple_chat_routes import _rate_limit_store, _rate_limit_lock
+
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        # Prime session for this client
+        client.get(f"/chat/room/{room_id}")
+        with client.session_transaction() as sess:
+            sid = sess["_id"]
+
+        now = datetime.datetime.now()
+        limit = RATE_LIMITS["chat_message"]["max_requests"]
+        with _rate_limit_lock:
+            _rate_limit_store[sid] = {
+                "chat_message": [now for _ in range(limit)]
+            }
+
+        response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "hello"},
+            content_type="application/json",
+        )
+        assert response.status_code == 429
+        assert response.headers.get("Retry-After") is not None
+        data = response.get_json()
+        assert data["endpoint"] == "chat_message"
+        assert data["retry_after_seconds"] >= 1
 
     def test_view_dm_success(self, client):
         room_id = client.post("/chat/create").get_json()["room_id"]

@@ -5,6 +5,7 @@ let encryptionEnabled = false;
 let encryptionKey = null;
 let pollInterval = null;
 let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+let sendCooldownTimer = null;
 
 // Encrypted message prefix (ASCII-safe, recognised by both client and server)
 const ENC_PREFIX = 'ENC:';
@@ -140,6 +141,38 @@ function scrollToBottom() {
     container.scrollTop = container.scrollHeight;
 }
 
+function setSendDisabledWithCountdown(seconds) {
+    const safeSeconds = Math.max(parseInt(seconds || 0, 10), 1);
+    const sendBtn = document.getElementById('sendBtn');
+    const input = document.getElementById('messageInput');
+
+    if (sendCooldownTimer) {
+        clearInterval(sendCooldownTimer);
+        sendCooldownTimer = null;
+    }
+
+    let remaining = safeSeconds;
+    sendBtn.disabled = true;
+    input.disabled = true;
+    sendBtn.textContent = `Wait ${remaining}s`;
+
+    sendCooldownTimer = setInterval(function() {
+        remaining -= 1;
+        if (remaining <= 0) {
+            clearInterval(sendCooldownTimer);
+            sendCooldownTimer = null;
+            sendBtn.textContent = 'Send';
+            if (securityWarningAccepted) {
+                sendBtn.disabled = false;
+                input.disabled = false;
+                input.focus();
+            }
+            return;
+        }
+        sendBtn.textContent = `Wait ${remaining}s`;
+    }, 1000);
+}
+
 async function renderMessages(messages) {
     const container = document.getElementById('messagesContainer');
     container.innerHTML = '';
@@ -209,7 +242,27 @@ async function sendMessage() {
             input.value = '';
             await pollMessages();
         } else {
-            showStatus('Error sending message');
+            let errorPayload = null;
+            try {
+                errorPayload = await response.json();
+            } catch (_) {
+                errorPayload = null;
+            }
+
+            if (response.status === 429) {
+                const retryAfterHeader = parseInt(response.headers.get('Retry-After') || '0', 10);
+                const retryAfterBody = errorPayload && errorPayload.retry_after_seconds;
+                const retrySeconds = retryAfterHeader || retryAfterBody || 1;
+                showStatus(`Rate limit reached. Wait ${retrySeconds}s before sending again.`, retrySeconds * 1000);
+                setSendDisabledWithCountdown(retrySeconds);
+                return;
+            }
+
+            if (errorPayload && errorPayload.error) {
+                showStatus(`Error: ${errorPayload.error}`);
+            } else {
+                showStatus('Error sending message');
+            }
         }
     } catch (error) {
         showStatus('Error: ' + error.message);
@@ -292,6 +345,9 @@ window.addEventListener('load', async function() {
 window.addEventListener('beforeunload', function() {
     if (pollInterval) {
         clearInterval(pollInterval);
+    }
+    if (sendCooldownTimer) {
+        clearInterval(sendCooldownTimer);
     }
 });
 

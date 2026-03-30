@@ -80,15 +80,26 @@ python chat-room.py --port 8080
 
 1. In the chat room, toggle the "Encryption" switch
 2. All your messages will be encrypted using AES-GCM
-3. Other users must also enable encryption to read your messages
-4. The encryption key is stored in your browser's sessionStorage
-5. Keys are NOT shared - this is for protection against server compromise
+3. The client automatically fetches the room key from `/chat/room/<room_id>/key`
+4. Other users in the same room can decrypt once they enable encryption
+5. The key remains in browser memory for the current page session
 
-**Important**: E2E encryption is per-user. If you want to chat with encrypted messages:
+**Important**:
 - All participants should enable encryption
-- The encryption protects against server compromise
 - Messages are still deleted after 3 minutes
-- Encryption keys are session-only (lost when you close the tab)
+- Encryption protects message content at rest on the server
+- Reloading/closing the page requires fetching the room key again
+
+### Rate Limiting and Cooldown UX
+
+- Room creation, room messages, and DMs are all rate limited per session.
+- When a limit is hit, the server returns:
+  - HTTP `429`
+  - `Retry-After` response header
+  - JSON metadata including `retry_after_seconds` and endpoint/window limits
+- The web client uses that metadata to show a countdown instead of generic errors:
+  - `/chat` create button enters a temporary cooldown state
+  - Room send button is disabled until the retry window expires
 
 ## Security Features
 
@@ -122,8 +133,8 @@ This prevents memory forensics from recovering deleted messages.
 - Uses Web Crypto API (AES-GCM with 256-bit keys)
 - Simple, reviewable JavaScript implementation
 - No external dependencies beyond native browser APIs
-- Encrypted messages are prefixed with 🔒 emoji
-- Keys stored in sessionStorage (lost when tab closes)
+- Encrypted payloads are sent with an `ENC:` ASCII prefix
+- Room keys are fetched from `/chat/room/<room_id>/key` for the active page session
 
 ## Technical Details
 
