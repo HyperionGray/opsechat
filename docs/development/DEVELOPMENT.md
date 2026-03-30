@@ -76,6 +76,12 @@ These are development and testing utilities that help during development:
 - **`usability_assessment.py`** - UI/UX testing helper
 - **`comprehensive_functionality_test.py`** - Full functional test suite
 
+### Deprecated ad-hoc validation scripts
+The following one-off local troubleshooting files were removed to keep the repo tidy:
+
+- `test-ci-fix.js`
+- `test_fix.sh`
+
 ### Main Application Files
 - **`runserver.py`** - Main entry point (legacy monolithic)
 - **`runserver_refactored.py`** - Refactored version (blueprint-based)
