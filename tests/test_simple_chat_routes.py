@@ -450,3 +450,48 @@ class TestBugFixes:
             content_type="application/json",
         )
         assert response.status_code == 400
+
+    # -- Rate-limit backoff metadata ----------------------------------------
+
+    def test_chat_create_rate_limit_returns_retry_metadata(self, client):
+        """429 responses should include retry metadata and headers."""
+        for _ in range(3):
+            assert client.post("/chat/create").status_code == 200
+
+        response = client.post("/chat/create")
+        assert response.status_code == 429
+
+        data = response.get_json()
+        assert data["error_code"] == "RATE_LIMIT_EXCEEDED"
+        assert data["endpoint"] == "chat_create"
+        assert isinstance(data["retry_after"], int)
+        assert data["retry_after"] >= 1
+        assert data["backoff"]["strategy"] == "fixed"
+        assert data["backoff"]["retry_after_seconds"] == data["retry_after"]
+        assert data["limit"]["max_requests"] == simple_chat_routes.RATE_LIMITS["chat_create"]["max_requests"]
+        assert data["limit"]["window_seconds"] == simple_chat_routes.RATE_LIMITS["chat_create"]["window_seconds"]
+        assert response.headers["Retry-After"] == str(data["retry_after"])
+        assert response.headers["X-RateLimit-Retry-After"] == str(data["retry_after"])
+
+    def test_chat_message_rate_limit_returns_retry_metadata(self, client):
+        """Message endpoint 429 should include endpoint-specific metadata."""
+        room_id = client.post("/chat/create").get_json()["room_id"]
+
+        for _ in range(simple_chat_routes.RATE_LIMITS["chat_message"]["max_requests"]):
+            response = client.post(
+                f"/chat/room/{room_id}/messages",
+                json={"message": "hello from test"},
+                content_type="application/json",
+            )
+            assert response.status_code == 200
+
+        response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "this one should be throttled"},
+            content_type="application/json",
+        )
+        assert response.status_code == 429
+        data = response.get_json()
+        assert data["endpoint"] == "chat_message"
+        assert data["error_code"] == "RATE_LIMIT_EXCEEDED"
+        assert response.headers["Retry-After"] == str(data["retry_after"])

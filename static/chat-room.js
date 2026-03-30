@@ -135,6 +135,22 @@ function showStatus(message, duration = 3000) {
     }, duration);
 }
 
+function getRetryAfterSeconds(response, body) {
+    if (body && Number.isFinite(body.retry_after)) {
+        return Math.max(1, Math.ceil(body.retry_after));
+    }
+
+    const retryAfterHeader = response.headers.get('Retry-After');
+    if (retryAfterHeader) {
+        const parsed = parseInt(retryAfterHeader, 10);
+        if (!Number.isNaN(parsed) && parsed > 0) {
+            return parsed;
+        }
+    }
+
+    return null;
+}
+
 function scrollToBottom() {
     const container = document.getElementById('messagesContainer');
     container.scrollTop = container.scrollHeight;
@@ -209,7 +225,25 @@ async function sendMessage() {
             input.value = '';
             await pollMessages();
         } else {
-            showStatus('Error sending message');
+            let payload = null;
+            try {
+                payload = await response.json();
+            } catch (e) {
+                payload = null;
+            }
+
+            if (response.status === 429) {
+                const retryAfter = getRetryAfterSeconds(response, payload);
+                if (retryAfter) {
+                    showStatus(`Rate limited. Retry in ${retryAfter}s.`, 5000);
+                } else {
+                    showStatus('Rate limited. Please wait before retrying.', 5000);
+                }
+                return;
+            }
+
+            const fallback = 'Error sending message';
+            showStatus((payload && payload.error) || fallback);
         }
     } catch (error) {
         showStatus('Error: ' + error.message);

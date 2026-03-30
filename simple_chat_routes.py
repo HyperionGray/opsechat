@@ -55,6 +55,41 @@ ENC_PREFIX = "ENC:"
 # overhead, so a 500-char plaintext becomes ~700 chars of base64 plus the prefix.
 MAX_ENC_MESSAGE_LENGTH = MAX_MESSAGE_LENGTH * 2
 
+
+def build_rate_limited_response(endpoint: str, message: str, retry_after: int):
+    """
+    Return a structured 429 response with explicit backoff metadata.
+
+    This is used by the in-memory sliding-window limiter so clients can
+    reliably back off and retry without guessing.
+    """
+    retry_after = max(int(retry_after), 1)
+    config = RATE_LIMITS.get(endpoint, {})
+    retry_at = (
+        datetime.datetime.now(datetime.timezone.utc)
+        + datetime.timedelta(seconds=retry_after)
+    ).isoformat()
+
+    response = jsonify({
+        "error": message,
+        "error_code": "RATE_LIMIT_EXCEEDED",
+        "endpoint": endpoint,
+        "retry_after": retry_after,
+        "retry_at": retry_at,
+        "backoff": {
+            "strategy": "fixed",
+            "retry_after_seconds": retry_after,
+        },
+        "limit": {
+            "max_requests": config.get("max_requests"),
+            "window_seconds": config.get("window_seconds"),
+        },
+    })
+    response.status_code = 429
+    response.headers["Retry-After"] = str(retry_after)
+    response.headers["X-RateLimit-Retry-After"] = str(retry_after)
+    return response
+
 # Room class to manage chat state
 class ChatRoom:
     """Manages a single chat room with message expiry and memory overwriting"""
@@ -291,9 +326,11 @@ def register_simple_chat_routes(app):
 
         allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Try again in {retry_after} seconds."
-            }), 429
+            return build_rate_limited_response(
+                "chat_create",
+                f"Rate limit exceeded. Try again in {retry_after} seconds.",
+                retry_after,
+            )
 
         room_id = generate_secure_room_id(32)
         
@@ -344,9 +381,14 @@ def register_simple_chat_routes(app):
             # Check rate limit before processing message
             allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
             if not allowed:
-                return jsonify({
-                    "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds."
-                }), 429
+                return build_rate_limited_response(
+                    "chat_message",
+                    (
+                        "Rate limit exceeded. Maximum 30 messages per minute. "
+                        f"Try again in {retry_after} seconds."
+                    ),
+                    retry_after,
+                )
             
             # Get message from request
             data = request.get_json()
@@ -439,9 +481,14 @@ def register_simple_chat_routes(app):
         # Check rate limit for DMs
         allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds."
-            }), 429
+            return build_rate_limited_response(
+                "dm_send",
+                (
+                    "Rate limit exceeded. Maximum 5 DMs per minute. "
+                    f"Try again in {retry_after} seconds."
+                ),
+                retry_after,
+            )
         
         data = request.get_json()
         if not data or "room_id" not in data or "message" not in data:

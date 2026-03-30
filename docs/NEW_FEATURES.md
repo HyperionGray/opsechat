@@ -99,6 +99,41 @@ GET /chat/dm/xyz789
 
 ## 🔒 Enhanced Security Features
 
+### Rate-Limit Backoff Metadata (NEW)
+Rate-limited chat endpoints now return structured retry guidance so clients can
+apply predictable backoff instead of guessing.
+
+#### Affected endpoints
+- `POST /chat/create`
+- `POST /chat/room/{room_id}/messages`
+- `POST /chat/dm/send`
+
+#### 429 response shape
+```json
+{
+  "error": "Rate limit exceeded. Try again in 12 seconds.",
+  "error_code": "RATE_LIMIT_EXCEEDED",
+  "endpoint": "chat_create",
+  "retry_after": 12,
+  "retry_at": "2026-03-30T18:12:25.123456+00:00",
+  "backoff": {
+    "strategy": "fixed",
+    "retry_after_seconds": 12
+  },
+  "limit": {
+    "max_requests": 10,
+    "window_seconds": 60
+  }
+}
+```
+
+#### Headers
+- `Retry-After: <seconds>`
+- `X-RateLimit-Retry-After: <seconds>`
+
+The web chat client now reads these values and displays a clear countdown-style
+message (for example, "Rate limited. Retry in 12s.").
+
 ### Message Length Caps
 - **Chat messages**: 500 characters maximum
 - **DM messages**: 200 characters maximum
