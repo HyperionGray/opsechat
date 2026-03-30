@@ -142,6 +142,28 @@ POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
 
+#### Rate-limit Response Headers (write endpoints)
+All write endpoints expose adaptive throttling headers:
+
+- `X-RateLimit-Limit`: request limit in the active window
+- `X-RateLimit-Remaining`: remaining requests in the current window
+- `X-RateLimit-Reset`: seconds until window reset / next allowed window
+- `X-RateLimit-Policy`: compact policy string (for example `30;w=60`)
+- `X-RateLimit-Backoff-Level`: escalating violation level
+- `Retry-After`: returned on `429` responses with seconds to wait
+
+Example `429` response headers:
+
+```http
+HTTP/1.1 429 TOO MANY REQUESTS
+Retry-After: 12
+X-RateLimit-Limit: 30
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 12
+X-RateLimit-Policy: 30;w=60
+X-RateLimit-Backoff-Level: 2
+```
+
 ### Encryption Implementation
 
 The E2E encryption uses native Web Crypto API:

@@ -18,6 +18,7 @@
 - [x] Structured logging / APM via `monitoring.py`
 - [x] Test suite for `simple_chat_routes.py` (31 tests)
 - [x] Fixed `datetime.utcnow()` deprecation – use `datetime.now(timezone.utc)`
+- [x] Added adaptive API throttling with `Retry-After` + `X-RateLimit-*` headers for chat endpoints
 
 ---
 
@@ -98,7 +99,7 @@
   - [x] Implement per-session/IP limits (Flask-Limiter)
   - [x] Add per-endpoint throttling (`/chat/create`, `/chat/*/messages`, `/chat/dm/send`)
   - [ ] Configure reasonable thresholds (review after load testing)
-  - [ ] Add backoff/retry logic
+  - [x] Add backoff/retry logic (`Retry-After`, escalating cooldown for repeated violations)
 - [ ] Integrate second domain registrar API
   - [ ] Choose registrar (Namecheap recommended)
   - [ ] Implement API client

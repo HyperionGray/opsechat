@@ -172,6 +172,37 @@ When limit exceeded:
 
 ---
 
+## 🚦 Chat API Adaptive Throttling (NEW)
+
+### What Changed
+Chat write endpoints now return standard rate-limit headers and an adaptive cooldown
+signal when clients repeatedly exceed limits.
+
+### Affected Endpoints
+- `POST /chat/create`
+- `POST /chat/room/<room_id>/messages`
+- `POST /chat/dm/send`
+
+### Response Headers
+- `X-RateLimit-Limit`
+- `X-RateLimit-Remaining`
+- `X-RateLimit-Reset`
+- `X-RateLimit-Policy`
+- `X-RateLimit-Backoff-Level`
+- `Retry-After` (only on `429`)
+
+### Adaptive Backoff Behavior
+- First violation enters a short cooldown
+- Repeated requests while blocked increase `X-RateLimit-Backoff-Level`
+- Cooldown duration grows exponentially (bounded max)
+- Violation state decays after inactivity
+
+### Client Guidance
+Use `Retry-After` before retrying, and treat elevated
+`X-RateLimit-Backoff-Level` as an abuse-protection signal.
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

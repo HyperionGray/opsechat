@@ -19,8 +19,13 @@ from simple_chat_routes import (
     get_random_color_rgb,
     ChatRoom,
     check_rate_limit,
+    check_rate_limit_detailed,
     RATE_LIMITS,
+    BACKOFF_MAX_SECONDS,
     MAX_MESSAGE_LENGTH,
+    _rate_limit_store,
+    _rate_limit_penalties,
+    _rate_limit_lock,
 )
 
 
@@ -43,6 +48,17 @@ def client(app):
     with app.test_client() as c:
         with app.app_context():
             yield c
+
+
+# ---------------------------------------------------------------------------
+# Internal test helpers
+# ---------------------------------------------------------------------------
+
+def _clear_rate_limit_state():
+    """Reset in-memory rate limit and adaptive penalty state."""
+    with _rate_limit_lock:
+        _rate_limit_store.clear()
+        _rate_limit_penalties.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +139,9 @@ class TestChatRoom:
 # ---------------------------------------------------------------------------
 
 class TestCheckRateLimit:
+    def setup_method(self):
+        _clear_rate_limit_state()
+
     def test_allows_within_limit(self):
         allowed, _ = check_rate_limit("sess-001", "chat_message")
         assert allowed is True
@@ -140,12 +159,42 @@ class TestCheckRateLimit:
         allowed, _ = check_rate_limit("sess-002", "nonexistent_endpoint")
         assert allowed is True
 
+    def test_detailed_check_returns_metadata(self):
+        allowed, retry_after, metadata = check_rate_limit_detailed("sess-003", "dm_send")
+        assert allowed is True
+        assert retry_after == 0
+        assert metadata["limit"] == RATE_LIMITS["dm_send"]["max_requests"]
+        assert metadata["remaining"] == RATE_LIMITS["dm_send"]["max_requests"] - 1
+        assert metadata["window_seconds"] == RATE_LIMITS["dm_send"]["window_seconds"]
+        assert metadata["backoff_level"] == 0
+
+    def test_repeated_violations_increase_backoff_level(self):
+        session_id = "sess-backoff-test"
+        limit = RATE_LIMITS["dm_send"]["max_requests"]
+        for _ in range(limit):
+            allowed, _, _ = check_rate_limit_detailed(session_id, "dm_send")
+            assert allowed is True
+
+        allowed, retry_after_1, metadata_1 = check_rate_limit_detailed(session_id, "dm_send")
+        assert allowed is False
+        assert retry_after_1 >= 1
+        assert metadata_1["backoff_level"] >= 1
+
+        allowed, retry_after_2, metadata_2 = check_rate_limit_detailed(session_id, "dm_send")
+        assert allowed is False
+        assert retry_after_2 >= 1
+        assert metadata_2["backoff_level"] > metadata_1["backoff_level"]
+        assert retry_after_2 <= BACKOFF_MAX_SECONDS + RATE_LIMITS["dm_send"]["window_seconds"]
+
 
 # ---------------------------------------------------------------------------
 # HTTP routes – chat rooms
 # ---------------------------------------------------------------------------
 
 class TestChatRoutes:
+    def setup_method(self):
+        _clear_rate_limit_state()
+
     def test_chat_index_returns_200(self, client):
         response = client.get("/chat")
         assert response.status_code == 200
@@ -239,6 +288,43 @@ class TestChatRoutes:
     def test_get_room_key_nonexistent_room(self, client):
         response = client.get("/chat/room/no-such-room/key")
         assert response.status_code == 404
+
+    def test_message_rate_limit_headers_exposed_on_success_and_block(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        endpoint = f"/chat/room/{room_id}/messages"
+
+        # First message should succeed and include standard rate-limit headers.
+        first = client.post(
+            endpoint,
+            json={"message": "hello world"},
+            content_type="application/json",
+        )
+        assert first.status_code == 200
+        assert first.headers.get("X-RateLimit-Limit") == "30"
+        assert first.headers.get("X-RateLimit-Remaining") == "29"
+        assert first.headers.get("X-RateLimit-Policy") == "30;w=60"
+        assert first.headers.get("X-RateLimit-Backoff-Level") == "0"
+        assert first.headers.get("Retry-After") is None
+
+        # Consume remaining allowed requests for the per-session 30/minute limit.
+        for _ in range(29):
+            response = client.post(
+                endpoint,
+                json={"message": "hello world"},
+                content_type="application/json",
+            )
+            assert response.status_code == 200
+
+        blocked = client.post(
+            endpoint,
+            json={"message": "hello world"},
+            content_type="application/json",
+        )
+        assert blocked.status_code == 429
+        assert blocked.headers.get("Retry-After") is not None
+        assert blocked.headers.get("X-RateLimit-Limit") == "30"
+        assert blocked.headers.get("X-RateLimit-Remaining") == "0"
+        assert int(blocked.headers.get("X-RateLimit-Backoff-Level", "0")) >= 1
 
 
 # ---------------------------------------------------------------------------
