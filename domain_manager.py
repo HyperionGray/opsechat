@@ -6,7 +6,7 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -127,17 +127,195 @@ class DomainRotationManager:
     Automatically purchase cheap domains and rotate them
     """
     
-    def __init__(self, api_client: Optional[DomainAPIClient] = None, 
+    def __init__(self, api_client: Optional[DomainAPIClient] = None,
                  monthly_budget: float = 50.0):
-        self.api_client = api_client
+        # Backward-compatible direct client reference (kept in sync with active provider)
+        self.api_client: Optional[DomainAPIClient] = None
+        # Multi-provider support for registrar fallback/expansion
+        self.providers: Dict[str, DomainAPIClient] = {}
+        self.active_provider: Optional[str] = None
         self.monthly_budget = monthly_budget
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+        self.test_mode = False
+
+        if api_client is not None:
+            self.set_api_client(api_client)
     
     def set_api_client(self, api_client: DomainAPIClient):
-        """Set the domain API client"""
-        self.api_client = api_client
+        """Set a default API client (backward-compatible helper)."""
+        self.add_api_client("default", api_client, make_active=True)
+
+    def add_api_client(self, provider_name: str, api_client: DomainAPIClient,
+                       make_active: bool = False):
+        """Register a named API client provider."""
+        if not provider_name:
+            raise ValueError("provider_name is required")
+        provider_key = provider_name.strip().lower()
+        self.providers[provider_key] = api_client
+        if self.active_provider is None or make_active:
+            self.active_provider = provider_key
+        self.api_client = self.providers.get(self.active_provider)
+
+    def set_active_provider(self, provider_name: str) -> bool:
+        """Set active provider by name."""
+        provider_key = (provider_name or "").strip().lower()
+        if provider_key not in self.providers:
+            return False
+        self.active_provider = provider_key
+        self.api_client = self.providers[provider_key]
+        return True
+
+    def list_providers(self) -> List[str]:
+        """List currently configured registrar providers."""
+        return sorted(self.providers.keys())
+
+    def get_config(self) -> Dict[str, Any]:
+        """Return non-secret runtime configuration for UI/status pages."""
+        return {
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "active_domain": self.active_domain,
+            "domains_owned": len(self.owned_domains),
+            "providers": self.list_providers(),
+            "active_provider": self.active_provider
+        }
+
+    def configure(self, api_key: str, secret_key: str,
+                  monthly_budget: float = 50.0,
+                  provider_name: str = "porkbun") -> Dict[str, Any]:
+        """
+        Configure and activate a registrar client.
+
+        Currently supports provider_name='porkbun'. Additional providers can be
+        added by extending DomainAPIClient and registering via add_api_client().
+        """
+        provider_key = (provider_name or "").strip().lower()
+        if not api_key or not secret_key:
+            raise ValueError("api_key and secret_key are required")
+
+        if provider_key == "porkbun":
+            client = PorkbunAPIClient(api_key, secret_key)
+        else:
+            raise ValueError(f"Unsupported provider: {provider_name}")
+
+        self.add_api_client(provider_key, client, make_active=True)
+        self.monthly_budget = float(monthly_budget)
+        return self.get_config()
+
+    def set_test_mode(self, enabled: bool):
+        """Enable/disable dry-run mode for safe testing."""
+        self.test_mode = bool(enabled)
+
+    def _get_current_client(self) -> Optional[DomainAPIClient]:
+        """Get active API client (supports legacy self.api_client fallback)."""
+        if self.active_provider and self.active_provider in self.providers:
+            return self.providers[self.active_provider]
+        return self.api_client
+
+    def _parse_datetime(self, value: Any, default: Optional[datetime] = None) -> datetime:
+        """Parse datetime values from runtime objects or persisted JSON strings."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                pass
+        return default or datetime.now()
+
+    def _normalize_owned_domain_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize persisted domain records into runtime-safe structure."""
+        now = datetime.now()
+        normalized = dict(record)
+        normalized["domain"] = str(record.get("domain", ""))
+        raw_price = record.get("price", 0.0)
+        if isinstance(raw_price, str):
+            raw_price = raw_price.replace("$", "").replace("€", "").strip()
+        normalized["price"] = float(raw_price)
+        normalized["purchased_at"] = self._parse_datetime(record.get("purchased_at"), default=now)
+        normalized["expires_at"] = self._parse_datetime(
+            record.get("expires_at"),
+            default=normalized["purchased_at"] + timedelta(days=365)
+        )
+        return normalized
+
+    def _serialize_owned_domain_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        """Serialize runtime domain record into JSON-safe dict."""
+        normalized = self._normalize_owned_domain_record(record)
+        return {
+            "domain": normalized["domain"],
+            "price": normalized["price"],
+            "purchased_at": normalized["purchased_at"].isoformat(),
+            "expires_at": normalized["expires_at"].isoformat()
+        }
+
+    def load_state(self, state: Dict[str, Any]):
+        """Load persisted manager state from a JSON-compatible dict."""
+        if not isinstance(state, dict):
+            return
+        self.current_spending = float(state.get("current_spending", 0.0))
+        self.active_domain = state.get("active_domain")
+        owned = state.get("owned_domains", [])
+        if isinstance(owned, list):
+            self.owned_domains = [self._normalize_owned_domain_record(item)
+                                  for item in owned if isinstance(item, dict)]
+
+    def export_state(self) -> Dict[str, Any]:
+        """Export manager state in JSON-safe format."""
+        return {
+            "current_spending": self.current_spending,
+            "active_domain": self.active_domain,
+            "owned_domains": [
+                self._serialize_owned_domain_record(record)
+                for record in self.owned_domains
+            ],
+            "monthly_budget": self.monthly_budget
+        }
+
+    def search_cheap_domains(self, tlds: Optional[List[str]] = None,
+                             max_price: float = 5.0, limit: int = 5,
+                             max_attempts: int = 20) -> List[Dict[str, Any]]:
+        """
+        Search for available low-cost domains.
+
+        Returns at most `limit` unique domains that are available and <= max_price.
+        """
+        client = self._get_current_client()
+        if not client:
+            logger.error("No API client configured")
+            return []
+
+        tld_candidates = tlds or ["xyz", "club", "online", "site", "website"]
+        found: List[Dict[str, Any]] = []
+        seen = set()
+
+        for _ in range(max_attempts):
+            if len(found) >= limit:
+                break
+            tld = random.choice(tld_candidates)
+            candidate = self.generate_random_domain(tld)
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+
+            result = client.search_domain(candidate)
+            if not result.get("available"):
+                continue
+
+            try:
+                raw_price = result.get("price", 999)
+                if isinstance(raw_price, str):
+                    raw_price = float(raw_price.replace("$", "").replace("€", ""))
+                price = float(raw_price)
+            except (TypeError, ValueError):
+                continue
+
+            if price <= max_price:
+                found.append({"domain": candidate, "price": price, "tld": tld})
+
+        return found
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -154,7 +332,8 @@ class DomainRotationManager:
         Find a cheap available domain
         Returns domain info or None
         """
-        if not self.api_client:
+        api_client = self._get_current_client()
+        if not api_client:
             logger.error("No API client configured")
             return None
         
@@ -165,15 +344,13 @@ class DomainRotationManager:
             tld = random.choice(cheap_tlds)
             domain = self.generate_random_domain(tld)
             
-            result = self.api_client.search_domain(domain)
+            result = api_client.search_domain(domain)
             
             if result.get("available"):
                 price = result.get("price", 999)
-                
                 if isinstance(price, str):
-                    # Remove currency symbols
                     price = float(price.replace("$", "").replace("€", ""))
-                
+                price = float(price)
                 if price <= max_price:
                     return {
                         "domain": domain,
@@ -188,7 +365,8 @@ class DomainRotationManager:
         Purchase domain if within budget
         Returns True on success
         """
-        if not self.api_client:
+        api_client = self._get_current_client()
+        if not api_client:
             logger.error("No API client configured")
             return False
         
@@ -198,16 +376,19 @@ class DomainRotationManager:
                           f"Requested: ${price}, Budget: ${self.monthly_budget}")
             return False
         
-        # Attempt purchase
-        result = self.api_client.purchase_domain(domain, years=1)
+        if self.test_mode:
+            result = {"success": True, "domain": domain, "message": "test mode"}
+        else:
+            result = api_client.purchase_domain(domain, years=1)
         
         if result.get("success"):
             self.current_spending += price
+            now = datetime.now()
             self.owned_domains.append({
                 "domain": domain,
                 "price": price,
-                "purchased_at": datetime.now(),
-                "expires_at": datetime.now() + timedelta(days=365)
+                "purchased_at": now,
+                "expires_at": now + timedelta(days=365)
             })
             
             # Set as active if no active domain
@@ -243,6 +424,29 @@ class DomainRotationManager:
             return self.active_domain
         
         return None
+
+    def rotate_to_new_domain(self, max_price: float = 5.0) -> Dict[str, Any]:
+        """
+        Rotate to a new domain and return structured status.
+        This wrapper is friendlier for API/CLI callers.
+        """
+        domain_info = self.find_cheap_available_domain(max_price=max_price)
+        if not domain_info:
+            return {"success": False, "error": "No available domain found"}
+
+        success = self.purchase_domain_if_budget_allows(
+            domain_info["domain"], domain_info["price"]
+        )
+        if not success:
+            return {"success": False, "error": "Purchase failed or budget exceeded"}
+
+        self.active_domain = domain_info["domain"]
+        return {
+            "success": True,
+            "domain": self.active_domain,
+            "cost": domain_info["price"],
+            "provider": self.active_provider
+        }
     
     def get_active_domain(self) -> Optional[str]:
         """Get currently active domain"""

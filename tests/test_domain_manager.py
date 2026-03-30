@@ -174,3 +174,70 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_sets_provider_and_budget(self):
+        """Test configure() wires provider and budget status"""
+        manager = DomainRotationManager()
+        config = manager.configure(
+            api_key="pk_test",
+            secret_key="sk_test",
+            monthly_budget=12.5,
+            provider_name="porkbun",
+        )
+
+        assert config["monthly_budget"] == 12.5
+        assert config["active_provider"] == "porkbun"
+        assert "porkbun" in config["providers"]
+        assert manager.api_client is not None
+
+    def test_load_and_export_state_roundtrip(self):
+        """State should round-trip with ISO datetimes."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        state = {
+            "current_spending": 4.5,
+            "active_domain": "abc.xyz",
+            "owned_domains": [
+                {
+                    "domain": "abc.xyz",
+                    "price": 1.23,
+                    "purchased_at": "2026-03-01T10:00:00",
+                    "expires_at": "2027-03-01T10:00:00",
+                }
+            ],
+        }
+
+        manager.load_state(state)
+        exported = manager.export_state()
+
+        assert manager.current_spending == 4.5
+        assert manager.active_domain == "abc.xyz"
+        assert len(manager.owned_domains) == 1
+        assert exported["owned_domains"][0]["purchased_at"].startswith("2026-03-01T10:00:00")
+        assert exported["owned_domains"][0]["expires_at"].startswith("2027-03-01T10:00:00")
+
+    def test_search_cheap_domains_returns_limited_results(self):
+        """search_cheap_domains should cap result count."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": 1.99,
+        }
+        manager = DomainRotationManager(mock_client)
+
+        results = manager.search_cheap_domains(tlds=["xyz"], max_price=2.0, limit=3, max_attempts=10)
+
+        assert len(results) <= 3
+        assert len(results) > 0
+        assert all(item["price"] <= 2.0 for item in results)
+
+    def test_test_mode_purchase_skips_external_api(self):
+        """In test mode, purchase succeeds without external call."""
+        mock_client = Mock(spec=DomainAPIClient)
+        manager = DomainRotationManager(mock_client, monthly_budget=10.0)
+        manager.set_test_mode(True)
+
+        success = manager.purchase_domain_if_budget_allows("dryrun.xyz", 2.0)
+
+        assert success is True
+        assert manager.active_domain == "dryrun.xyz"
+        mock_client.purchase_domain.assert_not_called()
