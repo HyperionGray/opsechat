@@ -92,6 +92,18 @@ python chat-room.py --port 8080
 
 ## Security Features
 
+### Abuse Protection & Rate Limiting
+- Write endpoints are rate-limited at multiple layers:
+  - Flask-Limiter endpoint caps (e.g. room creation and message posting)
+  - In-memory sliding-window session limits (per user session)
+  - In-memory sliding-window network limits (per public source IP)
+- Network-level limits are only applied to public IPs to avoid over-throttling
+  local/private development and internal test traffic.
+- When throttled by the in-memory limiter, the API returns:
+  - HTTP status `429`
+  - JSON body containing `error` and `retry_after`
+  - `Retry-After` response header
+
 ### Message Expiry
 - All messages are automatically deleted after **3 minutes**
 - The timer starts when the message is sent

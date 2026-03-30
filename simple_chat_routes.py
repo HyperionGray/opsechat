@@ -17,8 +17,9 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+import ipaddress
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Absolute path to this file's directory (used for reliable VERSION lookup)
@@ -39,9 +40,12 @@ _rate_limit_lock = threading.Lock()
 
 # Rate limit configuration
 RATE_LIMITS = {
-    "chat_create": {"max_requests": 10, "window_seconds": 60},
-    "chat_message": {"max_requests": 30, "window_seconds": 60},
-    "dm_send": {"max_requests": 5, "window_seconds": 60},
+    # "max_requests" is per-session, "ip_max_requests" is shared per source IP.
+    # This helps limit abuse patterns where many fresh sessions are created from
+    # the same network address to bypass per-session limits.
+    "chat_create": {"max_requests": 10, "window_seconds": 60, "ip_max_requests": 25},
+    "chat_message": {"max_requests": 30, "window_seconds": 60, "ip_max_requests": 90},
+    "dm_send": {"max_requests": 5, "window_seconds": 60, "ip_max_requests": 20},
 }
 
 # Maximum message length to prevent base64 encoding of images
@@ -167,51 +171,81 @@ def cleanup_old_dms():
             del direct_messages[dm_id]
 
 
-def check_rate_limit(session_id: str, endpoint: str) -> tuple:
+def _check_rate_limit_scopes(session_id: str, endpoint: str, client_ip: str = None) -> tuple:
     """
-    Check if a session has exceeded its rate limit for an endpoint.
+    Check if a request has exceeded rate limits for an endpoint.
 
-    Uses a sliding-window algorithm with in-memory storage.
+    Enforces:
+    - Per-session limits (primary anti-spam and fairness control)
+    - Optional per-IP limits (anti-abuse for session-churn attacks)
 
     Args:
         session_id: Unique identifier for the requesting session.
         endpoint: Name of the endpoint to check (must be a key in RATE_LIMITS).
+        client_ip: Source IP for optional network-wide throttling.
 
     Returns:
-        tuple[bool, int]: (allowed, retry_after_seconds).
+        tuple[bool, int, str]: (allowed, retry_after_seconds, blocked_scope).
             - allowed=True, retry_after=0 when the request is permitted.
             - allowed=False, retry_after>=1 when the limit is exceeded.
+            - blocked_scope is "session", "network", or "session+network".
             - For unknown endpoints (not in RATE_LIMITS) always returns (True, 0).
     """
     config = RATE_LIMITS.get(endpoint)
     if not config:
-        return True, 0
+        return True, 0, ""
 
     max_requests = config["max_requests"]
     window = config["window_seconds"]
+    ip_max_requests = config.get("ip_max_requests")
     now = datetime.datetime.now()
     cutoff = now - datetime.timedelta(seconds=window)
+    subjects = [("session", session_id, max_requests)]
+    if client_ip and ip_max_requests:
+        subjects.append(("network", f"ip::{client_ip}", ip_max_requests))
 
     with _rate_limit_lock:
-        if session_id not in _rate_limit_store:
-            _rate_limit_store[session_id] = {}
+        retries = []
+        blocked_scopes = []
 
-        session_limits = _rate_limit_store[session_id]
-        if endpoint not in session_limits:
-            session_limits[endpoint] = []
+        # Phase 1: prune old entries and evaluate all scopes
+        for scope_name, subject_key, subject_limit in subjects:
+            if subject_key not in _rate_limit_store:
+                _rate_limit_store[subject_key] = {}
+            subject_limits = _rate_limit_store[subject_key]
+            if endpoint not in subject_limits:
+                subject_limits[endpoint] = []
 
-        # Remove timestamps outside the current window
-        session_limits[endpoint] = [
-            ts for ts in session_limits[endpoint] if ts > cutoff
-        ]
+            subject_limits[endpoint] = [
+                ts for ts in subject_limits[endpoint] if ts > cutoff
+            ]
 
-        if len(session_limits[endpoint]) >= max_requests:
-            oldest = session_limits[endpoint][0]
-            retry_after = int(window - (now - oldest).total_seconds()) + 1
-            return False, max(retry_after, 1)
+            if len(subject_limits[endpoint]) >= subject_limit:
+                oldest = subject_limits[endpoint][0]
+                retry_after = int(window - (now - oldest).total_seconds()) + 1
+                retries.append(max(retry_after, 1))
+                blocked_scopes.append(scope_name)
 
-        session_limits[endpoint].append(now)
-        return True, 0
+        if retries:
+            blocked_scope = "+".join(blocked_scopes)
+            return False, max(retries), blocked_scope
+
+        # Phase 2: record accepted request across all active scopes
+        for _, subject_key, _ in subjects:
+            _rate_limit_store[subject_key][endpoint].append(now)
+
+        return True, 0, ""
+
+
+def check_rate_limit(session_id: str, endpoint: str) -> tuple:
+    """
+    Backwards-compatible wrapper for existing tests and callers.
+
+    Returns:
+        tuple[bool, int]: (allowed, retry_after_seconds)
+    """
+    allowed, retry_after, _ = _check_rate_limit_scopes(session_id, endpoint)
+    return allowed, retry_after
 
 
 def cleanup_rate_limits():
@@ -232,6 +266,47 @@ def cleanup_rate_limits():
 
         for sid in stale_sessions:
             del _rate_limit_store[sid]
+
+
+def _rate_limited_response(message: str, retry_after: int):
+    """Build a standardized 429 response with Retry-After header."""
+    response = jsonify({
+        "error": message,
+        "retry_after": retry_after
+    })
+    response.status_code = 429
+    response.headers["Retry-After"] = str(retry_after)
+    return response
+
+
+def _extract_public_client_ip() -> str:
+    """
+    Return a normalized public client IP or empty string if unavailable.
+
+    Local/private addresses are excluded from network-level rate limiting to
+    avoid over-throttling local development and internal test traffic.
+    """
+    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    if not client_ip:
+        return ""
+    if "," in client_ip:
+        client_ip = client_ip.split(",", 1)[0].strip()
+
+    try:
+        parsed = ipaddress.ip_address(client_ip)
+    except ValueError:
+        return ""
+
+    if (
+        parsed.is_private
+        or parsed.is_loopback
+        or parsed.is_link_local
+        or parsed.is_multicast
+        or parsed.is_unspecified
+    ):
+        return ""
+
+    return client_ip
 
 
 # Background cleanup thread
@@ -289,11 +364,16 @@ def register_simple_chat_routes(app):
             session["username"] = generate_random_username()
             session["color"] = get_random_color_rgb()
 
-        allowed, retry_after = check_rate_limit(session["_id"], "chat_create")
+        client_ip = _extract_public_client_ip()
+        allowed, retry_after, blocked_scope = _check_rate_limit_scopes(
+            session["_id"], "chat_create", client_ip
+        )
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Try again in {retry_after} seconds."
-            }), 429
+            scope_text = "network" if "network" in blocked_scope else "session"
+            return _rate_limited_response(
+                f"Rate limit exceeded ({scope_text}). Try again in {retry_after} seconds.",
+                retry_after
+            )
 
         room_id = generate_secure_room_id(32)
         
@@ -342,11 +422,16 @@ def register_simple_chat_routes(app):
                 session["color"] = get_random_color_rgb()
 
             # Check rate limit before processing message
-            allowed, retry_after = check_rate_limit(session["_id"], "chat_message")
+            client_ip = _extract_public_client_ip()
+            allowed, retry_after, blocked_scope = _check_rate_limit_scopes(
+                session["_id"], "chat_message", client_ip
+            )
             if not allowed:
-                return jsonify({
-                    "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds."
-                }), 429
+                scope_text = "network" if "network" in blocked_scope else "session"
+                return _rate_limited_response(
+                    f"Rate limit exceeded ({scope_text}). Maximum 30 messages per minute. Try again in {retry_after} seconds.",
+                    retry_after
+                )
             
             # Get message from request
             data = request.get_json()
@@ -437,11 +522,16 @@ def register_simple_chat_routes(app):
             session["color"] = get_random_color_rgb()
 
         # Check rate limit for DMs
-        allowed, retry_after = check_rate_limit(session["_id"], "dm_send")
+        client_ip = _extract_public_client_ip()
+        allowed, retry_after, blocked_scope = _check_rate_limit_scopes(
+            session["_id"], "dm_send", client_ip
+        )
         if not allowed:
-            return jsonify({
-                "error": f"Rate limit exceeded. Maximum 5 DMs per minute. Try again in {retry_after} seconds."
-            }), 429
+            scope_text = "network" if "network" in blocked_scope else "session"
+            return _rate_limited_response(
+                f"Rate limit exceeded ({scope_text}). Maximum 5 DMs per minute. Try again in {retry_after} seconds.",
+                retry_after
+            )
         
         data = request.get_json()
         if not data or "room_id" not in data or "message" not in data:

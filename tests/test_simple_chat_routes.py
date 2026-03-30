@@ -19,6 +19,7 @@ from simple_chat_routes import (
     get_random_color_rgb,
     ChatRoom,
     check_rate_limit,
+    _check_rate_limit_scopes,
     RATE_LIMITS,
     MAX_MESSAGE_LENGTH,
 )
@@ -140,6 +141,26 @@ class TestCheckRateLimit:
         allowed, _ = check_rate_limit("sess-002", "nonexistent_endpoint")
         assert allowed is True
 
+    def test_ip_scope_blocks_when_shared_network_exceeds_limit(self):
+        endpoint = "dm_send"
+        ip = "203.0.113.10"
+        ip_limit = RATE_LIMITS[endpoint]["ip_max_requests"]
+
+        for idx in range(ip_limit):
+            allowed, retry_after, blocked_scope = _check_rate_limit_scopes(
+                f"sess-ip-{idx}", endpoint, ip
+            )
+            assert allowed is True
+            assert retry_after == 0
+            assert blocked_scope == ""
+
+        allowed, retry_after, blocked_scope = _check_rate_limit_scopes(
+            "sess-ip-over", endpoint, ip
+        )
+        assert allowed is False
+        assert retry_after >= 1
+        assert blocked_scope == "network"
+
 
 # ---------------------------------------------------------------------------
 # HTTP routes – chat rooms
@@ -162,6 +183,43 @@ class TestChatRoutes:
         r1 = client.post("/chat/create").get_json()["room_id"]
         r2 = client.post("/chat/create").get_json()["room_id"]
         assert r1 != r2
+
+    def test_create_room_network_limit_sets_retry_after_header(self, client):
+        endpoint = "chat_create"
+        # Keep this below the decorator-level Flask-Limiter threshold (3/min)
+        # and force the internal network limiter to trigger first.
+        original_ip_limit = RATE_LIMITS[endpoint]["ip_max_requests"]
+        original_max_requests = RATE_LIMITS[endpoint]["max_requests"]
+        original_window_seconds = RATE_LIMITS[endpoint]["window_seconds"]
+        original_store = simple_chat_routes._rate_limit_store
+        simple_chat_routes._rate_limit_store = {}
+        RATE_LIMITS[endpoint]["ip_max_requests"] = 2
+        RATE_LIMITS[endpoint]["max_requests"] = 100
+        RATE_LIMITS[endpoint]["window_seconds"] = 3600
+        headers = {"X-Forwarded-For": "198.51.100.44"}
+
+        try:
+            with patch(
+                "simple_chat_routes._extract_public_client_ip",
+                return_value="198.51.100.44",
+            ):
+                for _ in range(2):
+                    response = client.post("/chat/create")
+                    assert response.status_code == 200
+
+                blocked = client.post("/chat/create")
+                assert blocked.status_code == 429
+                data = blocked.get_json()
+                assert "error" in data
+                assert "network" in data["error"]
+                assert "retry_after" in data
+                assert blocked.headers.get("Retry-After") is not None
+                assert data["retry_after"] >= 1
+        finally:
+            RATE_LIMITS[endpoint]["ip_max_requests"] = original_ip_limit
+            RATE_LIMITS[endpoint]["max_requests"] = original_max_requests
+            RATE_LIMITS[endpoint]["window_seconds"] = original_window_seconds
+            simple_chat_routes._rate_limit_store = original_store
 
     def test_join_nonexistent_room_returns_404(self, client):
         response = client.get("/chat/room/nonexistent-room-id-xyz")

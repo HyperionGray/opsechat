@@ -8,6 +8,7 @@
 ## Recently Completed (2026-03)
 
 - [x] Rate limiting on chat/create, chat/messages, and dm/send endpoints
+- [x] Added network-aware abuse controls (public IP scope + Retry-After) on write endpoints
 - [x] `/health` endpoint returning JSON status with version and uptime
 - [x] Domain rotation CLI and `domain_manager.py`
 - [x] Simple web-based chat rooms (`simple_chat_routes.py`)
@@ -147,6 +148,7 @@
 - [x] Security headers tests (CSP, X-Frame-Options, Referrer-Policy, Server)
 - [x] Message sanitization tests (XSS, length limits)
 - [x] Per-session rate limiting tests (Flask-Limiter + in-memory sliding window)
+- [x] Network-scope rate-limiting tests (shared public IP abuse path + Retry-After header)
 - [x] Health endpoint tests
 - [ ] Signup/login flow tests (blocked: auth not yet implemented)
 - [ ] Key management UI tests (blocked: UI not yet implemented)
