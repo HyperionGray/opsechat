@@ -362,7 +362,7 @@ systemctl --user restart opsechat-app
 - **README**: [README.md](../README.md)
 
 ### Testing
-- **Run tests**: `python test_new_features.py`
+- **Run tests**: `python tests/test_new_features.py`
 - **Security scan**: CodeQL (automated)
 - **Manual testing**: See docs/NEW_FEATURES.md
 

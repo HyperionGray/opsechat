@@ -6,7 +6,7 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -82,8 +82,6 @@ def create_app():
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
@@ -94,8 +92,73 @@ def create_app():
                         check_older_than, process_chat)
     
     # Register simple chat routes (new simplified interface)
-    from simple_chat_routes import register_simple_chat_routes
+    from simple_chat_routes import register_simple_chat_routes, RATE_LIMITS
     register_simple_chat_routes(app)
+
+    def _map_rate_limited_endpoint():
+        """Map Flask endpoint/path to simple_chat_routes rate-limit keys."""
+        endpoint_map = {
+            "chat_create": "chat_create",
+            "simple_chat_messages": "chat_message",
+            "send_dm": "dm_send",
+        }
+        mapped = endpoint_map.get(request.endpoint)
+        if mapped:
+            return mapped
+
+        # Fallback for endpoints where Flask may not resolve function names.
+        path = request.path or ""
+        if request.method == "POST":
+            if path == "/chat/create":
+                return "chat_create"
+            if path == "/chat/dm/send":
+                return "dm_send"
+            if path.startswith("/chat/room/") and path.endswith("/messages"):
+                return "chat_message"
+        return None
+
+    @app.errorhandler(429)
+    def handle_too_many_requests(error):
+        """
+        Normalize all 429 responses into a stable JSON contract.
+
+        Flask-Limiter can raise 429 before route handlers run. This keeps
+        frontend and tests consistent regardless of where the limit is enforced.
+        """
+        endpoint_key = _map_rate_limited_endpoint()
+        config = RATE_LIMITS.get(endpoint_key, {}) if endpoint_key else {}
+        limit = config.get("max_requests")
+        window = config.get("window_seconds")
+
+        retry_after = None
+        if hasattr(error, "get_response"):
+            original = error.get_response()
+            retry_after = original.headers.get("Retry-After")
+
+        retry_after_seconds = 1
+        if retry_after is not None:
+            try:
+                retry_after_seconds = max(int(float(retry_after)), 1)
+            except (TypeError, ValueError):
+                retry_after_seconds = 1
+
+        payload = {
+            "error": "Rate limit exceeded. Please retry later.",
+            "code": "rate_limited",
+            "endpoint": endpoint_key or (request.endpoint or "unknown"),
+            "retry_after_seconds": retry_after_seconds,
+            "limit": limit,
+            "window_seconds": window,
+        }
+
+        response = jsonify(payload)
+        response.status_code = 429
+        response.headers["Retry-After"] = str(retry_after_seconds)
+        if limit is not None and window is not None:
+            response.headers["X-RateLimit-Limit"] = str(limit)
+            response.headers["X-RateLimit-Remaining"] = "0"
+            response.headers["X-RateLimit-Window"] = str(window)
+        return response
     
     # Register email routes
     from email_routes import register_email_routes

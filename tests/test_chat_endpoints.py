@@ -85,6 +85,13 @@ class TestChatCreateEndpoint:
         resp = self.client.get("/chat/room/nonexistent-room-id-12345678")
         assert resp.status_code == 404
 
+    def test_create_room_sets_rate_limit_headers(self):
+        resp = self.client.post("/chat/create")
+        assert resp.status_code == 200
+        assert "X-RateLimit-Limit" in resp.headers
+        assert "X-RateLimit-Remaining" in resp.headers
+        assert "X-RateLimit-Window" in resp.headers
+
 
 # ===========================================================================
 # /chat/room/<id>/messages
@@ -189,6 +196,39 @@ class TestChatMessagesEndpoint:
         msg = data["messages"][0]
         for field in ("username", "color", "message", "timestamp", "is_mine"):
             assert field in msg, f"Missing field: {field}"
+
+    def test_message_post_sets_rate_limit_headers(self):
+        resp = self.client.post(
+            f"/chat/room/{self.room_id}/messages",
+            json={"message": "header check"},
+        )
+        assert resp.status_code == 200
+        assert "X-RateLimit-Limit" in resp.headers
+        assert "X-RateLimit-Remaining" in resp.headers
+        assert "X-RateLimit-Window" in resp.headers
+
+    def test_message_rate_limit_429_includes_retry_metadata(self):
+        # chat_message limit is 30/minute; exceed with one client session
+        for _ in range(30):
+            ok = self.client.post(
+                f"/chat/room/{self.room_id}/messages",
+                json={"message": "spam check"},
+            )
+            assert ok.status_code == 200
+
+        blocked = self.client.post(
+            f"/chat/room/{self.room_id}/messages",
+            json={"message": "should block"},
+        )
+        assert blocked.status_code == 429
+        data = blocked.get_json()
+        assert data["code"] == "rate_limited"
+        assert data["endpoint"] == "chat_message"
+        assert data["retry_after_seconds"] >= 1
+        assert data["limit"] == 30
+        assert data["window_seconds"] == 60
+        assert blocked.headers.get("Retry-After") is not None
+        assert blocked.headers.get("X-RateLimit-Remaining") == "0"
 
 
 # ===========================================================================
@@ -312,3 +352,36 @@ class TestDMEndpoints:
             json={"room_id": self.room_id, "message": "x" * 201},
         )
         assert resp.status_code == 400
+
+    def test_send_dm_sets_rate_limit_headers(self):
+        resp = self.client.post(
+            "/chat/dm/send",
+            json={"room_id": self.room_id, "message": "rate headers"},
+        )
+        assert resp.status_code == 200
+        assert "X-RateLimit-Limit" in resp.headers
+        assert "X-RateLimit-Remaining" in resp.headers
+        assert "X-RateLimit-Window" in resp.headers
+
+    def test_send_dm_rate_limit_429_includes_retry_metadata(self):
+        # dm_send limit is 5/minute
+        for _ in range(5):
+            ok = self.client.post(
+                "/chat/dm/send",
+                json={"room_id": self.room_id, "message": "burst"},
+            )
+            assert ok.status_code == 200
+
+        blocked = self.client.post(
+            "/chat/dm/send",
+            json={"room_id": self.room_id, "message": "should block"},
+        )
+        assert blocked.status_code == 429
+        data = blocked.get_json()
+        assert data["code"] == "rate_limited"
+        assert data["endpoint"] == "dm_send"
+        assert data["retry_after_seconds"] >= 1
+        assert data["limit"] == 5
+        assert data["window_seconds"] == 60
+        assert blocked.headers.get("Retry-After") is not None
+        assert blocked.headers.get("X-RateLimit-Remaining") == "0"

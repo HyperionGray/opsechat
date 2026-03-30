@@ -122,8 +122,31 @@ This prevents memory forensics from recovering deleted messages.
 - Uses Web Crypto API (AES-GCM with 256-bit keys)
 - Simple, reviewable JavaScript implementation
 - No external dependencies beyond native browser APIs
-- Encrypted messages are prefixed with 🔒 emoji
+- Encrypted payloads are sent as `ENC:<base64>` and rendered with a lock marker in the UI
 - Keys stored in sessionStorage (lost when tab closes)
+
+### Chat API Rate-Limit Metadata
+
+The chat endpoints now return explicit rate-limit metadata to make client backoff deterministic:
+
+- `X-RateLimit-Limit` - max requests in the current window
+- `X-RateLimit-Remaining` - remaining requests before blocking
+- `X-RateLimit-Window` - window size in seconds
+- `Retry-After` - present on `429 Too Many Requests`
+
+On rate-limited responses (`429`), JSON now includes:
+
+```json
+{
+  "code": "rate_limited",
+  "endpoint": "chat_message",
+  "retry_after_seconds": 11,
+  "limit": 30,
+  "window_seconds": 60
+}
+```
+
+The web client consumes this metadata and shows a countdown/backoff message instead of repeatedly retrying while blocked.
 
 ## Technical Details
 

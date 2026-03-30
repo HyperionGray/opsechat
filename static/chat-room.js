@@ -8,6 +8,8 @@ let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') 
 
 // Encrypted message prefix (ASCII-safe, recognised by both client and server)
 const ENC_PREFIX = 'ENC:';
+let sendBackoffUntil = 0;
+let sendBackoffTimer = null;
 
 // Show security warning on first load
 function showSecurityWarning() {
@@ -45,23 +47,6 @@ async function fetchRoomKey() {
 }
 
 // Simple encryption using AES-GCM with Web Crypto API
-async function generateKey() {
-    const key = await window.crypto.subtle.generateKey(
-        {
-            name: "AES-GCM",
-            length: 256
-        },
-        true,
-        ["encrypt", "decrypt"]
-    );
-    return key;
-}
-
-async function exportKey(key) {
-    const exported = await window.crypto.subtle.exportKey("raw", key);
-    return Array.from(new Uint8Array(exported));
-}
-
 async function importKey(keyArray) {
     const key = await window.crypto.subtle.importKey(
         "raw",
@@ -135,6 +120,39 @@ function showStatus(message, duration = 3000) {
     }, duration);
 }
 
+function disableSendForSeconds(seconds) {
+    const input = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const clamped = Math.max(1, Number(seconds) || 1);
+    sendBackoffUntil = Date.now() + (clamped * 1000);
+
+    input.disabled = true;
+    sendBtn.disabled = true;
+
+    if (sendBackoffTimer) {
+        clearInterval(sendBackoffTimer);
+    }
+
+    const updateCountdown = () => {
+        const remaining = Math.max(0, Math.ceil((sendBackoffUntil - Date.now()) / 1000));
+        if (remaining <= 0) {
+            clearInterval(sendBackoffTimer);
+            sendBackoffTimer = null;
+            // Respect the security warning lockout state if not yet accepted.
+            if (securityWarningAccepted) {
+                input.disabled = false;
+                sendBtn.disabled = false;
+            }
+            showStatus('Rate limit window cleared. You can send again.', 2000);
+            return;
+        }
+        showStatus(`Rate limited. Try again in ${remaining}s.`, 1200);
+    };
+
+    updateCountdown();
+    sendBackoffTimer = setInterval(updateCountdown, 1000);
+}
+
 function scrollToBottom() {
     const container = document.getElementById('messagesContainer');
     container.scrollTop = container.scrollHeight;
@@ -188,6 +206,11 @@ async function sendMessage() {
     const message = input.value.trim();
 
     if (!message) return;
+    if (Date.now() < sendBackoffUntil) {
+        const remaining = Math.max(1, Math.ceil((sendBackoffUntil - Date.now()) / 1000));
+        showStatus(`Rate limited. Try again in ${remaining}s.`);
+        return;
+    }
 
     let messageToSend = message;
 
@@ -209,7 +232,25 @@ async function sendMessage() {
             input.value = '';
             await pollMessages();
         } else {
-            showStatus('Error sending message');
+            let errorText = 'Error sending message';
+            let retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
+            try {
+                const data = await response.json();
+                if (data && data.error) {
+                    errorText = data.error;
+                }
+                if (!retryAfter && data && data.retry_after_seconds) {
+                    retryAfter = parseInt(data.retry_after_seconds, 10);
+                }
+            } catch (e) {
+                // ignore JSON parsing failures; generic message already set
+            }
+
+            if (response.status === 429 && retryAfter > 0) {
+                disableSendForSeconds(retryAfter);
+            } else {
+                showStatus(errorText);
+            }
         }
     } catch (error) {
         showStatus('Error: ' + error.message);
@@ -292,6 +333,9 @@ window.addEventListener('load', async function() {
 window.addEventListener('beforeunload', function() {
     if (pollInterval) {
         clearInterval(pollInterval);
+    }
+    if (sendBackoffTimer) {
+        clearInterval(sendBackoffTimer);
     }
 });
 
