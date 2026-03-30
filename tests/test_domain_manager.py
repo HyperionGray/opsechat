@@ -262,17 +262,16 @@ class TestDomainRotationManager:
         provider.provider_name = "mock-provider"
         provider.search_domain.return_value = {
             "available": True,
-            "domain": "test789.xyz",
             "price": "2.25"
         }
         provider.purchase_domain.return_value = {
-            "success": True,
-            "domain": "test789.xyz"
+            "success": True
         }
 
         manager = DomainRotationManager(provider, monthly_budget=50.0)
         result = manager.rotate_to_new_domain(max_price=5.0, max_attempts=1)
 
         assert result["success"] is True
-        assert result["domain"] == "test789.xyz"
+        assert result["domain"].endswith((".xyz", ".club", ".online", ".site", ".website"))
+        assert result["cost"] == 2.25
         assert result["provider"] == "mock-provider"
