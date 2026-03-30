@@ -17,9 +17,14 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from getpass import getpass
-from domain_manager import PorkbunAPIClient, DomainRotationManager
+from domain_manager import (
+    DomainRotationManager,
+    NamecheapAPIClient,
+    PorkbunAPIClient,
+)
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
@@ -54,12 +59,16 @@ def save_config(config):
 def configure_api():
     """Configure API credentials"""
     print("\n=== Domain API Configuration ===\n")
-    print("This tool supports Porkbun API for domain management.")
-    print("You can get API credentials from: https://porkbun.com/account/api\n")
+    print("This tool supports Porkbun and Namecheap API for domain management.")
+    print("Porkbun keys: https://porkbun.com/account/api")
+    print("Namecheap API: https://www.namecheap.com/support/api/intro/\n")
     
     config = load_config()
     
     print("Current configuration:")
+    provider = config.get('provider', 'porkbun')
+    print(f"  Provider: {provider}")
+
     if config.get('api_key'):
         print(f"  API Key: {'*' * 20}{config['api_key'][-4:]}")
     else:
@@ -71,14 +80,73 @@ def configure_api():
         print("  Monthly Budget: Not configured")
     
     print("\nEnter new values (or press Enter to keep current):\n")
-    
-    api_key = input("Porkbun API Key: ").strip()
+
+    provider_input = input("Provider [porkbun/namecheap] (default: porkbun): ").strip().lower()
+    if provider_input in {"porkbun", "namecheap"}:
+        config['provider'] = provider_input
+    elif 'provider' not in config:
+        config['provider'] = 'porkbun'
+
+    selected_provider = config.get('provider', 'porkbun')
+
+    api_key_prompt = "Namecheap API Key" if selected_provider == "namecheap" else "Porkbun API Key"
+    api_key = input(f"{api_key_prompt}: ").strip()
     if api_key:
         config['api_key'] = api_key
-    
-    api_secret = getpass("Porkbun API Secret: ").strip()
-    if api_secret:
-        config['api_secret'] = api_secret
+
+    if selected_provider == "namecheap":
+        username = input("Namecheap Username: ").strip()
+        if username:
+            config['username'] = username
+        client_ip = input("Namecheap Client IP (whitelisted in Namecheap): ").strip()
+        if client_ip:
+            config['client_ip'] = client_ip
+        api_user = input("Namecheap ApiUser (optional; defaults to username): ").strip()
+        if api_user:
+            config['api_user'] = api_user
+        default_contact_id = input("Namecheap default contact profile ID (optional): ").strip()
+        if default_contact_id:
+            try:
+                config['default_contact_id'] = int(default_contact_id)
+            except ValueError:
+                print("Invalid contact profile ID, ignoring")
+        sandbox = input("Use Namecheap sandbox? [y/N]: ").strip().lower()
+        config['sandbox'] = sandbox in {'y', 'yes'}
+    else:
+        api_secret = getpass("Porkbun API Secret: ").strip()
+        if api_secret:
+            config['api_secret'] = api_secret
+
+    use_fallback = input("Configure fallback provider too? [y/N]: ").strip().lower()
+    if use_fallback in {'y', 'yes'}:
+        fallback_provider = "namecheap" if selected_provider == "porkbun" else "porkbun"
+        print(f"\nConfiguring fallback provider: {fallback_provider}")
+        fb_key = input(f"{fallback_provider.capitalize()} API Key: ").strip()
+        if fb_key:
+            fallback = {"provider": fallback_provider, "api_key": fb_key}
+            if fallback_provider == "porkbun":
+                fb_secret = getpass("Porkbun API Secret: ").strip()
+                if fb_secret:
+                    fallback["api_secret"] = fb_secret
+            else:
+                fb_user = input("Namecheap Username: ").strip()
+                fb_ip = input("Namecheap Client IP: ").strip()
+                if fb_user:
+                    fallback["username"] = fb_user
+                if fb_ip:
+                    fallback["client_ip"] = fb_ip
+                fb_api_user = input("Namecheap ApiUser (optional): ").strip()
+                if fb_api_user:
+                    fallback["api_user"] = fb_api_user
+                fb_contact = input("Namecheap default contact profile ID (optional): ").strip()
+                if fb_contact:
+                    try:
+                        fallback["default_contact_id"] = int(fb_contact)
+                    except ValueError:
+                        print("Invalid fallback contact profile ID, ignoring")
+                fb_sandbox = input("Use Namecheap sandbox? [y/N]: ").strip().lower()
+                fallback["sandbox"] = fb_sandbox in {'y', 'yes'}
+            config['fallback'] = fallback
     
     budget = input("Monthly Budget (USD) [default: 50]: ").strip()
     if budget:
@@ -97,16 +165,60 @@ def get_manager():
     """Get configured domain manager"""
     config = load_config()
     
-    if not config.get('api_key') or not config.get('api_secret'):
+    if not config.get('api_key'):
         print("❌ Error: API credentials not configured.")
         print("Run: python domain_rotation_cli.py config")
         sys.exit(1)
-    
-    client = PorkbunAPIClient(config['api_key'], config['api_secret'])
+
+    provider = config.get('provider', 'porkbun')
+    if provider == 'namecheap':
+        if not config.get('username') or not config.get('client_ip'):
+            print("❌ Error: Namecheap requires username and client_ip.")
+            print("Run: python domain_rotation_cli.py config")
+            sys.exit(1)
+        client = NamecheapAPIClient(
+            api_key=config['api_key'],
+            username=config['username'],
+            client_ip=config['client_ip'],
+            api_user=config.get('api_user'),
+            sandbox=bool(config.get('sandbox', False)),
+            default_contact_id=config.get('default_contact_id'),
+        )
+    else:
+        if not config.get('api_secret'):
+            print("❌ Error: Porkbun requires api_secret.")
+            print("Run: python domain_rotation_cli.py config")
+            sys.exit(1)
+        client = PorkbunAPIClient(config['api_key'], config['api_secret'])
+
     manager = DomainRotationManager(
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
     )
+
+    fallback = config.get('fallback')
+    if isinstance(fallback, dict) and fallback.get('api_key'):
+        fb_provider = fallback.get('provider', 'porkbun')
+        try:
+            if fb_provider == 'namecheap':
+                if fallback.get('username') and fallback.get('client_ip'):
+                    manager.add_api_client(
+                        NamecheapAPIClient(
+                            api_key=fallback['api_key'],
+                            username=fallback['username'],
+                            client_ip=fallback['client_ip'],
+                            api_user=fallback.get('api_user'),
+                            sandbox=bool(fallback.get('sandbox', False)),
+                            default_contact_id=fallback.get('default_contact_id'),
+                        )
+                    )
+            else:
+                if fallback.get('api_secret'):
+                    manager.add_api_client(
+                        PorkbunAPIClient(fallback['api_key'], fallback['api_secret'])
+                    )
+        except Exception as exc:
+            print(f"⚠️ Could not load fallback provider: {exc}")
     
     # Load saved state
     if config.get('current_spending'):
@@ -122,7 +234,15 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    serialized_domains = []
+    for domain in manager.owned_domains:
+        d = dict(domain)
+        if isinstance(d.get('purchased_at'), datetime):
+            d['purchased_at'] = d['purchased_at'].isoformat()
+        if isinstance(d.get('expires_at'), datetime):
+            d['expires_at'] = d['expires_at'].isoformat()
+        serialized_domains.append(d)
+    config['owned_domains'] = serialized_domains
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -144,8 +264,25 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        purchased_at = domain.get('purchased_at')
+        expires_at = domain.get('expires_at')
+        if isinstance(purchased_at, str):
+            try:
+                purchased_at = datetime.fromisoformat(purchased_at)
+            except ValueError:
+                purchased_at = None
+        if isinstance(expires_at, str):
+            try:
+                expires_at = datetime.fromisoformat(expires_at)
+            except ValueError:
+                expires_at = None
+
+        registrar = domain.get('registrar')
+        if registrar:
+            print(f"   Registrar: {registrar}")
+
+        print(f"   Purchased: {purchased_at.strftime('%Y-%m-%d %H:%M') if purchased_at else 'Unknown'}")
+        print(f"   Expires: {expires_at.strftime('%Y-%m-%d') if expires_at else 'Unknown'}")
         print()
 
 
@@ -203,7 +340,8 @@ def rotate_domain():
     print("\nPurchasing domain...")
     success = manager.purchase_domain_if_budget_allows(
         domain_info['domain'],
-        domain_info['price']
+        domain_info['price'],
+        registrar=domain_info.get('registrar'),
     )
     
     if success:

@@ -8,7 +8,13 @@ Opsechat supports automated domain purchasing for rotating burner email addresse
 
 ## Supported Registrars
 
-### Porkbun (Recommended)
+Opsechat currently supports:
+
+- Porkbun
+- Namecheap
+- Multi-registrar fallback (primary + one fallback provider)
+
+### Porkbun (Recommended default)
 
 **Why Porkbun?**
 - Competitive pricing on cheap TLDs (.xyz from $1.99/yr)
@@ -59,25 +65,25 @@ Key endpoints used by opsechat:
 - `pricing/get` - Get TLD pricing
 - `domain/listAll` - List owned domains
 
-## Other Registrars (Future Support)
+## Additional Registrar Notes
 
-The opsechat domain manager is designed to be extensible. Future registrar support may include:
+### Namecheap (Supported)
 
-### Namecheap
-- API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
-- Cheap TLDs: .xyz, .club, .online
+- API docs: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
+- Requires API key, username, and a whitelisted client IP
+- Optional: contact profile ID for automated purchases
+- Works as either the primary registrar or a fallback registrar
 
-### Namesilo
+### Namesilo (Future)
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)
 - No spending requirement
 - Very competitive bulk pricing
 
-### Dynadot
+### Dynadot (Future)
 - API key from: [Dynadot API](https://www.dynadot.com/domain/api.html)
 - Good for bulk operations
 
-### Cloudflare Registrar
+### Cloudflare Registrar (Future)
 - API key from: [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens)
 - At-cost pricing (no markup)
 - Limited TLD support
@@ -98,7 +104,25 @@ The opsechat domain manager is designed to be extensible. Future registrar suppo
 
 3. Click "Configure"
 
-### Via Environment Variables (Advanced)
+### Via CLI (recommended for local operations)
+
+Use the built-in CLI to configure registrars and optional fallback:
+
+```bash
+python domain_rotation_cli.py config
+python domain_rotation_cli.py status
+python domain_rotation_cli.py search
+python domain_rotation_cli.py rotate
+python domain_rotation_cli.py list
+```
+
+You can set:
+- Primary provider (`porkbun` or `namecheap`)
+- Provider-specific credentials
+- Optional fallback provider credentials
+- Monthly budget
+
+### Via Environment Variables (Advanced / deployment-specific)
 
 For container deployments, you can set:
 
@@ -130,6 +154,7 @@ http://yourservice.onion/{path}/email/config
 2. **Generate Burner**: Creates email with current domain
 3. **Auto-Rotate**: When domain is flagged/old, rotate to new domain
 4. **Manual Rotate**: Force rotation via email config page
+5. **Fallback handling**: If primary registrar cannot satisfy a purchase/search, fallback registrar is attempted when configured
 
 ## Security Considerations
 
@@ -184,6 +209,17 @@ Possible causes:
 
 Solution: Verify credentials in registrar dashboard
 
+### Namecheap "Invalid Client IP"
+
+Possible causes:
+- The machine IP is not allowlisted in Namecheap API settings
+- A stale IP is configured in CLI/web settings
+
+Solution:
+1. Add your active public IP in Namecheap API settings
+2. Re-run `python domain_rotation_cli.py config`
+3. Update `client_ip` value
+
 ## Example: Complete Setup
 
 ```bash
@@ -196,9 +232,10 @@ podman-compose logs opsechat | grep "Your service is available"
 # 3. Open in Tor Browser
 # Navigate to: http://xxxxx.onion/randompath/email/config
 
-# 4. Configure Porkbun API
+# 4. Configure domain API (Porkbun or Namecheap)
 # - API Key: pk1_your_api_key_here
-# - API Secret: sk1_your_secret_here
+# - API Secret: sk1_your_secret_here (Porkbun only)
+# - Username + Client IP (Namecheap only)
 # - Monthly Budget: 20.00
 
 # 5. Generate burner email
@@ -220,6 +257,6 @@ podman-compose logs opsechat | grep "Your service is available"
 
 ## See Also
 
-- [EMAIL_SYSTEM.md](EMAIL_SYSTEM.md) - Full email system documentation
-- [DOCKER.md](DOCKER.md) - Container deployment
-- [QUADLETS.md](QUADLETS.md) - Podman Quadlet deployment
+- [Email system guide](../user-guide/EMAIL_SYSTEM.md)
+- [Docker guide](DOCKER.md)
+- [Quadlets guide](QUADLETS.md)

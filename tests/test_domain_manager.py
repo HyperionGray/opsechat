@@ -4,7 +4,7 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, NamecheapAPIClient, DomainRotationManager
 )
 
 
@@ -74,6 +74,72 @@ class TestPorkbunAPIClient:
         
         assert result["tld"] == "com"
         assert result["registration"] == "9.99"
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch('domain_manager.requests.Session')
+    def test_search_domain_available(self, mock_session_class):
+        """Test Namecheap availability search"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">'
+            '<CommandResponse Type="namecheap.domains.check">'
+            '<DomainCheckResult Domain="test123.xyz" Available="true" IsPremiumName="false"/>'
+            '</CommandResponse>'
+            '</ApiResponse>'
+        )
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_key="test_key",
+            username="namecheap-user",
+            client_ip="127.0.0.1",
+        )
+        with patch.object(client, "get_pricing", return_value={"registration": "2.49"}):
+            result = client.search_domain("test123.xyz")
+
+        assert result["available"] is True
+        assert result["domain"] == "test123.xyz"
+        assert result["price"] == "2.49"
+
+    @patch('domain_manager.requests.Session')
+    def test_get_pricing(self, mock_session_class):
+        """Test Namecheap pricing retrieval"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">'
+            '<CommandResponse Type="namecheap.users.getPricing">'
+            '<UserGetPricingResult>'
+            '<ProductType Name="DOMAIN">'
+            '<ProductCategory Name="register">'
+            '<Product Name="xyz">'
+            '<Price Duration="1" Price="2.49" YourPrice="2.19"/>'
+            '</Product>'
+            '</ProductCategory>'
+            '</ProductType>'
+            '</UserGetPricingResult>'
+            '</CommandResponse>'
+            '</ApiResponse>'
+        )
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_key="test_key",
+            username="namecheap-user",
+            client_ip="127.0.0.1",
+        )
+        result = client.get_pricing("xyz")
+
+        assert result["tld"] == "xyz"
+        assert result["registration"] == "2.19"
 
 
 class TestDomainRotationManager:
@@ -174,3 +240,81 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_find_domain_uses_fallback_client(self):
+        """Use fallback registrar when primary has no result"""
+        primary = Mock(spec=DomainAPIClient)
+        primary.provider_name = "porkbun"
+        primary.search_domain.return_value = {"available": False}
+
+        fallback = Mock(spec=DomainAPIClient)
+        fallback.provider_name = "namecheap"
+        fallback.search_domain.return_value = {
+            "available": True,
+            "domain": "fallback123.xyz",
+            "price": "2.49",
+        }
+
+        manager = DomainRotationManager(primary, monthly_budget=50.0)
+        manager.add_api_client(fallback)
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["registrar"] == "namecheap"
+        assert result["price"] == 2.49
+
+    def test_purchase_records_registrar(self):
+        """Purchased domains should preserve registrar metadata"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.provider_name = "porkbun"
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "test123.xyz",
+            "order_id": "abc123",
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        result = manager.purchase_domain_if_budget_allows("test123.xyz", 2.99)
+
+        assert result is True
+        assert manager.owned_domains[0]["registrar"] == "porkbun"
+        assert manager.owned_domains[0]["order_id"] == "abc123"
+
+    def test_configure_porkbun(self):
+        """Configure helper should initialize a Porkbun client"""
+        manager = DomainRotationManager()
+        config = manager.configure(
+            api_key="pk_test",
+            secret_key="sk_test",
+            monthly_budget=42.0,
+            provider="porkbun",
+        )
+
+        assert manager.api_client is not None
+        assert manager.api_client.provider_name == "porkbun"
+        assert config["provider"] == "porkbun"
+        assert config["monthly_budget"] == 42.0
+
+    def test_configure_namecheap_requires_username_and_client_ip(self):
+        """Namecheap configuration should enforce required fields"""
+        manager = DomainRotationManager()
+
+        with pytest.raises(ValueError):
+            manager.configure(
+                api_key="nc_key",
+                provider="namecheap",
+            )
+
+    def test_get_config_lists_all_registrars(self):
+        """Config should surface primary and fallback registrars"""
+        primary = Mock(spec=DomainAPIClient)
+        primary.provider_name = "porkbun"
+        fallback = Mock(spec=DomainAPIClient)
+        fallback.provider_name = "namecheap"
+
+        manager = DomainRotationManager(primary, monthly_budget=50.0)
+        manager.add_api_client(fallback)
+        config = manager.get_config()
+
+        assert config["provider"] == "porkbun"
+        assert config["registrars"] == ["porkbun", "namecheap"]
