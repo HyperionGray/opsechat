@@ -76,6 +76,14 @@ These are development and testing utilities that help during development:
 - **`usability_assessment.py`** - UI/UX testing helper
 - **`comprehensive_functionality_test.py`** - Full functional test suite
 
+### Cleanup Notes (2026-03)
+- Removed stale standalone CI-debug scripts from repo root:
+  - `test_fix.sh`
+  - `test-ci-fix.js`
+  - `test-server.js`
+- Equivalent coverage remains in the `tests/` suite; these ad-hoc scripts were
+  unreferenced and created root-level clutter.
+
 ### Main Application Files
 - **`runserver.py`** - Main entry point (legacy monolithic)
 - **`runserver_refactored.py`** - Refactored version (blueprint-based)
