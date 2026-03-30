@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
+from datetime import datetime
 
 
 class TestPorkbunAPIClient:
@@ -174,3 +175,47 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_updates_budget_without_client(self):
+        """Test budget-only configuration update"""
+        manager = DomainRotationManager(monthly_budget=20.0)
+
+        config = manager.configure(monthly_budget=35.0)
+
+        assert config["monthly_budget"] == 35.0
+        assert config["configured"] is False
+
+    def test_configure_requires_both_api_values(self):
+        """Test configure validation for API credentials"""
+        manager = DomainRotationManager()
+
+        with pytest.raises(ValueError, match="Both api_key and secret_key are required"):
+            manager.configure(api_key="only-key")
+
+    def test_state_export_import_round_trip(self):
+        """Test JSON-safe state export and import"""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 4.5
+        manager.active_domain = "active.xyz"
+        manager.owned_domains = [
+            {
+                "domain": "active.xyz",
+                "price": "2.99",
+                "purchased_at": datetime(2026, 1, 1, 12, 0, 0),
+                "expires_at": datetime(2027, 1, 1, 12, 0, 0),
+            }
+        ]
+
+        exported = manager.export_state()
+
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(exported["owned_domains"][0]["expires_at"], str)
+        assert exported["owned_domains"][0]["price"] == 2.99
+
+        imported_manager = DomainRotationManager(monthly_budget=50.0)
+        imported_manager.import_state(exported)
+
+        assert imported_manager.current_spending == 4.5
+        assert imported_manager.active_domain == "active.xyz"
+        assert imported_manager.owned_domains[0]["domain"] == "active.xyz"
+        assert isinstance(imported_manager.owned_domains[0]["purchased_at"], datetime)

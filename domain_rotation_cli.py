@@ -108,22 +108,24 @@ def get_manager():
         monthly_budget=config.get('monthly_budget', 50.0)
     )
     
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+    # Load saved state using robust datetime-safe import.
+    manager.import_state(
+        {
+            "current_spending": config.get("current_spending", 0.0),
+            "owned_domains": config.get("owned_domains", []),
+            "active_domain": config.get("active_domain"),
+        }
+    )
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    exported = manager.export_state()
+    config['current_spending'] = exported['current_spending']
+    config['owned_domains'] = exported['owned_domains']
+    config['active_domain'] = exported['active_domain']
     save_config(config)
 
 
