@@ -66,19 +66,19 @@ opsechat/
 
 ## Development Tools
 
-### Python Files in Root (Dev Tools)
-These are development and testing utilities that help during development:
+### Development Utilities
+Primary dev/test entry points should live under `tests/`, `scripts/`, or
+`pf-tasks/`. Legacy one-off scripts are archived in `bak/dev-scripts/`.
 
-- **`manual-test.py`** - Manual testing script for interactive testing
-- **`simple_test.py`** - Quick sanity checks
-- **`quick_import_test.py`** - Test Python imports
 - **`review_performance.py`** - Performance benchmarking tool
 - **`usability_assessment.py`** - UI/UX testing helper
-- **`comprehensive_functionality_test.py`** - Full functional test suite
+- **`bak/dev-scripts/manual-test.py`** - Legacy manual interactive script (archived)
+- **`bak/dev-scripts/simple_test.py`** - Legacy sanity-check script (archived)
+- **`bak/dev-scripts/quick_import_test.py`** - Legacy import check script (archived)
+- **`bak/dev-scripts/comprehensive_functionality_test.py`** - Legacy functional suite (archived)
 
 ### Main Application Files
-- **`runserver.py`** - Main entry point (legacy monolithic)
-- **`runserver_refactored.py`** - Refactored version (blueprint-based)
+- **`runserver.py`** - Main entry point (currently uses app factory + modular routes)
 - **`app_factory.py`** - Flask app factory pattern
 - **`chat-room.py`** - Standalone chat room creator
 - **`tui-server.py`** - Terminal UI server

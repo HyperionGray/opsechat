@@ -13,6 +13,11 @@ Experimental file transfer utilities that were developed but are not integrated 
 - `repair_send.py` - Repair mechanism for failed transfers
 - `bench_pvrt.py` - Benchmarking tool
 
+### `dev-scripts/`
+Legacy development-only helper scripts moved out of the repository root to keep
+the top-level layout focused on production code and supported entry points.
+These scripts are retained for historical reference only.
+
 ### `transfer_sdk/`
 A comprehensive file transfer SDK with multiple transport protocols and integrity checking. This appears to be experimental/development code for a robust file transfer system. Key components include:
 - Transport implementations (QUIC, UDP, TCP, WebSocket)
