@@ -159,15 +159,36 @@ def test_dm_structure():
         retrieved = direct_messages.get(dm_id)
         assert retrieved is not None, "Should retrieve DM"
         assert retrieved["room_id"] == "test_room_abc123", "Room ID should match"
-        assert retrieved["read"] == False, "Should be unread initially"
-        
-        # Simulate reading
-        retrieved["read"] = True
+        assert retrieved["read"] is False, "Should be unread initially"
         
         # Clean up
         del direct_messages[dm_id]
     
     print("✅ DM functionality structure correct")
+
+
+def test_dm_burn_after_read():
+    """A viewed DM should be removed from in-memory storage."""
+    print("\nTesting DM burn-after-read behavior...")
+    from app_factory import create_app
+
+    app = create_app()
+    app.config["TESTING"] = True
+
+    with app.test_client() as client:
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        dm_id = client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "single use invite"},
+        ).get_json()["dm_id"]
+
+        first_view = client.get(f"/chat/dm/{dm_id}")
+        assert first_view.status_code == 200, "First DM view should succeed"
+
+        second_view = client.get(f"/chat/dm/{dm_id}")
+        assert second_view.status_code == 404, "DM should be burned after first view"
+
+    print("✅ DM burn-after-read behavior works correctly")
 
 
 def run_all_tests():
@@ -183,6 +204,7 @@ def run_all_tests():
         test_base64_detection,
         test_message_length_cap,
         test_dm_structure,
+        test_dm_burn_after_read,
     ]
 
     passed = 0

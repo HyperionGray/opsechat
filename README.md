@@ -6,7 +6,7 @@
 
 **Latest Updates (v0.8.0):**
 - 🔑 **Automated Key Exchange** - No manual key sharing needed
-- 💬 **Direct Messages** - Ephemeral DM feature for sharing room IDs (1-min expiry)
+- 💬 **Direct Messages** - Ephemeral single-read invites (burn-after-read, 1-min max lifetime)
 - 🔒 **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
 - 🌐 **Domain Rotation CLI** - Easy burner email domain management
 - 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
@@ -32,7 +32,7 @@ OpSecChat now includes both **Web-Based Chat Rooms** and **Terminal UI (TUI)** f
 - ✅ **Text Only** - No images, videos, or media sharing (500 char limit)
 - ✅ **In-Memory Only** - Zero disk writes
 - ✅ **Tor Ready** - Works seamlessly with Tor hidden services
-- ✅ **Direct Messages** - Share room IDs securely (1-minute expiry)
+- ✅ **Direct Messages** - Single-read room invites with immediate burn-after-read (1-minute max lifetime)
 
 ### Quick Start (Web Chat)
 
