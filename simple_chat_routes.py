@@ -17,8 +17,8 @@ import datetime
 import secrets
 import threading
 import base64
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Absolute path to this file's directory (used for reliable VERSION lookup)
@@ -46,6 +46,8 @@ RATE_LIMITS = {
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
+DM_MAX_MESSAGE_LENGTH = 200
+DM_EXPIRY_SECONDS = 60
 
 # Prefix for E2E-encrypted messages sent from the client.
 # The client prepends this ASCII marker before the base64 AES-GCM ciphertext.
@@ -156,7 +158,7 @@ def cleanup_old_dms():
         
         for dm_id, dm_data in direct_messages.items():
             age = (now - dm_data["timestamp"]).total_seconds()
-            if age > 60:  # 1 minute expiry
+            if age > DM_EXPIRY_SECONDS:
                 expired_dms.append(dm_id)
         
         for dm_id in expired_dms:
@@ -429,7 +431,7 @@ def register_simple_chat_routes(app):
     @app.route('/chat/dm/send', methods=['POST'])
     @limiter.limit("20 per hour; 5 per minute")
     def send_dm():
-        """Send a direct message (for sharing room IDs) - expires in 1 minute"""
+        """Send a read-once direct message for sharing room IDs"""
         # Initialize user session if needed
         if "_id" not in session:
             session["_id"] = generate_secure_dm_id()
@@ -454,8 +456,13 @@ def register_simple_chat_routes(app):
         if not room_id or not message:
             return jsonify({"error": "Empty room_id or message"}), 400
         
-        if len(message) > 200:  # DMs should be short
-            return jsonify({"error": "DM too long. Maximum 200 characters."}), 400
+        if len(message) > DM_MAX_MESSAGE_LENGTH:
+            return jsonify({"error": f"DM too long. Maximum {DM_MAX_MESSAGE_LENGTH} characters."}), 400
+
+        # DMs are only for sharing existing room IDs
+        with rooms_lock:
+            if room_id not in chat_rooms:
+                return jsonify({"error": "Room not found"}), 404
         
         # Sanitize
         message = re.sub(r'<[^>]+>', '', message)
@@ -470,20 +477,20 @@ def register_simple_chat_routes(app):
                 "sender_name": session["username"],
                 "room_id": room_id,
                 "message": message,
-                "timestamp": datetime.datetime.now(),
-                "read": False
+                "timestamp": datetime.datetime.now()
             }
         
         return jsonify({
             "success": True,
             "dm_id": dm_id,
             "dm_url": f"/chat/dm/{dm_id}",
-            "expires_in": 60
+            "expires_in": DM_EXPIRY_SECONDS,
+            "read_once": True
         })
     
     @app.route('/chat/dm/<string:dm_id>')
     def view_dm(dm_id):
-        """View a direct message"""
+        """View and consume a direct message (read-once)"""
         with dm_lock:
             if dm_id not in direct_messages:
                 return jsonify({"error": "DM not found or expired"}), 404
@@ -492,19 +499,28 @@ def register_simple_chat_routes(app):
             
             # Check if expired
             age = (datetime.datetime.now() - dm["timestamp"]).total_seconds()
-            if age > 60:
+            if age > DM_EXPIRY_SECONDS:
+                # Scrub sensitive values before deletion
+                dm["message"] = "X" * len(dm["message"])
+                dm["room_id"] = "X" * len(dm["room_id"])
+                del direct_messages[dm_id]
                 return jsonify({"error": "DM expired"}), 404
-            
-            # Mark as read
-            dm["read"] = True
-            
-            return jsonify({
+
+            response_payload = {
                 "dm_id": dm["dm_id"],
                 "sender_name": dm["sender_name"],
                 "room_id": dm["room_id"],
                 "message": dm["message"],
-                "expires_in": max(0, 60 - int(age))
-            })
+                "expires_in": max(0, DM_EXPIRY_SECONDS - int(age)),
+                "read_once": True
+            }
+
+            # Read-once behavior: scrub and remove as soon as it is viewed.
+            dm["message"] = "X" * len(dm["message"])
+            dm["room_id"] = "X" * len(dm["room_id"])
+            del direct_messages[dm_id]
+
+            return jsonify(response_payload)
     
     @app.route('/chat/room/<string:room_id>/key', methods=['GET'])
     def get_room_key(room_id):

@@ -259,6 +259,7 @@ class TestDMEndpoints:
         assert data["success"] is True
         assert "dm_id" in data
         assert data["expires_in"] == 60
+        assert data["read_once"] is True
 
     def test_send_dm_creates_viewable_link(self):
         resp = self.client.post(
@@ -271,6 +272,19 @@ class TestDMEndpoints:
         data = view_resp.get_json()
         assert "message" in data
         assert "room_id" in data
+
+    def test_dm_is_consumed_after_first_read(self):
+        resp = self.client.post(
+            "/chat/dm/send",
+            json={"room_id": self.room_id, "message": "consume once"},
+        )
+        dm_id = resp.get_json()["dm_id"]
+
+        first = self.client.get(f"/chat/dm/{dm_id}")
+        second = self.client.get(f"/chat/dm/{dm_id}")
+
+        assert first.status_code == 200
+        assert second.status_code == 404
 
     def test_dm_has_expiry_field(self):
         resp = self.client.post(
@@ -312,3 +326,10 @@ class TestDMEndpoints:
             json={"room_id": self.room_id, "message": "x" * 201},
         )
         assert resp.status_code == 400
+
+    def test_send_dm_requires_existing_room(self):
+        resp = self.client.post(
+            "/chat/dm/send",
+            json={"room_id": "missing-room-id", "message": "join me"},
+        )
+        assert resp.status_code == 404

@@ -176,7 +176,6 @@ class TestDirectMessageCleanup:
                 "room_id": "some-room",
                 "message": "here is the room link",
                 "timestamp": datetime.datetime.now() - datetime.timedelta(seconds=90),
-                "read": False,
             }
         cleanup_old_dms()
         with dm_lock:
@@ -191,7 +190,6 @@ class TestDirectMessageCleanup:
                 "room_id": "some-room",
                 "message": "here is the room link",
                 "timestamp": datetime.datetime.now(),
-                "read": False,
             }
         cleanup_old_dms()
         with dm_lock:
@@ -207,7 +205,6 @@ class TestDirectMessageCleanup:
             "room_id": original_room_id,
             "message": original_message,
             "timestamp": datetime.datetime.now() - datetime.timedelta(seconds=90),
-            "read": False,
         }
         with dm_lock:
             direct_messages["overwrite-dm"] = dm

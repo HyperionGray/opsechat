@@ -35,7 +35,8 @@ Previously, users had to manually share encryption keys. Now, each chat room aut
 Simple, ephemeral messaging for sharing room IDs with specific users. DMs are designed for one purpose: **sharing chat room URLs securely**.
 
 ### Features
-- **1-minute expiry** - Messages disappear after 60 seconds
+- **Read-once** - First successful read consumes and deletes the DM
+- **1-minute expiry** - Messages disappear after 60 seconds if never read
 - **Simple text only** - Max 200 characters
 - **Memory overwriting** - Data is overwritten before deletion
 - **Non-discoverable** - Cryptographically secure DM IDs
@@ -57,7 +58,8 @@ Response:
   "success": true,
   "dm_id": "14gvVa4l3SPsLJc1Ijb_sA",
   "dm_url": "/chat/dm/14gvVa4l3SPsLJc1Ijb_sA",
-  "expires_in": 60
+  "expires_in": 60,
+  "read_once": true
 }
 ```
 
@@ -71,8 +73,15 @@ Response:
   "sender_name": "SilentWolf4523",
   "room_id": "wWR_qXjnWQlr4oXqlR2JLxA...",
   "message": "Join me in the secure room...",
-  "expires_in": 45
+  "expires_in": 45,
+  "read_once": true
 }
+```
+
+After a successful `GET`, the same URL returns:
+
+```json
+{"error":"DM not found or expired"}
 ```
 
 ### Example Workflow
@@ -90,9 +99,13 @@ POST /chat/dm/send
 → Gets dm_id: "xyz789"
 
 # User A shares DM URL with User B out-of-band
-# User B accesses the DM
+# User B accesses the DM (first read consumes it)
 GET /chat/dm/xyz789
 → Gets room ID and joins the chat
+
+# Any subsequent read fails (already consumed)
+GET /chat/dm/xyz789
+→ 404 DM not found or expired
 ```
 
 ---

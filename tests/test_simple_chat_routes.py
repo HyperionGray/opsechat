@@ -21,6 +21,7 @@ from simple_chat_routes import (
     check_rate_limit,
     RATE_LIMITS,
     MAX_MESSAGE_LENGTH,
+    DM_MAX_MESSAGE_LENGTH,
 )
 
 
@@ -257,6 +258,7 @@ class TestDMRoutes:
         data = response.get_json()
         assert data["success"] is True
         assert "dm_id" in data
+        assert data["read_once"] is True
 
     def test_send_dm_missing_fields(self, client):
         response = client.post(
@@ -269,10 +271,18 @@ class TestDMRoutes:
     def test_send_dm_message_too_long(self, client):
         response = client.post(
             "/chat/dm/send",
-            json={"room_id": "some-room", "message": "x" * 201},
+            json={"room_id": "some-room", "message": "x" * (DM_MAX_MESSAGE_LENGTH + 1)},
             content_type="application/json",
         )
         assert response.status_code == 400
+
+    def test_send_dm_nonexistent_room_rejected(self, client):
+        response = client.post(
+            "/chat/dm/send",
+            json={"room_id": "no-such-room", "message": "join me"},
+            content_type="application/json",
+        )
+        assert response.status_code == 404
 
     def test_view_dm_success(self, client):
         room_id = client.post("/chat/create").get_json()["room_id"]
@@ -286,6 +296,20 @@ class TestDMRoutes:
         assert response.status_code == 200
         data = response.get_json()
         assert data["room_id"] == room_id
+        assert data["read_once"] is True
+
+    def test_view_dm_is_read_once(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        dm_id = client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "single read"},
+            content_type="application/json",
+        ).get_json()["dm_id"]
+
+        first = client.get(f"/chat/dm/{dm_id}")
+        second = client.get(f"/chat/dm/{dm_id}")
+        assert first.status_code == 200
+        assert second.status_code == 404
 
     def test_view_dm_nonexistent(self, client):
         response = client.get("/chat/dm/nonexistent-dm-id")
