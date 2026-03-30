@@ -142,6 +142,64 @@ class TestDomainRotationManager:
         assert result is False
         assert manager.current_spending == 4.0
         assert len(manager.owned_domains) == 0
+
+    def test_purchase_domain_if_budget_allows_multi_year(self):
+        """Test multi-year purchase budget accounting"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "testmulti.xyz",
+            "order_id": "99999"
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=20.0)
+        result = manager.purchase_domain_if_budget_allows("testmulti.xyz", 2.5, years=3)
+
+        assert result is True
+        assert manager.current_spending == 7.5
+        assert manager.owned_domains[0]["years"] == 3
+        assert manager.owned_domains[0]["price_per_year"] == 2.5
+
+    def test_configure_and_get_config(self):
+        """Test compatibility configuration helpers"""
+        manager = DomainRotationManager()
+        configured = manager.configure(
+            api_key="pk1_test_123456",
+            secret_key="sk1_test_abcdef",
+            monthly_budget=15.0
+        )
+
+        assert configured["configured"] is True
+        assert configured["provider"] == "porkbun"
+        assert configured["monthly_budget"] == 15.0
+
+        config = manager.get_config()
+        assert config["configured"] is True
+        assert config["provider"] == "porkbun"
+        assert config["monthly_budget"] == 15.0
+        assert config["api_key_masked"].endswith("3456")
+
+    def test_export_and_load_state_roundtrip(self):
+        """State export/import should preserve ownership and active domain."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 4.2
+        manager.active_domain = "abc123.xyz"
+        manager.owned_domains = [{
+            "domain": "abc123.xyz",
+            "price": 4.2,
+            "purchased_at": __import__("datetime").datetime.now(),
+            "expires_at": __import__("datetime").datetime.now()
+        }]
+
+        exported = manager.export_state()
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+
+        loaded = DomainRotationManager(monthly_budget=1.0)
+        loaded.load_state(exported)
+        assert loaded.current_spending == 4.2
+        assert loaded.active_domain == "abc123.xyz"
+        assert loaded.owned_domains[0]["domain"] == "abc123.xyz"
+        assert loaded.owned_domains[0]["purchased_at"] is not None
     
     def test_get_budget_status(self):
         """Test budget status retrieval"""
@@ -174,3 +232,23 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_rotate_domain_return_details(self):
+        """Detailed rotate response for API callers"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test789.xyz",
+            "price": 1.99
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "test789.xyz"
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        details = manager.rotate_domain(return_details=True)
+
+        assert details["success"] is True
+        assert details["domain"] == manager.active_domain
+        assert "budget_status" in details

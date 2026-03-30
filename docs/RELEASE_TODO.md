@@ -43,10 +43,10 @@
 
 ### 2. Domain Rotation CLI Tool
 
-**Current State:** Python API only (requires programming)  
-**Desired State:** Simple CLI tool for non-programmers
+**Current State:** Implemented (`domain_rotation_cli.py` + compatibility wrapper `rotate-domain.py`)  
+**Desired State:** Keep extending UX for non-programmers
 
-**Create:** `rotate-domain.py`
+**Shipped:** `rotate-domain.py` (compatibility CLI) + `domain_rotation_cli.py`
 
 ```bash
 # Usage examples:
@@ -57,15 +57,15 @@ python rotate-domain.py --get-pricing xyz
 ```
 
 **Implementation:**
-- [ ] Create CLI argument parser
+- [x] Create CLI argument parser
 - [ ] Add interactive mode
-- [ ] Display pricing before purchase
-- [ ] Confirm purchases with user
-- [ ] Add budget checking
-- [ ] Store API credentials securely
-- [ ] Add to documentation
+- [x] Display pricing before purchase
+- [x] Confirm purchases with user (`domain_rotation_cli.py rotate`)
+- [x] Add budget checking
+- [x] Store API credentials securely
+- [x] Add to documentation
 
-**Estimated Effort:** 1-2 days
+**Estimated Effort Remaining:** low (interactive-mode polish)
 
 ---
 
