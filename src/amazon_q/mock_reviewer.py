@@ -5,14 +5,19 @@ This module provides a comprehensive mock review when AWS services are unavailab
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional, Any
 
+from .quality_analyzer import analyze_code_quality
 from .security_scanner import perform_security_scan
 from .architecture_analyzer import analyze_architecture
-from .utils import get_source_files, calculate_overall_score, generate_recommendations
+from .utils import calculate_overall_score, generate_recommendations
 
 logger = logging.getLogger(__name__)
+
+
+def _timestamp_utc() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def mock_review(repo_path: str, custom_rules: Optional[Dict] = None) -> Dict[str, Any]:
@@ -32,51 +37,15 @@ def mock_review(repo_path: str, custom_rules: Optional[Dict] = None) -> Dict[str
     logger.info(f"Performing mock Amazon Q review for repository: {repo_path}")
     
     try:
-        # Perform local analysis
-        source_files = get_source_files(repo_path)
-        
-        # Mock security analysis
-        security_results = {
-            'total_files_scanned': len(source_files),
-            'vulnerabilities_found': 0,  # Assume clean for mock
-            'security_issues': [],
-            'scan_timestamp': datetime.utcnow().isoformat() + 'Z',
-            'scanner': 'mock_security_scanner'
-        }
-        
-        # Mock quality analysis
-        quality_results = {
-            'metrics': {
-                'maintainability_score': 88,
-                'complexity_score': 82,
-                'documentation_score': 90,
-                'test_coverage_estimate': 78
-            },
-            'issues': [],
-            'total_files_analyzed': len(source_files),
-            'analysis_timestamp': datetime.utcnow().isoformat() + 'Z',
-            'analyzer': 'mock_quality_analyzer'
-        }
-        
-        # Mock architecture analysis
-        architecture_results = {
-            'structure': {},
-            'dependencies': {},
-            'patterns': {},
-            'architecture_score': 85,
-            'analysis_timestamp': datetime.utcnow().isoformat() + 'Z',
-            'analyzer': 'mock_architecture_analyzer'
-        }
-        
-        # Use actual architecture analysis for better mock
-        try:
-            architecture_results = analyze_architecture(repo_path)
-        except Exception as e:
-            logger.warning(f"Failed to run architecture analysis in mock: {e}")
+        # Use the same local analyzers in mock mode to keep results realistic and
+        # deterministic even when AWS services are unavailable.
+        security_results = perform_security_scan(repo_path, codewhisperer_client=None)
+        quality_results = analyze_code_quality(repo_path, custom_rules=custom_rules, bedrock_client=None)
+        architecture_results = analyze_architecture(repo_path)
         
         # Generate comprehensive mock review
         review_results = {
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': _timestamp_utc(),
             'repository_path': repo_path,
             'service_used': 'mock_amazon_q',
             'security_analysis': security_results,
@@ -98,7 +67,7 @@ def mock_review(repo_path: str, custom_rules: Optional[Dict] = None) -> Dict[str
     except Exception as e:
         logger.error(f"Mock review failed: {e}")
         return {
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': _timestamp_utc(),
             'repository_path': repo_path,
             'service_used': 'mock_amazon_q',
             'error': str(e),

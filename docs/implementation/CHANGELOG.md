@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- Local deterministic Amazon Q analyzer enhancements:
+  - Full-repository security scanning (removed demo file limits)
+  - Deterministic severity summaries and issue scoring
+  - Local quality metrics based on code heuristics (complexity/docstrings/markers)
+  - Architecture scoring with anti-pattern detection and dependency health
+  - New analyzer test coverage in `tests/test_amazon_q_analyzers.py`
+  - New implementation note: `docs/implementation/AMAZON_Q_ANALYZER_ENHANCEMENTS_2026-03-30.md`
 
 ### Changed
 - Improved repository structure and documentation organization

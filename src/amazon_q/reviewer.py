@@ -7,7 +7,7 @@ This module provides the primary interface for Amazon Q code review functionalit
 import logging
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional, Any
 
 from .security_scanner import perform_security_scan
@@ -16,6 +16,10 @@ from .architecture_analyzer import analyze_architecture
 from .utils import calculate_overall_score, generate_recommendations
 
 logger = logging.getLogger(__name__)
+
+
+def _timestamp_utc() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 class AmazonQReviewer:
@@ -131,7 +135,7 @@ class AmazonQReviewer:
             
             # Combine results
             review_results = {
-                'timestamp': datetime.utcnow().isoformat() + 'Z',
+                'timestamp': _timestamp_utc(),
                 'repository_path': repo_path,
                 'service_used': 'amazon_q',
                 'security_analysis': security_results,
