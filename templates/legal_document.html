@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} | OpSecChat</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='legal.css') }}">
+</head>
+<body>
+    <div class="legal-page">
+        <header class="legal-header">
+            <h1>{{ title }}</h1>
+            <nav class="legal-nav" aria-label="Legal policies">
+                {% for link in nav_links %}
+                    {% if link.active %}
+                        <span class="legal-nav-link active" aria-current="page">{{ link.title }}</span>
+                    {% else %}
+                        <a class="legal-nav-link" href="{{ link.route }}">{{ link.title }}</a>
+                    {% endif %}
+                {% endfor %}
+            </nav>
+        </header>
+
+        <main>
+            <article>
+                <pre class="legal-content">{{ content }}</pre>
+            </article>
+        </main>
+
+        <footer class="legal-footer">
+            <p>Source: {{ source_path }}</p>
+        </footer>
+    </div>
+</body>
+</html>

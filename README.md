@@ -2,6 +2,8 @@
 **Documentation:** [docs/README.md](docs/README.md)  
 **License:** MIT
 
+Legal pages are available at `/terms`, `/privacy`, and `/aup`.
+
 ## 🆕 NEW: Enhanced Security & Production Ready
 
 **Latest Updates (v0.8.0):**
