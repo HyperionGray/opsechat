@@ -240,6 +240,38 @@ class TestChatRoutes:
         response = client.get("/chat/room/no-such-room/key")
         assert response.status_code == 404
 
+    def test_chat_create_rate_limit_returns_retry_after(self, client):
+        for _ in range(3):
+            ok_response = client.post("/chat/create")
+            assert ok_response.status_code == 200
+
+        blocked_response = client.post("/chat/create")
+        assert blocked_response.status_code == 429
+        data = blocked_response.get_json()
+        assert data["error_code"] == "rate_limit_exceeded"
+        assert int(blocked_response.headers["Retry-After"]) >= 1
+
+    def test_chat_message_rate_limit_returns_retry_after(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        for i in range(30):
+            ok_response = client.post(
+                f"/chat/room/{room_id}/messages",
+                json={"message": f"msg {i}"},
+                content_type="application/json",
+            )
+            assert ok_response.status_code == 200
+
+        blocked_response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "blocked"},
+            content_type="application/json",
+        )
+        assert blocked_response.status_code == 429
+        data = blocked_response.get_json()
+        assert data["error_code"] == "rate_limit_exceeded"
+        assert data["endpoint"] in ("chat_message", "simple_chat_messages")
+        assert int(blocked_response.headers["Retry-After"]) >= 1
+
 
 # ---------------------------------------------------------------------------
 # HTTP routes – direct messages
@@ -273,6 +305,27 @@ class TestDMRoutes:
             content_type="application/json",
         )
         assert response.status_code == 400
+
+    def test_send_dm_rate_limit_returns_retry_after(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        for _ in range(5):
+            ok_response = client.post(
+                "/chat/dm/send",
+                json={"room_id": room_id, "message": "short dm"},
+                content_type="application/json",
+            )
+            assert ok_response.status_code == 200
+
+        blocked_response = client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "short dm"},
+            content_type="application/json",
+        )
+        assert blocked_response.status_code == 429
+        data = blocked_response.get_json()
+        assert data["error_code"] == "rate_limit_exceeded"
+        assert data["endpoint"] in ("dm_send", "send_dm")
+        assert int(blocked_response.headers["Retry-After"]) >= 1
 
     def test_view_dm_success(self, client):
         room_id = client.post("/chat/create").get_json()["room_id"]
@@ -338,6 +391,23 @@ class TestBugFixes:
         assert response.status_code == 200
         body = response.data.decode()
         assert re.search(r'\d+\.\d+\.\d+', body), "No version string found in page"
+
+    def test_flask_limiter_429_response_has_retry_after(self, client):
+        """
+        Decorator-triggered 429s should return normalized JSON + Retry-After.
+
+        This validates the global 429 error handler in app_factory.
+        """
+        for _ in range(3):
+            ok_response = client.post("/chat/create")
+            assert ok_response.status_code == 200
+
+        blocked_response = client.post("/chat/create")
+        assert blocked_response.status_code == 429
+        payload = blocked_response.get_json()
+        assert payload["error_code"] == "rate_limit_exceeded"
+        assert payload["retry_after"] >= 1
+        assert int(blocked_response.headers["Retry-After"]) >= 1
 
     # -- Bug 1: CSP – templates must NOT contain inline scripts -------------
 

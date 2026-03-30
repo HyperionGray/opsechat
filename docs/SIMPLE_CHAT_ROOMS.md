@@ -142,6 +142,28 @@ POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
 
+#### Rate-Limit Backoff Contract
+When a write endpoint is throttled, OpSecChat now returns a standardized `429`:
+
+```
+Status: 429 Too Many Requests
+Header: Retry-After: <seconds>
+Body: {
+  "error": "Rate limit exceeded. ...",
+  "error_code": "rate_limit_exceeded",
+  "endpoint": "<endpoint_name>",
+  "retry_after": <seconds>
+}
+```
+
+This applies to:
+- `POST /chat/create`
+- `POST /chat/room/<room_id>/messages`
+- `POST /chat/dm/send`
+
+The web clients consume `Retry-After` and apply an automatic send/create cooldown
+with a visible countdown to prevent repeated failed requests.
+
 ### Encryption Implementation
 
 The E2E encryption uses native Web Crypto API:
@@ -241,6 +263,11 @@ python chat-room.py --port 8080
 - Ensure both users have enabled encryption toggle
 - Check browser console for errors
 - Verify Web Crypto API is available (requires HTTPS or localhost)
+
+### "Rate limited" message appears
+- This is expected abuse protection behavior.
+- Wait until the countdown reaches zero, then retry.
+- API clients should honor `Retry-After` instead of retrying immediately.
 
 ## Code Review
 

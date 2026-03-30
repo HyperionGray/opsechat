@@ -5,6 +5,7 @@ let encryptionEnabled = false;
 let encryptionKey = null;
 let pollInterval = null;
 let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
+let sendCooldownTimer = null;
 
 // Encrypted message prefix (ASCII-safe, recognised by both client and server)
 const ENC_PREFIX = 'ENC:';
@@ -135,6 +136,49 @@ function showStatus(message, duration = 3000) {
     }, duration);
 }
 
+function stopSendCooldown() {
+    if (sendCooldownTimer) {
+        clearInterval(sendCooldownTimer);
+        sendCooldownTimer = null;
+    }
+}
+
+function setSendEnabled(enabled) {
+    const input = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    input.disabled = !enabled;
+    sendBtn.disabled = !enabled;
+}
+
+function extractRetryAfter(response, body) {
+    const headerValue = response.headers.get('Retry-After');
+    if (headerValue && !Number.isNaN(parseInt(headerValue, 10))) {
+        return parseInt(headerValue, 10);
+    }
+    if (body && typeof body.retry_after === 'number') {
+        return body.retry_after;
+    }
+    return 60;
+}
+
+function startSendCooldown(seconds) {
+    stopSendCooldown();
+    let remaining = Math.max(parseInt(seconds, 10) || 1, 1);
+    setSendEnabled(false);
+    showStatus(`Rate limited. You can send again in ${remaining}s.`, 1200);
+
+    sendCooldownTimer = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+            stopSendCooldown();
+            setSendEnabled(true);
+            showStatus('You can send messages again.', 1500);
+            return;
+        }
+        showStatus(`Rate limited. You can send again in ${remaining}s.`, 1200);
+    }, 1000);
+}
+
 function scrollToBottom() {
     const container = document.getElementById('messagesContainer');
     container.scrollTop = container.scrollHeight;
@@ -187,7 +231,7 @@ async function sendMessage() {
     const input = document.getElementById('messageInput');
     const message = input.value.trim();
 
-    if (!message) return;
+    if (sendCooldownTimer || !message) return;
 
     let messageToSend = message;
 
@@ -208,8 +252,23 @@ async function sendMessage() {
         if (response.ok) {
             input.value = '';
             await pollMessages();
+        } else if (response.status === 429) {
+            let body = null;
+            try {
+                body = await response.json();
+            } catch (e) {
+                body = null;
+            }
+            const retryAfter = extractRetryAfter(response, body);
+            startSendCooldown(retryAfter);
         } else {
-            showStatus('Error sending message');
+            let errorBody = null;
+            try {
+                errorBody = await response.json();
+            } catch (e) {
+                errorBody = null;
+            }
+            showStatus((errorBody && errorBody.error) || 'Error sending message');
         }
     } catch (error) {
         showStatus('Error: ' + error.message);

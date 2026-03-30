@@ -6,7 +6,7 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -88,6 +88,32 @@ def create_app():
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
         return response
+
+    @app.errorhandler(429)
+    def handle_rate_limit(error):
+        """
+        Normalize 429 responses so clients can implement retry backoff.
+
+        Flask-Limiter may raise 429s before route handlers run. This ensures
+        a stable JSON shape and Retry-After header for all throttled requests.
+        """
+        retry_after = 60
+        response = getattr(error, "response", None)
+        if response is not None:
+            raw_retry_after = response.headers.get("Retry-After")
+            if raw_retry_after and str(raw_retry_after).isdigit():
+                retry_after = max(int(raw_retry_after), 1)
+
+        payload = {
+            "error": "Rate limit exceeded. Please retry later.",
+            "error_code": "rate_limit_exceeded",
+            "endpoint": request.endpoint or "unknown",
+            "retry_after": retry_after,
+        }
+        resp = jsonify(payload)
+        resp.status_code = 429
+        resp.headers["Retry-After"] = str(retry_after)
+        return resp
     
     # Register chat routes
     register_chat_routes(app, chatlines, chatters, id_generator, get_random_color,

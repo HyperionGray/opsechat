@@ -40,6 +40,10 @@ def test_post_is_rate_limited_get_is_not():
 
         r = client.post("/chat/create", content_type="application/json")
         assert r.status_code == 429, f"4th POST should be rate-limited (429), got {r.status_code}"
+        body = r.get_json()
+        assert body["error_code"] == "rate_limit_exceeded"
+        assert "retry_after" in body
+        assert int(r.headers["Retry-After"]) >= 1
 
     print("✅ POST /chat/create is rate-limited after 3 requests; GET / is never throttled")
 
@@ -69,6 +73,24 @@ def test_separate_sessions_have_independent_limits():
     print("✅ Different sessions have independent rate-limit counters")
 
 
+def test_rate_limited_response_is_json_with_retry_after():
+    """Flask-Limiter 429 should include stable JSON + Retry-After header."""
+    print("\nTesting: rate-limited response contract...")
+    app = _make_app()
+    with app.test_client() as client:
+        for _ in range(3):
+            ok = client.post("/chat/create", content_type="application/json")
+            assert ok.status_code == 200
+
+        blocked = client.post("/chat/create", content_type="application/json")
+        assert blocked.status_code == 429
+        data = blocked.get_json()
+        assert data["error_code"] == "rate_limit_exceeded"
+        assert data["endpoint"]
+        assert int(data["retry_after"]) >= 1
+        assert int(blocked.headers["Retry-After"]) >= 1
+
+
 def main():
     print("=== Rate Limiter Integration Tests ===\n")
     results = []
@@ -76,6 +98,7 @@ def main():
     tests = [
         test_post_is_rate_limited_get_is_not,
         test_separate_sessions_have_independent_limits,
+        test_rate_limited_response_is_json_with_retry_after,
     ]
 
     for test_fn in tests:
