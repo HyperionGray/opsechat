@@ -21,6 +21,8 @@ from simple_chat_routes import (
     check_rate_limit,
     RATE_LIMITS,
     MAX_MESSAGE_LENGTH,
+    MAX_DM_MESSAGE_LENGTH,
+    DM_EXPIRY_SECONDS,
 )
 
 
@@ -269,10 +271,18 @@ class TestDMRoutes:
     def test_send_dm_message_too_long(self, client):
         response = client.post(
             "/chat/dm/send",
-            json={"room_id": "some-room", "message": "x" * 201},
+            json={"room_id": "some-room", "message": "x" * (MAX_DM_MESSAGE_LENGTH + 1)},
             content_type="application/json",
         )
-        assert response.status_code == 400
+        assert response.status_code in (400, 404)
+
+    def test_send_dm_unknown_room_rejected(self, client):
+        response = client.post(
+            "/chat/dm/send",
+            json={"room_id": "unknown-room-id", "message": "join me"},
+            content_type="application/json",
+        )
+        assert response.status_code == 404
 
     def test_view_dm_success(self, client):
         room_id = client.post("/chat/create").get_json()["room_id"]
@@ -286,6 +296,21 @@ class TestDMRoutes:
         assert response.status_code == 200
         data = response.get_json()
         assert data["room_id"] == room_id
+        assert data["expires_in"] <= DM_EXPIRY_SECONDS
+
+    def test_dm_burns_after_first_read(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        dm_id = client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "single view"},
+            content_type="application/json",
+        ).get_json()["dm_id"]
+
+        first = client.get(f"/chat/dm/{dm_id}")
+        assert first.status_code == 200
+
+        second = client.get(f"/chat/dm/{dm_id}")
+        assert second.status_code == 404
 
     def test_view_dm_nonexistent(self, client):
         response = client.get("/chat/dm/nonexistent-dm-id")
@@ -307,6 +332,8 @@ class TestDMRoutes:
 
         response = client.get(f"/chat/dm/{dm_id}")
         assert response.status_code == 404
+        with dm_lock:
+            assert dm_id not in direct_messages
 
 
 # ---------------------------------------------------------------------------

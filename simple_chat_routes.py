@@ -28,7 +28,7 @@ _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 chat_rooms = {}
 rooms_lock = threading.Lock()
 
-# Direct message storage (ephemeral, 1-minute expiry)
+# Direct message storage (ephemeral, 1-minute expiry, single-view burn-after-read)
 direct_messages = {}
 dm_lock = threading.Lock()
 
@@ -46,6 +46,8 @@ RATE_LIMITS = {
 
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
+MAX_DM_MESSAGE_LENGTH = 200
+DM_EXPIRY_SECONDS = 60
 
 # Prefix for E2E-encrypted messages sent from the client.
 # The client prepends this ASCII marker before the base64 AES-GCM ciphertext.
@@ -156,15 +158,33 @@ def cleanup_old_dms():
         
         for dm_id, dm_data in direct_messages.items():
             age = (now - dm_data["timestamp"]).total_seconds()
-            if age > 60:  # 1 minute expiry
+            if age > DM_EXPIRY_SECONDS:
                 expired_dms.append(dm_id)
         
         for dm_id in expired_dms:
-            # Overwrite message before deletion
-            dm = direct_messages[dm_id]
-            dm["message"] = "X" * len(dm["message"])
-            dm["room_id"] = "X" * len(dm["room_id"])
-            del direct_messages[dm_id]
+            _delete_dm(dm_id)
+
+
+def _secure_overwrite_dm(dm_data):
+    """Overwrite in-memory DM fields before deletion."""
+    for key in ("message", "room_id", "sender_name", "sender_id", "dm_id"):
+        value = dm_data.get(key)
+        if isinstance(value, str):
+            dm_data[key] = "X" * len(value)
+
+
+def _delete_dm(dm_id):
+    """
+    Delete a DM after securely overwriting sensitive fields.
+
+    Must be called while holding dm_lock.
+    """
+    dm_data = direct_messages.get(dm_id)
+    if not dm_data:
+        return False
+    _secure_overwrite_dm(dm_data)
+    del direct_messages[dm_id]
+    return True
 
 
 def check_rate_limit(session_id: str, endpoint: str) -> tuple:
@@ -454,8 +474,12 @@ def register_simple_chat_routes(app):
         if not room_id or not message:
             return jsonify({"error": "Empty room_id or message"}), 400
         
-        if len(message) > 200:  # DMs should be short
-            return jsonify({"error": "DM too long. Maximum 200 characters."}), 400
+        with rooms_lock:
+            if room_id not in chat_rooms:
+                return jsonify({"error": "Room not found"}), 404
+        
+        if len(message) > MAX_DM_MESSAGE_LENGTH:  # DMs should be short
+            return jsonify({"error": f"DM too long. Maximum {MAX_DM_MESSAGE_LENGTH} characters."}), 400
         
         # Sanitize
         message = re.sub(r'<[^>]+>', '', message)
@@ -478,7 +502,7 @@ def register_simple_chat_routes(app):
             "success": True,
             "dm_id": dm_id,
             "dm_url": f"/chat/dm/{dm_id}",
-            "expires_in": 60
+            "expires_in": DM_EXPIRY_SECONDS
         })
     
     @app.route('/chat/dm/<string:dm_id>')
@@ -492,19 +516,22 @@ def register_simple_chat_routes(app):
             
             # Check if expired
             age = (datetime.datetime.now() - dm["timestamp"]).total_seconds()
-            if age > 60:
+            if age > DM_EXPIRY_SECONDS:
+                _delete_dm(dm_id)
                 return jsonify({"error": "DM expired"}), 404
             
-            # Mark as read
+            # Mark as read before building response, then burn after first view.
             dm["read"] = True
-            
-            return jsonify({
+            response_payload = {
                 "dm_id": dm["dm_id"],
                 "sender_name": dm["sender_name"],
                 "room_id": dm["room_id"],
                 "message": dm["message"],
-                "expires_in": max(0, 60 - int(age))
-            })
+                "expires_in": max(0, DM_EXPIRY_SECONDS - int(age))
+            }
+            _delete_dm(dm_id)
+            
+            return jsonify(response_payload)
     
     @app.route('/chat/room/<string:room_id>/key', methods=['GET'])
     def get_room_key(room_id):

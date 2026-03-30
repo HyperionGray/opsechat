@@ -22,6 +22,8 @@ from simple_chat_routes import (
     direct_messages,
     dm_lock,
     rooms_lock,
+    DM_EXPIRY_SECONDS,
+    _delete_dm,
 )
 
 
@@ -175,7 +177,7 @@ class TestDirectMessageCleanup:
                 "sender_name": "Alice",
                 "room_id": "some-room",
                 "message": "here is the room link",
-                "timestamp": datetime.datetime.now() - datetime.timedelta(seconds=90),
+                "timestamp": datetime.datetime.now() - datetime.timedelta(seconds=DM_EXPIRY_SECONDS + 30),
                 "read": False,
             }
         cleanup_old_dms()
@@ -206,7 +208,7 @@ class TestDirectMessageCleanup:
             "sender_name": "Alice",
             "room_id": original_room_id,
             "message": original_message,
-            "timestamp": datetime.datetime.now() - datetime.timedelta(seconds=90),
+            "timestamp": datetime.datetime.now() - datetime.timedelta(seconds=DM_EXPIRY_SECONDS + 30),
             "read": False,
         }
         with dm_lock:
@@ -214,3 +216,21 @@ class TestDirectMessageCleanup:
         cleanup_old_dms()
         assert dm["message"] == "X" * len(original_message)
         assert dm["room_id"] == "X" * len(original_room_id)
+
+    def test_delete_dm_overwrites_sensitive_fields(self):
+        original_sender = "Alice"
+        dm = {
+            "dm_id": "wipe-dm",
+            "sender_id": "u1",
+            "sender_name": original_sender,
+            "room_id": "secret-room",
+            "message": "secret",
+            "timestamp": datetime.datetime.now(),
+            "read": False,
+        }
+        with dm_lock:
+            direct_messages["wipe-dm"] = dm
+            deleted = _delete_dm("wipe-dm")
+            assert deleted is True
+            assert "wipe-dm" not in direct_messages
+        assert dm["sender_name"] == "X" * len(original_sender)

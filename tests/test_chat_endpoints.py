@@ -21,6 +21,8 @@ from simple_chat_routes import (
     dm_lock,
     rooms_lock,
     MAX_MESSAGE_LENGTH,
+    MAX_DM_MESSAGE_LENGTH,
+    DM_EXPIRY_SECONDS,
 )
 from app_factory import create_app
 
@@ -258,7 +260,7 @@ class TestDMEndpoints:
         data = resp.get_json()
         assert data["success"] is True
         assert "dm_id" in data
-        assert data["expires_in"] == 60
+        assert data["expires_in"] == DM_EXPIRY_SECONDS
 
     def test_send_dm_creates_viewable_link(self):
         resp = self.client.post(
@@ -272,6 +274,17 @@ class TestDMEndpoints:
         assert "message" in data
         assert "room_id" in data
 
+    def test_dm_burned_after_first_view(self):
+        resp = self.client.post(
+            "/chat/dm/send",
+            json={"room_id": self.room_id, "message": "single-use dm"},
+        )
+        dm_id = resp.get_json()["dm_id"]
+        first = self.client.get(f"/chat/dm/{dm_id}")
+        assert first.status_code == 200
+        second = self.client.get(f"/chat/dm/{dm_id}")
+        assert second.status_code == 404
+
     def test_dm_has_expiry_field(self):
         resp = self.client.post(
             "/chat/dm/send",
@@ -281,7 +294,7 @@ class TestDMEndpoints:
         view_resp = self.client.get(f"/chat/dm/{dm_id}")
         data = view_resp.get_json()
         assert "expires_in" in data
-        assert data["expires_in"] <= 60
+        assert data["expires_in"] <= DM_EXPIRY_SECONDS
 
     def test_expired_dm_returns_404(self):
         """Manually insert an expired DM and verify the endpoint rejects it."""
@@ -297,6 +310,8 @@ class TestDMEndpoints:
             }
         view_resp = self.client.get("/chat/dm/test-expired")
         assert view_resp.status_code == 404
+        with dm_lock:
+            assert "test-expired" not in direct_messages
 
     def test_nonexistent_dm_returns_404(self):
         resp = self.client.get("/chat/dm/does-not-exist-at-all")
@@ -309,6 +324,13 @@ class TestDMEndpoints:
     def test_send_dm_too_long_rejected(self):
         resp = self.client.post(
             "/chat/dm/send",
-            json={"room_id": self.room_id, "message": "x" * 201},
+            json={"room_id": self.room_id, "message": "x" * (MAX_DM_MESSAGE_LENGTH + 1)},
         )
         assert resp.status_code == 400
+
+    def test_send_dm_unknown_room_rejected(self):
+        resp = self.client.post(
+            "/chat/dm/send",
+            json={"room_id": "no-such-room-id", "message": "invite"},
+        )
+        assert resp.status_code == 404
