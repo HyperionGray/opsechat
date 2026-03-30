@@ -113,3 +113,45 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+# ---------------------------------------------------------------------------
+# Legal policy routes integration tests
+# ---------------------------------------------------------------------------
+
+def test_terms_page_returns_200_and_contains_title():
+    client = _test_app.test_client()
+    response = client.get("/terms")
+    assert response.status_code == 200
+    assert b"Terms of Service" in response.data
+
+
+def test_aup_page_returns_200_and_contains_title():
+    client = _test_app.test_client()
+    response = client.get("/aup")
+    assert response.status_code == 200
+    assert b"Acceptable Use Policy" in response.data
+
+
+def test_privacy_page_returns_200_and_contains_title():
+    client = _test_app.test_client()
+    response = client.get("/privacy")
+    assert response.status_code == 200
+    assert b"Privacy Policy" in response.data
+
+
+def test_policy_pages_include_cross_links():
+    client = _test_app.test_client()
+    response = client.get("/terms")
+    body = response.data.decode("utf-8")
+    assert 'href="/aup"' in body
+    assert 'href="/privacy"' in body
+
+
+def test_policy_pages_render_markdown_as_html():
+    client = _test_app.test_client()
+    response = client.get("/privacy")
+    body = response.data.decode("utf-8")
+    assert response.status_code == 200
+    assert "<h1>Privacy Policy</h1>" in body
+    assert "Policy Navigation" in body

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpSecChat - {{ page_title }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            line-height: 1.7;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 920px;
+            margin: 0 auto;
+        }
+
+        h1, h2, h3, h4 {
+            color: #0f0;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            text-shadow: 0 0 8px #0f0;
+        }
+
+        p {
+            margin: 10px 0;
+            color: #cfc;
+        }
+
+        ul, ol {
+            margin: 12px 0 12px 26px;
+        }
+
+        li {
+            margin: 6px 0;
+            color: #cfc;
+        }
+
+        a {
+            color: #0ff;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        code {
+            color: #9f9;
+            background: #001800;
+            border: 1px solid #064;
+            padding: 1px 5px;
+            border-radius: 3px;
+        }
+
+        hr {
+            border: 0;
+            border-top: 1px solid #064;
+            margin: 18px 0;
+        }
+
+        .policy-header {
+            border: 1px solid #0f0;
+            background: #001100;
+            padding: 16px;
+            margin-bottom: 18px;
+        }
+
+        .policy-header p {
+            color: #afa;
+            margin-top: 6px;
+        }
+
+        .policy-nav {
+            border: 1px solid #064;
+            background: #001100;
+            padding: 14px;
+            margin: 18px 0;
+        }
+
+        .policy-nav strong {
+            color: #9f9;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .policy-nav ul {
+            margin: 0 0 0 22px;
+        }
+
+        .footer {
+            margin-top: 26px;
+            border-top: 1px solid #064;
+            padding-top: 12px;
+            color: #0a0;
+            font-size: 0.85em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" role="main">
+        <div class="policy-header">
+            <h1>{{ page_title }}</h1>
+            <p>{{ page_summary }}</p>
+        </div>
+
+        <nav class="policy-nav" aria-label="Policy navigation">
+            <strong>Policy Navigation</strong>
+            <ul>
+                {% if policy_key != "terms" %}
+                <li><a href="/terms">Terms of Service</a></li>
+                {% endif %}
+                {% if policy_key != "aup" %}
+                <li><a href="/aup">Acceptable Use Policy</a></li>
+                {% endif %}
+                {% if policy_key != "privacy" %}
+                <li><a href="/privacy">Privacy Policy</a></li>
+                {% endif %}
+                <li><a href="/chat">Chat Home</a></li>
+            </ul>
+        </nav>
+
+        <section aria-label="{{ page_title }} content">
+            {{ policy_html|safe }}
+        </section>
+
+        <footer class="footer">
+            OpSecChat {{ version|default('0.8.0-alpha') }} | Legal documents are policy drafts and may require legal review.
+        </footer>
+    </div>
+</body>
+</html>
