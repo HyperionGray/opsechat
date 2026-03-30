@@ -12,6 +12,8 @@ import subprocess
 import time
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 def print_section(title):
     print("\n" + "="*60)
     print(f"  {title}")
@@ -22,7 +24,8 @@ def test_tui_server():
     print_section("Testing TUI Server")
     
     print("1. Testing TUI server help...")
-    result = subprocess.run(['python3', 'tui-server.py', '--help'], 
+    result = subprocess.run(['python3', 'tui-server.py', '--help'],
+                          cwd=PROJECT_ROOT,
                           capture_output=True, text=True)
     if result.returncode == 0:
         print("✓ TUI server help works")
@@ -33,6 +36,7 @@ def test_tui_server():
     print("\n2. Testing TUI server startup (test mode, 5 seconds)...")
     print("   Starting server on port 5557...")
     proc = subprocess.Popen(['python3', 'tui-server.py', '--test', '--port', '5557'],
+                           cwd=PROJECT_ROOT,
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     time.sleep(2)
     
@@ -66,6 +70,7 @@ print(f'\\nAll different: {len(set(usernames)) == 5}')
 """
     
     result = subprocess.run(['python3', '-c', test_code],
+                          cwd=PROJECT_ROOT,
                           capture_output=True, text=True)
     
     if result.returncode == 0 and 'All different: True' in result.stdout:
@@ -93,6 +98,7 @@ print(f'Correct: {server.MESSAGE_LIFETIME == 240}')
 """
     
     result = subprocess.run(['python3', '-c', test_code],
+                          cwd=PROJECT_ROOT,
                           capture_output=True, text=True)
     
     if result.returncode == 0 and 'Correct: True' in result.stdout:
@@ -119,6 +125,7 @@ print(f'\\n✓ Domain manager imported and instantiated successfully')
 """
     
     result = subprocess.run(['python3', '-c', test_code],
+                          cwd=PROJECT_ROOT,
                           capture_output=True, text=True)
     
     if result.returncode == 0:
@@ -143,6 +150,7 @@ print(f'\\n✓ Email system imported successfully')
 """
     
     result = subprocess.run(['python3', '-c', test_code],
+                          cwd=PROJECT_ROOT,
                           capture_output=True, text=True)
     
     if result.returncode == 0:
@@ -168,7 +176,7 @@ def check_documentation():
     
     all_exist = True
     for filepath, name in docs:
-        path = Path(filepath)
+        path = PROJECT_ROOT / filepath
         if path.exists():
             size = path.stat().st_size
             print(f"✓ {name}: {filepath} ({size} bytes)")
@@ -183,9 +191,10 @@ def run_playwright_tests():
     print_section("Running Playwright Tests")
     
     print("Running product release test suite...")
-    result = subprocess.run(['npx', 'playwright', 'test', 
+    result = subprocess.run(['npx', 'playwright', 'test',
                            '--config=playwright-release.config.js',
                            '--reporter=line'],
+                          cwd=PROJECT_ROOT,
                           capture_output=True, text=True)
     
     # Show last 30 lines of output
@@ -205,8 +214,6 @@ def main():
     print("\n" + "="*60)
     print("  OpSecChat Product Release Manual Testing")
     print("="*60)
-    
-    os.chdir(Path(__file__).parent)
     
     tests = [
         ("Documentation Check", check_documentation),
