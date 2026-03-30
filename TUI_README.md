@@ -7,7 +7,7 @@ This is a serious privacy and opsec tool for serious privacy and opsec people. I
 ## Features
 
 ✅ **TUI Only** - Terminal interface, no web GUI bloat  
-✅ **Privacy First** - All messages in-memory, burn after 4 minutes  
+✅ **Privacy First** - All messages in-memory, burn after 3 minutes  
 ✅ **Randomized Usernames** - Server-assigned, no "Jerry Here" problem  
 ✅ **Text Only** - No images, no video, no b64 encoded garbage  
 ✅ **Message Validation** - Max 1000 chars, prevents b64 image encoding  
@@ -79,15 +79,24 @@ The client will automatically use Tor SOCKS proxy if:
 - Type your message and press **Enter** to send
 - Press **Ctrl+C** to quit
 - Your username is randomly assigned (e.g., `PhantomRaven4523`)
-- Messages automatically disappear after 4 minutes
+- Messages automatically disappear after 3 minutes
+
+### Slash Commands
+
+The client supports lightweight inline commands:
+
+- `/help` - List available commands
+- `/status` - Show connection, host, Tor mode, uptime, and username
+- `/users` - Request current connected user count from the server
+- `/quit` - Gracefully exit the client
 
 ## Privacy & Security Features
 
 ### In-Memory Only
 All messages are stored **only in RAM**. Nothing is written to disk. When the server stops, all data is gone.
 
-### Message Burning (4 Minutes)
-Messages automatically delete after 4 minutes. When deleted, the message content is **overwritten** with 'X' characters before removal (prevents memory recovery).
+### Message Burning (3 Minutes)
+Messages automatically delete after 3 minutes. When deleted, the message content is **overwritten** with 'X' characters before removal (prevents memory recovery).
 
 ### Randomized Usernames
 No user choice on usernames. Server assigns random names like:
@@ -134,7 +143,7 @@ sudo systemctl start tor
 ## Message Limits & Rules
 
 - **Max message length**: 1000 characters
-- **Message lifetime**: 4 minutes (240 seconds)
+- **Message lifetime**: 3 minutes (180 seconds)
 - **Max chat history**: 200 messages in client (memory management)
 - **No images**: Text only, no exceptions
 - **No video**: Text only, no exceptions
@@ -230,16 +239,16 @@ Use a **standardized phrase or code** that only you and your contact know. For e
 
 **Do NOT say** "Jerry Here" or use your real name.
 
-### What happens to messages after 4 minutes?
+### What happens to messages after 3 minutes?
 
 Messages are:
 1. Overwritten with 'X' characters (prevents memory recovery)
 2. Removed from the message list
 3. Gone forever (in-memory only, no disk)
 
-### Can I extend the 4-minute timer?
+### Can I extend the 3-minute timer?
 
-**No.** This is by design. Messages burn after 4 minutes, **no negotiation, no config**. If you need longer persistence, this tool is not for you.
+**No.** This is by design. Messages burn after 3 minutes, **no negotiation, no config**. If you need longer persistence, this tool is not for you.
 
 ## Coming Soon
 

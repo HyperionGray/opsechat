@@ -323,14 +323,21 @@ def _read_version() -> str:
 
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
+    active_rooms = 0
+    try:
+        # Local import avoids circular imports at module load time.
+        from simple_chat_routes import chat_rooms, rooms_lock
+        with rooms_lock:
+            active_rooms = len(chat_rooms)
+    except Exception:
+        active_rooms = 0
+
     return {
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
-        # active_rooms: this app uses a single global chat room. The field is
-        # included for API consistency; it always reports 1 when the service is up.
-        'active_rooms': 1,
+        'active_rooms': active_rooms,
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',

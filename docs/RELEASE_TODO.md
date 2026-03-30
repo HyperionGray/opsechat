@@ -95,10 +95,10 @@ python rotate-domain.py --get-pricing xyz
 ### 4. Inline Help System
 
 **Add to TUI:**
-- [ ] `/help` command - show all commands
-- [ ] `/status` - show server/connection status
-- [ ] `/users` - show connected users (count only)
-- [ ] `/quit` - graceful disconnect
+- [x] `/help` command - show all commands
+- [x] `/status` - show server/connection status
+- [x] `/users` - show connected users (count only)
+- [x] `/quit` - graceful disconnect
 - [ ] `/encrypt <on|off>` - toggle encryption
 
 **Estimated Effort:** 1 day

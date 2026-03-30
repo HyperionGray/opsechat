@@ -100,6 +100,39 @@ class ChatServer:
                 return self.messages.copy()
             else:
                 return [msg for msg in self.messages if msg['timestamp'] > since]
+
+    def _send_json_line(self, client_socket: socket.socket, payload: Dict[str, Any]):
+        """Send one newline-delimited JSON object to a client socket."""
+        client_socket.send((json.dumps(payload) + '\n').encode('utf-8'))
+
+    def _send_system_message(self, client_socket: socket.socket, message: str):
+        """Send a system message to one client."""
+        self._send_json_line(client_socket, {
+            'type': 'system',
+            'message': message,
+            'timestamp': datetime.datetime.now().isoformat()
+        })
+
+    def _handle_command(self, client_socket: socket.socket, command: str):
+        """
+        Handle slash-style client commands.
+        Privacy-sensitive operations return aggregate data only.
+        """
+        normalized = (command or '').strip().lower()
+
+        if normalized in ('/users', 'users'):
+            with self.lock:
+                user_count = len(self.clients)
+            self._send_system_message(
+                client_socket,
+                f"Connected users: {user_count}"
+            )
+            return
+
+        self._send_system_message(
+            client_socket,
+            f"Unknown command '{command}'. Available commands: /users"
+        )
     
     def handle_client(self, client_socket: socket.socket, addr):
         """Handle a client connection"""
@@ -115,7 +148,7 @@ class ChatServer:
                 'username': username,
                 'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
             }
-            client_socket.send((json.dumps(welcome) + '\n').encode())
+            self._send_json_line(client_socket, welcome)
             
             # Send existing messages
             messages = self.get_messages()
@@ -126,7 +159,7 @@ class ChatServer:
                     'message': msg['message'],
                     'timestamp': msg['timestamp'].isoformat()
                 }
-                client_socket.send((json.dumps(msg_data) + '\n').encode())
+                self._send_json_line(client_socket, msg_data)
             
             # Handle incoming messages
             buffer = ""
@@ -147,6 +180,11 @@ class ChatServer:
                                     if self.add_message(username, message):
                                         # Broadcast to all clients
                                         self.broadcast_message(username, message)
+                                elif msg_obj.get('type') == 'command':
+                                    self._handle_command(
+                                        client_socket,
+                                        msg_obj.get('command', '')
+                                    )
                             except json.JSONDecodeError:
                                 pass
                 
