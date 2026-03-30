@@ -9,6 +9,8 @@ import sys
 import re
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
 def assess_documentation_clarity():
     """Assess documentation from new user perspective"""
     print("\n=== Documentation Clarity Assessment ===")
@@ -23,7 +25,7 @@ def assess_documentation_clarity():
     scores = {}
     
     for doc_file, description in docs_to_check:
-        doc_path = f"/workspace/{doc_file}"
+        doc_path = PROJECT_ROOT / doc_file
         if os.path.exists(doc_path):
             with open(doc_path, 'r') as f:
                 content = f.read()

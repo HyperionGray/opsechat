@@ -66,15 +66,18 @@ opsechat/
 
 ## Development Tools
 
-### Python Files in Root (Dev Tools)
-These are development and testing utilities that help during development:
+### Manual and Ad-Hoc Test Tools
+Manual and ad-hoc scripts are organized under `tests/manual/`:
 
-- **`manual-test.py`** - Manual testing script for interactive testing
-- **`simple_test.py`** - Quick sanity checks
-- **`quick_import_test.py`** - Test Python imports
-- **`review_performance.py`** - Performance benchmarking tool
-- **`usability_assessment.py`** - UI/UX testing helper
-- **`comprehensive_functionality_test.py`** - Full functional test suite
+- **`tests/manual/python/manual-test.py`** - Interactive release validation checks
+- **`tests/manual/python/simple_test.py`** - Quick PF task sanity checks
+- **`tests/manual/python/quick_import_test.py`** - Core Python import checks
+- **`tests/manual/python/usability_assessment.py`** - Documentation usability checks
+- **`tests/manual/python/comprehensive_functionality_test.py`** - Broad feature smoke coverage
+- **`tests/manual/js/test-server.js`** - Mock server startup/debug helper
+- **`tests/manual/js/test-ci-fix.js`** - CI mock-server connectivity helper
+- **`tests/manual/shell/test_fix.sh`** - Focused helper for selected pytest cases
+- **`review_performance.py`** - Performance benchmarking tool (root-level utility)
 
 ### Main Application Files
 - **`runserver.py`** - Main entry point (legacy monolithic)

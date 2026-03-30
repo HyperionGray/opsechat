@@ -7,13 +7,18 @@
 
 const { spawn } = require('child_process');
 const http = require('http');
+const path = require('path');
+
+const repoRoot = path.resolve(__dirname, '..', '..', '..');
+const mockServerPath = path.join(repoRoot, 'tests', 'mock_server.py');
 
 async function testServerStartup() {
   console.log('🧪 Testing mock server startup...');
   
   return new Promise((resolve, reject) => {
     // Start the mock server
-    const serverProcess = spawn('python3', ['tests/mock_server.py'], {
+    const serverProcess = spawn('python3', [mockServerPath], {
+      cwd: repoRoot,
       stdio: ['pipe', 'pipe', 'pipe']
     });
 

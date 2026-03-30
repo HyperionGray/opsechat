@@ -11,8 +11,9 @@ import tempfile
 import json
 from datetime import datetime, timedelta
 
-# Add current directory to Python path
-sys.path.insert(0, '/workspace')
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+# Add repository root to Python path
+sys.path.insert(0, REPO_ROOT)
 
 def test_chat_functionality():
     """Test chat system functionality"""
@@ -274,7 +275,7 @@ def test_template_files():
     print("\n=== Testing Template Files ===")
     
     try:
-        template_dir = "/workspace/templates"
+        template_dir = os.path.join(REPO_ROOT, "templates")
         
         expected_templates = [
             "drop.html",
@@ -312,7 +313,7 @@ def test_static_files():
     print("\n=== Testing Static Files ===")
     
     try:
-        static_dir = "/workspace/static"
+        static_dir = os.path.join(REPO_ROOT, "static")
         
         expected_files = [
             "jquery.js",

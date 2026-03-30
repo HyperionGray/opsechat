@@ -7,8 +7,11 @@ import sys
 import os
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+PF_TASKS_DIR = PROJECT_ROOT / "pf-tasks"
+
 # Add pf-tasks to path
-sys.path.insert(0, str(Path(__file__).parent / "pf-tasks"))
+sys.path.insert(0, str(PF_TASKS_DIR))
 
 def test_basic_imports():
     """Test basic imports of all pf task modules"""
@@ -45,10 +48,10 @@ def test_file_structure():
     """Test that all expected files exist"""
     print("\nTesting file structure...")
     
-    project_root = Path(__file__).parent
+    project_root = PROJECT_ROOT
     
     # Check pf-tasks directory
-    pf_tasks_dir = project_root / "pf-tasks"
+    pf_tasks_dir = PF_TASKS_DIR
     if pf_tasks_dir.exists():
         print(f"[✓] pf-tasks directory exists")
     else:

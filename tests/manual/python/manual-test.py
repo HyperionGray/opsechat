@@ -12,6 +12,8 @@ import subprocess
 import time
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
 def print_section(title):
     print("\n" + "="*60)
     print(f"  {title}")
@@ -22,8 +24,12 @@ def test_tui_server():
     print_section("Testing TUI Server")
     
     print("1. Testing TUI server help...")
-    result = subprocess.run(['python3', 'tui-server.py', '--help'], 
-                          capture_output=True, text=True)
+    result = subprocess.run(
+        ['python3', 'tui-server.py', '--help'],
+        capture_output=True,
+        text=True,
+        cwd=str(REPO_ROOT),
+    )
     if result.returncode == 0:
         print("✓ TUI server help works")
     else:
@@ -32,8 +38,13 @@ def test_tui_server():
     
     print("\n2. Testing TUI server startup (test mode, 5 seconds)...")
     print("   Starting server on port 5557...")
-    proc = subprocess.Popen(['python3', 'tui-server.py', '--test', '--port', '5557'],
-                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    proc = subprocess.Popen(
+        ['python3', 'tui-server.py', '--test', '--port', '5557'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=str(REPO_ROOT),
+    )
     time.sleep(2)
     
     # Check if process is still running
@@ -65,8 +76,12 @@ for u in usernames:
 print(f'\\nAll different: {len(set(usernames)) == 5}')
 """
     
-    result = subprocess.run(['python3', '-c', test_code],
-                          capture_output=True, text=True)
+    result = subprocess.run(
+        ['python3', '-c', test_code],
+        capture_output=True,
+        text=True,
+        cwd=str(REPO_ROOT),
+    )
     
     if result.returncode == 0 and 'All different: True' in result.stdout:
         print(result.stdout)
@@ -92,8 +107,12 @@ print(f'Expected: 240 seconds (4 minutes)')
 print(f'Correct: {server.MESSAGE_LIFETIME == 240}')
 """
     
-    result = subprocess.run(['python3', '-c', test_code],
-                          capture_output=True, text=True)
+    result = subprocess.run(
+        ['python3', '-c', test_code],
+        capture_output=True,
+        text=True,
+        cwd=str(REPO_ROOT),
+    )
     
     if result.returncode == 0 and 'Correct: True' in result.stdout:
         print(result.stdout)
@@ -118,8 +137,12 @@ client = domain_manager.PorkbunAPIClient('test_key', 'test_secret')
 print(f'\\n✓ Domain manager imported and instantiated successfully')
 """
     
-    result = subprocess.run(['python3', '-c', test_code],
-                          capture_output=True, text=True)
+    result = subprocess.run(
+        ['python3', '-c', test_code],
+        capture_output=True,
+        text=True,
+        cwd=str(REPO_ROOT),
+    )
     
     if result.returncode == 0:
         print(result.stdout)
@@ -142,8 +165,12 @@ storage = email_system.EmailStorage()
 print(f'\\n✓ Email system imported successfully')
 """
     
-    result = subprocess.run(['python3', '-c', test_code],
-                          capture_output=True, text=True)
+    result = subprocess.run(
+        ['python3', '-c', test_code],
+        capture_output=True,
+        text=True,
+        cwd=str(REPO_ROOT),
+    )
     
     if result.returncode == 0:
         print(result.stdout)
@@ -168,7 +195,7 @@ def check_documentation():
     
     all_exist = True
     for filepath, name in docs:
-        path = Path(filepath)
+        path = REPO_ROOT / filepath
         if path.exists():
             size = path.stat().st_size
             print(f"✓ {name}: {filepath} ({size} bytes)")
@@ -183,10 +210,18 @@ def run_playwright_tests():
     print_section("Running Playwright Tests")
     
     print("Running product release test suite...")
-    result = subprocess.run(['npx', 'playwright', 'test', 
-                           '--config=playwright-release.config.js',
-                           '--reporter=line'],
-                          capture_output=True, text=True)
+    result = subprocess.run(
+        [
+            'npx',
+            'playwright',
+            'test',
+            '--config=playwright-release.config.js',
+            '--reporter=line',
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(REPO_ROOT),
+    )
     
     # Show last 30 lines of output
     lines = result.stdout.split('\n')
@@ -205,8 +240,6 @@ def main():
     print("\n" + "="*60)
     print("  OpSecChat Product Release Manual Testing")
     print("="*60)
-    
-    os.chdir(Path(__file__).parent)
     
     tests = [
         ("Documentation Check", check_documentation),
