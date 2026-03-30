@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- Extended `domain_manager.py` with multi-provider support (Porkbun + Namecheap client),
+  provider strategies (`round-robin`, `cheapest`), and per-provider budget tracking
+- Updated domain rotation CLI state persistence to safely serialize/deserialize datetime fields
+- Rewrote `docs/DOMAIN_ROTATION.md` to match implemented APIs and remove stale examples
+- Removed unreferenced temporary Node debug scripts (`test-ci-fix.js`, `test-server.js`)
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022

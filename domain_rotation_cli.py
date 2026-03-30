@@ -93,6 +93,42 @@ def configure_api():
     print("\n✅ Configuration updated successfully!")
 
 
+def _deserialize_owned_domains(raw_domains):
+    """Convert JSON-stored datetime strings back to datetime objects."""
+    from datetime import datetime
+
+    converted = []
+    for entry in raw_domains or []:
+        if not isinstance(entry, dict):
+            continue
+        item = dict(entry)
+        for key in ("purchased_at", "expires_at"):
+            value = item.get(key)
+            if isinstance(value, str):
+                try:
+                    item[key] = datetime.fromisoformat(value)
+                except ValueError:
+                    # Keep original value if it is not ISO-8601.
+                    pass
+        converted.append(item)
+    return converted
+
+
+def _serialize_owned_domains(domains):
+    """Convert datetime values into JSON-serializable strings."""
+    serialized = []
+    for entry in domains or []:
+        if not isinstance(entry, dict):
+            continue
+        item = dict(entry)
+        for key in ("purchased_at", "expires_at"):
+            value = item.get(key)
+            if hasattr(value, "isoformat"):
+                item[key] = value.isoformat()
+        serialized.append(item)
+    return serialized
+
+
 def get_manager():
     """Get configured domain manager"""
     config = load_config()
@@ -112,7 +148,7 @@ def get_manager():
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = _deserialize_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +158,7 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = _serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
     save_config(config)
 

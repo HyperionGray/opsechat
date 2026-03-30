@@ -1,11 +1,9 @@
 """
-Tests for domain management module
+Tests for domain management module.
 """
-import pytest
 from unittest.mock import Mock, patch
-from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
-)
+
+from domain_manager import DomainAPIClient, DomainRotationManager, PorkbunAPIClient
 
 
 class TestPorkbunAPIClient:
@@ -100,6 +98,7 @@ class TestDomainRotationManager:
         """Test finding cheap domain successfully"""
         # Create mock API client
         mock_client = Mock(spec=DomainAPIClient)
+        mock_client.provider_name = "mock-provider"
         mock_client.search_domain.return_value = {
             "available": True,
             "domain": "test123.xyz",
@@ -116,6 +115,7 @@ class TestDomainRotationManager:
     def test_purchase_domain_if_budget_allows_success(self):
         """Test domain purchase within budget"""
         mock_client = Mock(spec=DomainAPIClient)
+        mock_client.provider_name = "mock-provider"
         mock_client.purchase_domain.return_value = {
             "success": True,
             "domain": "test123.xyz",
@@ -129,10 +129,12 @@ class TestDomainRotationManager:
         assert manager.current_spending == 2.99
         assert len(manager.owned_domains) == 1
         assert manager.active_domain == "test123.xyz"
+        assert manager.get_owned_domains()[0]["provider"] == "mock-provider"
     
     def test_purchase_domain_if_budget_allows_exceeds_budget(self):
         """Test domain purchase exceeds budget"""
         mock_client = Mock(spec=DomainAPIClient)
+        mock_client.provider_name = "mock-provider"
         
         manager = DomainRotationManager(mock_client, monthly_budget=5.0)
         manager.current_spending = 4.0
@@ -155,10 +157,13 @@ class TestDomainRotationManager:
         assert status["current_spending"] == 10.0
         assert status["remaining"] == 40.0
         assert status["domains_owned"] == 1
+        assert "provider_spending" in status
+        assert "provider_budgets" in status
     
     def test_rotate_domain(self):
         """Test domain rotation"""
         mock_client = Mock(spec=DomainAPIClient)
+        mock_client.provider_name = "mock-provider"
         mock_client.search_domain.return_value = {
             "available": True,
             "domain": "test456.xyz",
@@ -174,3 +179,100 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+        assert manager.active_provider == "mock-provider"
+
+    def test_round_robin_failover_uses_next_provider(self):
+        """Round-robin strategy should fail over to next provider."""
+        first = Mock(spec=DomainAPIClient)
+        first.provider_name = "first"
+        first.search_domain.return_value = {
+            "available": False,
+            "domain": "ignored.xyz",
+            "price": 2.50
+        }
+
+        second = Mock(spec=DomainAPIClient)
+        second.provider_name = "second"
+        second.search_domain.return_value = {
+            "available": True,
+            "domain": "candidate.xyz",
+            "price": 1.99
+        }
+
+        manager = DomainRotationManager(monthly_budget=50.0, selection_strategy="round-robin")
+        manager.add_provider("first", first)
+        manager.add_provider("second", second)
+
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["provider"] == "second"
+        assert result["price"] == 1.99
+
+    def test_cheapest_strategy_prefers_lower_price(self):
+        """Cheapest strategy should choose lower available price."""
+        expensive = Mock(spec=DomainAPIClient)
+        expensive.provider_name = "expensive"
+        expensive.search_domain.return_value = {
+            "available": True,
+            "domain": "candidate.xyz",
+            "price": "4.99"
+        }
+
+        cheap = Mock(spec=DomainAPIClient)
+        cheap.provider_name = "cheap"
+        cheap.search_domain.return_value = {
+            "available": True,
+            "domain": "candidate.xyz",
+            "price": "1.49"
+        }
+
+        manager = DomainRotationManager(monthly_budget=50.0, selection_strategy="cheapest")
+        manager.add_provider("expensive", expensive)
+        manager.add_provider("cheap", cheap)
+
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["provider"] == "cheap"
+        assert result["price"] == 1.49
+
+    def test_provider_budget_enforced(self):
+        """Provider budget should block purchases even if global budget allows."""
+        provider = Mock(spec=DomainAPIClient)
+        provider.provider_name = "limited"
+        provider.purchase_domain.return_value = {"success": True, "domain": "test123.xyz"}
+
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.add_provider("limited", provider, monthly_budget=1.00)
+
+        result = manager.purchase_domain_if_budget_allows(
+            "test123.xyz",
+            2.00,
+            provider_name="limited"
+        )
+
+        assert result is False
+        assert manager.current_spending == 0.0
+        assert len(manager.owned_domains) == 0
+
+    def test_rotate_to_new_domain_returns_structured_result(self):
+        """rotate_to_new_domain should return structured success payload."""
+        provider = Mock(spec=DomainAPIClient)
+        provider.provider_name = "mock-provider"
+        provider.search_domain.return_value = {
+            "available": True,
+            "domain": "test789.xyz",
+            "price": "2.25"
+        }
+        provider.purchase_domain.return_value = {
+            "success": True,
+            "domain": "test789.xyz"
+        }
+
+        manager = DomainRotationManager(provider, monthly_budget=50.0)
+        result = manager.rotate_to_new_domain(max_price=5.0, max_attempts=1)
+
+        assert result["success"] is True
+        assert result["domain"] == "test789.xyz"
+        assert result["provider"] == "mock-provider"
