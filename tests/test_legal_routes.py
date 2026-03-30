@@ -27,7 +27,7 @@ def test_privacy_page_renders():
     assert response.status_code == 200
     body = response.data.decode()
     assert "Privacy Policy" in body
-    assert "Data Retention and Expiry" in body
+    assert "Retention and Deletion" in body
 
 
 def test_aup_page_renders():
