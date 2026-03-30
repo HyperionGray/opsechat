@@ -180,6 +180,24 @@ class TestChatRoutes:
         assert data["messages"] == []
         assert isinstance(data["user_count"], int)
 
+    def test_join_room_updates_presence_count(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        # Opening the room should register presence for this session.
+        join_response = client.get(f"/chat/room/{room_id}")
+        assert join_response.status_code == 200
+
+        messages_response = client.get(f"/chat/room/{room_id}/messages")
+        assert messages_response.status_code == 200
+        assert messages_response.get_json()["user_count"] >= 1
+
+    def test_presence_endpoint_returns_user_count(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        response = client.post(f"/chat/room/{room_id}/presence")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["success"] is True
+        assert data["user_count"] >= 1
+
     def test_post_message_success(self, client):
         room_id = client.post("/chat/create").get_json()["room_id"]
         response = client.post(

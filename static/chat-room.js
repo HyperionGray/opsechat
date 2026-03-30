@@ -4,10 +4,12 @@ const roomId = document.body.dataset.roomId;
 let encryptionEnabled = false;
 let encryptionKey = null;
 let pollInterval = null;
+let presenceInterval = null;
 let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') === 'true';
 
 // Encrypted message prefix (ASCII-safe, recognised by both client and server)
 const ENC_PREFIX = 'ENC:';
+const PRESENCE_HEARTBEAT_MS = 30000;
 
 // Show security warning on first load
 function showSecurityWarning() {
@@ -140,6 +142,27 @@ function scrollToBottom() {
     container.scrollTop = container.scrollHeight;
 }
 
+function updateUserCount(count) {
+    document.getElementById('userCount').textContent = `Users: ${count}`;
+}
+
+async function sendPresenceHeartbeat() {
+    try {
+        const response = await fetch(`/chat/room/${roomId}/presence`, {
+            method: 'POST'
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            if (typeof data.user_count === 'number') {
+                updateUserCount(data.user_count);
+            }
+        }
+    } catch (error) {
+        // Presence updates are best-effort.
+    }
+}
+
 async function renderMessages(messages) {
     const container = document.getElementById('messagesContainer');
     container.innerHTML = '';
@@ -223,7 +246,7 @@ async function pollMessages() {
         if (response.ok) {
             const data = await response.json();
             await renderMessages(data.messages);
-            document.getElementById('userCount').textContent = `Users: ${data.user_count}`;
+            updateUserCount(data.user_count);
         }
     } catch (error) {
         // Silently fail for polling errors
@@ -283,15 +306,28 @@ window.addEventListener('load', async function() {
         document.getElementById('encryptionStatus').className = 'encryption-status enabled';
     }
 
+    // Register presence immediately on page load.
+    await sendPresenceHeartbeat();
+
     // Start polling
     await pollMessages();
     pollInterval = setInterval(pollMessages, 2000);
+    presenceInterval = setInterval(sendPresenceHeartbeat, PRESENCE_HEARTBEAT_MS);
 });
 
 // Cleanup on unload
 window.addEventListener('beforeunload', function() {
     if (pollInterval) {
         clearInterval(pollInterval);
+    }
+    if (presenceInterval) {
+        clearInterval(presenceInterval);
+    }
+    const heartbeatUrl = `/chat/room/${roomId}/presence`;
+    if (navigator.sendBeacon) {
+        navigator.sendBeacon(heartbeatUrl, '');
+    } else {
+        fetch(heartbeatUrl, { method: 'POST', keepalive: true }).catch(() => {});
     }
 });
 

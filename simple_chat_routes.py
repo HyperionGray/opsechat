@@ -83,16 +83,26 @@ class ChatRoom:
                 "timestamp": datetime.datetime.now()
             }
             self.messages.append(msg)
-            
-            # Track user
-            if user_id not in self.users:
-                self.users[user_id] = {
-                    "username": username,
-                    "color": color,
-                    "last_seen": datetime.datetime.now()
-                }
-            else:
-                self.users[user_id]["last_seen"] = datetime.datetime.now()
+            self._touch_user_unlocked(user_id, username, color)
+
+    def _touch_user_unlocked(self, user_id, username, color):
+        """Track/update user presence (caller must hold lock)."""
+        now = datetime.datetime.now()
+        if user_id not in self.users:
+            self.users[user_id] = {
+                "username": username,
+                "color": color,
+                "last_seen": now
+            }
+        else:
+            self.users[user_id]["username"] = username
+            self.users[user_id]["color"] = color
+            self.users[user_id]["last_seen"] = now
+
+    def touch_user(self, user_id, username, color):
+        """Mark a user as active without sending a message."""
+        with self.lock:
+            self._touch_user_unlocked(user_id, username, color)
     
     def cleanup_old_messages(self):
         """Remove messages older than 3 minutes and overwrite memory"""
@@ -313,12 +323,16 @@ def register_simple_chat_routes(app):
             if room_id not in chat_rooms:
                 return render_template("simple_chat_error.html", 
                                      error="Room not found or expired"), 404
+            room = chat_rooms[room_id]
         
         # Initialize user session
         if "_id" not in session:
             session["_id"] = generate_secure_dm_id()
             session["username"] = generate_random_username()
             session["color"] = get_random_color_rgb()
+
+        # Mark presence when user loads/joins the room (not only on message send).
+        room.touch_user(session["_id"], session["username"], session["color"])
         
         return render_template("simple_chat_room.html", 
                              room_id=room_id,
@@ -407,6 +421,9 @@ def register_simple_chat_routes(app):
             return jsonify({"success": True})
         
         else:  # GET
+            # Mark presence on polling so active user count remains accurate.
+            if "_id" in session:
+                room.touch_user(session["_id"], session["username"], session["color"])
             messages = room.get_messages()
             user_count = room.get_user_count()
             
@@ -425,6 +442,27 @@ def register_simple_chat_routes(app):
                 "my_username": session.get("username"),
                 "my_color": session.get("color")
             })
+
+    @app.route('/chat/room/<string:room_id>/presence', methods=['GET', 'POST'])
+    @limiter.limit("120 per minute")
+    def room_presence(room_id):
+        """Heartbeat endpoint for active user presence tracking."""
+        with rooms_lock:
+            if room_id not in chat_rooms:
+                return jsonify({"error": "Room not found"}), 404
+            room = chat_rooms[room_id]
+
+        # Ensure user has a session identity.
+        if "_id" not in session:
+            session["_id"] = generate_secure_dm_id()
+            session["username"] = generate_random_username()
+            session["color"] = get_random_color_rgb()
+
+        room.touch_user(session["_id"], session["username"], session["color"])
+        return jsonify({
+            "success": True,
+            "user_count": room.get_user_count()
+        })
     
     @app.route('/chat/dm/send', methods=['POST'])
     @limiter.limit("20 per hour; 5 per minute")

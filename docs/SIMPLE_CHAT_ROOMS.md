@@ -13,6 +13,7 @@ OpSecChat now includes a simple, security-focused web-based chat room system des
 - **Memory Overwriting**: Deleted messages are overwritten in memory
 - **Randomized Usernames**: Color-coded for easy visual distinction
 - **Text-Only**: No media, images, or file sharing
+- **Live Presence Tracking**: Active user count updates as users join and stay connected
 - **In-Memory Storage**: Zero disk writes
 - **Tor Ready**: Works seamlessly with Tor hidden services
 
@@ -141,6 +142,15 @@ GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
+
+#### Presence Heartbeat
+```
+POST /chat/room/<room_id>/presence
+Response: {"success": true, "user_count": <int>}
+```
+
+Used by the web client to keep active user counts accurate even when users are
+reading but not sending messages.
 
 ### Encryption Implementation
 

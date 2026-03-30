@@ -69,14 +69,45 @@ except ImportError as e:
     print(f"Warning: Could not import email_system: {e}")
     # Create mock objects for testing
     class MockEmailStorage:
-        def create_user_inbox(self, user_id): pass
+        def __init__(self):
+            self.inboxes = {}
+
+        def create_user_inbox(self, user_id):
+            self.inboxes.setdefault(user_id, [])
+            return self.inboxes[user_id]
+
     class MockBurnerManager:
-        def cleanup_expired(self): pass
-        def generate_burner_email(self, user_id): return f"test{user_id}@example.com"
-        def rotate_burner(self, user_id, old_email): return f"test{user_id}@example.com"
-        def get_user_burners(self, user_id): return []
-        def get_user_for_burner(self, email): return None
-        def expire_burner(self, email): pass
+        def __init__(self):
+            self.user_burners = {}
+            self.owner_by_email = {}
+
+        def cleanup_expired(self):
+            return 0
+
+        def generate_burner_email(self, user_id):
+            burner = f"test{user_id}@example.com"
+            self.user_burners.setdefault(user_id, []).append(burner)
+            self.owner_by_email[burner] = user_id
+            return burner
+
+        def rotate_burner(self, user_id, old_email):
+            self.expire_burner(old_email)
+            return self.generate_burner_email(user_id)
+
+        def get_user_burners(self, user_id):
+            return list(self.user_burners.get(user_id, []))
+
+        def get_user_for_burner(self, email):
+            return self.owner_by_email.get(email)
+
+        def expire_burner(self, email):
+            owner = self.owner_by_email.pop(email, None)
+            if owner is None:
+                return False
+            burners = self.user_burners.get(owner, [])
+            if email in burners:
+                burners.remove(email)
+            return True
     
     email_storage = MockEmailStorage()
     burner_manager = MockBurnerManager()
