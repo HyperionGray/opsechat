@@ -174,3 +174,76 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_and_get_config(self):
+        """Test manager configuration and masked config access"""
+        manager = DomainRotationManager()
+        result = manager.configure(
+            api_key="pk1_testkey",
+            secret_key="sk1_testsecret",
+            monthly_budget=25.0
+        )
+
+        assert result is True
+        cfg = manager.get_config()
+        assert cfg["configured"] is True
+        assert cfg["provider"] == "porkbun"
+        assert cfg["monthly_budget"] == 25.0
+        assert cfg["api_key_masked"].endswith("tkey")
+        assert cfg["secret_key_masked"].endswith("cret")
+
+    def test_search_cheap_domains_returns_sorted_matches(self):
+        """Search should return multiple domains sorted by price"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.side_effect = [
+            {"available": True, "domain": "a.xyz", "price": "4.50"},
+            {"available": True, "domain": "b.xyz", "price": "1.99"},
+            {"available": True, "domain": "c.xyz", "price": "3.25"},
+        ]
+
+        manager = DomainRotationManager(mock_client)
+        results = manager.search_cheap_domains(limit=3, max_attempts=3)
+
+        assert len(results) == 3
+        assert [r["domain"] for r in results] == ["b.xyz", "c.xyz", "a.xyz"]
+        assert all(isinstance(r["price"], float) for r in results)
+
+    def test_rotate_to_new_domain_test_mode(self):
+        """Test mode rotation should not call purchase API"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "testmode.xyz",
+            "price": "2.49"
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=10.0)
+        manager.set_test_mode(True)
+        result = manager.rotate_to_new_domain()
+
+        assert result["success"] is True
+        assert result["domain"] == "testmode.xyz"
+        assert result["cost"] == 2.49
+        assert manager.active_domain == "testmode.xyz"
+        mock_client.purchase_domain.assert_not_called()
+
+    def test_state_export_import_round_trip(self):
+        """Exported state should import with datetime restoration"""
+        manager = DomainRotationManager(monthly_budget=20.0)
+        manager.current_spending = 5.0
+        manager.active_domain = "active.xyz"
+        manager.owned_domains = [{
+            "domain": "active.xyz",
+            "price": 5.0,
+            "purchased_at": "2026-03-30T10:11:12",
+            "expires_at": "2027-03-30T10:11:12"
+        }]
+
+        # Import from json-safe strings
+        manager.import_state(manager.export_state())
+        exported = manager.export_state()
+
+        assert exported["monthly_budget"] == 20.0
+        assert exported["current_spending"] == 5.0
+        assert exported["active_domain"] == "active.xyz"
+        assert exported["owned_domains"][0]["purchased_at"].startswith("2026-03-30T10:11:12")
