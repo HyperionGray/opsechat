@@ -21,6 +21,9 @@ from simple_chat_routes import (
     check_rate_limit,
     RATE_LIMITS,
     MAX_MESSAGE_LENGTH,
+    _rate_limit_store,
+    _rate_limit_backoff,
+    _rate_limit_lock,
 )
 
 
@@ -123,6 +126,12 @@ class TestChatRoom:
 # ---------------------------------------------------------------------------
 
 class TestCheckRateLimit:
+    def setup_method(self):
+        # Ensure no state leak between tests
+        with _rate_limit_lock:
+            _rate_limit_store.clear()
+            _rate_limit_backoff.clear()
+
     def test_allows_within_limit(self):
         allowed, _ = check_rate_limit("sess-001", "chat_message")
         assert allowed is True
@@ -139,6 +148,29 @@ class TestCheckRateLimit:
     def test_unknown_endpoint_always_allowed(self):
         allowed, _ = check_rate_limit("sess-002", "nonexistent_endpoint")
         assert allowed is True
+
+    def test_adaptive_backoff_increases_retry_after(self):
+        session_id = "sess-backoff-test"
+        endpoint = "chat_create"
+        limit = RATE_LIMITS[endpoint]["max_requests"]
+        window = RATE_LIMITS[endpoint]["window_seconds"]
+
+        for _ in range(limit):
+            check_rate_limit(session_id, endpoint)
+
+        allowed1, retry1 = check_rate_limit(session_id, endpoint)
+        allowed2, retry2 = check_rate_limit(session_id, endpoint)
+        allowed3, retry3 = check_rate_limit(session_id, endpoint)
+
+        assert allowed1 is False
+        assert allowed2 is False
+        assert allowed3 is False
+        # Retry grows with repeated violations for the same window
+        assert retry1 >= 1
+        assert retry2 > retry1
+        assert retry3 > retry2
+        # Capped to keep lockouts short
+        assert retry3 <= window + 30
 
 
 # ---------------------------------------------------------------------------
@@ -157,6 +189,29 @@ class TestChatRoutes:
         assert data["success"] is True
         assert "room_id" in data
         assert data["room_url"].startswith("/chat/room/")
+
+    def test_create_room_rate_limit_returns_retry_after(self, client):
+        from simple_chat_routes import RATE_LIMITS
+
+        with _rate_limit_lock:
+            _rate_limit_store.clear()
+            _rate_limit_backoff.clear()
+
+        session_id = "sess-create-rate-limit"
+        with client.session_transaction() as sess:
+            sess["_id"] = session_id
+            sess["username"] = "TestUser"
+            sess["color"] = [255, 85, 85]
+
+        for _ in range(RATE_LIMITS["chat_create"]["max_requests"]):
+            ok = client.post("/chat/create")
+            assert ok.status_code == 200
+
+        blocked = client.post("/chat/create")
+        assert blocked.status_code == 429
+        body = blocked.get_json()
+        assert isinstance(body.get("retry_after"), int)
+        assert body["retry_after"] >= 1
 
     def test_create_room_id_unique(self, client):
         r1 = client.post("/chat/create").get_json()["room_id"]
@@ -189,6 +244,39 @@ class TestChatRoutes:
         )
         assert response.status_code == 200
         assert response.get_json()["success"] is True
+
+    def test_post_message_rate_limit_returns_retry_after(self, client):
+        from simple_chat_routes import RATE_LIMITS
+
+        with _rate_limit_lock:
+            _rate_limit_store.clear()
+            _rate_limit_backoff.clear()
+
+        room_id = client.post("/chat/create").get_json()["room_id"]
+
+        session_id = "sess-message-rate-limit"
+        with client.session_transaction() as sess:
+            sess["_id"] = session_id
+            sess["username"] = "RateLimitUser"
+            sess["color"] = [85, 170, 255]
+
+        for i in range(RATE_LIMITS["chat_message"]["max_requests"]):
+            ok = client.post(
+                f"/chat/room/{room_id}/messages",
+                json={"message": f"msg {i}"},
+                content_type="application/json",
+            )
+            assert ok.status_code == 200
+
+        blocked = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "blocked"},
+            content_type="application/json",
+        )
+        assert blocked.status_code == 429
+        body = blocked.get_json()
+        assert isinstance(body.get("retry_after"), int)
+        assert body["retry_after"] >= 1
 
     def test_post_message_missing_body(self, client):
         room_id = client.post("/chat/create").get_json()["room_id"]
@@ -257,6 +345,34 @@ class TestDMRoutes:
         data = response.get_json()
         assert data["success"] is True
         assert "dm_id" in data
+
+    def test_send_dm_rate_limit_returns_retry_after(self, client):
+        with _rate_limit_lock:
+            _rate_limit_store.clear()
+            _rate_limit_backoff.clear()
+
+        with client.session_transaction() as sess:
+            sess["_id"] = "sess-dm-rate-limit"
+            sess["username"] = "DmLimitUser"
+            sess["color"] = [170, 170, 170]
+
+        for i in range(RATE_LIMITS["dm_send"]["max_requests"]):
+            ok = client.post(
+                "/chat/dm/send",
+                json={"room_id": "room-a", "message": f"dm {i}"},
+                content_type="application/json",
+            )
+            assert ok.status_code == 200
+
+        blocked = client.post(
+            "/chat/dm/send",
+            json={"room_id": "room-a", "message": "blocked"},
+            content_type="application/json",
+        )
+        assert blocked.status_code == 429
+        body = blocked.get_json()
+        assert isinstance(body.get("retry_after"), int)
+        assert body["retry_after"] >= 1
 
     def test_send_dm_missing_fields(self, client):
         response = client.post(

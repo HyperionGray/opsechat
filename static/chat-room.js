@@ -183,11 +183,27 @@ async function renderMessages(messages) {
     scrollToBottom();
 }
 
+let pendingRetryTimer = null;
+let retryCountdownInterval = null;
+
+function clearPendingRetry() {
+    if (retryCountdownInterval) {
+        clearInterval(retryCountdownInterval);
+        retryCountdownInterval = null;
+    }
+    if (pendingRetryTimer) {
+        clearTimeout(pendingRetryTimer);
+        pendingRetryTimer = null;
+    }
+}
+
 async function sendMessage() {
     const input = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
     const message = input.value.trim();
 
     if (!message) return;
+    if (input.disabled || sendBtn.disabled) return;
 
     let messageToSend = message;
 
@@ -206,8 +222,40 @@ async function sendMessage() {
         });
 
         if (response.ok) {
+            clearPendingRetry();
             input.value = '';
             await pollMessages();
+        } else if (response.status === 429) {
+            const data = await response.json().catch(() => ({}));
+            const retryAfter = Number(data.retry_after || 1);
+            showStatus(data.error || `Rate limited. Retry in ${retryAfter}s.`, 4000);
+
+            input.disabled = true;
+            sendBtn.disabled = true;
+            sendBtn.textContent = `Wait ${retryAfter}s`;
+
+            let remaining = retryAfter;
+            retryCountdownInterval = setInterval(() => {
+                remaining -= 1;
+                if (remaining > 0) {
+                    sendBtn.textContent = `Wait ${remaining}s`;
+                } else {
+                    clearInterval(retryCountdownInterval);
+                    retryCountdownInterval = null;
+                }
+            }, 1000);
+
+            pendingRetryTimer = setTimeout(() => {
+                input.disabled = false;
+                sendBtn.disabled = false;
+                sendBtn.textContent = 'Send';
+                input.focus();
+                if (retryCountdownInterval) {
+                    clearInterval(retryCountdownInterval);
+                    retryCountdownInterval = null;
+                }
+                pendingRetryTimer = null;
+            }, retryAfter * 1000);
         } else {
             showStatus('Error sending message');
         }
@@ -232,6 +280,7 @@ async function pollMessages() {
 
 // Event listeners
 document.getElementById('sendBtn').addEventListener('click', sendMessage);
+document.getElementById('securityWarningAcceptBtn').addEventListener('click', acceptSecurityWarning);
 
 document.getElementById('messageInput').addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {
@@ -290,10 +339,9 @@ window.addEventListener('load', async function() {
 
 // Cleanup on unload
 window.addEventListener('beforeunload', function() {
+    clearPendingRetry();
     if (pollInterval) {
         clearInterval(pollInterval);
     }
 });
 
-// Expose acceptSecurityWarning for the HTML onclick attribute
-window.acceptSecurityWarning = acceptSecurityWarning;

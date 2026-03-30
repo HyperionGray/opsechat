@@ -172,6 +172,41 @@ When limit exceeded:
 
 ---
 
+## ⏱️ Chat Rate-Limit Backoff + Retry UX
+
+### What Changed
+The simple chat system now includes adaptive retry behavior instead of only returning a plain "rate limit exceeded" message.
+
+### Backend behavior
+- Rate limits now return a machine-readable `retry_after` value for:
+  - `POST /chat/create`
+  - `POST /chat/room/<room_id>/messages`
+  - `POST /chat/dm/send`
+- Repeated violations within the same window trigger temporary exponential backoff.
+- Backoff is capped (30s) and decays after successful requests.
+
+Example response:
+
+```json
+{
+  "error": "Rate limit exceeded. Maximum 30 messages per minute. Try again in 7 seconds.",
+  "retry_after": 7
+}
+```
+
+### Frontend behavior
+- The chat room client now reads `retry_after` from 429 responses.
+- Send input/button are temporarily disabled during cooldown.
+- A visible countdown ("Wait Ns") is shown and controls auto-re-enable.
+- Cooldown timers are cleaned up on page unload to avoid stale UI state.
+
+### Why this matters
+- Gives users deterministic retry guidance.
+- Reduces repeated hammering while still allowing recovery.
+- Aligns with "backoff/retry logic" production TODO items for abuse prevention.
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose
