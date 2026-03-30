@@ -10,6 +10,7 @@ Usage:
     python domain_rotation_cli.py search        # Search for available cheap domains
     python domain_rotation_cli.py rotate        # Rotate to a new domain
     python domain_rotation_cli.py status        # Show budget status
+    python domain_rotation_cli.py prune         # Remove expired/stale local entries
     python domain_rotation_cli.py config        # Configure API credentials
 """
 
@@ -18,6 +19,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from datetime import datetime
 from getpass import getpass
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
@@ -103,18 +105,20 @@ def get_manager():
         sys.exit(1)
     
     client = PorkbunAPIClient(config['api_key'], config['api_secret'])
-    manager = DomainRotationManager(
-        api_client=client,
-        monthly_budget=config.get('monthly_budget', 50.0)
-    )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+    try:
+        monthly_budget = float(config.get('monthly_budget', 50.0))
+    except (TypeError, ValueError):
+        monthly_budget = 50.0
+
+    manager = DomainRotationManager(api_client=client, monthly_budget=monthly_budget)
+
+    # Load saved state safely (persisted JSON stores timestamps as strings).
+    manager.active_domain = config.get('active_domain')
+    try:
+        manager.current_spending = float(config.get('current_spending', 0.0))
+    except (TypeError, ValueError):
+        manager.current_spending = 0.0
+    manager.import_owned_domains(config.get('owned_domains', []))
     
     return manager, config
 
@@ -122,14 +126,14 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = manager.export_owned_domains()
     config['active_domain'] = manager.active_domain
     save_config(config)
 
 
 def list_domains():
     """List owned domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Owned Domains ===\n")
     
@@ -151,7 +155,7 @@ def list_domains():
 
 def search_domains():
     """Search for available cheap domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
     print("Searching for domains under $5...\n")
@@ -215,7 +219,7 @@ def rotate_domain():
 
 def show_status():
     """Show current status"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Domain Rotation Status ===\n")
     
@@ -227,10 +231,41 @@ def show_status():
     print(f"  Spent: ${budget_status['current_spending']}")
     print(f"  Remaining: ${budget_status['remaining']}")
     print(f"\nDomains Owned: {budget_status['domains_owned']}")
+    print(f"Expired Domains (local): {budget_status['expired_domains']}")
     
     if manager.active_domain:
         print(f"\n✅ Current burner email domain: {manager.active_domain}")
         print(f"   Configure your email system to use: user@{manager.active_domain}")
+
+
+def prune_domains(assume_yes=False):
+    """Prune expired domain records from local CLI state."""
+    manager, config = get_manager()
+    now = datetime.now()
+
+    owned_domains = manager.get_owned_domains()
+    expired_domains = [
+        record for record in owned_domains
+        if record["expires_at"] <= now
+    ]
+
+    print("\n=== Domain State Prune ===\n")
+    print(f"Total local records: {len(owned_domains)}")
+    print(f"Expired records: {len(expired_domains)}")
+
+    if not expired_domains:
+        print("\nNo expired records to remove.")
+        return
+
+    if not assume_yes:
+        confirm = input("\nRemove expired records from local config? (yes/no): ").strip().lower()
+        if confirm != "yes":
+            print("Prune cancelled.")
+            return
+
+    removed_count = manager.prune_expired_domains(now=now)
+    save_manager_state(manager, config)
+    print(f"\nPruned {removed_count} expired record(s).")
 
 
 def main():
@@ -245,13 +280,19 @@ Examples:
   python domain_rotation_cli.py search     # Search for available domains
   python domain_rotation_cli.py rotate     # Rotate to a new domain
   python domain_rotation_cli.py list       # List owned domains
+  python domain_rotation_cli.py prune      # Remove expired local entries
         """
     )
     
     parser.add_argument(
         'command',
-        choices=['config', 'status', 'search', 'rotate', 'list'],
+        choices=['config', 'status', 'search', 'rotate', 'list', 'prune'],
         help='Command to execute'
+    )
+    parser.add_argument(
+        '--yes',
+        action='store_true',
+        help='Assume yes for confirmation prompts when supported'
     )
     
     args = parser.parse_args()
@@ -266,6 +307,8 @@ Examples:
         rotate_domain()
     elif args.command == 'list':
         list_domains()
+    elif args.command == 'prune':
+        prune_domains(assume_yes=args.yes)
 
 
 if __name__ == '__main__':

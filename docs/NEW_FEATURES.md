@@ -216,6 +216,9 @@ Domains Owned: 1
    Configure your email system to use: user@abc123xyz.club
 ```
 
+The status output now also includes:
+- `Expired Domains (local)` to show stale local records that can be removed.
+
 #### Search for Available Domains
 ```bash
 python domain_rotation_cli.py search
@@ -273,6 +276,32 @@ Output:
    Expires: 2027-03-02
 ```
 
+#### Prune Expired Local Domain Records
+```bash
+# Interactive confirmation
+python domain_rotation_cli.py prune
+
+# Non-interactive (automation-safe)
+python domain_rotation_cli.py prune --yes
+
+Output:
+=== Domain State Prune ===
+
+Total local records: 4
+Expired records: 2
+
+Remove expired records from local config? (yes/no): yes
+Pruned 2 expired record(s).
+```
+
+This removes expired domain entries from local CLI state and keeps the active
+domain pointer aligned with the remaining records.
+
+### Reliability Improvements
+- Domain records are now saved in JSON-safe format (ISO timestamps).
+- Reloading CLI state now safely parses persisted timestamps and prices.
+- `status` now reports local expired-domain count so you can prune quickly.
+
 ### Integration with Burner Email
 After rotating domains, update your email configuration:
 1. Run `python domain_rotation_cli.py status` to get active domain
@@ -285,6 +314,8 @@ After rotating domains, update your email configuration:
 - CLI tracks spending automatically
 - Prevents purchases that would exceed budget
 - Resets monthly (manual reset required)
+- State persistence now serializes domain timestamps safely so `list` and
+  `status` keep working across CLI restarts
 
 ---
 
