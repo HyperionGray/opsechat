@@ -43,6 +43,12 @@ services:
     restart: on-failure
     stdin_open: true
     tty: true
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:5000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 networks:
   opsechat-network:
