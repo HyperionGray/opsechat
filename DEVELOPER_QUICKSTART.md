@@ -5,12 +5,12 @@
 - Python 3.12+
 - Node.js 20+ and npm
 - Tor available locally for full runtime testing
-- Podman or Docker for container validation
+- Podman (preferred) or Docker for container validation
 
 ## Local setup
 
 ```bash
-cd /home/runner/work/opsechat/opsechat
+cd /path/to/opsechat
 
 python3 -m venv .venv
 source .venv/bin/activate
@@ -26,7 +26,7 @@ npm ci
 Run the smallest checks first:
 
 ```bash
-cd /home/runner/work/opsechat/opsechat
+cd /path/to/opsechat
 
 python3 -m pytest tests/test_rate_limit_and_health.py tests/test_security_headers.py tests/test_container_deployment.py
 npx playwright test tests/basic.spec.js
@@ -43,7 +43,7 @@ These cover:
 ### Without Tor
 
 ```bash
-cd /home/runner/work/opsechat/opsechat
+cd /path/to/opsechat
 python3 runserver.py test
 ```
 
@@ -57,7 +57,7 @@ curl -i http://127.0.0.1:5001/
 ### With Tor
 
 ```bash
-cd /home/runner/work/opsechat/opsechat
+cd /path/to/opsechat
 python3 runserver.py
 ```
 
@@ -66,17 +66,17 @@ The server prints the generated `.onion` URL and secret path at startup.
 ## Container validation
 
 ```bash
-cd /home/runner/work/opsechat/opsechat
+cd /path/to/opsechat
 ./compose-up.sh
 ./compose-down.sh
 ```
 
-The application container now includes a `/health` healthcheck, and `docker-compose.yml` also probes the same endpoint.
+The application container now includes a `/health` healthcheck, and the compose configuration also probes the same endpoint.
 
 ## Full test commands already in the repo
 
 ```bash
-cd /home/runner/work/opsechat/opsechat
+cd /path/to/opsechat
 
 python3 -m pytest
 npx playwright test
