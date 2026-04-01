@@ -58,12 +58,13 @@ test.describe('Reviews Functionality', () => {
     await expect(page.locator('#review-form')).toBeVisible();
     await expect(page.locator('#reviews-list')).toBeVisible();
 
-    const submitResponse = await page.request.post(`${TEST_CONFIG.testPath}/reviews/submit`, {
-      form: {
-        rating: '5',
-        review_text: message,
-      },
-    });
+    await page.check('#rating-5');
+    await page.fill('#review_text', message);
+
+    const [submitResponse] = await Promise.all([
+      page.waitForResponse((res) => res.url().includes('/reviews/submit')),
+      page.getByRole('button', { name: /Submit Review/i }).click(),
+    ]);
 
     expect(submitResponse.status()).toBe(200);
     expect(submitResponse.headers()['content-type']).toContain('application/json');
@@ -72,7 +73,6 @@ test.describe('Reviews Functionality', () => {
     expect(submitPayload.success).toBe(true);
     expect(submitPayload.message).toContain('Thank you for your review');
 
-    await page.reload();
     await expect(page.locator('#reviews-list')).toContainText(message);
 
     const reviewData = await fetchReviewData(page);
