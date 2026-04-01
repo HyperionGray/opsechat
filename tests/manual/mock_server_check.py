@@ -8,7 +8,9 @@ import os
 import time
 import subprocess
 import requests
-from threading import Thread
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def test_mock_server():
     """Test that the mock server can start and respond to health checks"""
@@ -18,10 +20,10 @@ def test_mock_server():
     server_process = None
     try:
         server_process = subprocess.Popen(
-            [sys.executable, 'tests/mock_server.py'],
+            [sys.executable, str(REPO_ROOT / 'tests' / 'mock_server.py')],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            cwd=os.path.dirname(os.path.abspath(__file__))
+            cwd=str(REPO_ROOT)
         )
         
         # Wait a bit for server to start
