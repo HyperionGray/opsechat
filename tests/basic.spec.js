@@ -128,8 +128,8 @@ test.describe('Configuration Tests', () => {
   });
 });
 
-test.describe('Mock server endpoint checks', () => {
-  test('should expose a healthy mock health endpoint', async ({ request }) => {
+test.describe('API endpoint smoke checks', () => {
+  test('should expose a healthy health endpoint', async ({ request }) => {
     const response = await request.get('/health');
 
     expect(response.status()).toBe(200);
