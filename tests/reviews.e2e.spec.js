@@ -26,7 +26,7 @@ async function fetchReviewData(page) {
 test.describe('Reviews Functionality', () => {
   test('should load the reviews page with statistics and review form', async ({ page }) => {
     const response = await page.goto(`${TEST_CONFIG.testPath}/reviews`);
-    expect(response?.status()).toBe(200);
+    expect(response.status()).toBe(200);
 
     await expect(page.getByRole('heading', { name: /Service Reviews/i })).toBeVisible();
     await expect(page.getByRole('heading', { name: /Review Statistics/i })).toBeVisible();
