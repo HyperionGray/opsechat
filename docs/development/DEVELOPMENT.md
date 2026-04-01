@@ -83,7 +83,7 @@ These are development and testing utilities that help during development:
 - **`chat-room.py`** - Standalone chat room creator
 - **`tui-server.py`** - Terminal UI server
 - **`tui-client.py`** - Terminal UI client
-- **`domain_rotation_cli.py`** - CLI for domain management
+- **`domain_rotation_cli.py`** - CLI for domain management (`config`, `status`, `search`, `rotate`, `list`, `prune`)
 
 ### Route Modules (Blueprints)
 - **`chat_routes.py`** - Chat functionality

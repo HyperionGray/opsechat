@@ -273,6 +273,25 @@ Output:
    Expires: 2027-03-02
 ```
 
+#### Prune Expired Local Domain Entries
+```bash
+python domain_rotation_cli.py prune
+
+Output:
+=== Domain State Cleanup ===
+
+Expired domains removed: 2
+Remaining domains: 3
+
+State cleanup complete.
+```
+
+### Domain State Reliability Improvements
+- Domain purchase timestamps are now persisted in JSON-safe ISO-8601 format.
+- Legacy saved state (string timestamps or partially missing fields) is auto-normalized on load.
+- `list` output now handles mixed timestamp formats robustly instead of failing on legacy data.
+- `prune` removes expired entries from local saved state and clears stale active-domain pointers.
+
 ### Integration with Burner Email
 After rotating domains, update your email configuration:
 1. Run `python domain_rotation_cli.py status` to get active domain

@@ -6,7 +6,7 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -138,6 +138,183 @@ class DomainRotationManager:
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+
+    @staticmethod
+    def _parse_datetime(value: Any) -> Optional[datetime]:
+        """Parse datetimes from runtime objects or ISO-formatted strings."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip()
+            if normalized.endswith("Z"):
+                normalized = f"{normalized[:-1]}+00:00"
+            try:
+                return datetime.fromisoformat(normalized)
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _serialize_datetime(value: Any) -> Optional[str]:
+        """Serialize datetimes to ISO-8601 strings."""
+        parsed = DomainRotationManager._parse_datetime(value)
+        if parsed is None:
+            return None
+        return parsed.isoformat()
+
+    def export_state(self) -> Dict[str, Any]:
+        """
+        Export manager state to a JSON-safe dictionary.
+        Datetimes are converted to ISO-8601 strings.
+        """
+        serialized_domains: List[Dict[str, Any]] = []
+        for entry in self.owned_domains:
+            if not isinstance(entry, dict):
+                continue
+
+            domain = entry.get("domain")
+            if not domain:
+                continue
+
+            purchased_at = self._parse_datetime(entry.get("purchased_at"))
+            expires_at = self._parse_datetime(entry.get("expires_at"))
+
+            if purchased_at is None and expires_at is None:
+                purchased_at = datetime.now()
+                expires_at = purchased_at + timedelta(days=365)
+            elif purchased_at is None:
+                purchased_at = expires_at - timedelta(days=365)
+            elif expires_at is None:
+                expires_at = purchased_at + timedelta(days=365)
+
+            try:
+                price = float(entry.get("price", 0.0))
+            except (TypeError, ValueError):
+                price = 0.0
+
+            serialized_domains.append({
+                "domain": str(domain),
+                "price": price,
+                "purchased_at": self._serialize_datetime(purchased_at),
+                "expires_at": self._serialize_datetime(expires_at)
+            })
+
+        try:
+            current_spending = float(self.current_spending)
+        except (TypeError, ValueError):
+            current_spending = 0.0
+
+        try:
+            monthly_budget = float(self.monthly_budget)
+        except (TypeError, ValueError):
+            monthly_budget = 50.0
+
+        active_domain = self.active_domain if isinstance(self.active_domain, str) else None
+
+        return {
+            "monthly_budget": monthly_budget,
+            "current_spending": current_spending,
+            "owned_domains": serialized_domains,
+            "active_domain": active_domain
+        }
+
+    def import_state(self, state: Dict[str, Any]) -> None:
+        """
+        Import manager state from a dictionary.
+        Supports legacy state where datetimes are stored as strings.
+        """
+        if not isinstance(state, dict):
+            return
+
+        if "monthly_budget" in state:
+            try:
+                self.monthly_budget = float(state.get("monthly_budget", self.monthly_budget))
+            except (TypeError, ValueError):
+                logger.warning("Invalid monthly_budget in state; keeping existing value")
+
+        if "current_spending" in state:
+            try:
+                self.current_spending = float(state.get("current_spending", self.current_spending))
+            except (TypeError, ValueError):
+                logger.warning("Invalid current_spending in state; resetting to 0.0")
+                self.current_spending = 0.0
+
+        imported_domains: List[Dict[str, Any]] = []
+        for entry in state.get("owned_domains", []):
+            if not isinstance(entry, dict):
+                continue
+
+            domain = entry.get("domain")
+            if not domain:
+                continue
+
+            try:
+                price = float(entry.get("price", 0.0))
+            except (TypeError, ValueError):
+                price = 0.0
+
+            purchased_at = self._parse_datetime(entry.get("purchased_at"))
+            expires_at = self._parse_datetime(entry.get("expires_at"))
+
+            if purchased_at is None and expires_at is None:
+                purchased_at = datetime.now()
+                expires_at = purchased_at + timedelta(days=365)
+            elif purchased_at is None:
+                purchased_at = expires_at - timedelta(days=365)
+            elif expires_at is None:
+                expires_at = purchased_at + timedelta(days=365)
+
+            imported_domains.append({
+                "domain": str(domain),
+                "price": price,
+                "purchased_at": purchased_at,
+                "expires_at": expires_at
+            })
+
+        self.owned_domains = imported_domains
+
+        active_domain = state.get("active_domain")
+        self.active_domain = active_domain if isinstance(active_domain, str) else None
+        if self.active_domain and not any(
+            domain.get("domain") == self.active_domain for domain in self.owned_domains
+        ):
+            self.active_domain = None
+
+    def prune_expired_domains(self, reference_time: Optional[datetime] = None) -> int:
+        """
+        Remove expired domains from state.
+        Returns the number of entries removed.
+        """
+        now = reference_time or datetime.now()
+        kept_domains: List[Dict[str, Any]] = []
+        removed = 0
+
+        for domain_entry in self.owned_domains:
+            if not isinstance(domain_entry, dict):
+                removed += 1
+                continue
+
+            expires_at = self._parse_datetime(domain_entry.get("expires_at"))
+            if expires_at and expires_at <= now:
+                removed += 1
+                continue
+
+            purchased_at = self._parse_datetime(domain_entry.get("purchased_at")) or now
+            if expires_at is None:
+                expires_at = purchased_at + timedelta(days=365)
+
+            normalized_entry = dict(domain_entry)
+            normalized_entry["purchased_at"] = purchased_at
+            normalized_entry["expires_at"] = expires_at
+            kept_domains.append(normalized_entry)
+
+        self.owned_domains = kept_domains
+        if self.active_domain and not any(
+            domain.get("domain") == self.active_domain for domain in self.owned_domains
+        ):
+            self.active_domain = None
+
+        return removed
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -202,12 +379,13 @@ class DomainRotationManager:
         result = self.api_client.purchase_domain(domain, years=1)
         
         if result.get("success"):
+            now = datetime.now()
             self.current_spending += price
             self.owned_domains.append({
                 "domain": domain,
                 "price": price,
-                "purchased_at": datetime.now(),
-                "expires_at": datetime.now() + timedelta(days=365)
+                "purchased_at": now,
+                "expires_at": now + timedelta(days=365)
             })
             
             # Set as active if no active domain
