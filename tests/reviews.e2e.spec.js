@@ -45,7 +45,7 @@ test.describe('Reviews Functionality', () => {
     await page.getByRole('button', { name: /Submit Review/i }).click();
 
     await expect(page.locator('.message.success')).toContainText('Thank you for your review');
-    await expect(page.locator('.review-text')).toContainText(message);
+    await expect(page.locator('.review-text', { hasText: message })).toBeVisible();
 
     const reviewData = await fetchReviewData(page);
     expect(reviewData.reviews.some((review) => review.text === message && review.rating === 4)).toBe(true);
