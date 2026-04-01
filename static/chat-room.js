@@ -9,10 +9,38 @@ let securityWarningAccepted = sessionStorage.getItem('securityWarningAccepted') 
 // Encrypted message prefix (ASCII-safe, recognised by both client and server)
 const ENC_PREFIX = 'ENC:';
 
+const USER_COLOR_CLASS_PREFIX = 'user-color-';
+
+function getUserColorClass(color) {
+    if (!Array.isArray(color)) {
+        return '';
+    }
+
+    const colorKey = color.join(',');
+    const knownColors = {
+        '255,85,85': 0,
+        '85,170,255': 1,
+        '85,255,85': 2,
+        '255,170,85': 3,
+        '255,85,255': 4,
+        '170,85,0': 5,
+        '255,170,255': 6,
+        '170,170,170': 7,
+        '170,170,0': 8,
+        '85,255,255': 9
+    };
+
+    if (!(colorKey in knownColors)) {
+        return '';
+    }
+
+    return `${USER_COLOR_CLASS_PREFIX}${knownColors[colorKey]}`;
+}
+
 // Show security warning on first load
 function showSecurityWarning() {
     if (!securityWarningAccepted) {
-        document.getElementById('securityWarning').style.display = 'block';
+        document.getElementById('securityWarning').classList.add('is-visible');
         document.getElementById('messageInput').disabled = true;
         document.getElementById('sendBtn').disabled = true;
     }
@@ -21,7 +49,7 @@ function showSecurityWarning() {
 function acceptSecurityWarning() {
     securityWarningAccepted = true;
     sessionStorage.setItem('securityWarningAccepted', 'true');
-    document.getElementById('securityWarning').style.display = 'none';
+    document.getElementById('securityWarning').classList.remove('is-visible');
     document.getElementById('messageInput').disabled = false;
     document.getElementById('sendBtn').disabled = false;
     document.getElementById('messageInput').focus();
@@ -150,7 +178,10 @@ async function renderMessages(messages) {
 
         const usernameSpan = document.createElement('span');
         usernameSpan.className = 'username';
-        usernameSpan.style.color = `rgb(${msg.color[0]}, ${msg.color[1]}, ${msg.color[2]})`;
+        const colorClass = msg.color_class;
+        if (colorClass) {
+            usernameSpan.classList.add(colorClass);
+        }
         usernameSpan.textContent = msg.username + ':';
 
         const messageText = document.createElement('span');
@@ -232,6 +263,15 @@ async function pollMessages() {
 
 // Event listeners
 document.getElementById('sendBtn').addEventListener('click', sendMessage);
+document.getElementById('acceptSecurityWarningBtn').addEventListener('click', acceptSecurityWarning);
+
+const userColorElement = document.querySelector('.user-color');
+if (userColorElement) {
+    const colorValues = userColorElement.dataset.userColor;
+    if (colorValues) {
+        userColorElement.style.color = `rgb(${colorValues})`;
+    }
+}
 
 document.getElementById('messageInput').addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {
@@ -294,6 +334,3 @@ window.addEventListener('beforeunload', function() {
         clearInterval(pollInterval);
     }
 });
-
-// Expose acceptSecurityWarning for the HTML onclick attribute
-window.acceptSecurityWarning = acceptSecurityWarning;
