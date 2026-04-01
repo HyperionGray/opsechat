@@ -1,36 +1,8 @@
-# Git files
+# ---- VCS & IDE ----
 .git
 .gitignore
 .github
-
-# Documentation (not needed in container)
-*.md
-AGENTS.md
-EMAIL_QUICKSTART.md
-EMAIL_SYSTEM.md
-IMPLEMENTATION_SUMMARY.md
-MODERNIZATION.md
-PGP_TEST_EXAMPLE.md
-PGP_USAGE.md
-SECURITY.md
-SECURITY_ASSESSMENT.md
-TESTING.md
-REPOSITORY_STATUS.md
-
-# Python cache
-__pycache__
-*.py[cod]
-*$py.class
-*.so
-
-# Virtual environments
-dropenv/
-venv/
-ENV/
-env/
-.venv
-
-# IDE
+.cursor/
 .vscode/
 .idea/
 *.swp
@@ -38,7 +10,25 @@ env/
 *~
 .DS_Store
 
-# Testing
+# ---- Documentation (not needed in container) ----
+*.md
+LICENSE
+LICENSE.md
+
+# ---- Python cache ----
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+
+# ---- Virtual environments ----
+dropenv/
+venv/
+ENV/
+env/
+.venv
+
+# ---- Testing ----
 .pytest_cache/
 .coverage
 htmlcov/
@@ -47,26 +37,54 @@ node_modules/
 playwright-report/
 test-results/
 tests/
+pytest.ini
+playwright.config.js
+playwright-release.config.js
+test-ci-fix.js
+test-server.js
+run_tests.sh
 
-# Build artifacts
+# ---- Build artifacts ----
 build/
 dist/
 *.egg-info/
 
-# Backup files
+# ---- Directories not needed in image ----
+aws/
 bak/
+containers/
+docs/
+include/
+pf-tasks/
+quadlets/
+scripts/
+src/
 
-# Container files (don't need these inside the container)
-Dockerfile
+# ---- Container/compose files (not needed inside container) ----
+container-compose.yml
 docker-compose.yml
+Dockerfile
 compose-up.sh
 compose-down.sh
-DOCKER.md
+install-quadlets.sh
+quadlet-setup.sh
+verify-setup.sh
+update_blueprints.sh
 
-# Node/npm
+# ---- Config/meta files not needed in image ----
+.bish-index
+.bish.sqlite
+.dockerignore
+.containerignore
+amazon-q-rules.json
+amazon_q_config.yaml
 package.json
 package-lock.json
-playwright.config.js
+Pfyfile.pf
+rules.json
+torrc
+setup-amazon-q.sh
 
-# Other
-LICENSE
+# ---- Deprecated/legacy installers ----
+install.sh
+uninstall.sh

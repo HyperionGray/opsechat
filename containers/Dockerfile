@@ -24,21 +24,10 @@ RUN pip install --no-cache-dir -r requirements.txt || \
      echo "Attempting installation with --trusted-host (NOT RECOMMENDED FOR PRODUCTION)..." && \
      pip install --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt)
 
-# Copy application code
-COPY runserver.py .
-COPY app_factory.py .
-COPY rate_limiter.py .
-COPY utils.py .
-COPY chat_routes.py .
-COPY simple_chat_routes.py .
-COPY email_routes.py .
-COPY review_routes.py .
-COPY email_system.py .
-COPY email_security_tools.py .
-COPY email_transport.py .
-COPY domain_manager.py .
-COPY setup.py .
+# Copy application code (wildcard captures all current and future modules)
+COPY *.py ./
 COPY MANIFEST.in .
+COPY VERSION .
 
 # Copy static files and templates
 COPY static/ static/

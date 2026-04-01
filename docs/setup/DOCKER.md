@@ -1,6 +1,6 @@
-# Docker/Podman Containerization
+# Podman / Docker Containerization
 
-This document describes how to run opsechat using containers with either Docker or Podman.
+This document describes how to run opsechat using containers with Podman (preferred) or Docker.
 
 ## Overview
 
@@ -8,16 +8,18 @@ The containerized setup includes:
 - **Tor daemon container**: Runs the Tor service with control port enabled
 - **Opsechat application container**: Runs the Flask application with chat, email, and burner email features
 
+The compose file is `container-compose.yml` (a `docker-compose.yml` symlink exists for backward compatibility).
+
 ## Prerequisites
 
 You need either:
-- **Podman** and **podman-compose** (recommended for rootless operation)
+- **Podman** and **podman-compose** (recommended -- rootless, daemonless)
   - Install: https://podman.io/getting-started/installation
   - Podman-compose: `pip install podman-compose`
 
 OR
 
-- **Docker** and **docker-compose**
+- **Docker** and **docker-compose** (fallback)
   - Install: https://docs.docker.com/get-docker/
 
 ## Quick Start
@@ -43,10 +45,10 @@ After services start, view the logs to get your onion service URL:
 
 ```bash
 # For podman-compose
-podman-compose logs opsechat
+podman-compose -f container-compose.yml logs opsechat
 
 # For docker-compose
-docker-compose logs opsechat
+docker-compose -f container-compose.yml logs opsechat
 ```
 
 Look for a line like:
@@ -74,10 +76,10 @@ Watch logs in real-time:
 
 ```bash
 # For podman-compose
-podman-compose logs -f
+podman-compose -f container-compose.yml logs -f
 
-# For docker-compose  
-docker-compose logs -f
+# For docker-compose
+docker-compose -f container-compose.yml logs -f
 ```
 
 ### Stopping Services
@@ -92,10 +94,10 @@ To also remove persistent data (Tor keys):
 
 ```bash
 # For podman-compose
-podman-compose down -v
+podman-compose -f container-compose.yml down -v
 
 # For docker-compose
-docker-compose down -v
+docker-compose -f container-compose.yml down -v
 ```
 
 ## Manual Usage
@@ -104,19 +106,19 @@ If you prefer to run compose commands directly:
 
 ```bash
 # Start services
-podman-compose up -d
+podman-compose -f container-compose.yml up -d
 # or
-docker-compose up -d
+docker-compose -f container-compose.yml up -d
 
 # View logs
-podman-compose logs -f
+podman-compose -f container-compose.yml logs -f
 # or
-docker-compose logs -f
+docker-compose -f container-compose.yml logs -f
 
 # Stop services
-podman-compose down
+podman-compose -f container-compose.yml down
 # or
-docker-compose down
+docker-compose -f container-compose.yml down
 ```
 
 ## Architecture
@@ -142,7 +144,7 @@ docker-compose down
 
 ### Environment Variables
 
-You can customize the setup by setting environment variables in `docker-compose.yml`:
+You can customize the setup by setting environment variables in `container-compose.yml`:
 
 - `TOR_CONTROL_HOST`: Hostname of Tor daemon (default: `tor`)
 - `TOR_CONTROL_PORT`: Control port (default: `9051`)
@@ -150,19 +152,19 @@ You can customize the setup by setting environment variables in `docker-compose.
 
 ### Custom Tor Configuration
 
-Edit `torrc` to customize Tor settings. After changes, rebuild:
+Edit `containers/torrc` to customize Tor settings. After changes, rebuild:
 
 ```bash
-podman-compose up -d --build
+podman-compose -f container-compose.yml up -d --build
 # or
-docker-compose up -d --build
+docker-compose -f container-compose.yml up -d --build
 ```
 
 ### Development/Debugging Mode
 
 For local development and debugging, you may want to expose Flask directly:
 
-1. Edit `docker-compose.yml` and uncomment the ports section under `opsechat`:
+1. Edit `container-compose.yml` and uncomment the ports section under `opsechat`:
    ```yaml
    ports:
      - "5000:5000"
@@ -225,9 +227,9 @@ podman unshare chown -R 0:0 /path/to/opsechat
 
 After code changes:
 ```bash
-podman-compose up -d --build
+podman-compose -f container-compose.yml up -d --build
 # or
-docker-compose up -d --build
+docker-compose -f container-compose.yml up -d --build
 ```
 
 ### Running Tests
@@ -277,8 +279,8 @@ Containerized vs. native:
 ## Support
 
 For issues specific to containerization, check:
-1. Container logs: `podman-compose logs` or `docker-compose logs`
-2. Container status: `podman-compose ps` or `docker-compose ps`
+1. Container logs: `podman-compose -f container-compose.yml logs` or `docker-compose -f container-compose.yml logs`
+2. Container status: `podman-compose -f container-compose.yml ps` or `docker-compose -f container-compose.yml ps`
 3. Network connectivity: `podman network inspect opsechat-network`
 
 For general opsechat issues, see the main [README.md](README.md).
