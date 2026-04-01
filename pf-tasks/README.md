@@ -89,6 +89,12 @@ python pf-tasks/clean.py --images --force
 
 # Clean build artifacts
 python pf-tasks/clean.py --artifacts
+
+# Preview stale repository file cleanup
+python pf-tasks/clean.py --repo-dry-run
+
+# Remove stale repository files (merge backups/editor leftovers)
+python pf-tasks/clean.py --repo
 ```
 
 **Features:**
@@ -98,6 +104,7 @@ python pf-tasks/clean.py --artifacts
 - Removes networks and volumes
 - Optionally removes container images
 - Cleans build artifacts and cache
+- Detects and removes stale repository files (`*~HEAD`, `.orig`, `.rej`, `.tmp`, `.bish-*`)
 
 ## Usage Patterns
 

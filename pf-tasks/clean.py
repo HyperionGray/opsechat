@@ -9,6 +9,26 @@ import sys
 import shutil
 from pathlib import Path
 import argparse
+from typing import List
+
+STALE_FILE_PATTERNS = [
+    "*~HEAD",
+    "*.orig",
+    "*.rej",
+    "*.tmp",
+    ".DS_Store",
+    ".bish-index",
+    ".bish.sqlite",
+]
+
+STALE_IGNORE_DIRS = {
+    ".git",
+    "node_modules",
+    ".venv",
+    "venv",
+    "deadenv",
+    "dropenv",
+}
 
 def run_command(cmd, cwd=None, check=True):
     """Run command with proper error handling"""
@@ -187,21 +207,72 @@ def clean_build_artifacts():
     
     return True
 
+def _is_in_ignored_tree(path: Path, project_root: Path) -> bool:
+    """Return True when the file lives in an ignored subtree."""
+    try:
+        rel_parts = path.relative_to(project_root).parts
+    except ValueError:
+        return True
+    return any(part in STALE_IGNORE_DIRS for part in rel_parts)
+
+def find_stale_repo_files(project_root: Path) -> List[Path]:
+    """Find stale or backup-style files that should not live in git."""
+    stale_paths = []
+
+    for pattern in STALE_FILE_PATTERNS:
+        for candidate in project_root.rglob(pattern):
+            if not candidate.is_file():
+                continue
+            if _is_in_ignored_tree(candidate, project_root):
+                continue
+            stale_paths.append(candidate)
+
+    # De-duplicate while keeping stable output order
+    unique = sorted({path.resolve() for path in stale_paths}, key=lambda p: str(p))
+    return [Path(p) for p in unique]
+
+def clean_repo_stale_files(dry_run=False):
+    """Clean stale repository files (merge backups, editor leftovers, bish state)."""
+    print("[*] Cleaning repository stale files")
+    project_root = Path(__file__).parent.parent
+    stale_files = find_stale_repo_files(project_root)
+
+    if not stale_files:
+        print("[*] No stale repository files found")
+        return True
+
+    action = "Would remove" if dry_run else "Removing"
+    success = True
+
+    for stale_file in stale_files:
+        print(f"[*] {action} {stale_file}")
+        if dry_run:
+            continue
+        try:
+            stale_file.unlink(missing_ok=True)
+        except OSError as exc:
+            print(f"[!] Failed to remove {stale_file}: {exc}")
+            success = False
+
+    return success
+
 def determine_cleanup_method(args):
     """
     Determine which cleanup method to use based on arguments.
     
     Returns:
         str or None: The effective cleanup method:
-            - None: Skip deployment cleanup, only clean artifacts (--artifacts without --method or --images)
+            - None: Skip deployment cleanup, only clean local artifacts/repo stale files
             - 'all': Clean all deployment artifacts - systemd, compose, and containers (default behavior)
             - 'systemd', 'compose', 'containers': Clean only specific deployment type
             
-    Note: Images and build artifacts are only cleaned when their respective flags (--images, --artifacts) are set.
+    Note: Images, build artifacts, and repo stale files are only cleaned when their
+    respective flags (--images, --artifacts, --repo/--repo-dry-run) are set.
     """
     if args.method is None:
-        if args.artifacts and not args.images:
-            # Only clean artifacts when --artifacts is specified alone
+        has_only_local_cleanup = (args.artifacts or args.repo or args.repo_dry_run) and not args.images
+        if has_only_local_cleanup:
+            # Only local cleanup requested, skip deployment cleanup
             return None
         else:
             # Default to 'all' for other cases (no args, --images alone, etc.)
@@ -218,6 +289,10 @@ def main():
     parser.add_argument('--images', action='store_true', help='Also remove container images')
     parser.add_argument('--force', action='store_true', help='Force removal of images')
     parser.add_argument('--artifacts', action='store_true', help='Clean build artifacts')
+    parser.add_argument('--repo', action='store_true',
+                        help='Clean stale repository files (backup/editor leftovers)')
+    parser.add_argument('--repo-dry-run', action='store_true',
+                        help='Show stale repository files without deleting them')
     
     args = parser.parse_args()
     
@@ -244,6 +319,10 @@ def main():
     # Only clean artifacts if explicitly requested via --artifacts flag
     if args.artifacts:
         success &= clean_build_artifacts()
+
+    # Clean stale repository files when requested
+    if args.repo or args.repo_dry_run:
+        success &= clean_repo_stale_files(dry_run=args.repo_dry_run)
     
     if success:
         print("[✓] Cleanup completed successfully")

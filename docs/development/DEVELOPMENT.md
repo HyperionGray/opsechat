@@ -121,6 +121,9 @@ npm run test:headed
 # Run Python unit tests (requires pytest)
 python -m pytest
 
+# Run repository-hygiene pf cleanup tests only
+python -m pytest tests/test_pf_clean_repo.py
+
 # Run specific test file
 npx playwright test tests/basic.spec.js
 ```
@@ -216,6 +219,11 @@ npm run lint
 - Check Flask logs for request details
 - Use browser dev tools for JavaScript debugging
 - Test with Tor Browser for .onion testing
+
+### Repository Hygiene
+- Preview stale repository artifacts with `python pf-tasks/clean.py --repo-dry-run`
+- Remove stale artifacts with `python pf-tasks/clean.py --repo`
+- This targets merge/editor leftovers such as `*~HEAD`, `.orig`, `.rej`, `.tmp`, and `.bish-*`
 
 ## Environment Variables
 

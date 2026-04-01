@@ -129,7 +129,7 @@ class PFTaskTester:
         try:
             import deploy
             
-            # Test valid arguments
+            # Test valid deploy arguments
             test_args = [
                 ['--method', 'quadlet'],
                 ['--method', 'compose'],
@@ -151,6 +151,31 @@ class PFTaskTester:
                         self.log_test(f"Deploy args parsing: {args}", True)
                 except Exception as e:
                     self.log_test(f"Deploy args parsing: {args}", False, str(e))
+
+            # Test valid clean arguments for repo-hygiene mode
+            clean_args = [
+                ['--repo'],
+                ['--repo-dry-run'],
+                ['--artifacts', '--repo'],
+                []  # default args
+            ]
+            for args in clean_args:
+                try:
+                    with patch('sys.argv', ['clean.py'] + args):
+                        clean_parser = argparse.ArgumentParser(description='Clean up opsechat deployment')
+                        clean_parser.add_argument('--method', choices=['systemd', 'compose', 'containers', 'all'],
+                                                  default=None, help='Cleanup method')
+                        clean_parser.add_argument('--images', action='store_true', help='Also remove container images')
+                        clean_parser.add_argument('--force', action='store_true', help='Force removal of images')
+                        clean_parser.add_argument('--artifacts', action='store_true', help='Clean build artifacts')
+                        clean_parser.add_argument('--repo', action='store_true',
+                                                  help='Clean stale repository files (backup/editor leftovers)')
+                        clean_parser.add_argument('--repo-dry-run', action='store_true',
+                                                  help='Show stale repository files without deleting them')
+                        clean_parser.parse_args(args)
+                        self.log_test(f"Clean args parsing: {args}", True)
+                except Exception as e:
+                    self.log_test(f"Clean args parsing: {args}", False, str(e))
                     
         except Exception as e:
             self.log_test("Argument parsing test", False, str(e))

@@ -76,6 +76,37 @@ def test_file_structure():
     
     return True
 
+def test_clean_task_repo_flags():
+    """Test clean.py repository-hygiene flags and behavior."""
+    print("\nTesting clean.py repo flags...")
+    import clean
+
+    class Args:
+        def __init__(self, method=None, images=False, artifacts=False, repo=False, repo_dry_run=False):
+            self.method = method
+            self.images = images
+            self.artifacts = artifacts
+            self.repo = repo
+            self.repo_dry_run = repo_dry_run
+
+    # Repo-only cleanup should skip deployment cleanup methods
+    repo_only = Args(repo=True)
+    if clean.determine_cleanup_method(repo_only) is None:
+        print("[✓] clean.py repo-only mode skips deployment cleanup")
+    else:
+        print("[!] clean.py repo-only mode should skip deployment cleanup")
+        return False
+
+    # Default behavior should still run all cleanup stages
+    default_args = Args()
+    if clean.determine_cleanup_method(default_args) == 'all':
+        print("[✓] clean.py default cleanup mode remains 'all'")
+    else:
+        print("[!] clean.py default cleanup mode should be 'all'")
+        return False
+
+    return True
+
 def main():
     print("=== Simple PF Task Test ===")
     
@@ -87,6 +118,7 @@ def main():
     
     # Test imports
     import_results = test_basic_imports()
+    repo_flags_ok = test_clean_task_repo_flags()
     
     # Summary
     total_modules = len(import_results)
@@ -97,7 +129,7 @@ def main():
     print(f"Successful imports: {successful_imports}")
     print(f"Failed imports: {total_modules - successful_imports}")
     
-    if successful_imports == total_modules:
+    if successful_imports == total_modules and repo_flags_ok:
         print("[✓] All basic tests passed!")
         return True
     else:
