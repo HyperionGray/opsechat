@@ -259,8 +259,8 @@ python tests/test-tui-client.py
 
 ## Next Steps
 
-- Read [TUI_README.md](../TUI_README.md) for full documentation
-- Read [docs/TUI_TODO.md](TUI_TODO.md) for planned features
+- Read [TUI_README.md](TUI_README.md) for full documentation
+- Read [TUI TODO](../development/TUI_TODO.md) for planned features
 - Report issues on GitHub
 - Contribute improvements
 
@@ -275,6 +275,6 @@ python tests/test-tui-client.py
 
 ---
 
-**Questions?** Check [TUI_README.md](../TUI_README.md) or open an issue on GitHub.
+**Questions?** Check [TUI_README.md](TUI_README.md) or open an issue on GitHub.
 
 **Ready to chat?** Just run `python tui-server.py` and you're live!
