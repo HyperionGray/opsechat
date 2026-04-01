@@ -332,6 +332,10 @@ Security
 ========
 
 For security best practices and recommendations, please see [SECURITY.md](SECURITY.md) and [Security Assessment](docs/assessment/SECURITY_ASSESSMENT.md).
+Legal policies are available at:
+- [Privacy Policy](docs/legal/PRIVACY_POLICY.md)
+- [Acceptable Use Policy](docs/legal/ACCEPTABLE_USE_POLICY.md)
+- [Terms of Service](docs/legal/TERMS_OF_SERVICE.md)
 
 **Note on jQuery**: ✅ **RESOLVED** - The bundled jQuery has been updated to v3.7.1 to patch the previously known XSS vulnerabilities (CVE-2020-11023 and CVE-2020-11022). The security vulnerabilities have been addressed.
 

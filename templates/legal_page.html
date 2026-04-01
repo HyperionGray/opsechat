@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }} - OpSecChat</title>
+  <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='legal-page.css') }}">
+</head>
+<body class="legal-page">
+  <main class="legal-shell">
+    <header class="page-header">
+      <h1>{{ title }}</h1>
+      <p class="subtitle">Policy document for OpSecChat.</p>
+    </header>
+
+    <nav class="legal-nav" aria-label="Legal policies">
+      <a href="{{ nav_terms }}">Terms</a>
+      <a href="{{ nav_privacy }}">Privacy</a>
+      <a href="{{ nav_aup }}">AUP</a>
+      <a href="{{ nav_home }}">Home</a>
+    </nav>
+
+    <section aria-label="{{ title }} content">
+      <pre class="legal-content">{{ policy_text }}</pre>
+    </section>
+  </main>
+</body>
+</html>

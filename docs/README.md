@@ -52,9 +52,10 @@ Information for developers contributing to the project.
 - [Modernization Notes](development/MODERNIZATION.md) - Upgrade notes
 - [Agent Guidelines](development/AGENTS.md) - Repository guidelines for AI agents
 
-### ⚖️ Legal
+### Legal
 Legal documents and policies.
 
+- [Privacy Policy](legal/PRIVACY_POLICY.md) - Privacy policy draft and data handling
 - [Acceptable Use Policy](legal/ACCEPTABLE_USE_POLICY.md) - AUP (requires legal review)
 - [Terms of Service](legal/TERMS_OF_SERVICE.md) - ToS (requires legal review)
 

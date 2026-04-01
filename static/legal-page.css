@@ -1,0 +1,52 @@
+.legal-page {
+    background-color: #000;
+    color: #0f0;
+    font-family: 'Courier New', monospace;
+    margin: 0;
+    padding: 20px;
+    line-height: 1.5;
+}
+
+.legal-shell {
+    max-width: 980px;
+    margin: 0 auto;
+}
+
+.page-header {
+    margin-bottom: 16px;
+}
+
+h1 {
+    margin: 0 0 8px 0;
+    color: #0f0;
+}
+
+.subtitle {
+    color: #aaa;
+    margin: 0;
+}
+
+.legal-nav {
+    margin: 16px 0;
+}
+
+.legal-nav a {
+    color: #0ff;
+    margin-right: 14px;
+    text-decoration: none;
+}
+
+.legal-nav a:hover {
+    text-decoration: underline;
+}
+
+.legal-content {
+    background-color: #070707;
+    border: 1px solid #1f1f1f;
+    border-radius: 4px;
+    padding: 16px;
+    overflow-x: auto;
+    margin: 0;
+    white-space: pre-wrap;
+    color: #e5e5e5;
+}

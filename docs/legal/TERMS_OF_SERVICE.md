@@ -355,7 +355,7 @@ Some jurisdictions don't allow arbitration agreements. In such cases, disputes s
 ## 17. Miscellaneous
 
 ### 17.1 Entire Agreement
-These Terms, together with our Acceptable Use Policy and Privacy Policy, constitute the entire agreement between you and Hyperion Gray LLC.
+These Terms, together with our [Acceptable Use Policy](ACCEPTABLE_USE_POLICY.md) and [Privacy Policy](PRIVACY_POLICY.md), constitute the entire agreement between you and Hyperion Gray LLC.
 
 ### 17.2 Severability
 If any provision is found unenforceable, it shall be modified to the minimum extent necessary, and other provisions remain in full force.
@@ -441,13 +441,13 @@ CONSULT A LAWYER IF YOU HAVE QUESTIONS ABOUT YOUR LEGAL OBLIGATIONS.
 
 *This is a template document. Legal review and customization are required before production use.*
 
-**TODO before alpha:**
+**Pre-alpha checklist:**
 - [ ] Legal counsel review and approval
 - [ ] Determine jurisdiction and governing law
 - [ ] Set up arbitration procedures
 - [ ] Add contact information
 - [ ] Integrate with UI (checkbox acknowledgment)
-- [ ] Publish privacy policy
+- [x] Publish privacy policy (`docs/legal/PRIVACY_POLICY.md`)
 - [ ] Set effective date
 - [ ] Translate to other languages (if needed)
 - [ ] Add dispute resolution contact information

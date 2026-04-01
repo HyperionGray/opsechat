@@ -307,12 +307,3 @@ In case of conflict between this AUP and other documents, the most restrictive i
 ---
 
 *This is a template document. Legal review and customization are required before production use.*
-
-**TODO before alpha:**
-- [ ] Legal counsel review
-- [ ] Add specific contact information
-- [ ] Determine jurisdiction
-- [ ] Set up abuse reporting mechanism
-- [ ] Integrate with Terms of Service
-- [ ] Add user acknowledgment checkbox in UI
-- [ ] Translate to other languages (if needed)
