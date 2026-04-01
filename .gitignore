@@ -70,3 +70,7 @@ docker-compose.override.yml
 
 # BFG Repo Cleaner (binary tool, not source)
 bfg-*.jar
+**.bish.**
+**/**.bish.**
+**bish**
+.bish.sqlite
