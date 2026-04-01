@@ -323,19 +323,71 @@ def _read_version() -> str:
 
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
+    active_rooms = _get_active_room_count()
     return {
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
         'version': _read_version(),
-        # active_rooms: this app uses a single global chat room. The field is
-        # included for API consistency; it always reports 1 when the service is up.
-        'active_rooms': 1,
+        'active_rooms': active_rooms,
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',
             'disk_space': 'ok'
         }
+    }
+
+
+def _get_active_room_count() -> int:
+    """Return the number of active chat rooms from simple_chat_routes.
+
+    Falls back to 0 if the module is unavailable (e.g. during isolated unit tests).
+    """
+    try:
+        from simple_chat_routes import chat_rooms, rooms_lock
+        with rooms_lock:
+            return len(chat_rooms)
+    except ImportError:
+        return 0
+
+
+def get_chat_stats() -> Dict[str, Any]:
+    """Return lightweight operational stats about chat rooms.
+
+    Useful for monitoring dashboards and alerting.
+    """
+    try:
+        from simple_chat_routes import (
+            chat_rooms, rooms_lock, direct_messages, dm_lock,
+            MESSAGE_EXPIRY_SECONDS, DM_EXPIRY_SECONDS, ROOM_INACTIVE_SECONDS,
+        )
+    except ImportError:
+        return {
+            'active_rooms': 0,
+            'total_messages': 0,
+            'active_users': 0,
+            'pending_dms': 0,
+            'config': {},
+        }
+
+    with rooms_lock:
+        active_rooms = len(chat_rooms)
+        total_messages = sum(len(r.messages) for r in chat_rooms.values())
+        active_users = sum(r.get_user_count() for r in chat_rooms.values())
+
+    with dm_lock:
+        pending_dms = len(direct_messages)
+
+    return {
+        'active_rooms': active_rooms,
+        'total_messages': total_messages,
+        'active_users': active_users,
+        'pending_dms': pending_dms,
+        'config': {
+            'message_expiry_seconds': MESSAGE_EXPIRY_SECONDS,
+            'dm_expiry_seconds': DM_EXPIRY_SECONDS,
+            'room_inactive_seconds': ROOM_INACTIVE_SECONDS,
+        },
     }
 
 # Security event logging
