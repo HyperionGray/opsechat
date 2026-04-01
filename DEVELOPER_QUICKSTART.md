@@ -28,7 +28,7 @@ Run the smallest checks first:
 ```bash
 cd /path/to/opsechat
 
-python3 -m pytest tests/test_rate_limit_and_health.py tests/test_security_headers.py tests/test_container_deployment.py
+python3 -m pytest tests/test_rate_limit_and_health.py tests/test_container_deployment.py
 npx playwright test tests/basic.spec.js
 ```
 
