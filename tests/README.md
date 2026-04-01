@@ -7,6 +7,7 @@ This directory contains the automated test suite for opsechat.
 - **basic.spec.js** - Tests for project structure, file existence, and Python module imports
 - **e2e.spec.js** - Comprehensive end-to-end tests validating complete user workflows with both status codes and content validation
 - **mock-server.spec.js** - Integration tests that use a mock Flask server
+- **reviews.e2e.spec.js** - End-to-end coverage for anonymous review submission in no-script and JavaScript modes
 - **ui-headless.spec.js** - UI tests that run in headless browser mode (no visible window)
 - **ui-headed.spec.js** - UI tests that run in headed mode (with visible browser window) for visual validation
 - **mock_server.py** - A lightweight Flask server that simulates opsechat without requiring Tor
@@ -63,6 +64,7 @@ Current tests validate:
 - ✅ **XSS attack prevention** (NEW)
 - ✅ **Multi-user concurrent chat scenarios** (NEW)
 - ✅ **JSON API endpoint validation** (NEW)
+- ✅ **Anonymous review submission and review statistics workflows** (NEW)
 
 ## Adding New Tests
 
