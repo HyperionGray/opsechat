@@ -50,8 +50,8 @@ python3 runserver.py test
 Useful checks:
 
 ```bash
-curl -i http://127.0.0.1:5001/health
-curl -i http://127.0.0.1:5001/
+curl -i http://127.0.0.1:5000/health
+curl -i http://127.0.0.1:5000/
 ```
 
 ### With Tor
