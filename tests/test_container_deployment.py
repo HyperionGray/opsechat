@@ -49,6 +49,7 @@ class TestDockerComposeConfig:
         assert 'build' in opsechat_service
         assert 'depends_on' in opsechat_service
         assert 'environment' in opsechat_service
+        assert 'healthcheck' in opsechat_service
         assert 'networks' in opsechat_service
     
     def test_compose_network_isolation(self):
@@ -78,6 +79,16 @@ class TestDockerComposeConfig:
         opsechat_service = config['services']['opsechat']
         assert 'ports' not in opsechat_service or not opsechat_service['ports']
 
+    def test_compose_app_healthcheck_targets_local_health_endpoint(self):
+        compose_path = os.path.join(REPO_DIR, 'docker-compose.yml')
+        with open(compose_path) as f:
+            config = yaml.safe_load(f)
+
+        healthcheck = config['services']['opsechat']['healthcheck']
+        assert healthcheck['test'] == [
+            'CMD', 'curl', '--fail', '--silent', 'http://127.0.0.1:5000/health'
+        ]
+
 
 class TestDockerfile:
     """Test Dockerfile configuration"""
@@ -105,6 +116,14 @@ class TestDockerfile:
         
         assert 'pip install' in content
         assert 'requirements.txt' in content
+
+    def test_dockerfile_has_healthcheck(self):
+        dockerfile_path = os.path.join(REPO_DIR, 'Dockerfile')
+        with open(dockerfile_path) as f:
+            content = f.read()
+
+        assert 'HEALTHCHECK' in content
+        assert '/health' in content
     
     def test_dockerfile_copies_app_files(self):
         dockerfile_path = self.get_dockerfile_path()

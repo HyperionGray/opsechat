@@ -47,19 +47,21 @@ test.describe('Project Structure Tests', () => {
     expect(content).toContain('stem');
   });
 
-  test('should have runserver.py with required imports', () => {
+  test('should have runserver.py wired to the app factory and Tor startup', () => {
     const serverPath = path.join(__dirname, '..', 'runserver.py');
     const content = fs.readFileSync(serverPath, 'utf8');
     
-    // Check for critical imports
-    expect(content).toContain('from flask import Flask');
+    // Check for the current entrypoint structure
+    expect(content).toContain('from app_factory import create_app');
     expect(content).toContain('from stem.control import Controller');
-    expect(content).toContain('import textwrap');
+    expect(content).toContain('def setup_tor_configuration():');
+    expect(content).toContain('def main():');
+    expect(content).toContain('app = create_app()');
   });
 });
 
 test.describe('Python Module Tests', () => {
-  test('should import runserver module without errors', async ({ page }) => {
+  test('should import runserver module without errors', async () => {
     // This is a basic smoke test to ensure the module can be imported
     const { exec } = require('child_process');
     const { promisify } = require('util');
@@ -123,5 +125,18 @@ test.describe('Configuration Tests', () => {
     const content = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
     expect(content.devDependencies).toBeDefined();
     expect(content.devDependencies['@playwright/test']).toBeDefined();
+  });
+});
+
+test.describe('API endpoint smoke checks', () => {
+  test('should expose a healthy health endpoint', async ({ request }) => {
+    const response = await request.get('/health');
+
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toContain('application/json');
+
+    const data = await response.json();
+    expect(data).toHaveProperty('status');
+    expect(data).toHaveProperty('timestamp');
   });
 });

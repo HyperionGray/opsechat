@@ -103,8 +103,11 @@ def test_health_endpoint_returns_json_with_required_fields():
     data = response.get_json()
     assert data is not None
     assert data.get("status") == "healthy"
+    assert "timestamp" in data
+    assert "uptime_seconds" in data
     assert "version" in data
     assert "active_rooms" in data
+    assert "checks" in data
 
 
 def test_health_endpoint_active_rooms_is_integer():
@@ -113,3 +116,53 @@ def test_health_endpoint_active_rooms_is_integer():
     data = response.get_json()
     assert isinstance(data["active_rooms"], int)
     assert data["active_rooms"] >= 0
+
+
+def test_health_endpoint_timestamp_is_iso8601_utc():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    data = response.get_json()
+
+    parsed = datetime.datetime.fromisoformat(data["timestamp"])
+    assert parsed.tzinfo is not None
+    assert parsed.utcoffset() == datetime.timedelta(0)
+
+
+def test_health_endpoint_reports_non_negative_uptime():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    data = response.get_json()
+
+    assert isinstance(data["uptime_seconds"], (int, float))
+    assert data["uptime_seconds"] >= 0
+
+
+def test_health_endpoint_includes_expected_checks():
+    client = _test_app.test_client()
+    response = client.get("/health")
+    data = response.get_json()
+
+    assert data["checks"] == {
+        "tor_connection": "unknown",
+        "memory_usage": "ok",
+        "disk_space": "ok",
+    }
+
+
+def test_health_endpoint_sets_json_and_security_headers():
+    client = _test_app.test_client()
+    response = client.get("/health")
+
+    assert response.content_type == "application/json"
+    assert response.headers["Content-Security-Policy"].startswith("default-src 'self';")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
+    assert response.headers["Server"] == ""
+
+
+def test_health_endpoint_date_header_is_blank():
+    client = _test_app.test_client()
+    response = client.get("/health")
+
+    assert response.headers["Date"] == ""
