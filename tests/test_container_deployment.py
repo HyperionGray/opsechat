@@ -12,14 +12,20 @@ REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class TestDockerComposeConfig:
-    """Test docker-compose.yml configuration"""
+    """Test container compose configuration"""
+
+    @staticmethod
+    def get_compose_path():
+        return os.path.join(REPO_DIR, 'container-compose.yml')
     
     def test_compose_file_exists(self):
-        compose_path = os.path.join(REPO_DIR, 'docker-compose.yml')
+        compose_path = self.get_compose_path()
         assert os.path.exists(compose_path)
+        legacy_path = os.path.join(REPO_DIR, 'docker-compose.yml')
+        assert os.path.islink(legacy_path)
     
     def test_compose_file_valid_yaml(self):
-        compose_path = os.path.join(REPO_DIR, 'docker-compose.yml')
+        compose_path = self.get_compose_path()
         with open(compose_path) as f:
             config = yaml.safe_load(f)
         
@@ -28,7 +34,7 @@ class TestDockerComposeConfig:
         assert 'opsechat' in config['services']
     
     def test_compose_services_have_required_config(self):
-        compose_path = os.path.join(REPO_DIR, 'docker-compose.yml')
+        compose_path = self.get_compose_path()
         with open(compose_path) as f:
             config = yaml.safe_load(f)
         
@@ -48,7 +54,7 @@ class TestDockerComposeConfig:
     
     def test_compose_network_isolation(self):
         """Verify services use isolated network"""
-        compose_path = os.path.join(REPO_DIR, 'docker-compose.yml')
+        compose_path = self.get_compose_path()
         with open(compose_path) as f:
             config = yaml.safe_load(f)
         
@@ -61,7 +67,7 @@ class TestDockerComposeConfig:
     
     def test_compose_no_ports_exposed_by_default(self):
         """Verify no ports are exposed to host by default"""
-        compose_path = os.path.join(REPO_DIR, 'docker-compose.yml')
+        compose_path = self.get_compose_path()
         with open(compose_path) as f:
             config = yaml.safe_load(f)
         
@@ -86,20 +92,25 @@ class TestDockerComposeConfig:
 
 class TestDockerfile:
     """Test Dockerfile configuration"""
+
+    @staticmethod
+    def get_dockerfile_path():
+        return os.path.join(REPO_DIR, 'containers', 'Dockerfile')
     
     def test_dockerfile_exists(self):
-        dockerfile_path = os.path.join(REPO_DIR, 'Dockerfile')
+        dockerfile_path = self.get_dockerfile_path()
         assert os.path.exists(dockerfile_path)
+        assert os.path.islink(os.path.join(REPO_DIR, 'Dockerfile'))
     
     def test_dockerfile_uses_python_base(self):
-        dockerfile_path = os.path.join(REPO_DIR, 'Dockerfile')
+        dockerfile_path = self.get_dockerfile_path()
         with open(dockerfile_path) as f:
             content = f.read()
         
         assert 'FROM python:' in content
     
     def test_dockerfile_installs_dependencies(self):
-        dockerfile_path = os.path.join(REPO_DIR, 'Dockerfile')
+        dockerfile_path = self.get_dockerfile_path()
         with open(dockerfile_path) as f:
             content = f.read()
         
@@ -115,7 +126,7 @@ class TestDockerfile:
         assert '/health' in content
     
     def test_dockerfile_copies_app_files(self):
-        dockerfile_path = os.path.join(REPO_DIR, 'Dockerfile')
+        dockerfile_path = self.get_dockerfile_path()
         with open(dockerfile_path) as f:
             content = f.read()
         
@@ -127,20 +138,25 @@ class TestDockerfile:
 
 class TestTorConfig:
     """Test Tor configuration"""
+
+    @staticmethod
+    def get_torrc_path():
+        return os.path.join(REPO_DIR, 'containers', 'torrc')
     
     def test_torrc_exists(self):
-        torrc_path = os.path.join(REPO_DIR, 'torrc')
+        torrc_path = self.get_torrc_path()
         assert os.path.exists(torrc_path)
+        assert os.path.islink(os.path.join(REPO_DIR, 'torrc'))
     
     def test_torrc_has_control_port(self):
-        torrc_path = os.path.join(REPO_DIR, 'torrc')
+        torrc_path = self.get_torrc_path()
         with open(torrc_path) as f:
             content = f.read()
         
         assert 'ControlPort 9051' in content
     
     def test_torrc_has_cookie_auth(self):
-        torrc_path = os.path.join(REPO_DIR, 'torrc')
+        torrc_path = self.get_torrc_path()
         with open(torrc_path) as f:
             content = f.read()
         
@@ -226,26 +242,39 @@ class TestQuadletFiles:
 
 class TestScripts:
     """Test helper scripts"""
+
+    def assert_script_location(self, filename):
+        script_path = os.path.join(REPO_DIR, 'scripts', filename)
+        assert os.path.exists(script_path)
+        assert os.access(script_path, os.X_OK)
+        legacy_path = os.path.join(REPO_DIR, filename)
+        assert os.path.islink(legacy_path)
     
     def test_compose_up_script_exists(self):
-        script_path = os.path.join(REPO_DIR, 'compose-up.sh')
-        assert os.path.exists(script_path)
-        assert os.access(script_path, os.X_OK)
+        self.assert_script_location('compose-up.sh')
     
     def test_compose_down_script_exists(self):
-        script_path = os.path.join(REPO_DIR, 'compose-down.sh')
-        assert os.path.exists(script_path)
-        assert os.access(script_path, os.X_OK)
+        self.assert_script_location('compose-down.sh')
     
     def test_verify_setup_script_exists(self):
-        script_path = os.path.join(REPO_DIR, 'verify-setup.sh')
-        assert os.path.exists(script_path)
-        assert os.access(script_path, os.X_OK)
+        self.assert_script_location('verify-setup.sh')
     
     def test_install_quadlets_script_exists(self):
-        script_path = os.path.join(REPO_DIR, 'install-quadlets.sh')
-        assert os.path.exists(script_path)
-        assert os.access(script_path, os.X_OK)
+        self.assert_script_location('install-quadlets.sh')
+
+
+class TestReleaseSkeleton:
+    """Test the requested release layout exists."""
+
+    def test_release_directories_exist(self):
+        for directory in ['src', 'include', 'containers', 'quadlets', 'tests', 'docs']:
+            path = os.path.join(REPO_DIR, directory)
+            assert os.path.isdir(path), f"{directory} should exist"
+
+    def test_release_files_exist(self):
+        for filename in ['container-compose.yml', 'install.sh', 'Pfyfile.pf']:
+            path = os.path.join(REPO_DIR, filename)
+            assert os.path.exists(path), f"{filename} should exist"
 
 
 class TestDocumentation:

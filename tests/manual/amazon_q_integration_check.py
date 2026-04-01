@@ -20,8 +20,9 @@ import argparse
 import tempfile
 from pathlib import Path
 
-# Add the current directory to Python path to import our module
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add the repository root to Python path to import our module
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))
 
 try:
     from amazon_q_integration import AmazonQReviewer
@@ -265,7 +266,7 @@ def test_configuration_loading():
     """Test configuration file loading."""
     print("🔍 Testing configuration loading...")
     
-    config_file = Path("amazon_q_config.yaml")
+    config_file = REPO_ROOT / "amazon_q_config.yaml"
     if not config_file.exists():
         print("⚠️  Configuration file not found (amazon_q_config.yaml)")
         return False

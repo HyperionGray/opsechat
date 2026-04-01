@@ -17,6 +17,7 @@ import datetime
 import secrets
 import threading
 import base64
+import binascii
 from flask import render_template, request, session, jsonify, Blueprint
 from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
@@ -54,6 +55,19 @@ ENC_PREFIX = "ENC:"
 # Allow encrypted payloads to be larger: AES-GCM adds IV (12 B) + tag (16 B)
 # overhead, so a 500-char plaintext becomes ~700 chars of base64 plus the prefix.
 MAX_ENC_MESSAGE_LENGTH = MAX_MESSAGE_LENGTH * 2
+
+COLOR_CLASS_NAMES = {
+    (255, 85, 85): "user-color-0",
+    (85, 170, 255): "user-color-1",
+    (85, 255, 85): "user-color-2",
+    (255, 170, 85): "user-color-3",
+    (255, 85, 255): "user-color-4",
+    (170, 85, 0): "user-color-5",
+    (255, 170, 255): "user-color-6",
+    (170, 170, 170): "user-color-7",
+    (170, 170, 0): "user-color-8",
+    (85, 255, 255): "user-color-9",
+}
 
 # Room class to manage chat state
 class ChatRoom:
@@ -323,7 +337,8 @@ def register_simple_chat_routes(app):
         return render_template("simple_chat_room.html", 
                              room_id=room_id,
                              username=session["username"],
-                             color=session["color"])
+                             color=session["color"],
+                             user_color_class=get_color_class_name(session["color"]))
     
     @app.route('/chat/room/<string:room_id>/messages', methods=['GET', 'POST'])
     @limiter.limit("60 per minute", methods=["POST"])
@@ -373,7 +388,7 @@ def register_simple_chat_routes(app):
                 # Validate that the payload looks like valid base64
                 try:
                     base64.b64decode(payload, validate=True)
-                except Exception:
+                except binascii.Error:
                     return jsonify({"error": "Invalid encrypted message format."}), 400
             else:
                 # Plain-text path: apply all sanitization and content checks
@@ -415,6 +430,7 @@ def register_simple_chat_routes(app):
                     {
                         "username": msg["username"],
                         "color": msg["color"],
+                        "color_class": get_color_class_name(msg["color"]),
                         "message": msg["message"],
                         "timestamp": msg["timestamp"].isoformat(),
                         "is_mine": msg["user_id"] == session.get("_id")
@@ -528,6 +544,11 @@ def generate_random_username():
              'Tiger', 'Falcon', 'Spider', 'Serpent', 'Dragon']
     number = secrets.randbelow(9999)
     return f"{secrets.choice(adjectives)}{secrets.choice(nouns)}{number:04d}"
+
+
+def get_color_class_name(color):
+    """Return the CSS class name for a known chat color."""
+    return COLOR_CLASS_NAMES.get(tuple(color), "")
 
 
 def get_random_color_rgb():

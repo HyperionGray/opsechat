@@ -115,7 +115,7 @@ def clean_compose():
     project_root = Path(__file__).parent.parent
     
     # Try compose-down.sh script first
-    compose_down_script = project_root / "compose-down.sh"
+    compose_down_script = project_root / "scripts" / "compose-down.sh"
     if compose_down_script.exists():
         print("[*] Using compose-down.sh script")
         run_command([str(compose_down_script)], cwd=project_root, check=False)

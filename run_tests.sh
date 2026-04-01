@@ -1,3 +1,3 @@
 #!/bin/bash
 cd /workspace
-python3 test_pf_tasks.py --verbose
+python3 tests/manual/pf_tasks_check.py --verbose
