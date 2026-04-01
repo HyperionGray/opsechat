@@ -90,8 +90,7 @@ python3 pf-tasks/test.py --skip-e2e
 - `monitoring.py` - `/health` payload generation
 - `docker-compose.yml` - local container deployment
 - `Dockerfile` - container build and app healthcheck
-- `tests/test_rate_limit_and_health.py` - health endpoint coverage
-- `tests/test_security_headers.py` - security header checks
+- `tests/test_rate_limit_and_health.py` - health endpoint and security header coverage
 - `tests/test_container_deployment.py` - deployment safety checks
 - `tests/basic.spec.js` - lightweight Playwright smoke tests
 
