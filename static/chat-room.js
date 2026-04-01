@@ -178,7 +178,7 @@ async function renderMessages(messages) {
 
         const usernameSpan = document.createElement('span');
         usernameSpan.className = 'username';
-        const colorClass = getUserColorClass(msg.color);
+        const colorClass = msg.color_class;
         if (colorClass) {
             usernameSpan.classList.add(colorClass);
         }
