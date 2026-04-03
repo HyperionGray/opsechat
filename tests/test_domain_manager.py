@@ -4,7 +4,7 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, NamecheapAPIClient, DomainRotationManager
 )
 
 
@@ -74,6 +74,37 @@ class TestPorkbunAPIClient:
         
         assert result["tld"] == "com"
         assert result["registration"] == "9.99"
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch("domain_manager.requests.Session")
+    def test_search_domain_available(self, mock_session_class):
+        """Test Namecheap availability search parsing"""
+        xml_payload = """<?xml version="1.0" encoding="utf-8"?>
+<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+  <CommandResponse Type="namecheap.domains.check">
+    <DomainCheckResult Domain="test123.xyz" Available="true" />
+  </CommandResponse>
+</ApiResponse>
+"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = xml_payload
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_key="test_key",
+            username="test_user",
+            client_ip="127.0.0.1",
+        )
+        result = client.search_domain("test123.xyz")
+
+        assert result["available"] is True
+        assert result["domain"] == "test123.xyz"
+        assert result["currency"] == "USD"
 
 
 class TestDomainRotationManager:
@@ -174,3 +205,32 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_find_cheap_available_domain_falls_back_to_second_registrar(self):
+        """Uses secondary registrar when primary has no available domain."""
+        primary = Mock(spec=DomainAPIClient)
+        primary.search_domain.return_value = {"available": False, "domain": "x.xyz", "price": None}
+
+        fallback = Mock(spec=DomainAPIClient)
+        fallback.search_domain.return_value = {"available": True, "domain": "x.xyz", "price": 1.99}
+
+        manager = DomainRotationManager(monthly_budget=20.0)
+        manager.add_api_client("porkbun", primary, make_active=True)
+        manager.add_api_client("namecheap", fallback)
+        manager.generate_random_domain = Mock(return_value="x.xyz")
+
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["domain"] == "x.xyz"
+        assert result["registrar"] == "namecheap"
+
+    def test_configure_and_get_config_for_porkbun(self):
+        """Configuration helper is available for route integration."""
+        manager = DomainRotationManager()
+        manager.configure(api_key="pk", secret_key="sk", monthly_budget=25.0)
+
+        config = manager.get_config()
+        assert config["active_registrar"] == "porkbun"
+        assert "porkbun" in config["configured_registrars"]
+        assert config["monthly_budget"] == 25.0

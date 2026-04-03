@@ -8,7 +8,7 @@ Opsechat supports automated domain purchasing for rotating burner email addresse
 
 ## Supported Registrars
 
-### Porkbun (Recommended)
+### Porkbun (Recommended Default)
 
 **Why Porkbun?**
 - Competitive pricing on cheap TLDs (.xyz from $1.99/yr)
@@ -59,14 +59,34 @@ Key endpoints used by opsechat:
 - `pricing/get` - Get TLD pricing
 - `domain/listAll` - List owned domains
 
-## Other Registrars (Future Support)
+### Namecheap (Supported)
+
+Namecheap support is now available in `domain_manager.py` via `NamecheapAPIClient` and can be used as either:
+
+- an explicitly selected registrar, or
+- an automatic fallback registrar when the primary registrar does not return an available low-cost domain.
+
+#### Namecheap requirements
+
+Namecheap API calls require:
+
+- API key
+- username (and optional `ApiUser`, usually the same as username)
+- whitelisted client IP
+
+Purchase calls also require registrant contact fields. The client supports this through a `default_contact` mapping.
+
+#### Namecheap API Documentation
+
+- Intro: [Namecheap API](https://www.namecheap.com/support/api/intro/)
+- Commands used:
+  - `namecheap.domains.check`
+  - `namecheap.users.getPricing`
+  - `namecheap.domains.create`
+
+## Additional Registrars (Future Support)
 
 The opsechat domain manager is designed to be extensible. Future registrar support may include:
-
-### Namecheap
-- API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
-- Cheap TLDs: .xyz, .club, .online
 
 ### Namesilo
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)
@@ -92,8 +112,7 @@ The opsechat domain manager is designed to be extensible. Future registrar suppo
    ```
 
 2. Under "Domain API Configuration":
-   - Enter your API Key
-   - Enter your API Secret
+   - Enter your registrar credentials (Porkbun or Namecheap)
    - Set monthly budget limit (recommended: start with $20-50)
 
 3. Click "Configure"
@@ -107,6 +126,11 @@ For container deployments, you can set:
 Environment=PORKBUN_API_KEY=pk1_xxxxx
 Environment=PORKBUN_API_SECRET=sk1_xxxxx
 Environment=DOMAIN_MONTHLY_BUDGET=50.0
+
+# Optional Namecheap values
+Environment=NAMECHEAP_API_KEY=nc_xxxxx
+Environment=NAMECHEAP_USERNAME=your_username
+Environment=NAMECHEAP_CLIENT_IP=1.2.3.4
 ```
 
 Then modify the runserver.py to read these on startup.
@@ -170,10 +194,11 @@ Solution:
 
 Possible causes:
 - All randomly generated domains are taken (rare)
-- API rate limiting
+- Registrar API rate limiting
 - Network connectivity issues
+- Registrar returned no check-time price and fallback pricing exceeded budget
 
-Solution: Try again after a few minutes
+Solution: Try again after a few minutes, or configure a secondary registrar for fallback.
 
 ### API Authentication Failed
 
