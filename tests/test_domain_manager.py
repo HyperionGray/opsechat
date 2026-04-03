@@ -1,7 +1,7 @@
 """
 Tests for domain management module
 """
-import pytest
+from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +174,74 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_export_and_load_state_round_trip(self):
+        """Test state export/import with datetime conversion"""
+        manager = DomainRotationManager(monthly_budget=25.0)
+        now = datetime.now()
+        manager.current_spending = 7.5
+        manager.active_domain = "active.xyz"
+        manager.owned_domains = [{
+            "domain": "active.xyz",
+            "price": 1.99,
+            "purchased_at": now,
+            "expires_at": now + timedelta(days=365),
+        }]
+
+        exported = manager.export_state()
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(exported["owned_domains"][0]["expires_at"], str)
+
+        reloaded = DomainRotationManager(monthly_budget=25.0)
+        reloaded.load_state(exported)
+
+        assert reloaded.current_spending == 7.5
+        assert reloaded.active_domain == "active.xyz"
+        assert isinstance(reloaded.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(reloaded.owned_domains[0]["expires_at"], datetime)
+
+    def test_prune_expired_domains_updates_active_domain(self):
+        """Expired domains should be removed and active domain updated."""
+        manager = DomainRotationManager(monthly_budget=25.0)
+        now = datetime.now()
+        manager.owned_domains = [
+            {
+                "domain": "expired.xyz",
+                "price": 1.99,
+                "purchased_at": now - timedelta(days=400),
+                "expires_at": now - timedelta(days=1),
+            },
+            {
+                "domain": "fresh.xyz",
+                "price": 2.49,
+                "purchased_at": now - timedelta(days=5),
+                "expires_at": now + timedelta(days=360),
+            },
+        ]
+        manager.active_domain = "expired.xyz"
+
+        removed = manager.prune_expired_domains(reference_time=now)
+
+        assert removed == 1
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["domain"] == "fresh.xyz"
+        assert manager.active_domain == "fresh.xyz"
+
+    def test_find_cheap_available_domain_skips_invalid_price(self):
+        """Invalid pricing responses should not raise and should be skipped."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.side_effect = [
+            {"available": True, "price": "not-a-number"},
+            {"available": True, "price": "$2.50"},
+        ]
+
+        manager = DomainRotationManager(mock_client)
+        with patch.object(
+            manager,
+            "generate_random_domain",
+            side_effect=["first.xyz", "second.club"],
+        ):
+            result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=2)
+
+        assert result is not None
+        assert result["price"] == 2.5

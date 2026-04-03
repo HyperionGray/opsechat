@@ -5,7 +5,7 @@ Welcome to the OpSecChat documentation. All documentation has been organized int
 ## Quick Links
 
 - **[Main README](../README.md)** - Start here for project overview
-- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes (TODO)
+- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes
 - **[Security](../SECURITY.md)** - Security information and best practices
 - **[License](../LICENSE.md)** - MIT License
 
@@ -73,7 +73,7 @@ Implementation details and summaries of major features.
 ### 🏗️ Architecture
 Architectural decisions and design documents.
 
-Currently empty - architectural decisions should be documented here as they are made.
+- [Domain Rotation Guide](../DOMAIN_ROTATION.md) - Domain lifecycle, budget behavior, and CLI/API flows
 
 ## Contributing to Documentation
 
