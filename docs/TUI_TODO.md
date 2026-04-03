@@ -29,20 +29,20 @@ This file tracks what needs to be done for the TUI chat system.
 ## 🔄 IN PROGRESS (Phase 2: Tor Integration)
 
 - [ ] Integrate Tor hidden service in TUI server
-  - [ ] Modify `src/tui/server.py` to support Tor
-  - [ ] Add ephemeral hidden service creation
-  - [ ] Display .onion address to share
-  - [ ] Handle Tor connection failures gracefully
+  - [x] Modify `src/tui/server.py` to support Tor
+  - [x] Add ephemeral hidden service creation
+  - [x] Display .onion address to share
+  - [x] Handle Tor connection failures gracefully
 - [ ] Update client for Tor connections
-  - [ ] Support connecting to .onion addresses
-  - [ ] Add SOCKS proxy support
-  - [ ] Connection status indicator
+  - [x] Support connecting to .onion addresses
+  - [x] Add SOCKS proxy support
+  - [x] Connection status indicator
 
 ## 📋 TODO (Phase 3: Security & OpSec)
 
 ### Security Enhancements
 - [ ] Add message sanitization improvements
-  - [ ] Better b64 detection
+  - [x] Better b64 detection
   - [ ] Unicode/emoji filtering (if needed)
   - [ ] URL detection and handling
 - [ ] Implement secure username sharing system
@@ -75,7 +75,7 @@ This file tracks what needs to be done for the TUI chat system.
   - [ ] Number of connected users
   - [ ] Time until message burn
 - [ ] Improve error handling
-  - [ ] Better error messages
+  - [x] Better error messages
   - [ ] Reconnection logic
   - [ ] Graceful degradation
 - [ ] Add TUI features
@@ -172,6 +172,7 @@ This file tracks what needs to be done for the TUI chat system.
 - ✅ Message overwriting on delete
 - ✅ Randomized usernames
 - ✅ Text-only validation
+- ✅ Structured protocol error responses for malformed/invalid client payloads
 - ⚠️ No E2E encryption yet (transport only via Tor)
 - ⚠️ No authentication (ephemeral by design)
 - ⚠️ No rate limiting yet
@@ -186,5 +187,5 @@ This file tracks what needs to be done for the TUI chat system.
 ---
 
 **Created**: 2026-02-26  
-**Last Updated**: 2026-02-26  
-**Status**: Phase 1 Complete, Phase 2 In Progress
+**Last Updated**: 2026-04-03  
+**Status**: Phase 2 mostly complete, Protocol validation improved

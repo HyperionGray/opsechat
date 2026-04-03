@@ -10,6 +10,7 @@ This is a serious privacy and opsec tool for serious privacy and opsec people. I
 ✅ **Privacy First** - All messages in-memory, burn after 4 minutes  
 ✅ **Randomized Usernames** - Server-assigned, no "Jerry Here" problem  
 ✅ **Text Only** - No images, no video, no b64 encoded garbage  
+✅ **Structured Protocol Errors** - Invalid/malformed client payloads get explicit server feedback  
 ✅ **Message Validation** - Max 1000 chars, prevents b64 image encoding  
 ✅ **Secure Deletion** - Messages overwritten before removal  
 ✅ **Zero Disk** - Nothing touches disk except the application code  
@@ -105,6 +106,14 @@ This prevents:
 - HTML/special characters stripped
 - Detects and rejects likely b64-encoded data
 - **No images, no video, no binary data**
+
+### Protocol Validation and Error Feedback
+The server now validates each newline-delimited JSON payload and returns explicit errors instead of silently dropping invalid input:
+- `invalid_json` for malformed JSON
+- `unsupported_type` for unknown payload types
+- `message_rejected` for invalid message content (empty, too long, or likely encoded binary)
+
+This improves debuggability and reduces confusing client behavior during bad input scenarios.
 
 ### Tor Integration
 

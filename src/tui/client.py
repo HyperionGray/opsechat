@@ -195,7 +195,7 @@ class ChatClient:
                             msg = json.loads(line)
                             self.handle_server_message(msg)
                         except json.JSONDecodeError:
-                            pass
+                            self.add_message("System", "Received malformed server response", is_system=True)
             
             except Exception as e:
                 if self.running:
@@ -217,6 +217,13 @@ class ChatClient:
             username = msg.get('username', 'Unknown')
             message = msg.get('message', '')
             self.add_message(username, message)
+
+        elif msg_type == 'error':
+            error_code = msg.get('error_code', 'unknown_error')
+            error_message = msg.get('message', 'Unknown server error')
+            self.add_message("System", f"Server rejected message ({error_code}): {error_message}", is_system=True)
+        else:
+            self.add_message("System", f"Received unknown server payload type: {msg_type}", is_system=True)
     
     def update_footer(self):
         """Update the footer with current username"""

@@ -25,7 +25,7 @@ from typing import Dict, List, Any, Optional
 # Message storage (in-memory only)
 class ChatServer:
     MAX_MESSAGE_LENGTH = 1000  # Prevent b64 encoded images
-    MESSAGE_LIFETIME = 180  # 3 minutes in seconds
+    MESSAGE_LIFETIME = 240  # 4 minutes in seconds
     
     def __init__(self, host='127.0.0.1', port=5555):
         self.host = host
@@ -72,25 +72,17 @@ class ChatServer:
             self.messages = new_messages
     
     def add_message(self, username: str, message: str) -> bool:
-        """Add a message to the chat (with validation)"""
-        # Validate message
-        if not message or len(message) > self.MAX_MESSAGE_LENGTH:
+        """
+        Add a message to the chat.
+
+        This convenience API keeps behavior consistent with the client protocol
+        path by using the shared validator/sanitizer.
+        """
+        is_valid, _, sanitized = self.validate_message(message)
+        if not is_valid:
             return False
-        
-        # Check for potential b64 encoded data (rough heuristic)
-        if len(message) > 500 and message.replace('=', '').isalnum():
-            return False  # Likely b64 encoded image/video
-        
-        # Strip any HTML/special chars
-        message = message.replace('<', '').replace('>', '').replace('&', '')
-        
-        with self.lock:
-            self.messages.append({
-                'username': username,
-                'message': message,
-                'timestamp': datetime.datetime.now()
-            })
-        
+
+        self._store_message(username, sanitized)
         return True
     
     def get_messages(self, since: datetime.datetime = None) -> List[Dict[str, Any]]:
@@ -113,7 +105,7 @@ class ChatServer:
             welcome = {
                 'type': 'welcome',
                 'username': username,
-                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
+                'message': f'Welcome! You are {username}. Messages burn in 4 minutes.'
             }
             client_socket.send((json.dumps(welcome) + '\n').encode())
             
@@ -140,17 +132,9 @@ class ChatServer:
                     while '\n' in buffer:
                         line, buffer = buffer.split('\n', 1)
                         if line:
-                            try:
-                                msg_obj = json.loads(line)
-                                if msg_obj.get('type') == 'message':
-                                    message = msg_obj.get('message', '')
-                                    if self.add_message(username, message):
-                                        # Broadcast to all clients
-                                        self.broadcast_message(username, message)
-                            except json.JSONDecodeError:
-                                pass
+                            self._handle_client_line(client_socket, username, line)
                 
-                except (OSError, socket.error) as e:
+                except (OSError, socket.error):
                     break
         
         finally:
@@ -188,6 +172,75 @@ class ChatServer:
                     client.close()
                 except (OSError, socket.error):
                     pass
+
+    def _store_message(self, username: str, message: str):
+        """Store a validated and sanitized message."""
+        with self.lock:
+            self.messages.append({
+                'username': username,
+                'message': message,
+                'timestamp': datetime.datetime.now()
+            })
+
+    def _send_protocol_error(self, client_socket: socket.socket, error_code: str, message: str):
+        """Send a structured protocol error to a client."""
+        payload = {
+            'type': 'error',
+            'error_code': error_code,
+            'message': message,
+        }
+        try:
+            client_socket.send((json.dumps(payload) + '\n').encode())
+        except (OSError, socket.error):
+            # Socket may already be closed by peer.
+            pass
+
+    def validate_message(self, message: Any) -> tuple[bool, str, str]:
+        """
+        Validate and sanitize an incoming message.
+
+        Returns:
+            tuple: (is_valid, rejection_reason, sanitized_message)
+        """
+        if not isinstance(message, str):
+            return False, "Message must be a string", ""
+
+        message = message.strip()
+        if not message:
+            return False, "Message cannot be empty", ""
+
+        if len(message) > self.MAX_MESSAGE_LENGTH:
+            return False, f"Message too long (max {self.MAX_MESSAGE_LENGTH} chars)", ""
+
+        # Reject likely base64/image payloads but avoid false positives for normal prose.
+        if len(message) > 500:
+            compact = message.replace('=', '')
+            whitespace_ratio = message.count(' ') / max(len(message), 1)
+            if compact.isalnum() and whitespace_ratio < 0.05:
+                return False, "Message appears to contain encoded binary data", ""
+
+        sanitized = message.replace('<', '').replace('>', '').replace('&', '')
+        return True, "", sanitized
+
+    def _handle_client_line(self, client_socket: socket.socket, username: str, line: str):
+        """Process one newline-delimited payload from a client."""
+        try:
+            msg_obj = json.loads(line)
+        except json.JSONDecodeError:
+            self._send_protocol_error(client_socket, "invalid_json", "Malformed JSON payload")
+            return
+
+        if msg_obj.get('type') != 'message':
+            self._send_protocol_error(client_socket, "unsupported_type", "Unsupported payload type")
+            return
+
+        is_valid, reason, sanitized = self.validate_message(msg_obj.get('message', ''))
+        if not is_valid:
+            self._send_protocol_error(client_socket, "message_rejected", reason)
+            return
+
+        self._store_message(username, sanitized)
+        self.broadcast_message(username, sanitized)
     
     def start(self):
         """Start the chat server"""
