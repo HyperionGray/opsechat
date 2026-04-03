@@ -8,7 +8,7 @@ OpSecChat supports automated domain rotation for burner email systems. This allo
 
 Currently supported:
 - **Porkbun** (Recommended - cheap .xyz, .club domains)
-- Additional registrars can be added by extending `DomainAPIClient`
+- **Namecheap** (supported in `domain_manager.py` and `domain_rotation_cli.py`)
 
 ## Setup
 
@@ -23,21 +23,37 @@ Currently supported:
    - API Key
    - API Secret Key
 
+#### Namecheap Setup
+
+1. Sign up at [namecheap.com](https://www.namecheap.com/)
+2. Request and enable API access:
+   - API docs and onboarding: https://www.namecheap.com/support/api/intro/
+   - Whitelist the calling `ClientIp` in Namecheap API settings
+3. Save:
+   - API User
+   - API Key
+   - Username (usually your account username; optional if same as API user)
+4. Prepare default contact profile fields for domain purchase (required by Namecheap):
+   - FirstName, LastName, Address1, City, StateProvince, PostalCode, Country, Phone, EmailAddress
+
 ### 2. Configure OpSecChat
 
-Add your credentials to the email configuration:
+Configure registrar credentials with the domain rotation CLI:
 
 ```bash
-# Via web interface
-1. Access http://your-onion-url/<secret-path>/email/config
-2. Scroll to "Domain Rotation Settings"
-3. Enter Porkbun API Key
-4. Enter Porkbun Secret Key
-5. Set Monthly Budget (e.g., $10)
-6. Save Configuration
+# Use CLI configuration flow
+python domain_rotation_cli.py config
+
+# Prompts include:
+# - registrar selection (porkbun/namecheap)
+# - credentials
+# - monthly budget
+# - optional Namecheap default contact profile
 ```
 
-Or via environment variables:
+Environment variables can still be used in deployment wrappers, but direct
+runtime wiring for Namecheap environment variables is not implemented in the
+web app route today:
 
 ```bash
 export PORKBUN_API_KEY="pk1_abc123..."
@@ -329,26 +345,12 @@ dig @8.8.8.8 yourdomain.xyz MX
 
 ### Multiple Registrars
 
-Add support for additional registrars:
+Namecheap and Porkbun are now supported implementations. To add further registrars,
+extend `DomainAPIClient` and implement:
 
-```python
-from domain_manager import DomainAPIClient
-
-class NamecheapAPIClient(DomainAPIClient):
-    def __init__(self, api_key: str):
-        super().__init__(api_key)
-    
-    def search_domain(self, domain: str):
-        # Implementation here
-        pass
-    
-    def purchase_domain(self, domain: str, years: int = 1):
-        # Implementation here
-        pass
-
-# Register new client
-domain_rotation_manager.add_api_client('namecheap', NamecheapAPIClient(api_key))
-```
+- `search_domain(domain)`
+- `purchase_domain(domain, years=1)`
+- `get_pricing(tld)`
 
 ### Custom Domain Patterns
 

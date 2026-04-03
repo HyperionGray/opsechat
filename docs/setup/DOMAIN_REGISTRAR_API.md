@@ -8,7 +8,7 @@ Opsechat supports automated domain purchasing for rotating burner email addresse
 
 ## Supported Registrars
 
-### Porkbun (Recommended)
+### Porkbun (Recommended for Simplicity)
 
 **Why Porkbun?**
 - Competitive pricing on cheap TLDs (.xyz from $1.99/yr)
@@ -59,14 +59,32 @@ Key endpoints used by opsechat:
 - `pricing/get` - Get TLD pricing
 - `domain/listAll` - List owned domains
 
-## Other Registrars (Future Support)
-
-The opsechat domain manager is designed to be extensible. Future registrar support may include:
-
 ### Namecheap
-- API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
-- Cheap TLDs: .xyz, .club, .online
+- API access: [Namecheap API Intro](https://www.namecheap.com/support/api/intro/)
+- Requires account API access and IP whitelist configuration
+- Supports availability checks, pricing lookup, and purchase flow through `NamecheapAPIClient`
+- The CLI supports selecting Namecheap (`registrar=namecheap`) and storing default contact profile fields needed for purchases
+
+#### Getting Namecheap API Access
+
+1. Enable API access on your Namecheap account
+2. Add your client IP address to Namecheap API whitelist
+3. Generate an API key and keep it secure
+4. Configure opsechat CLI:
+   ```bash
+   python domain_rotation_cli.py config
+   # Select registrar: namecheap
+   ```
+
+#### Namecheap Purchase Requirements
+
+Namecheap requires contact profile fields for registration.
+`NamecheapAPIClient.purchase_domain()` validates that these fields are present:
+
+- `FirstName`, `LastName`, `Address1`, `City`, `StateProvince`
+- `PostalCode`, `Country`, `Phone`, `EmailAddress`
+
+If any are missing, purchase is denied locally with a clear error message before any API call.
 
 ### Namesilo
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)
@@ -110,6 +128,8 @@ Environment=DOMAIN_MONTHLY_BUDGET=50.0
 ```
 
 Then modify the runserver.py to read these on startup.
+
+Note: Namecheap environment-based runtime wiring is not yet part of the web config route. Use the domain rotation CLI for Namecheap configuration today.
 
 ## Budget Management
 

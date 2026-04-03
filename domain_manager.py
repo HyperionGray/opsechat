@@ -6,10 +6,26 @@ import requests
 import random
 import string
 import logging
+import re
+import xml.etree.ElementTree as ET
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
+
+
+def _coerce_price(value: object, default: float = 999.0) -> float:
+    """Parse mixed price formats into a float for budget checks."""
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        cleaned = re.sub(r"[^0-9.]+", "", value)
+        if cleaned:
+            try:
+                return float(cleaned)
+            except ValueError:
+                return default
+    return default
 
 
 class DomainAPIClient:
@@ -121,6 +137,180 @@ class PorkbunAPIClient(DomainAPIClient):
         return []
 
 
+class NamecheapAPIClient(DomainAPIClient):
+    """
+    Namecheap API client for domain management.
+    API docs: https://www.namecheap.com/support/api/intro/
+    """
+
+    BASE_URL = "https://api.namecheap.com/xml.response"
+
+    def __init__(
+        self,
+        api_user: str,
+        api_key: str,
+        username: Optional[str] = None,
+        client_ip: str = "127.0.0.1",
+        default_contacts: Optional[Dict[str, str]] = None,
+    ):
+        super().__init__(api_key=api_key, api_secret=None)
+        self.api_user = api_user
+        self.username = username or api_user
+        self.client_ip = client_ip
+        self.default_contacts = default_contacts or {}
+        self.session = requests.Session()
+
+    def _make_request(self, command: str, data: Optional[Dict] = None) -> Dict:
+        """Make Namecheap XML API request and parse response metadata."""
+        params = {
+            "ApiUser": self.api_user,
+            "ApiKey": self.api_key,
+            "UserName": self.username,
+            "ClientIp": self.client_ip,
+            "Command": command,
+        }
+        if data:
+            params.update(data)
+
+        try:
+            response = self.session.get(self.BASE_URL, params=params, timeout=30)
+            response.raise_for_status()
+            root = ET.fromstring(response.text)
+            return {
+                "status": root.attrib.get("Status", "ERROR"),
+                "errors": [err.text or "" for err in root.findall(".//Errors/Error")],
+                "root": root,
+            }
+        except Exception as e:
+            logger.error(f"Namecheap API request failed: {e}")
+            return {"status": "ERROR", "errors": [str(e)], "root": None}
+
+    def _extract_tld_price(self, root: Optional[ET.Element], tld: str) -> Optional[str]:
+        """Extract first-year price for a TLD from pricing response XML."""
+        if root is None:
+            return None
+        normalized_tld = tld.lower().lstrip(".")
+        for product in root.findall(".//Product"):
+            if product.attrib.get("Name", "").lower() != normalized_tld:
+                continue
+            for price in product.findall(".//Price"):
+                if price.attrib.get("Duration") == "1":
+                    return price.attrib.get("YourPrice")
+        return None
+
+    def _get_action_price(self, tld: str, action_name: str) -> Optional[str]:
+        """Get a TLD price for one Namecheap pricing action."""
+        result = self._make_request(
+            "namecheap.users.getPricing",
+            {
+                "ProductType": "DOMAIN",
+                "ProductCategory": "DOMAINS",
+                "ActionName": action_name,
+            },
+        )
+        if result.get("status") != "OK":
+            return None
+        return self._extract_tld_price(result.get("root"), tld)
+
+    def search_domain(self, domain: str) -> Dict:
+        """Check if domain is available on Namecheap."""
+        result = self._make_request(
+            "namecheap.domains.check",
+            {"DomainList": domain},
+        )
+        root = result.get("root")
+        domain_result = root.find(".//DomainCheckResult") if root is not None else None
+        available = False
+        if domain_result is not None:
+            available = domain_result.attrib.get("Available", "false").lower() == "true"
+
+        price = None
+        tld = domain.rsplit(".", 1)[-1]
+        if available:
+            premium_price = (
+                domain_result.attrib.get("PremiumRegistrationPrice")
+                if domain_result is not None
+                else None
+            )
+            if premium_price and _coerce_price(premium_price, default=0.0) > 0.0:
+                price = premium_price
+            else:
+                pricing = self.get_pricing(tld)
+                price = pricing.get("registration")
+
+        return {
+            "domain": domain,
+            "available": available,
+            "price": price,
+            "currency": "USD",
+            "message": "; ".join(result.get("errors", [])),
+            "registrar": "namecheap",
+        }
+
+    def purchase_domain(self, domain: str, years: int = 1) -> Dict:
+        """
+        Purchase domain via Namecheap.
+        Requires contact details in default_contacts.
+        """
+        required_fields = {
+            "FirstName",
+            "LastName",
+            "Address1",
+            "City",
+            "StateProvince",
+            "PostalCode",
+            "Country",
+            "Phone",
+            "EmailAddress",
+        }
+        missing_fields = sorted(required_fields - set(self.default_contacts.keys()))
+        if missing_fields:
+            return {
+                "success": False,
+                "domain": domain,
+                "message": (
+                    "Namecheap purchase requires contact details in default_contacts. "
+                    f"Missing fields: {', '.join(missing_fields)}"
+                ),
+            }
+
+        payload = {
+            "DomainName": domain,
+            "Years": years,
+            "AddFreeWhoisguard": "yes",
+            "WGEnabled": "yes",
+        }
+        for prefix in ("Registrant", "Tech", "Admin", "AuxBilling"):
+            for field in required_fields:
+                payload[f"{prefix}{field}"] = self.default_contacts[field]
+
+        result = self._make_request("namecheap.domains.create", payload)
+        root = result.get("root")
+        create_result = root.find(".//DomainCreateResult") if root is not None else None
+        success = result.get("status") == "OK" and create_result is not None
+        return {
+            "success": success,
+            "domain": domain,
+            "message": "; ".join(result.get("errors", [])),
+            "order_id": create_result.attrib.get("OrderID") if create_result is not None else None,
+        }
+
+    def get_pricing(self, tld: str) -> Dict:
+        """Get registration, renewal, and transfer prices for a TLD."""
+        registration = self._get_action_price(tld, "REGISTER")
+        renewal = self._get_action_price(tld, "RENEW")
+        transfer = self._get_action_price(tld, "TRANSFER")
+        if not any((registration, renewal, transfer)):
+            return {}
+        return {
+            "tld": tld.lstrip("."),
+            "registration": registration,
+            "renewal": renewal,
+            "transfer": transfer,
+            "currency": "USD",
+        }
+
+
 class DomainRotationManager:
     """
     Manage domain rotation for burner emails
@@ -168,11 +358,7 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
+                price = _coerce_price(result.get("price", 999), default=999.0)
                 
                 if price <= max_price:
                     return {
