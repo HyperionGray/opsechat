@@ -3,6 +3,7 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime, timedelta
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -174,3 +175,82 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_serialize_state_converts_datetimes(self):
+        """State serialization should produce JSON-safe timestamp strings."""
+        manager = DomainRotationManager(monthly_budget=25.0)
+        now = datetime.now()
+        manager.current_spending = 3.5
+        manager.owned_domains = [{
+            "domain": "persisted.xyz",
+            "price": 2.25,
+            "purchased_at": now,
+            "expires_at": now + timedelta(days=365),
+        }]
+        manager.active_domain = "persisted.xyz"
+
+        state = manager.serialize_state()
+
+        assert state["current_spending"] == 3.5
+        assert state["active_domain"] == "persisted.xyz"
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(state["owned_domains"][0]["expires_at"], str)
+
+    def test_load_state_normalizes_legacy_datetime_strings(self):
+        """Loading state should normalize legacy JSON data to datetime objects."""
+        manager = DomainRotationManager(monthly_budget=40.0)
+        state = {
+            "current_spending": "4.75",
+            "active_domain": "legacy.xyz",
+            "owned_domains": [{
+                "domain": "legacy.xyz",
+                "price": "$1.99",
+                "purchased_at": "2026-03-01T12:00:00",
+                "expires_at": "2027-03-01T12:00:00Z",
+            }],
+        }
+
+        manager.load_state(state)
+
+        assert manager.current_spending == 4.75
+        assert manager.active_domain == "legacy.xyz"
+        assert manager.owned_domains[0]["price"] == 1.99
+        assert isinstance(manager.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(manager.owned_domains[0]["expires_at"], datetime)
+
+    def test_load_state_reconciles_missing_active_domain(self):
+        """Invalid active domain should be reconciled to first owned domain."""
+        manager = DomainRotationManager()
+        manager.load_state({
+            "active_domain": "missing.xyz",
+            "owned_domains": [{"domain": "first.xyz", "price": 1.0}],
+        })
+
+        assert manager.active_domain == "first.xyz"
+
+    def test_prune_expired_domains_updates_active_domain(self):
+        """Pruning should remove expired domains and keep active domain valid."""
+        manager = DomainRotationManager()
+        now = datetime.now()
+        manager.owned_domains = [
+            {
+                "domain": "expired.xyz",
+                "price": 1.0,
+                "purchased_at": now - timedelta(days=400),
+                "expires_at": now - timedelta(days=1),
+            },
+            {
+                "domain": "valid.xyz",
+                "price": 2.0,
+                "purchased_at": now - timedelta(days=5),
+                "expires_at": now + timedelta(days=360),
+            },
+        ]
+        manager.active_domain = "expired.xyz"
+
+        removed = manager.prune_expired_domains(now=now)
+
+        assert removed == 1
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["domain"] == "valid.xyz"
+        assert manager.active_domain == "valid.xyz"
