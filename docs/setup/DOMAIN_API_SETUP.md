@@ -167,15 +167,39 @@ Enterprise-focused with comprehensive API.
    - Click "Generate New Burner"
    - System automatically creates domain if needed
 
-2. **Monitor Usage**
+2. **Sync Local CLI State (Recommended)**
+   - Run:
+     ```bash
+     python domain_rotation_cli.py sync
+     ```
+   - This reconciles locally tracked domains with domains currently owned in
+     the registrar account.
+   - Useful after restarts or if domains were bought outside the CLI.
+
+3. **Monitor Usage**
    - Check budget status in configuration
    - Monitor domain expiration times
    - Review spending in registrar dashboard
 
-3. **Rotate Domains**
+4. **Rotate Domains**
    - Click "Rotate Domain" for new domain
    - Old domains expire automatically
    - Budget tracking prevents overspending
+
+### CLI State Persistence
+
+The domain CLI stores local state in:
+
+`~/.opsechat/domain_config.json`
+
+Stored state includes:
+- `current_spending`
+- `active_domain`
+- `owned_domains` (with ISO datetime strings)
+
+Datetime and price fields are normalized when loaded, and written in JSON-safe
+format when saved. This prevents crashes from non-serializable datetime objects
+and keeps legacy config entries compatible.
 
 ### Maintenance
 

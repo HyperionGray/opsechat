@@ -69,6 +69,7 @@ python domain_rotation_cli.py config    # Configure API
 python domain_rotation_cli.py status    # Check status
 python domain_rotation_cli.py search    # Find domains
 python domain_rotation_cli.py rotate    # Buy new domain
+python domain_rotation_cli.py sync      # Reconcile with registrar state
 python domain_rotation_cli.py list      # List owned
 ```
 

@@ -2,6 +2,7 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +175,50 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_serialize_owned_domains_datetime_roundtrip(self):
+        """Owned domains should be JSON-safe and parse back cleanly."""
+        manager = DomainRotationManager()
+        manager.owned_domains = [{
+            "domain": "example.xyz",
+            "price": "$2.99",
+            "purchased_at": "2026-04-01T12:30:00",
+            "expires_at": "2027-04-01T12:30:00",
+        }]
+
+        normalized = manager.normalize_owned_domains(manager.owned_domains)
+        manager.owned_domains = normalized
+        serialized = manager.serialize_owned_domains()
+
+        assert serialized[0]["domain"] == "example.xyz"
+        assert serialized[0]["price"] == 2.99
+        assert isinstance(serialized[0]["purchased_at"], str)
+        assert isinstance(serialized[0]["expires_at"], str)
+
+        reloaded = manager.normalize_owned_domains(serialized)
+        assert isinstance(reloaded[0]["purchased_at"], datetime)
+        assert isinstance(reloaded[0]["expires_at"], datetime)
+
+    def test_sync_owned_domains_adds_registrar_missing_domains(self):
+        """Sync should add registrar-owned domains to local tracked state."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.list_domains.return_value = ["registrar.xyz", "already.xyz"]
+
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        manager.owned_domains = [{
+            "domain": "already.xyz",
+            "price": 1.99,
+            "purchased_at": datetime.now(),
+            "expires_at": datetime.now(),
+            "source": "purchase",
+        }]
+        manager.active_domain = None
+
+        result = manager.sync_owned_domains()
+
+        assert result["success"] is True
+        assert "registrar.xyz" in result["added_domains"]
+        tracked_domains = {d["domain"] for d in manager.owned_domains}
+        assert "already.xyz" in tracked_domains
+        assert "registrar.xyz" in tracked_domains
+        assert manager.active_domain == "registrar.xyz"

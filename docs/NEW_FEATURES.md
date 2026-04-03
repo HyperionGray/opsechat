@@ -255,6 +255,25 @@ Purchasing domain...
 ✅ Successfully purchased and activated: n5x8q2k7.xyz
 ```
 
+#### Sync Local State with Registrar
+```bash
+python domain_rotation_cli.py sync
+
+Output:
+=== Domain Sync ===
+
+Registrar domains: 4
+Added to local state: 1
+Local-only tracked domains: 2
+Total tracked domains: 5
+Active domain: n5x8q2k7.xyz
+
+Newly tracked domains:
+  - imported-from-registrar.xyz
+
+✅ Domain sync complete.
+```
+
 #### List Owned Domains
 ```bash
 python domain_rotation_cli.py list
@@ -266,11 +285,13 @@ Output:
    Price: $2.99
    Purchased: 2026-03-01 14:23
    Expires: 2027-03-01
+   Source: purchase
 
 2. n5x8q2k7.xyz [ACTIVE]
    Price: $0.99
    Purchased: 2026-03-02 10:15
    Expires: 2027-03-02
+   Source: purchase
 ```
 
 ### Integration with Burner Email
@@ -285,6 +306,7 @@ After rotating domains, update your email configuration:
 - CLI tracks spending automatically
 - Prevents purchases that would exceed budget
 - Resets monthly (manual reset required)
+- Domain purchase state is now persisted as JSON-safe timestamps and can be recovered safely across restarts
 
 ---
 

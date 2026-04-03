@@ -33,6 +33,10 @@ class DomainAPIClient:
         """Get pricing for TLD"""
         raise NotImplementedError
 
+    def list_domains(self) -> List[str]:
+        """List domains owned in registrar account"""
+        raise NotImplementedError
+
 
 class PorkbunAPIClient(DomainAPIClient):
     """
@@ -138,6 +142,78 @@ class DomainRotationManager:
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+
+    @staticmethod
+    def _parse_datetime(value, fallback: datetime) -> datetime:
+        """Parse datetime values from config/API state."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                return fallback
+        return fallback
+
+    @staticmethod
+    def _to_float(value, fallback: float = 0.0) -> float:
+        """Convert number-like values to float safely."""
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            try:
+                cleaned = value.replace("$", "").replace("€", "").strip()
+                return float(cleaned)
+            except ValueError:
+                return fallback
+        return fallback
+
+    def normalize_owned_domains(self, domains: List[Dict]) -> List[Dict]:
+        """
+        Normalize owned domain entries loaded from config.
+        Ensures datetime fields are datetime objects and price is numeric.
+        """
+        normalized = []
+        now = datetime.now()
+
+        for domain_entry in domains:
+            domain_name = domain_entry.get("domain")
+            if not domain_name:
+                continue
+
+            purchased_at = self._parse_datetime(
+                domain_entry.get("purchased_at"),
+                now
+            )
+            expires_at = self._parse_datetime(
+                domain_entry.get("expires_at"),
+                purchased_at + timedelta(days=365)
+            )
+
+            normalized.append({
+                "domain": domain_name,
+                "price": self._to_float(domain_entry.get("price"), fallback=0.0),
+                "purchased_at": purchased_at,
+                "expires_at": expires_at,
+                "source": domain_entry.get("source", "local")
+            })
+
+        return normalized
+
+    def serialize_owned_domains(self) -> List[Dict]:
+        """Serialize owned domains to JSON-safe dictionaries."""
+        serialized = []
+
+        for domain_entry in self.normalize_owned_domains(self.owned_domains):
+            serialized.append({
+                "domain": domain_entry["domain"],
+                "price": domain_entry["price"],
+                "purchased_at": domain_entry["purchased_at"].isoformat(),
+                "expires_at": domain_entry["expires_at"].isoformat(),
+                "source": domain_entry.get("source", "local")
+            })
+
+        return serialized
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -203,11 +279,13 @@ class DomainRotationManager:
         
         if result.get("success"):
             self.current_spending += price
+            now = datetime.now()
             self.owned_domains.append({
                 "domain": domain,
                 "price": price,
-                "purchased_at": datetime.now(),
-                "expires_at": datetime.now() + timedelta(days=365)
+                "purchased_at": now,
+                "expires_at": now + timedelta(days=365),
+                "source": "purchase"
             })
             
             # Set as active if no active domain
@@ -219,6 +297,71 @@ class DomainRotationManager:
         else:
             logger.error(f"Failed to purchase domain: {result.get('message')}")
             return False
+
+    def sync_owned_domains(self) -> Dict:
+        """
+        Sync locally tracked domains with registrar account state.
+        Adds missing registrar domains into local state.
+        """
+        if not self.api_client:
+            logger.error("No API client configured")
+            return {"success": False, "message": "No API client configured"}
+
+        if not hasattr(self.api_client, "list_domains"):
+            logger.error("API client does not support domain listing")
+            return {"success": False, "message": "API client does not support list_domains"}
+
+        try:
+            registrar_domains = self.api_client.list_domains()
+        except Exception as exc:
+            logger.error(f"Domain sync failed: {exc}")
+            return {"success": False, "message": str(exc)}
+
+        registrar_domains = list(dict.fromkeys(registrar_domains))
+        existing_by_domain = {
+            domain_entry["domain"]: domain_entry
+            for domain_entry in self.normalize_owned_domains(self.owned_domains)
+        }
+
+        now = datetime.now()
+        added_domains = []
+
+        for domain_name in registrar_domains:
+            if domain_name not in existing_by_domain:
+                existing_by_domain[domain_name] = {
+                    "domain": domain_name,
+                    "price": 0.0,
+                    "purchased_at": now,
+                    "expires_at": now + timedelta(days=365),
+                    "source": "registrar_sync"
+                }
+                added_domains.append(domain_name)
+
+        merged_domains = []
+        registrar_set = set(registrar_domains)
+
+        for domain_name in registrar_domains:
+            merged_domains.append(existing_by_domain[domain_name])
+
+        local_only_count = 0
+        for domain_name, domain_entry in existing_by_domain.items():
+            if domain_name not in registrar_set:
+                merged_domains.append(domain_entry)
+                local_only_count += 1
+
+        self.owned_domains = merged_domains
+
+        if (not self.active_domain or self.active_domain not in existing_by_domain) and registrar_domains:
+            self.active_domain = registrar_domains[0]
+
+        return {
+            "success": True,
+            "registrar_domains": len(registrar_domains),
+            "added_domains": added_domains,
+            "local_only_domains": local_only_count,
+            "total_tracked": len(self.owned_domains),
+            "active_domain": self.active_domain
+        }
     
     def rotate_domain(self) -> Optional[str]:
         """

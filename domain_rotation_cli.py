@@ -9,6 +9,7 @@ Usage:
     python domain_rotation_cli.py list          # List owned domains
     python domain_rotation_cli.py search        # Search for available cheap domains
     python domain_rotation_cli.py rotate        # Rotate to a new domain
+    python domain_rotation_cli.py sync          # Sync local state with registrar domains
     python domain_rotation_cli.py status        # Show budget status
     python domain_rotation_cli.py config        # Configure API credentials
 """
@@ -109,10 +110,10 @@ def get_manager():
     )
     
     # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+    if "current_spending" in config:
+        manager.current_spending = float(config["current_spending"])
+    if config.get("owned_domains"):
+        manager.owned_domains = manager.normalize_owned_domains(config["owned_domains"])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,18 +123,18 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = manager.serialize_owned_domains()
     config['active_domain'] = manager.active_domain
     save_config(config)
 
 
 def list_domains():
     """List owned domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Owned Domains ===\n")
     
-    domains = manager.get_owned_domains()
+    domains = manager.normalize_owned_domains(manager.get_owned_domains())
     
     if not domains:
         print("No domains owned yet.")
@@ -146,12 +147,13 @@ def list_domains():
         print(f"   Price: ${domain['price']}")
         print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
         print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Source: {domain.get('source', 'local')}")
         print()
 
 
 def search_domains():
     """Search for available cheap domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
     print("Searching for domains under $5...\n")
@@ -213,9 +215,36 @@ def rotate_domain():
         print("\n❌ Failed to purchase domain. Check API credentials and budget.")
 
 
+def sync_domains():
+    """Sync local tracked domains with registrar account domains."""
+    manager, config = get_manager()
+
+    print("\n=== Domain Sync ===\n")
+    result = manager.sync_owned_domains()
+
+    if not result.get("success"):
+        print(f"❌ Domain sync failed: {result.get('message', 'unknown error')}")
+        return
+
+    added_domains = result.get("added_domains", [])
+    print(f"Registrar domains: {result['registrar_domains']}")
+    print(f"Added to local state: {len(added_domains)}")
+    print(f"Local-only tracked domains: {result['local_only_domains']}")
+    print(f"Total tracked domains: {result['total_tracked']}")
+    print(f"Active domain: {result.get('active_domain') or 'None'}")
+
+    if added_domains:
+        print("\nNewly tracked domains:")
+        for domain in added_domains:
+            print(f"  - {domain}")
+
+    save_manager_state(manager, config)
+    print("\n✅ Domain sync complete.")
+
+
 def show_status():
     """Show current status"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Domain Rotation Status ===\n")
     
@@ -244,13 +273,14 @@ Examples:
   python domain_rotation_cli.py status     # Show current status
   python domain_rotation_cli.py search     # Search for available domains
   python domain_rotation_cli.py rotate     # Rotate to a new domain
+  python domain_rotation_cli.py sync       # Sync domains from registrar
   python domain_rotation_cli.py list       # List owned domains
         """
     )
     
     parser.add_argument(
         'command',
-        choices=['config', 'status', 'search', 'rotate', 'list'],
+        choices=['config', 'status', 'search', 'rotate', 'sync', 'list'],
         help='Command to execute'
     )
     
@@ -264,6 +294,8 @@ Examples:
         search_domains()
     elif args.command == 'rotate':
         rotate_domain()
+    elif args.command == 'sync':
+        sync_domains()
     elif args.command == 'list':
         list_domains()
 
