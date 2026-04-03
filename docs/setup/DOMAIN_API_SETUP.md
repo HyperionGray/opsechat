@@ -112,9 +112,10 @@ Enterprise-focused with comprehensive API.
 ### API Key Security
 
 **Storage:**
-- API keys are stored in memory only
-- Never written to disk or logs
-- Cleared when application restarts
+- Web app/API runtime should treat credentials as sensitive secrets
+- Domain rotation CLI stores credentials in `~/.opsechat/domain_config.json`
+- CLI config file is written with restrictive permissions (`0600`)
+- Never commit API keys to git or paste real values in logs
 
 **Access:**
 - Keys only accessible to authenticated users
@@ -233,7 +234,7 @@ Enterprise-focused with comprehensive API.
 - Monitor auto-renewal settings
 
 **Budget tracking inaccurate**
-- Budget resets monthly, not rolling
+- Verify local CLI state in `~/.opsechat/domain_config.json`
 - Check registrar account for actual spending
 - Consider API rate limits affecting purchases
 
@@ -270,7 +271,7 @@ Enterprise-focused with comprehensive API.
 
 3. **Limit Exposure**
    - Only configure API access when needed
-   - Clear configuration when not in use
+   - Restrict file permissions on local config storage
    - Use separate registrar account for opsechat
 
 ### Operational Best Practices
