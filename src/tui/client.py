@@ -17,6 +17,7 @@ import sys
 import socket
 import json
 import threading
+import re
 import urwid
 import socks  # PySocks for SOCKS proxy support
 
@@ -56,6 +57,7 @@ class ChatClient:
         self.tor_port = tor_port
         self.socket = None
         self.username = "Unknown"
+        self.current_room = "lobby"
         self.running = False
         self.message_buffer = ""
         
@@ -85,10 +87,15 @@ class ChatClient:
         footer_text = [
             ('info', 'Enter'),
             ': Send | ',
+            ('info', '/join <room>'),
+            ': Switch room | ',
             ('info', 'Ctrl+C'),
             ': Quit | ',
             ('warn', 'Your username: '),
-            ('username', self.username)
+            ('username', self.username),
+            ' | ',
+            ('warn', 'Room: '),
+            ('username', self.current_room)
         ]
         footer = urwid.AttrMap(urwid.Text(footer_text), 'footer')
         
@@ -151,6 +158,11 @@ class ChatClient:
         # Limit message history (memory management)
         if len(self.messages_walker) > 200:
             self.messages_walker.pop(0)
+
+    def clear_messages(self):
+        """Clear visible message history in the current view."""
+        while self.messages_walker:
+            self.messages_walker.pop()
     
     def connect(self):
         """Connect to the chat server"""
@@ -195,7 +207,7 @@ class ChatClient:
                             msg = json.loads(line)
                             self.handle_server_message(msg)
                         except json.JSONDecodeError:
-                            pass
+                            self.add_message("System", "Ignored malformed server payload.", is_system=True)
             
             except Exception as e:
                 if self.running:
@@ -209,6 +221,7 @@ class ChatClient:
         
         if msg_type == 'welcome':
             self.username = msg.get('username', 'Unknown')
+            self.current_room = msg.get('room', 'lobby')
             self.update_footer()
             welcome_msg = msg.get('message', 'Welcome!')
             self.add_message("System", welcome_msg, is_system=True)
@@ -217,16 +230,30 @@ class ChatClient:
             username = msg.get('username', 'Unknown')
             message = msg.get('message', '')
             self.add_message(username, message)
+
+        elif msg_type == 'system':
+            self.add_message("System", msg.get('message', ''), is_system=True)
+
+        elif msg_type == 'room_joined':
+            self.current_room = msg.get('room', self.current_room)
+            self.update_footer()
+            self.clear_messages()
+            self.add_message("System", msg.get('message', f"Joined room '{self.current_room}'."), is_system=True)
     
     def update_footer(self):
         """Update the footer with current username"""
         footer_text = [
             ('info', 'Enter'),
             ': Send | ',
+            ('info', '/join <room>'),
+            ': Switch room | ',
             ('info', 'Ctrl+C'),
             ': Quit | ',
             ('warn', 'Your username: '),
-            ('username', self.username)
+            ('username', self.username),
+            ' | ',
+            ('warn', 'Room: '),
+            ('username', self.current_room)
         ]
         footer = urwid.AttrMap(urwid.Text(footer_text), 'footer')
         self.frame.footer = footer
@@ -249,13 +276,49 @@ class ChatClient:
             self.socket.send((json.dumps(msg_obj) + '\n').encode())
         except Exception as e:
             self.add_message("System", f"Failed to send: {e}", is_system=True)
+
+    def send_join_room(self, room_name):
+        """Request room switch from the server."""
+        if not self.socket:
+            return
+
+        normalized = room_name.strip().lower()
+        if not re.fullmatch(r"[a-z0-9_-]{1,32}", normalized):
+            self.add_message(
+                "System",
+                "Invalid room. Use 1-32 chars: a-z, 0-9, _ or -.",
+                is_system=True
+            )
+            return
+
+        try:
+            msg_obj = {
+                'type': 'join_room',
+                'room': normalized
+            }
+            self.socket.send((json.dumps(msg_obj) + '\n').encode())
+        except Exception as e:
+            self.add_message("System", f"Failed to switch room: {e}", is_system=True)
     
     def handle_input(self, key):
         """Handle keyboard input"""
         if key == 'enter':
             message = self.input_box.get_edit_text()
             if message.strip():
-                self.send_message(message.strip())
+                trimmed = message.strip()
+                if trimmed.startswith("/join "):
+                    room_name = trimmed[6:].strip()
+                    self.send_join_room(room_name)
+                elif trimmed == "/room":
+                    self.add_message("System", f"Current room: {self.current_room}", is_system=True)
+                elif trimmed == "/help":
+                    self.add_message(
+                        "System",
+                        "Commands: /join <room>, /room, /help",
+                        is_system=True
+                    )
+                else:
+                    self.send_message(trimmed)
                 self.input_box.set_edit_text("")
             return
         

@@ -20,6 +20,7 @@ import secrets
 import threading
 import socket
 import json
+import re
 from typing import Dict, List, Any, Optional
 
 # Message storage (in-memory only)
@@ -32,9 +33,12 @@ class ChatServer:
         self.port = port
         self.messages: List[Dict[str, Any]] = []
         self.clients: Dict[socket.socket, str] = {}
+        self.client_rooms: Dict[socket.socket, str] = {}
         self.lock = threading.Lock()
         self.server_socket = None
         self.running = False
+        self._is_stopped = False
+        self.stop_event = threading.Event()
         
         # Start cleanup thread
         self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
@@ -49,8 +53,11 @@ class ChatServer:
     
     def _cleanup_loop(self):
         """Continuously clean up old messages"""
-        while True:
-            time.sleep(10)  # Check every 10 seconds
+        while not self.stop_event.is_set():
+            # Wait with timeout so shutdown can interrupt quickly.
+            self.stop_event.wait(10)
+            if self.stop_event.is_set():
+                break
             self._cleanup_old_messages()
     
     def _cleanup_old_messages(self):
@@ -70,8 +77,31 @@ class ChatServer:
                     msg['username'] = 'X' * len(msg['username'])
             
             self.messages = new_messages
+
+    def normalize_room_name(self, room_name: str) -> Optional[str]:
+        """Validate and normalize a room name."""
+        if not isinstance(room_name, str):
+            return None
+        normalized = room_name.strip().lower()
+        if not re.fullmatch(r"[a-z0-9_-]{1,32}", normalized):
+            return None
+        return normalized
+
+    def get_client_room(self, client_socket: socket.socket) -> str:
+        """Get a client's current room, defaulting to lobby."""
+        with self.lock:
+            return self.client_rooms.get(client_socket, 'lobby')
+
+    def set_client_room(self, client_socket: socket.socket, room_name: str) -> Optional[str]:
+        """Set a client's room. Returns normalized room or None if invalid."""
+        normalized = self.normalize_room_name(room_name)
+        if not normalized:
+            return None
+        with self.lock:
+            self.client_rooms[client_socket] = normalized
+        return normalized
     
-    def add_message(self, username: str, message: str) -> bool:
+    def add_message(self, username: str, message: str, room: str = 'lobby') -> bool:
         """Add a message to the chat (with validation)"""
         # Validate message
         if not message or len(message) > self.MAX_MESSAGE_LENGTH:
@@ -86,6 +116,7 @@ class ChatServer:
         
         with self.lock:
             self.messages.append({
+                'room': room,
                 'username': username,
                 'message': message,
                 'timestamp': datetime.datetime.now()
@@ -93,13 +124,44 @@ class ChatServer:
         
         return True
     
-    def get_messages(self, since: datetime.datetime = None) -> List[Dict[str, Any]]:
-        """Get messages (optionally since a specific time)"""
+    def get_messages(self, since: datetime.datetime = None, room: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get messages optionally filtered by timestamp and room."""
         with self.lock:
+            filtered = self.messages
+            if room is not None:
+                filtered = [msg for msg in filtered if msg.get('room', 'lobby') == room]
             if since is None:
-                return self.messages.copy()
-            else:
-                return [msg for msg in self.messages if msg['timestamp'] > since]
+                return filtered.copy()
+            return [msg for msg in filtered if msg['timestamp'] > since]
+
+    def _send_json(self, client_socket: socket.socket, payload: Dict[str, Any]) -> bool:
+        """Send a JSON payload to one client."""
+        try:
+            client_socket.send((json.dumps(payload) + '\n').encode())
+            return True
+        except (OSError, socket.error):
+            return False
+
+    def send_system_message(self, client_socket: socket.socket, message: str):
+        """Send a system message to one client."""
+        self._send_json(client_socket, {
+            'type': 'system',
+            'message': message,
+            'timestamp': datetime.datetime.now().isoformat(),
+        })
+
+    def join_room(self, client_socket: socket.socket, requested_room: str) -> Optional[Dict[str, str]]:
+        """
+        Move a client to a room.
+        Returns a dict with old/new room names, or None for invalid names.
+        """
+        new_room = self.normalize_room_name(requested_room)
+        if not new_room:
+            return None
+        with self.lock:
+            old_room = self.client_rooms.get(client_socket, 'lobby')
+            self.client_rooms[client_socket] = new_room
+        return {'old_room': old_room, 'new_room': new_room}
     
     def handle_client(self, client_socket: socket.socket, addr):
         """Handle a client connection"""
@@ -107,26 +169,31 @@ class ChatServer:
         
         with self.lock:
             self.clients[client_socket] = username
+            self.client_rooms[client_socket] = 'lobby'
         
         try:
             # Send welcome message
             welcome = {
                 'type': 'welcome',
                 'username': username,
-                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
+                'room': 'lobby',
+                'message': f'Welcome! You are {username}. Messages burn in 3 minutes. Use /join <room> to switch rooms.'
             }
-            client_socket.send((json.dumps(welcome) + '\n').encode())
+            self._send_json(client_socket, welcome)
             
             # Send existing messages
-            messages = self.get_messages()
+            current_room = self.get_client_room(client_socket)
+            messages = self.get_messages(room=current_room)
             for msg in messages[-50:]:  # Last 50 messages
                 msg_data = {
                     'type': 'message',
+                    'room': msg.get('room', 'lobby'),
                     'username': msg['username'],
                     'message': msg['message'],
                     'timestamp': msg['timestamp'].isoformat()
                 }
-                client_socket.send((json.dumps(msg_data) + '\n').encode())
+                if not self._send_json(client_socket, msg_data):
+                    break
             
             # Handle incoming messages
             buffer = ""
@@ -142,30 +209,99 @@ class ChatServer:
                         if line:
                             try:
                                 msg_obj = json.loads(line)
-                                if msg_obj.get('type') == 'message':
+                                msg_type = msg_obj.get('type')
+                                if msg_type == 'join_room':
+                                    room_change = self.join_room(client_socket, msg_obj.get('room', ''))
+                                    if not room_change:
+                                        self.send_system_message(
+                                            client_socket,
+                                            "Invalid room. Use 1-32 chars: a-z, 0-9, _ or -."
+                                        )
+                                        continue
+
+                                    old_room = room_change['old_room']
+                                    new_room = room_change['new_room']
+                                    if old_room == new_room:
+                                        self.send_system_message(client_socket, f"Already in room '{new_room}'.")
+                                        continue
+
+                                    self._send_json(client_socket, {
+                                        'type': 'room_joined',
+                                        'room': new_room,
+                                        'previous_room': old_room,
+                                        'message': f"Joined room '{new_room}' (from '{old_room}').",
+                                        'timestamp': datetime.datetime.now().isoformat(),
+                                    })
+                                    recent_messages = self.get_messages(room=new_room)
+                                    for old_msg in recent_messages[-50:]:
+                                        self._send_json(client_socket, {
+                                            'type': 'message',
+                                            'room': old_msg.get('room', 'lobby'),
+                                            'username': old_msg['username'],
+                                            'message': old_msg['message'],
+                                            'timestamp': old_msg['timestamp'].isoformat()
+                                        })
+
+                                elif msg_type == 'message':
                                     message = msg_obj.get('message', '')
-                                    if self.add_message(username, message):
-                                        # Broadcast to all clients
-                                        self.broadcast_message(username, message)
+                                    # Backward-compatible text command for older clients.
+                                    if isinstance(message, str) and message.lower().startswith('/join '):
+                                        room_change = self.join_room(client_socket, message[6:].strip())
+                                        if not room_change:
+                                            self.send_system_message(
+                                                client_socket,
+                                                "Invalid room. Use 1-32 chars: a-z, 0-9, _ or -."
+                                            )
+                                            continue
+                                        old_room = room_change['old_room']
+                                        new_room = room_change['new_room']
+                                        if old_room == new_room:
+                                            self.send_system_message(client_socket, f"Already in room '{new_room}'.")
+                                            continue
+                                        self._send_json(client_socket, {
+                                            'type': 'room_joined',
+                                            'room': new_room,
+                                            'previous_room': old_room,
+                                            'message': f"Joined room '{new_room}' (from '{old_room}').",
+                                            'timestamp': datetime.datetime.now().isoformat(),
+                                        })
+                                        recent_messages = self.get_messages(room=new_room)
+                                        for old_msg in recent_messages[-50:]:
+                                            self._send_json(client_socket, {
+                                                'type': 'message',
+                                                'room': old_msg.get('room', 'lobby'),
+                                                'username': old_msg['username'],
+                                                'message': old_msg['message'],
+                                                'timestamp': old_msg['timestamp'].isoformat()
+                                            })
+                                        continue
+
+                                    room = self.get_client_room(client_socket)
+                                    if self.add_message(username, message, room=room):
+                                        # Broadcast to clients in the same room.
+                                        self.broadcast_message(username, message, room=room)
                             except json.JSONDecodeError:
-                                pass
+                                self.send_system_message(client_socket, "Ignored malformed JSON message.")
                 
-                except (OSError, socket.error) as e:
+                except (OSError, socket.error):
                     break
         
         finally:
             with self.lock:
                 if client_socket in self.clients:
                     del self.clients[client_socket]
+                if client_socket in self.client_rooms:
+                    del self.client_rooms[client_socket]
             try:
                 client_socket.close()
             except (OSError, socket.error):
                 pass
     
-    def broadcast_message(self, username: str, message: str):
-        """Broadcast a message to all connected clients"""
+    def broadcast_message(self, username: str, message: str, room: str = 'lobby'):
+        """Broadcast a message to clients in one room."""
         msg_data = {
             'type': 'message',
+            'room': room,
             'username': username,
             'message': message,
             'timestamp': datetime.datetime.now().isoformat()
@@ -175,6 +311,8 @@ class ChatServer:
         with self.lock:
             dead_clients = []
             for client_socket in list(self.clients.keys()):
+                if self.client_rooms.get(client_socket, 'lobby') != room:
+                    continue
                 try:
                     client_socket.send(msg_json.encode())
                 except (OSError, socket.error):
@@ -184,6 +322,8 @@ class ChatServer:
             for client in dead_clients:
                 if client in self.clients:
                     del self.clients[client]
+                if client in self.client_rooms:
+                    del self.client_rooms[client]
                 try:
                     client.close()
                 except (OSError, socket.error):
@@ -221,7 +361,11 @@ class ChatServer:
     
     def stop(self):
         """Stop the chat server"""
+        if self._is_stopped:
+            return
+        self._is_stopped = True
         self.running = False
+        self.stop_event.set()
         
         # Close all client connections
         with self.lock:
@@ -231,6 +375,7 @@ class ChatServer:
                 except (OSError, socket.error):
                     pass
             self.clients.clear()
+            self.client_rooms.clear()
         
         # Close server socket
         if self.server_socket:

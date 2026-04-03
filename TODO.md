@@ -239,6 +239,7 @@
 **Estimated:** 2-3 days
 
 ### 15. Additional Features (Future)
+- [x] TUI room switching and room-scoped broadcast (`/join <room>`, `/room`)
 - [ ] Multiple language support (i18n)
 - [ ] Video tutorials
 - [ ] In-app help system

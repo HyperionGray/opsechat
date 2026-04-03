@@ -53,6 +53,7 @@ Access the chat at `/chat` to create rooms and share with your contacts.
 - ✅ **Randomized Usernames** - Server-assigned, no reuse
 - ✅ **Text Only** - No images, videos, or encoded data
 - ✅ **In-Memory Only** - Zero disk writes
+- ✅ **Room Switching** - Use `/join <room>` for room-scoped broadcasts
 
 ### Quick Start (TUI)
 
@@ -62,6 +63,10 @@ python tui-server.py
 
 # Terminal 2: Connect client
 python tui-client.py
+
+# In-client commands
+/join team_alpha
+/room
 ```
 
 **With Tor:**

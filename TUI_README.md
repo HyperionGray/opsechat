@@ -140,6 +140,23 @@ sudo systemctl start tor
 - **No video**: Text only, no exceptions
 - **No b64 encoding**: Large base64-like strings are rejected
 
+## Room Switching (NEW)
+
+The TUI now supports lightweight room isolation.
+
+- Default room is `lobby`
+- Use `/join <room>` to switch rooms
+- Use `/room` to show your current room
+- Room names are normalized to lowercase and must match: `a-z`, `0-9`, `_`, `-` (1-32 chars)
+- You only receive broadcasts from your current room
+
+Example:
+
+```text
+/join team_alpha
+/room
+```
+
 ## Architecture
 
 ```
@@ -245,7 +262,7 @@ Messages are:
 
 - [ ] Full Tor hidden service integration
 - [ ] PGP encryption support (optional)
-- [ ] Multi-room support
+- [x] Multi-room support (`/join <room>` and room-scoped broadcast)
 - [ ] Message signing/verification
 - [ ] Improved standardized identity system
 
