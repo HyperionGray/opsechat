@@ -107,14 +107,41 @@ Enterprise-focused with comprehensive API.
 - More expensive than Porkbun
 - Better for production/enterprise use
 
+## Domain Rotation CLI (Local Operations)
+
+For local administration and automation, use the dedicated CLI:
+
+```bash
+python domain_rotation_cli.py config
+python domain_rotation_cli.py status
+python domain_rotation_cli.py search
+python domain_rotation_cli.py rotate
+python domain_rotation_cli.py list
+```
+
+### State Persistence
+
+The CLI stores its state in `~/.opsechat/domain_config.json` with secure file
+permissions (`0600`):
+
+- API credentials
+- monthly budget
+- current spending
+- active domain
+- owned domains history
+
+Owned-domain timestamps (`purchased_at`, `expires_at`) are persisted as ISO-8601
+strings and restored back to datetime objects when loaded. This keeps CLI state
+stable across restarts while preserving readable JSON.
+
 ## Security Considerations
 
 ### API Key Security
 
 **Storage:**
-- API keys are stored in memory only
-- Never written to disk or logs
-- Cleared when application restarts
+- API keys are stored in the CLI config file for persistent local operations
+- Config file is created with owner-only permissions (`0600`)
+- API keys should never be printed or committed to source control
 
 **Access:**
 - Keys only accessible to authenticated users
@@ -159,6 +186,7 @@ Enterprise-focused with comprehensive API.
    - Access email configuration page
    - Enter API credentials and budget
    - Test configuration
+   - (Optional) mirror values in `domain_rotation_cli.py config` for CLI use
 
 ### Daily Operations
 

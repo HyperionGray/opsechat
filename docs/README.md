@@ -5,7 +5,7 @@ Welcome to the OpSecChat documentation. All documentation has been organized int
 ## Quick Links
 
 - **[Main README](../README.md)** - Start here for project overview
-- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes (TODO)
+- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes
 - **[Security](../SECURITY.md)** - Security information and best practices
 - **[License](../LICENSE.md)** - MIT License
 
@@ -97,5 +97,5 @@ When adding new documentation:
 
 ---
 
-**Last Updated:** February 23, 2026  
+**Last Updated:** April 3, 2026  
 **Maintained by:** OpSecChat Team

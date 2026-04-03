@@ -131,15 +131,33 @@ http://yourservice.onion/{path}/email/config
 3. **Auto-Rotate**: When domain is flagged/old, rotate to new domain
 4. **Manual Rotate**: Force rotation via email config page
 
+## Domain Rotation CLI
+
+The local CLI is the recommended interface for direct domain operations:
+
+```bash
+python domain_rotation_cli.py config
+python domain_rotation_cli.py status
+python domain_rotation_cli.py search
+python domain_rotation_cli.py rotate
+python domain_rotation_cli.py list
+```
+
+The CLI persists state to `~/.opsechat/domain_config.json` and restores owned
+domain timestamps from ISO-8601 strings, so `list`/`status` remain stable
+across restarts.
+
 ## Security Considerations
 
 ### API Key Storage
 
-⚠️ **Important**: API keys are stored in-memory only. They are NOT persisted to disk. After restart, you must reconfigure.
+API keys may be stored by the local CLI in `~/.opsechat/domain_config.json`
+for persistent operations. The file is created with owner-only permissions
+(`0600`).
 
-For persistent configuration:
-- Use environment variables in your deployment
-- Store encrypted credentials separately
+For deployments:
+- Use environment variables in container/quadlet definitions where practical
+- Store encrypted credentials separately when required
 - Never commit API keys to version control
 
 ### Domain Privacy
