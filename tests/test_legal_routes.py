@@ -44,7 +44,7 @@ def test_privacy_route_available_and_contains_expected_heading():
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "Privacy Policy" in body
-    assert "Data We Process" in body
+    assert "Data We May Process" in body
 
 
 def test_legal_routes_include_security_headers():
