@@ -108,3 +108,32 @@ See `TODO-automation.md` for:
 - Issue: "Automation: Direction"
 - Requirements: Per P4X-ng comment - keep only triggered workflows, fix continuous progress, bi-weekly security, keep sync
 - Full Documentation: `docs/AUTOMATION_CONSOLIDATION.md`
+
+## 2026-04-03 - TUI Protocol Hardening and Cleanup
+
+### Summary
+Implemented a concrete TUI server/client feature to complete unfinished behavior around silent message drops, plus repository cleanup of stale merge-artifact files.
+
+### Added
+1. **TUI protocol validation and explicit error responses** (`src/tui/server.py`):
+   - Added structured protocol error payloads for malformed/unsupported client input.
+   - Added shared message validation path returning rejection reason + sanitized content.
+   - Added `invalid_json`, `unsupported_type`, and `message_rejected` error codes.
+2. **TUI server test coverage** (`tests/test_tui_server.py`):
+   - New tests for message lifetime constant, validation/sanitization, protocol error responses, and valid message handling/broadcast behavior.
+
+### Changed
+1. **Aligned message burn lifetime to docs/UI**:
+   - `ChatServer.MESSAGE_LIFETIME` changed from 180 to 240 seconds (4 minutes).
+   - Welcome message now consistently says "burn in 4 minutes."
+2. **Client UX for server-side validation errors** (`src/tui/client.py`):
+   - Client now surfaces server `error` payloads as system messages instead of leaving users with silent failures.
+   - Client now reports malformed server responses in receive loop.
+3. **Documentation updates**:
+   - Updated `TUI_README.md` with protocol validation/error behavior.
+   - Updated `docs/TUI_TODO.md` with completed validation/error-handling items and status.
+
+### Cleanup
+Removed stale root-level merge artifact files:
+- `Dockerfile~HEAD`
+- `docker-compose.yml~HEAD`
