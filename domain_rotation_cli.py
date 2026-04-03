@@ -19,10 +19,12 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+DEFAULT_MONTHLY_BUDGET = 50.0
 
 
 def load_config():
@@ -32,7 +34,8 @@ def load_config():
     
     try:
         with open(CONFIG_FILE, 'r') as f:
-            return json.load(f)
+            config = json.load(f)
+            return config if isinstance(config, dict) else {}
     except Exception as e:
         print(f"Error loading config: {e}")
         return {}
@@ -49,6 +52,80 @@ def save_config(config):
         print(f"Configuration saved to {CONFIG_FILE}")
     except Exception as e:
         print(f"Error saving config: {e}")
+
+
+def _current_budget_month(now: datetime = None) -> str:
+    """Return month key in YYYY-MM format."""
+    now = now or datetime.now()
+    return now.strftime("%Y-%m")
+
+
+def _deserialize_datetime(value):
+    """Parse persisted datetime string safely."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _serialize_owned_domains(domains):
+    """Convert in-memory domain records to JSON-serializable data."""
+    serialized = []
+    for domain in domains or []:
+        if not isinstance(domain, dict):
+            continue
+
+        record = dict(domain)
+        for key in ("purchased_at", "expires_at"):
+            if isinstance(record.get(key), datetime):
+                record[key] = record[key].isoformat()
+        serialized.append(record)
+
+    return serialized
+
+
+def _deserialize_owned_domains(domains):
+    """Convert persisted domain records back into runtime objects."""
+    deserialized = []
+    for domain in domains or []:
+        if not isinstance(domain, dict):
+            continue
+
+        record = dict(domain)
+        for key in ("purchased_at", "expires_at"):
+            parsed = _deserialize_datetime(record.get(key))
+            if parsed is not None:
+                record[key] = parsed
+        deserialized.append(record)
+
+    return deserialized
+
+
+def _sync_budget_month(config, manager) -> bool:
+    """
+    Keep spending aligned to the current month.
+    Returns True when config values were changed and should be saved.
+    """
+    current_month = _current_budget_month()
+    saved_month = config.get("budget_month")
+
+    if not saved_month:
+        # Backward-compatible migration for older configs.
+        config["budget_month"] = current_month
+        return True
+
+    if saved_month != current_month:
+        manager.current_spending = 0.0
+        config["current_spending"] = 0.0
+        config["budget_month"] = current_month
+        print("Detected a new month. Monthly domain spending has been reset to $0.00.")
+        return True
+
+    return False
 
 
 def configure_api():
@@ -87,7 +164,9 @@ def configure_api():
         except ValueError:
             print("Invalid budget amount, keeping previous value")
     elif 'monthly_budget' not in config:
-        config['monthly_budget'] = 50.0
+        config['monthly_budget'] = DEFAULT_MONTHLY_BUDGET
+
+    config.setdefault('budget_month', _current_budget_month())
     
     save_config(config)
     print("\n✅ Configuration updated successfully!")
@@ -105,31 +184,34 @@ def get_manager():
     client = PorkbunAPIClient(config['api_key'], config['api_secret'])
     manager = DomainRotationManager(
         api_client=client,
-        monthly_budget=config.get('monthly_budget', 50.0)
+        monthly_budget=config.get('monthly_budget', DEFAULT_MONTHLY_BUDGET)
     )
     
     # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
+    manager.current_spending = float(config.get('current_spending', 0.0) or 0.0)
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = _deserialize_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
+
+    if _sync_budget_month(config, manager):
+        save_config(config)
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['current_spending'] = float(manager.current_spending)
+    config['owned_domains'] = _serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
+    config['budget_month'] = _current_budget_month()
     save_config(config)
 
 
 def list_domains():
     """List owned domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Owned Domains ===\n")
     
@@ -142,16 +224,20 @@ def list_domains():
     
     for i, domain in enumerate(domains, 1):
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
+        purchased_at = domain.get("purchased_at")
+        expires_at = domain.get("expires_at")
+        purchased_text = purchased_at.strftime('%Y-%m-%d %H:%M') if isinstance(purchased_at, datetime) else "Unknown"
+        expires_text = expires_at.strftime('%Y-%m-%d') if isinstance(expires_at, datetime) else "Unknown"
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {purchased_text}")
+        print(f"   Expires: {expires_text}")
         print()
 
 
 def search_domains():
     """Search for available cheap domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
     print("Searching for domains under $5...\n")
@@ -215,7 +301,7 @@ def rotate_domain():
 
 def show_status():
     """Show current status"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Domain Rotation Status ===\n")
     

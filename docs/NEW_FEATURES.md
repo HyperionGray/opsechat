@@ -284,7 +284,13 @@ After rotating domains, update your email configuration:
 - Set monthly budget to prevent overspending
 - CLI tracks spending automatically
 - Prevents purchases that would exceed budget
-- Resets monthly (manual reset required)
+- Resets monthly automatically when a new month is detected
+
+### Persistence Improvements (April 2026)
+- Domain purchase records now persist timestamps safely in JSON
+- On startup, persisted timestamps are restored to runtime datetime values
+- Legacy config files are auto-migrated with a `budget_month` field
+- `list` no longer fails when reading previously persisted domain records
 
 ---
 
