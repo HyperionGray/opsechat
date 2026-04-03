@@ -34,8 +34,33 @@ class TestSecurityHeaders:
 
     def test_csp_disallows_inline_scripts(self):
         csp = self._headers()["Content-Security-Policy"]
-        # Must not contain 'unsafe-inline' for scripts
-        assert "unsafe-inline" not in csp
+        # Script policy must never allow unsafe-inline JavaScript.
+        script_src = next(
+            (part.strip() for part in csp.split(";") if part.strip().startswith("script-src")),
+            "",
+        )
+        assert script_src
+        assert "'unsafe-inline'" not in script_src
+        assert "nonce-" in script_src
+
+    def test_csp_style_policy_allows_legacy_inline_styles(self):
+        csp = self._headers()["Content-Security-Policy"]
+        style_src = next(
+            (part.strip() for part in csp.split(";") if part.strip().startswith("style-src")),
+            "",
+        )
+        assert style_src
+        assert "'unsafe-inline'" in style_src
+
+    def test_inline_script_templates_emit_nonce_attribute(self):
+        app = _fresh_app()
+        app.config["path"] = "nonce-test-path"
+        app.config["hostname"] = "localhost"
+        client = app.test_client()
+        response = client.get("/nonce-test-path/landing/auto")
+        assert response.status_code == 200
+        body = response.data.decode("utf-8")
+        assert '<script nonce="' in body
 
     def test_x_content_type_options(self):
         h = self._headers()

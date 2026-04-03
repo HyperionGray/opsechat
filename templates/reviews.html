@@ -10,12 +10,12 @@
 
 {% if script_enabled %}
 <noscript>  
-  <style>html{display:none;}</style>
+  <style nonce="{{ csp_nonce }}">html{display:none;}</style>
   <meta http-equiv="refresh" content="0.0;url=../reviews">
 </noscript>
 {% endif %}
 
-<style>
+<style nonce="{{ csp_nonce }}">
   * {
     margin: 0;
     padding: 0;
@@ -363,7 +363,7 @@
 </div>
 
 {% if script_enabled %}
-<script>
+<script nonce="{{ csp_nonce }}">
 $(document).ready(function() {
   // Auto-refresh reviews every 30 seconds
   setInterval(function() {

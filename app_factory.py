@@ -6,7 +6,8 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+import secrets
+from flask import Flask, jsonify, g
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -67,23 +68,37 @@ def create_app():
     def add_review_wrapper(user_id, rating, review_text):
         return add_review(reviews, user_id, rating, review_text)
     
+    @app.before_request
+    def set_csp_nonce():
+        """Create a per-request nonce for inline script/style authorization."""
+        g.csp_nonce = secrets.token_urlsafe(16)
+
+    @app.context_processor
+    def inject_csp_nonce():
+        """Expose the CSP nonce to Jinja templates as {{ csp_nonce }}."""
+        return {"csp_nonce": getattr(g, "csp_nonce", "")}
+
     # Add security headers after every response
     @app.after_request
     def add_security_headers(response):
         response.headers["Server"] = ""
         response.headers["Date"] = ""
-        # Content Security Policy: restrict resources to same origin, block inline scripts
+        nonce = getattr(g, "csp_nonce", None) or secrets.token_urlsafe(16)
+        # CSP policy:
+        # - script-src uses per-request nonces to allow vetted inline scripts only
+        # - style-src allows legacy style="" attributes while we migrate templates
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self'; "
-            "style-src 'self'; "
+            f"script-src 'self' 'nonce-{nonce}'; "
+            f"style-src 'self' 'unsafe-inline' 'nonce-{nonce}'; "
             "img-src 'self' data:; "
             "font-src 'self'; "
             "connect-src 'self'; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"

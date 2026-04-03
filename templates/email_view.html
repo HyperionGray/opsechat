@@ -5,7 +5,7 @@
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 </head>
 
-<style>
+<style nonce="{{ csp_nonce }}">
   * {
     margin: 0;
     padding: 0;
@@ -193,9 +193,21 @@
     <div class="actions">
       <a href="/{{ path }}/email/edit/{{ email.id }}">Edit (Raw Mode)</a>
       <form method="POST" action="/{{ path }}/email/delete/{{ email.id }}">
-        <button type="submit" onclick="return confirm('Delete this email?')">Delete</button>
+        <button type="submit" class="js-confirm-delete">Delete</button>
       </form>
     </div>
   </div>
+  <script nonce="{{ csp_nonce }}">
+    document.addEventListener('DOMContentLoaded', function () {
+      var deleteButtons = document.querySelectorAll('.js-confirm-delete');
+      deleteButtons.forEach(function (button) {
+        button.addEventListener('click', function (event) {
+          if (!confirm('Delete this email?')) {
+            event.preventDefault();
+          }
+        });
+      });
+    });
+  </script>
 </body>
 </html>

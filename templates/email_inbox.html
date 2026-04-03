@@ -11,12 +11,12 @@
 
 {% if script_enabled %}
 <noscript>  
-  <style>html{display:none;}</style>
+  <style nonce="{{ csp_nonce }}">html{display:none;}</style>
   <meta http-equiv="refresh" content="0.0;url={{ path }}/email">
 </noscript>
 {% endif %}
 
-<style>
+<style nonce="{{ csp_nonce }}">
   * {
     margin: 0;
     padding: 0;
@@ -188,7 +188,7 @@
             <a href="/{{ path }}/email/view/{{ email.id }}">View</a>
             <a href="/{{ path }}/email/edit/{{ email.id }}">Edit (Raw)</a>
             <form method="POST" action="/{{ path }}/email/delete/{{ email.id }}">
-              <button type="submit" onclick="return confirm('Delete this email?')">Delete</button>
+              <button type="submit">Delete</button>
             </form>
           </div>
         </div>
@@ -208,7 +208,7 @@
   </div>
 
   {% if script_enabled %}
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Auto-refresh inbox every 30 seconds
     setTimeout(function() {
       location.reload();

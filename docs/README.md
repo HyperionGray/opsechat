@@ -5,7 +5,7 @@ Welcome to the OpSecChat documentation. All documentation has been organized int
 ## Quick Links
 
 - **[Main README](../README.md)** - Start here for project overview
-- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes (TODO)
+- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes
 - **[Security](../SECURITY.md)** - Security information and best practices
 - **[License](../LICENSE.md)** - MIT License
 
@@ -62,6 +62,7 @@ Legal documents and policies.
 Implementation details and summaries of major features.
 
 - [Alpha Implementation Roadmap](implementation/ALPHA_IMPLEMENTATION_ROADMAP.md) - Detailed implementation plan
+- [CSP Nonce Security Hardening](implementation/CSP_NONCE_HARDENING_2026-04.md) - Nonce-based inline script/style authorization and CSP cleanup
 - [Implementation Summary](implementation/IMPLEMENTATION_SUMMARY.md) - Email feature implementation
 - [Amazon Q Integration](implementation/AMAZON_Q_IMPLEMENTATION_SUMMARY.md) - Amazon Q implementation
 - [CI/CD Implementation](implementation/CI_CD_IMPLEMENTATION_SUMMARY.md) - CI/CD setup
@@ -97,5 +98,5 @@ When adding new documentation:
 
 ---
 
-**Last Updated:** February 23, 2026  
+**Last Updated:** April 3, 2026  
 **Maintained by:** OpSecChat Team

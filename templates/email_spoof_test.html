@@ -5,7 +5,7 @@
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 </head>
 
-<style>
+<style nonce="{{ csp_nonce }}">
   * {
     margin: 0;
     padding: 0;
@@ -216,8 +216,8 @@
   </div>
 
   <div class="tabs">
-    <button class="tab-button active" onclick="showTab('detect')">Spoofing Detection</button>
-    <button class="tab-button" onclick="showTab('generate')">Generate Variants</button>
+    <button class="tab-button active js-tab-btn" data-tab="detect">Spoofing Detection</button>
+    <button class="tab-button js-tab-btn" data-tab="generate">Generate Variants</button>
   </div>
 
   <!-- Spoofing Detection Tab -->
@@ -354,20 +354,28 @@
     </ul>
   </div>
 
-  <script>
-    function showTab(tabName) {
+  <script nonce="{{ csp_nonce }}">
+    function showTab(tabName, targetBtn) {
       // Hide all tabs
-      document.querySelectorAll('.tab-content').forEach(tab => {
+      document.querySelectorAll('.tab-content').forEach(function(tab) {
         tab.classList.remove('active');
       });
-      document.querySelectorAll('.tab-button').forEach(btn => {
+      document.querySelectorAll('.tab-button').forEach(function(btn) {
         btn.classList.remove('active');
       });
-      
+
       // Show selected tab
       document.getElementById(tabName + '-tab').classList.add('active');
-      event.target.classList.add('active');
+      if (targetBtn) {
+        targetBtn.classList.add('active');
+      }
     }
+
+    document.querySelectorAll('.js-tab-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        showTab(btn.dataset.tab, btn);
+      });
+    });
   </script>
 </body>
 </html>

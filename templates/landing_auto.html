@@ -1,12 +1,12 @@
 <html>
 <head>
-<script>
+<script nonce="{{ csp_nonce }}">
 window.location = "http://" + window.location.hostname + "/{{path}}/yesscript";
 </script>
 </head>
 
 <noscript>
-  <style>html{display:none;}</style>
+  <style nonce="{{ csp_nonce }}">html{display:none;}</style>
   <meta http-equiv="refresh" content="0.0;url={{path}}/noscript">
 </noscript>
 </html>

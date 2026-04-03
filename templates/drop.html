@@ -12,12 +12,12 @@
 
 {% if script_enabled %}
 <noscript>  
-  <style>html{display:none;}</style>
+  <style nonce="{{ csp_nonce }}">html{display:none;}</style>
   <meta http-equiv="refresh" content="0.0;url=noscript">
 </noscript>
 {% endif %}
 
-<style>
+<style nonce="{{ csp_nonce }}">
   * {
     margin: 0;
     padding: 0;
@@ -111,7 +111,7 @@
 </style>
 
 {% if script_enabled %}
-<script>
+<script nonce="{{ csp_nonce }}">
 async function processMessage(msg) {
   // Attempt to decrypt if it's a PGP message
   if (PGPManager.isPGPMessage(msg)) {
@@ -205,7 +205,7 @@ $( document ).ready(function() {
 
 <input type="text" id="messagearea" style="width:90vw; height:30px; position: fixed;  bottom: 0;" autofocus required></input>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 $( document ).ready(function() {
 
     $(document).keypress(async function(e){

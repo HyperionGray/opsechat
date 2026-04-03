@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 
-<style>
+<style nonce="{{ csp_nonce }}">
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
@@ -125,9 +125,9 @@
 <!--  Section controls                                       -->
 <!-- ======================================================= -->
 <div class="section-toggle">
-  <button onclick="showSection('create')">➕ Create New Mailbox</button>
-  <button onclick="showSection('compose')">✉️ Send a Message</button>
-  <button onclick="showSection('read')">📬 Read My Inbox</button>
+  <button type="button" class="js-section-btn" data-section="create">➕ Create New Mailbox</button>
+  <button type="button" class="js-section-btn" data-section="compose">✉️ Send a Message</button>
+  <button type="button" class="js-section-btn" data-section="read">📬 Read My Inbox</button>
 </div>
 
 <!-- ======================================================= -->
@@ -139,7 +139,7 @@
     A unique address and secret read key will be generated.
     <strong>Save your read key</strong> — it is shown only once.
   </p>
-  <button id="create-btn" onclick="createMailbox()">Create Mailbox</button>
+  <button id="create-btn" type="button">Create Mailbox</button>
 
   <div id="new-mailbox-result">
     <div class="warn">
@@ -149,12 +149,12 @@
     <div class="form-group">
       <div class="token-label">Your Mailbox Address (share with senders)</div>
       <div class="token-box" id="result-address"></div>
-      <button onclick="copyText('result-address')">📋 Copy Address</button>
+      <button type="button" class="js-copy-btn" data-copy-target="result-address">📋 Copy Address</button>
     </div>
     <div class="form-group">
       <div class="token-label">Your Read Key (keep secret — required to read messages)</div>
       <div class="token-box" id="result-read-key"></div>
-      <button onclick="copyText('result-read-key')">📋 Copy Read Key</button>
+      <button type="button" class="js-copy-btn" data-copy-target="result-read-key">📋 Copy Read Key</button>
     </div>
     <div class="form-group">
       <div class="token-label">Send URL (share this link with senders)</div>
@@ -234,7 +234,7 @@
              value="{{ inbox_read_key or '' }}"
              placeholder="Your private read key">
     </div>
-    <button type="button" onclick="fetchInbox()">Open Inbox</button>
+    <button type="button" id="open-inbox-btn">Open Inbox</button>
   </form>
 
   <!-- Inbox messages rendered from server (non-JS fallback) -->
@@ -256,8 +256,8 @@
         <form method="POST"
               action="/{{ path }}/mail/{{ inbox_address }}/delete/{{ msg.id }}">
           <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
-          <button type="submit" class="danger"
-                  onclick="return confirm('Delete this message?')">🗑 Delete</button>
+          <button type="submit" class="danger js-confirm-submit"
+                  data-confirm-message="Delete this message?">🗑 Delete</button>
         </form>
       </div>
     </div>
@@ -269,8 +269,8 @@
       <h3 style="color:#f00;">Danger Zone</h3>
       <form method="POST" action="/{{ path }}/mail/{{ inbox_address }}/destroy">
         <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
-        <button type="submit" class="danger"
-                onclick="return confirm('Destroy mailbox and all messages permanently?')">
+        <button type="submit" class="danger js-confirm-submit"
+                data-confirm-message="Destroy mailbox and all messages permanently?">
           💣 Destroy Mailbox
         </button>
       </form>
@@ -282,7 +282,7 @@
   <div id="js-inbox-messages"></div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
   // Show/hide sections
   function showSection(name) {
     ['create', 'compose', 'read'].forEach(function(s) {
@@ -467,6 +467,37 @@
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#x27;');
   }
+
+  document.querySelectorAll('.js-section-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      showSection(btn.dataset.section);
+    });
+  });
+
+  var createBtn = document.getElementById('create-btn');
+  if (createBtn) {
+    createBtn.addEventListener('click', createMailbox);
+  }
+
+  document.querySelectorAll('.js-copy-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      copyText(btn.dataset.copyTarget);
+    });
+  });
+
+  var openInboxBtn = document.getElementById('open-inbox-btn');
+  if (openInboxBtn) {
+    openInboxBtn.addEventListener('click', fetchInbox);
+  }
+
+  document.querySelectorAll('.js-confirm-submit').forEach(function(btn) {
+    btn.addEventListener('click', function(event) {
+      var msg = btn.dataset.confirmMessage || 'Are you sure?';
+      if (!confirm(msg)) {
+        event.preventDefault();
+      }
+    });
+  });
 </script>
 </body>
 </html>

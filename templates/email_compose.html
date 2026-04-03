@@ -5,7 +5,7 @@
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 </head>
 
-<style>
+<style nonce="{{ csp_nonce }}">
   * {
     margin: 0;
     padding: 0;
@@ -153,11 +153,11 @@
 
   <div class="mode-toggle">
     <label>
-      <input type="radio" name="compose-mode" value="standard" checked onchange="toggleMode()"> 
+      <input type="radio" name="compose-mode" value="standard" checked> 
       Standard Compose
     </label>
     <label>
-      <input type="radio" name="compose-mode" value="raw" onchange="toggleMode()"> 
+      <input type="radio" name="compose-mode" value="raw"> 
       Raw Mode (Edit Headers)
     </label>
   </div>
@@ -253,7 +253,7 @@ Email body goes here..."></textarea>
     </ul>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     function toggleMode() {
       const mode = document.querySelector('input[name="compose-mode"]:checked').value;
       const standardForm = document.getElementById('standard-form');
@@ -267,6 +267,12 @@ Email body goes here..."></textarea>
         standardForm.classList.add('active');
       }
     }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('input[name="compose-mode"]').forEach(function (input) {
+        input.addEventListener('change', toggleMode);
+      });
+    });
   </script>
 </body>
 </html>

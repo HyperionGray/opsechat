@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 
-<style>
+<style nonce="{{ csp_nonce }}">
   * {
     margin: 0;
     padding: 0;
@@ -316,7 +316,7 @@
         </div>
         
         <div class="burner-actions">
-          <button onclick="copyToClipboard('{{ burner.email }}')">📋 Copy Email</button>
+          <button type="button" class="js-copy-email" data-email="{{ burner.email }}">📋 Copy Email</button>
           <a href="/{{ path }}/email" class="button">📧 View Inbox</a>
           <form method="POST" action="/{{ path }}/email/burner" style="display: inline;">
             <input type="hidden" name="action" value="rotate">
@@ -376,7 +376,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     function copyToClipboard(text) {
       if (navigator.clipboard) {
         navigator.clipboard.writeText(text).then(function() {
@@ -404,6 +404,14 @@
       }
       document.body.removeChild(textArea);
     }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('.js-copy-email').forEach(function (button) {
+        button.addEventListener('click', function () {
+          copyToClipboard(button.dataset.email || '');
+        });
+      });
+    });
 
     {% if script_enabled %}
     // Live countdown updates
