@@ -331,11 +331,11 @@ test.describe('Product Release - API Endpoints', () => {
   });
   
   test('should have security routes defined', () => {
-    const securityRoutes = path.join(projectRoot, 'email_security_routes.py');
+    const securityRoutes = path.join(projectRoot, 'security_routes.py');
     expect(fs.existsSync(securityRoutes)).toBeTruthy();
     
     const content = fs.readFileSync(securityRoutes, 'utf8');
-    expect(content).toContain('@email_security_bp.route');
+    expect(content).toContain('@security_bp.route');
   });
 });
 
