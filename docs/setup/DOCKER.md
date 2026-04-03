@@ -7,6 +7,7 @@ This document describes how to run opsechat using containers with Podman (prefer
 The containerized setup includes:
 - **Tor daemon container**: Runs the Tor service with control port enabled
 - **Opsechat application container**: Runs the Flask application with chat, email, and burner email features
+- **Container health checks**: Uses `/health` endpoint checks for both compose and image-level monitoring
 
 The compose file is `container-compose.yml` (a `docker-compose.yml` symlink exists for backward compatibility).
 
@@ -139,6 +140,15 @@ docker-compose -f container-compose.yml down
 4. **Internal-Only Ports**: Tor control port and SOCKS proxy are only accessible within the container network.
 5. **No Disk Storage**: The opsechat app stores nothing on disk (in-memory only).
 6. **Ephemeral Hidden Services**: Services are created dynamically and destroyed on shutdown.
+
+### Health Checks
+
+The app container includes health checks in two places:
+
+- **Image-level** (`containers/Dockerfile`): `HEALTHCHECK` probes `http://127.0.0.1:5000/health`
+- **Compose-level** (`container-compose.yml`): service health controls startup ordering and restart behavior
+
+This gives consistent behavior across podman, docker-compose, and systemd/quadlet style orchestration.
 
 ## Configuration
 
