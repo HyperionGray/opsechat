@@ -58,6 +58,13 @@ class ChatClient:
         self.username = "Unknown"
         self.running = False
         self.message_buffer = ""
+        self.server_status = {
+            "message_lifetime_seconds": 240,
+            "max_message_length": 1000,
+            "rate_limit_messages_per_window": None,
+            "rate_limit_window_seconds": None,
+            "active_users": None,
+        }
         
         # UI components
         self.messages_walker = urwid.SimpleFocusListWalker([])
@@ -74,7 +81,7 @@ class ChatClient:
             urwid.Text([
                 ('title', 'OpSecChat TUI - Privacy First'),
                 ' | ',
-                ('info', 'Messages burn in 4 min'),
+                ('info', self._burn_window_label()),
                 ' | ',
                 ('warn', 'Text only - No images/video')
             ], align='center'),
@@ -151,6 +158,56 @@ class ChatClient:
         # Limit message history (memory management)
         if len(self.messages_walker) > 200:
             self.messages_walker.pop(0)
+
+    def _burn_window_label(self):
+        """Return burn window label for header/footer."""
+        burn_seconds = self.server_status.get("message_lifetime_seconds") or 240
+        burn_minutes = burn_seconds // 60
+        if burn_seconds % 60 == 0:
+            return f"Messages burn in {burn_minutes} min"
+        return f"Messages burn in {burn_seconds} sec"
+
+    def _rate_limit_label(self):
+        """Return human-readable rate limit label."""
+        limit = self.server_status.get("rate_limit_messages_per_window")
+        window = self.server_status.get("rate_limit_window_seconds")
+        if isinstance(limit, int) and isinstance(window, int):
+            return f"Rate: {limit}/{window}s"
+        return "Rate: n/a"
+
+    def _user_count_label(self):
+        """Return connected user count label."""
+        active_users = self.server_status.get("active_users")
+        if isinstance(active_users, int):
+            return f"Users: {active_users}"
+        return "Users: ?"
+
+    def _build_footer(self):
+        """Build footer widget with current dynamic status."""
+        footer_text = [
+            ('info', 'Enter'),
+            ': Send | ',
+            ('info', 'Ctrl+C'),
+            ': Quit | ',
+            ('info', self._user_count_label()),
+            ' | ',
+            ('info', self._rate_limit_label()),
+            ' | ',
+            ('warn', 'Your username: '),
+            ('username', self.username)
+        ]
+        return urwid.AttrMap(urwid.Text(footer_text), 'footer')
+
+    def _build_header(self):
+        """Build header widget with current burn policy."""
+        header_text = [
+            ('title', 'OpSecChat TUI - Privacy First'),
+            ' | ',
+            ('info', self._burn_window_label()),
+            ' | ',
+            ('warn', 'Text only - No images/video')
+        ]
+        return urwid.AttrMap(urwid.Text(header_text, align='center'), 'header')
     
     def connect(self):
         """Connect to the chat server"""
@@ -209,6 +266,22 @@ class ChatClient:
         
         if msg_type == 'welcome':
             self.username = msg.get('username', 'Unknown')
+            self.server_status["message_lifetime_seconds"] = msg.get(
+                "message_lifetime_seconds",
+                self.server_status["message_lifetime_seconds"],
+            )
+            self.server_status["max_message_length"] = msg.get(
+                "max_message_length",
+                self.server_status["max_message_length"],
+            )
+            self.server_status["rate_limit_messages_per_window"] = msg.get(
+                "rate_limit_messages_per_window",
+                self.server_status["rate_limit_messages_per_window"],
+            )
+            self.server_status["rate_limit_window_seconds"] = msg.get(
+                "rate_limit_window_seconds",
+                self.server_status["rate_limit_window_seconds"],
+            )
             self.update_footer()
             welcome_msg = msg.get('message', 'Welcome!')
             self.add_message("System", welcome_msg, is_system=True)
@@ -217,19 +290,36 @@ class ChatClient:
             username = msg.get('username', 'Unknown')
             message = msg.get('message', '')
             self.add_message(username, message)
+        
+        elif msg_type == 'status':
+            self.server_status["active_users"] = msg.get("active_users")
+            self.server_status["message_lifetime_seconds"] = msg.get(
+                "message_lifetime_seconds",
+                self.server_status["message_lifetime_seconds"],
+            )
+            self.server_status["max_message_length"] = msg.get(
+                "max_message_length",
+                self.server_status["max_message_length"],
+            )
+            self.server_status["rate_limit_messages_per_window"] = msg.get(
+                "rate_limit_messages_per_window",
+                self.server_status["rate_limit_messages_per_window"],
+            )
+            self.server_status["rate_limit_window_seconds"] = msg.get(
+                "rate_limit_window_seconds",
+                self.server_status["rate_limit_window_seconds"],
+            )
+            self.update_footer()
+
+        elif msg_type == 'error':
+            code = msg.get("code", "unknown_error")
+            error_message = msg.get("message", "Unknown server error")
+            self.add_message("System", f"[{code}] {error_message}", is_system=True)
     
     def update_footer(self):
-        """Update the footer with current username"""
-        footer_text = [
-            ('info', 'Enter'),
-            ': Send | ',
-            ('info', 'Ctrl+C'),
-            ': Quit | ',
-            ('warn', 'Your username: '),
-            ('username', self.username)
-        ]
-        footer = urwid.AttrMap(urwid.Text(footer_text), 'footer')
-        self.frame.footer = footer
+        """Update header/footer with current server status and username."""
+        self.frame.header = self._build_header()
+        self.frame.footer = self._build_footer()
     
     def send_message(self, message):
         """Send a message to the server"""
@@ -237,8 +327,13 @@ class ChatClient:
             return
         
         # Validate message
-        if len(message) > 1000:
-            self.add_message("System", "Message too long (max 1000 chars)", is_system=True)
+        max_message_length = self.server_status.get("max_message_length") or 1000
+        if len(message) > max_message_length:
+            self.add_message(
+                "System",
+                f"Message too long (max {max_message_length} chars)",
+                is_system=True,
+            )
             return
         
         try:

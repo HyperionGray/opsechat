@@ -20,18 +20,22 @@ import secrets
 import threading
 import socket
 import json
+from collections import deque
 from typing import Dict, List, Any, Optional
 
 # Message storage (in-memory only)
 class ChatServer:
     MAX_MESSAGE_LENGTH = 1000  # Prevent b64 encoded images
-    MESSAGE_LIFETIME = 180  # 3 minutes in seconds
+    MESSAGE_LIFETIME = 240  # 4 minutes in seconds
+    RATE_LIMIT_MESSAGES_PER_WINDOW = 12
+    RATE_LIMIT_WINDOW_SECONDS = 30
     
     def __init__(self, host='127.0.0.1', port=5555):
         self.host = host
         self.port = port
         self.messages: List[Dict[str, Any]] = []
         self.clients: Dict[socket.socket, str] = {}
+        self.client_message_times: Dict[socket.socket, deque[float]] = {}
         self.lock = threading.Lock()
         self.server_socket = None
         self.running = False
@@ -51,7 +55,109 @@ class ChatServer:
         """Continuously clean up old messages"""
         while True:
             time.sleep(10)  # Check every 10 seconds
+            if not self.running:
+                continue
             self._cleanup_old_messages()
+
+    def _active_user_count(self) -> int:
+        """Return number of currently connected users."""
+        with self.lock:
+            return len(self.clients)
+
+    def _build_status_payload(self) -> Dict[str, Any]:
+        """Build server status payload sent to clients."""
+        return {
+            "type": "status",
+            "active_users": self._active_user_count(),
+            "message_lifetime_seconds": self.MESSAGE_LIFETIME,
+            "max_message_length": self.MAX_MESSAGE_LENGTH,
+            "rate_limit_messages_per_window": self.RATE_LIMIT_MESSAGES_PER_WINDOW,
+            "rate_limit_window_seconds": self.RATE_LIMIT_WINDOW_SECONDS,
+            "timestamp": datetime.datetime.now().isoformat(),
+        }
+
+    def _send_json(self, client_socket: socket.socket, payload: Dict[str, Any]) -> bool:
+        """Send a JSON payload to a specific client socket."""
+        try:
+            client_socket.send((json.dumps(payload) + "\n").encode("utf-8"))
+            return True
+        except (OSError, socket.error):
+            return False
+
+    def send_error(
+        self,
+        client_socket: socket.socket,
+        code: str,
+        message: str,
+        extra: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Send a structured protocol error to a client."""
+        payload: Dict[str, Any] = {
+            "type": "error",
+            "code": code,
+            "message": message,
+            "timestamp": datetime.datetime.now().isoformat(),
+        }
+        if extra:
+            payload.update(extra)
+        self._send_json(client_socket, payload)
+
+    def _check_rate_limit(self, client_socket: socket.socket) -> tuple[bool, int]:
+        """
+        Enforce a per-client sliding-window rate limit.
+
+        Returns:
+            (allowed, retry_after_seconds)
+        """
+        now = time.time()
+        window_start = now - self.RATE_LIMIT_WINDOW_SECONDS
+        with self.lock:
+            timestamps = self.client_message_times.setdefault(client_socket, deque())
+            while timestamps and timestamps[0] < window_start:
+                timestamps.popleft()
+
+            if len(timestamps) >= self.RATE_LIMIT_MESSAGES_PER_WINDOW:
+                retry_after = max(1, int(self.RATE_LIMIT_WINDOW_SECONDS - (now - timestamps[0])))
+                return False, retry_after
+
+            timestamps.append(now)
+            return True, 0
+
+    def validate_message_content(
+        self, message: Any
+    ) -> tuple[bool, str, str, Optional[str]]:
+        """
+        Validate and sanitize client message payload.
+
+        Returns:
+            (ok, error_code, error_message, sanitized_message)
+        """
+        if not isinstance(message, str):
+            return False, "invalid_message_type", "Message must be plain text.", None
+
+        message = message.strip()
+        if not message:
+            return False, "empty_message", "Message cannot be empty.", None
+
+        if len(message) > self.MAX_MESSAGE_LENGTH:
+            return (
+                False,
+                "message_too_long",
+                f"Message too long (max {self.MAX_MESSAGE_LENGTH} chars).",
+                None,
+            )
+
+        # Roughly reject long dense payloads likely to be b64/binary transfer.
+        if len(message) > 500 and message.replace("=", "").isalnum():
+            return (
+                False,
+                "encoded_payload_rejected",
+                "Message rejected: encoded/binary-like payloads are not allowed.",
+                None,
+            )
+
+        sanitized = message.replace("<", "").replace(">", "").replace("&", "")
+        return True, "", "", sanitized
     
     def _cleanup_old_messages(self):
         """Remove and overwrite messages older than MESSAGE_LIFETIME"""
@@ -73,16 +179,12 @@ class ChatServer:
     
     def add_message(self, username: str, message: str) -> bool:
         """Add a message to the chat (with validation)"""
-        # Validate message
+        if not isinstance(message, str):
+            return False
+
+        message = message.strip()
         if not message or len(message) > self.MAX_MESSAGE_LENGTH:
             return False
-        
-        # Check for potential b64 encoded data (rough heuristic)
-        if len(message) > 500 and message.replace('=', '').isalnum():
-            return False  # Likely b64 encoded image/video
-        
-        # Strip any HTML/special chars
-        message = message.replace('<', '').replace('>', '').replace('&', '')
         
         with self.lock:
             self.messages.append({
@@ -107,15 +209,20 @@ class ChatServer:
         
         with self.lock:
             self.clients[client_socket] = username
+            self.client_message_times[client_socket] = deque()
         
         try:
             # Send welcome message
             welcome = {
                 'type': 'welcome',
                 'username': username,
-                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
+                'message': f'Welcome! You are {username}. Messages burn in 4 minutes.',
+                'message_lifetime_seconds': self.MESSAGE_LIFETIME,
+                'max_message_length': self.MAX_MESSAGE_LENGTH,
+                'rate_limit_messages_per_window': self.RATE_LIMIT_MESSAGES_PER_WINDOW,
+                'rate_limit_window_seconds': self.RATE_LIMIT_WINDOW_SECONDS,
             }
-            client_socket.send((json.dumps(welcome) + '\n').encode())
+            self._send_json(client_socket, welcome)
             
             # Send existing messages
             messages = self.get_messages()
@@ -126,7 +233,10 @@ class ChatServer:
                     'message': msg['message'],
                     'timestamp': msg['timestamp'].isoformat()
                 }
-                client_socket.send((json.dumps(msg_data) + '\n').encode())
+                self._send_json(client_socket, msg_data)
+
+            # Share status with all clients when membership changes.
+            self.broadcast_status()
             
             # Handle incoming messages
             buffer = ""
@@ -142,13 +252,49 @@ class ChatServer:
                         if line:
                             try:
                                 msg_obj = json.loads(line)
-                                if msg_obj.get('type') == 'message':
-                                    message = msg_obj.get('message', '')
-                                    if self.add_message(username, message):
-                                        # Broadcast to all clients
-                                        self.broadcast_message(username, message)
+                                if msg_obj.get('type') != 'message':
+                                    self.send_error(
+                                        client_socket,
+                                        "unsupported_message_type",
+                                        "Unsupported message type. Use type='message'.",
+                                    )
+                                    continue
+
+                                is_valid, code, error_message, sanitized = self.validate_message_content(
+                                    msg_obj.get('message', '')
+                                )
+                                if not is_valid or sanitized is None:
+                                    self.send_error(client_socket, code, error_message)
+                                    continue
+
+                                allowed, retry_after = self._check_rate_limit(client_socket)
+                                if not allowed:
+                                    self.send_error(
+                                        client_socket,
+                                        "rate_limited",
+                                        (
+                                            "Message rate limit reached. "
+                                            f"Try again in {retry_after} seconds."
+                                        ),
+                                        extra={"retry_after_seconds": retry_after},
+                                    )
+                                    continue
+
+                                if self.add_message(username, sanitized):
+                                    # Broadcast to all clients
+                                    self.broadcast_message(username, sanitized)
+                                else:
+                                    self.send_error(
+                                        client_socket,
+                                        "message_rejected",
+                                        "Message could not be processed.",
+                                    )
                             except json.JSONDecodeError:
-                                pass
+                                self.send_error(
+                                    client_socket,
+                                    "invalid_json",
+                                    "Invalid JSON payload.",
+                                )
                 
                 except (OSError, socket.error) as e:
                     break
@@ -157,10 +303,13 @@ class ChatServer:
             with self.lock:
                 if client_socket in self.clients:
                     del self.clients[client_socket]
+                if client_socket in self.client_message_times:
+                    del self.client_message_times[client_socket]
             try:
                 client_socket.close()
             except (OSError, socket.error):
                 pass
+            self.broadcast_status()
     
     def broadcast_message(self, username: str, message: str):
         """Broadcast a message to all connected clients"""
@@ -188,6 +337,29 @@ class ChatServer:
                     client.close()
                 except (OSError, socket.error):
                     pass
+
+    def broadcast_status(self):
+        """Broadcast current server limits and active user count."""
+        status_payload = self._build_status_payload()
+        status_json = json.dumps(status_payload) + "\n"
+
+        with self.lock:
+            dead_clients = []
+            for client_socket in list(self.clients.keys()):
+                try:
+                    client_socket.send(status_json.encode())
+                except (OSError, socket.error):
+                    dead_clients.append(client_socket)
+
+            for client in dead_clients:
+                if client in self.clients:
+                    del self.clients[client]
+                if client in self.client_message_times:
+                    del self.client_message_times[client]
+                try:
+                    client.close()
+                except (OSError, socket.error):
+                    pass
     
     def start(self):
         """Start the chat server"""
@@ -200,6 +372,10 @@ class ChatServer:
         print(f"[*] OpSecChat TUI Server running on {self.host}:{self.port}")
         print(f"[*] Messages burn after {self.MESSAGE_LIFETIME} seconds")
         print(f"[*] Max message length: {self.MAX_MESSAGE_LENGTH} chars")
+        print(
+            "[*] Rate limit: "
+            f"{self.RATE_LIMIT_MESSAGES_PER_WINDOW} messages / {self.RATE_LIMIT_WINDOW_SECONDS} sec per user"
+        )
         print(f"[*] Press Ctrl+C to stop")
         
         try:
@@ -231,6 +407,7 @@ class ChatServer:
                 except (OSError, socket.error):
                     pass
             self.clients.clear()
+            self.client_message_times.clear()
         
         # Close server socket
         if self.server_socket:

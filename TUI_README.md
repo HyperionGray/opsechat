@@ -135,10 +135,22 @@ sudo systemctl start tor
 
 - **Max message length**: 1000 characters
 - **Message lifetime**: 4 minutes (240 seconds)
+- **Message rate limit**: 12 messages per 30 seconds per client
 - **Max chat history**: 200 messages in client (memory management)
 - **No images**: Text only, no exceptions
 - **No video**: Text only, no exceptions
 - **No b64 encoding**: Large base64-like strings are rejected
+
+## Protocol Events
+
+The TUI socket protocol now includes explicit events for visibility and safer
+client behavior:
+
+- `welcome` - assigned username and server limits
+- `message` - standard chat messages
+- `status` - live metadata (active users, burn window, limits)
+- `error` - structured validation/rate-limit failures (for example
+  `message_too_long`, `encoded_payload_rejected`, `rate_limited`)
 
 ## Architecture
 

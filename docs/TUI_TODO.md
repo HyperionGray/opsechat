@@ -59,10 +59,10 @@ This file tracks what needs to be done for the TUI chat system.
 - [ ] Implement message overwrite verification
   - [ ] Test memory overwriting actually works
   - [ ] Add optional wipe methods (zeros, random)
-- [ ] Add message rate limiting
-  - [ ] Prevent spam/flooding
-  - [ ] Per-user limits
-  - [ ] Configurable thresholds
+- [x] Add message rate limiting
+  - [x] Prevent spam/flooding
+  - [x] Per-user limits
+  - [x] Configurable thresholds
 - [ ] Improve message history management
   - [ ] Server-side message limit (not just client)
   - [ ] Memory usage monitoring
@@ -70,12 +70,12 @@ This file tracks what needs to be done for the TUI chat system.
 
 ### User Experience
 - [ ] Add status indicators
-  - [ ] Connection status
+  - [x] Connection status
   - [ ] Server health
-  - [ ] Number of connected users
+  - [x] Number of connected users
   - [ ] Time until message burn
 - [ ] Improve error handling
-  - [ ] Better error messages
+  - [x] Better error messages
   - [ ] Reconnection logic
   - [ ] Graceful degradation
 - [ ] Add TUI features
@@ -172,9 +172,11 @@ This file tracks what needs to be done for the TUI chat system.
 - ✅ Message overwriting on delete
 - ✅ Randomized usernames
 - ✅ Text-only validation
+- ✅ Per-user message rate limiting (12 messages / 30s)
+- ✅ Structured server error events for rejected payloads/rate limits
+- ✅ Live connected-user status updates in client footer
 - ⚠️ No E2E encryption yet (transport only via Tor)
 - ⚠️ No authentication (ephemeral by design)
-- ⚠️ No rate limiting yet
 
 ### Future Improvements
 - Add PGP for E2E encryption
