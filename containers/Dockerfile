@@ -24,7 +24,9 @@ RUN pip install --no-cache-dir -r requirements.txt || \
      echo "Attempting installation with --trusted-host (NOT RECOMMENDED FOR PRODUCTION)..." && \
      pip install --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt)
 
-# Copy application code (wildcard captures all current and future modules)
+# Copy key application entry points explicitly, then include remaining modules.
+COPY runserver.py ./
+COPY email_system.py ./
 COPY *.py ./
 COPY MANIFEST.in .
 COPY VERSION .

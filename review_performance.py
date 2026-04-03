@@ -11,6 +11,9 @@ import time
 _review_stats_cache = None
 _review_stats_cache_time = 0
 _cache_ttl = 60  # Cache for 60 seconds
+_review_counts_by_hash = {}
+_review_counts_hash_order = []
+_review_counts_cache_max_entries = 128
 
 def invalidate_review_cache():
     """Invalidate the review statistics cache"""
@@ -87,20 +90,53 @@ def get_user_review_count(user_id, reviews_hash):
     Get review count for a specific user (cached)
     reviews_hash is used to invalidate cache when reviews change
     """
-    # This would need to be implemented with actual review data
-    # For now, return 0 as placeholder
-    return 0
+    user_counts = _review_counts_by_hash.get(reviews_hash)
+    if not user_counts:
+        return 0
+    return user_counts.get(user_id, 0)
 
 def create_reviews_hash(reviews):
     """
     Create a hash of reviews for cache invalidation
     """
     if not reviews:
-        return hash(())
+        reviews_hash = hash(())
+        _cache_user_review_counts(reviews_hash, {})
+        return reviews_hash
     
-    # Create hash based on review count and latest timestamp
-    latest_timestamp = max(review["timestamp"] for review in reviews)
-    return hash((len(reviews), latest_timestamp.isoformat()))
+    # Use a stable fingerprint of review content so cache invalidation works
+    # even when count/timestamps are similar but ownership changes.
+    review_fingerprint = tuple(
+        sorted(
+            (
+                review.get("user_id", ""),
+                int(review.get("rating", 0)),
+                review["timestamp"].isoformat(),
+            )
+            for review in reviews
+        )
+    )
+    reviews_hash = hash(review_fingerprint)
+
+    user_counts = {}
+    for review in reviews:
+        user_id = review.get("user_id")
+        if user_id:
+            user_counts[user_id] = user_counts.get(user_id, 0) + 1
+
+    _cache_user_review_counts(reviews_hash, user_counts)
+    return reviews_hash
+
+
+def _cache_user_review_counts(reviews_hash, user_counts):
+    """Store per-user review counts by hash with bounded memory usage."""
+    if reviews_hash not in _review_counts_by_hash:
+        _review_counts_hash_order.append(reviews_hash)
+    _review_counts_by_hash[reviews_hash] = user_counts
+
+    while len(_review_counts_hash_order) > _review_counts_cache_max_entries:
+        oldest_hash = _review_counts_hash_order.pop(0)
+        _review_counts_by_hash.pop(oldest_hash, None)
 
 # Performance monitoring for review operations
 class ReviewPerformanceMonitor:

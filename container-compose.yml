@@ -38,6 +38,12 @@ services:
     # Uncomment for debugging/development only:
     # ports:
     #   - "5000:5000"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - opsechat-network
     restart: on-failure
