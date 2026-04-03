@@ -163,6 +163,21 @@ class TestChatRoutes:
         r2 = client.post("/chat/create").get_json()["room_id"]
         assert r1 != r2
 
+    def test_create_room_rate_limit_includes_retry_after_metadata(self, client):
+        for _ in range(3):
+            ok = client.post("/chat/create")
+            assert ok.status_code == 200
+
+        response = client.post("/chat/create")
+        assert response.status_code == 429
+        data = response.get_json()
+        assert data["status"] == "rate_limited"
+        assert data["endpoint"] == "chat_create"
+        assert data["retry_after_seconds"] >= 1
+        assert "limit" in data
+        assert "Retry-After" in response.headers
+        assert int(response.headers["Retry-After"]) >= 1
+
     def test_join_nonexistent_room_returns_404(self, client):
         response = client.get("/chat/room/nonexistent-room-id-xyz")
         assert response.status_code == 404
@@ -290,6 +305,30 @@ class TestDMRoutes:
     def test_view_dm_nonexistent(self, client):
         response = client.get("/chat/dm/nonexistent-dm-id")
         assert response.status_code == 404
+
+    def test_dm_rate_limit_returns_retry_after_header_and_metadata(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        for _ in range(5):
+            ok = client.post(
+                "/chat/dm/send",
+                json={"room_id": room_id, "message": "join"},
+                content_type="application/json",
+            )
+            assert ok.status_code == 200
+
+        response = client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "join"},
+            content_type="application/json",
+        )
+        assert response.status_code == 429
+        data = response.get_json()
+        assert data["status"] == "rate_limited"
+        assert data["endpoint"] == "dm_send"
+        assert data["retry_after_seconds"] >= 1
+        assert data["limit"]["max_requests"] == RATE_LIMITS["dm_send"]["max_requests"]
+        assert "Retry-After" in response.headers
+        assert int(response.headers["Retry-After"]) >= 1
 
     def test_view_dm_expired(self, client):
         from simple_chat_routes import direct_messages, dm_lock
@@ -465,3 +504,25 @@ class TestBugFixes:
             content_type="application/json",
         )
         assert response.status_code == 400
+
+    def test_chat_message_rate_limit_sets_retry_after_and_endpoint(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        for _ in range(RATE_LIMITS["chat_message"]["max_requests"]):
+            ok = client.post(
+                f"/chat/room/{room_id}/messages",
+                json={"message": "hello"},
+                content_type="application/json",
+            )
+            assert ok.status_code == 200
+
+        response = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "hello"},
+            content_type="application/json",
+        )
+        assert response.status_code == 429
+        data = response.get_json()
+        assert data["status"] == "rate_limited"
+        assert data["endpoint"] == "chat_message"
+        assert data["retry_after_seconds"] >= 1
+        assert "Retry-After" in response.headers

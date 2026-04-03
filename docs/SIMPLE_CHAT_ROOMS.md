@@ -142,6 +142,34 @@ POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
 
+### Rate limiting and backoff
+
+Write endpoints enforce per-session limits:
+
+- `POST /chat/create` - 10/minute (plus stricter per-minute limiter)
+- `POST /chat/room/<room_id>/messages` - 30/minute
+- `POST /chat/dm/send` - 5/minute
+
+When a limit is exceeded, the API returns HTTP `429` with:
+
+- `Retry-After` header with wait time in seconds
+- JSON payload:
+
+```json
+{
+  "error": "Rate limit exceeded. Try again in 12 seconds.",
+  "status": "rate_limited",
+  "endpoint": "chat_message",
+  "retry_after_seconds": 12,
+  "limit": {
+    "max_requests": 30,
+    "window_seconds": 60
+  }
+}
+```
+
+Clients should respect `Retry-After` (or `retry_after_seconds`) before retrying.
+
 ### Encryption Implementation
 
 The E2E encryption uses native Web Crypto API:

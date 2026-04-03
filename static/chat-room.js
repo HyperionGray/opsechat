@@ -163,6 +163,22 @@ function showStatus(message, duration = 3000) {
     }, duration);
 }
 
+function getRetryAfterSeconds(response, payload) {
+    const headerValue = response.headers.get('Retry-After');
+    const bodyValue = payload && payload.retry_after_seconds;
+    const parsed = Number.parseInt(headerValue || bodyValue, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+        return 1;
+    }
+    return parsed;
+}
+
+function getRateLimitMessage(response, payload, fallbackPrefix) {
+    const waitSeconds = getRetryAfterSeconds(response, payload);
+    const detail = payload && payload.error ? payload.error : `${fallbackPrefix}.`;
+    return `${detail} Retry in ${waitSeconds}s.`;
+}
+
 function scrollToBottom() {
     const container = document.getElementById('messagesContainer');
     container.scrollTop = container.scrollHeight;
@@ -240,7 +256,20 @@ async function sendMessage() {
             input.value = '';
             await pollMessages();
         } else {
-            showStatus('Error sending message');
+            let payload = null;
+            try {
+                payload = await response.json();
+            } catch (_err) {
+                payload = null;
+            }
+
+            if (response.status === 429) {
+                showStatus(getRateLimitMessage(response, payload, 'Rate limit exceeded'), 5000);
+                return;
+            }
+
+            const errText = payload && payload.error ? payload.error : 'Error sending message';
+            showStatus(errText);
         }
     } catch (error) {
         showStatus('Error: ' + error.message);

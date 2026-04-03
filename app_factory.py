@@ -6,7 +6,7 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -16,6 +16,11 @@ except ModuleNotFoundError:
         # This keeps containerized installs working even if rate_limiter.py
         # was not included in the image build.
         return app
+
+try:
+    from flask_limiter.errors import RateLimitExceeded
+except ModuleNotFoundError:
+    RateLimitExceeded = None
 
 
 def create_app():
@@ -27,6 +32,54 @@ def create_app():
     
     # Initialize rate limiter
     init_limiter(app)
+
+    if RateLimitExceeded is not None:
+        def _map_rate_limit_endpoint():
+            """Map request path/method to a stable endpoint key for clients."""
+            if request.method == "POST" and request.path == "/chat/create":
+                return "chat_create"
+            if (
+                request.method == "POST"
+                and request.path.startswith("/chat/room/")
+                and request.path.endswith("/messages")
+            ):
+                return "chat_message"
+            if request.method == "POST" and request.path == "/chat/dm/send":
+                return "dm_send"
+            return request.endpoint or request.path
+
+        @app.errorhandler(RateLimitExceeded)
+        def handle_rate_limit_exceeded(exc):
+            """
+            Return a consistent JSON response for all rate-limit violations.
+
+            Flask-Limiter can trigger before route handlers execute, so this
+            normalizes those 429 responses to match custom in-route backoff data.
+            """
+            retry_after = None
+            default_response = exc.get_response() if hasattr(exc, "get_response") else None
+            if default_response is not None:
+                retry_after = default_response.headers.get("Retry-After")
+            if retry_after is None:
+                retry_after = getattr(exc, "retry_after", None)
+
+            try:
+                retry_after_seconds = max(int(float(retry_after)), 1)
+            except (TypeError, ValueError):
+                retry_after_seconds = 1
+
+            response = jsonify({
+                "error": f"Rate limit exceeded. Try again in {retry_after_seconds} seconds.",
+                "status": "rate_limited",
+                "endpoint": _map_rate_limit_endpoint(),
+                "retry_after_seconds": retry_after_seconds,
+                "limit": {
+                    "configured": str(getattr(exc, "description", "")).strip() or None
+                },
+            })
+            response.status_code = 429
+            response.headers["Retry-After"] = str(retry_after_seconds)
+            return response
     
     # Initialize global state
     chatters = []
