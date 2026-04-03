@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} - OpSecChat</title>
+    <link rel="stylesheet" href="/static/legal-document.css">
+</head>
+<body>
+    <main class="document-container" role="main">
+        <header>
+            <h1>{{ title }}</h1>
+            <p class="subtitle">OpSecChat policy reference</p>
+        </header>
+
+        {% if not available %}
+        <section class="status unavailable" role="alert">
+            {{ content }}
+        </section>
+        {% else %}
+        <article class="document-content" aria-label="{{ title }} content">
+            <pre>{{ content }}</pre>
+        </article>
+        {% endif %}
+
+        <nav class="legal-nav" aria-label="Policy navigation">
+            <a href="/terms">Terms</a>
+            <a href="/aup">AUP</a>
+            <a href="/privacy">Privacy</a>
+        </nav>
+    </main>
+</body>
+</html>
