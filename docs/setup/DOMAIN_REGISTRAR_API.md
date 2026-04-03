@@ -8,7 +8,7 @@ Opsechat supports automated domain purchasing for rotating burner email addresse
 
 ## Supported Registrars
 
-### Porkbun (Recommended)
+### Porkbun (Recommended for full purchase flow)
 
 **Why Porkbun?**
 - Competitive pricing on cheap TLDs (.xyz from $1.99/yr)
@@ -53,20 +53,29 @@ Opsechat supports automated domain purchasing for rotating burner email addresse
 
 Full Porkbun API docs: [porkbun.com/api/json/v3/documentation](https://porkbun.com/api/json/v3/documentation)
 
-Key endpoints used by opsechat:
+Key endpoints used by OpSecChat:
 - `domain/check` - Check domain availability
 - `domain/create` - Purchase domain
 - `pricing/get` - Get TLD pricing
 - `domain/listAll` - List owned domains
 
+### Namecheap (Available with fallback support)
+
+Namecheap is now supported by `domain_manager.py` and can be configured as either:
+
+- **Primary registrar** (lookup + purchase when contact profile is configured)
+- **Fallback registrar** behind another primary
+
+Namecheap API docs: [namecheap.com/support/api/intro](https://www.namecheap.com/support/api/intro/)
+
+Notes:
+- Namecheap requires API whitelisting and account eligibility.
+- Purchase requires contact profile fields (registrant/admin/tech/billing details).
+- If contact profile is not configured, OpSecChat keeps Namecheap in lookup-only mode.
+
 ## Other Registrars (Future Support)
 
 The opsechat domain manager is designed to be extensible. Future registrar support may include:
-
-### Namecheap
-- API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
-- Cheap TLDs: .xyz, .club, .online
 
 ### Namesilo
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)
@@ -107,6 +116,11 @@ For container deployments, you can set:
 Environment=PORKBUN_API_KEY=pk1_xxxxx
 Environment=PORKBUN_API_SECRET=sk1_xxxxx
 Environment=DOMAIN_MONTHLY_BUDGET=50.0
+Environment=DOMAIN_REGISTRAR=porkbun
+Environment=NAMECHEAP_API_KEY=nc_xxxxx
+Environment=NAMECHEAP_USERNAME=your_namecheap_user
+Environment=NAMECHEAP_CLIENT_IP=1.2.3.4
+Environment=NAMECHEAP_SANDBOX=false
 ```
 
 Then modify the runserver.py to read these on startup.
@@ -126,9 +140,9 @@ http://yourservice.onion/{path}/email/config
 
 ## Domain Rotation Workflow
 
-1. **Initial Setup**: Configure API and budget
+1. **Initial Setup**: Configure one or more registrars and budget
 2. **Generate Burner**: Creates email with current domain
-3. **Auto-Rotate**: When domain is flagged/old, rotate to new domain
+3. **Auto-Rotate**: Search and purchase through primary registrar, fallback when needed
 4. **Manual Rotate**: Force rotation via email config page
 
 ## Security Considerations
@@ -183,6 +197,18 @@ Possible causes:
 - Account suspended
 
 Solution: Verify credentials in registrar dashboard
+
+### Namecheap is configured but domains are not being purchased
+
+Possible causes:
+- Contact profile not configured (lookup-only mode)
+- API client IP not whitelisted in Namecheap dashboard
+- Account/API eligibility restrictions
+
+Solution:
+1. Verify Namecheap API access and IP whitelist
+2. Configure contact profile data for purchases
+3. Keep Porkbun as fallback until Namecheap purchase flow is fully configured
 
 ## Example: Complete Setup
 

@@ -4,7 +4,7 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, NamecheapAPIClient, DomainRotationManager
 )
 
 
@@ -174,3 +174,83 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_and_get_config_for_porkbun(self):
+        """Test manager configure/get_config for Porkbun."""
+        manager = DomainRotationManager(monthly_budget=10.0)
+        config = manager.configure(
+            api_key="pk1_test_1234",
+            secret_key="sk1_test_9999",
+            monthly_budget=25.0,
+            registrar="porkbun"
+        )
+
+        assert config["has_api_client"] is True
+        assert config["monthly_budget"] == 25.0
+        assert config["active_registrar"] == "porkbun"
+        assert "porkbun" in config["registrars"]
+        assert config["registrars"]["porkbun"]["api_key_suffix"] == "1234"
+
+    def test_purchase_fallback_to_secondary_registrar(self):
+        """
+        If preferred registrar cannot purchase, manager should fallback to next.
+        """
+        # Namecheap client without contact profile: lookup-only, no purchase.
+        namecheap = NamecheapAPIClient(
+            api_key="nc_key",
+            username="nc_user",
+            client_ip="127.0.0.1",
+        )
+
+        # Porkbun can purchase.
+        porkbun = Mock(spec=DomainAPIClient)
+        porkbun.can_purchase.return_value = True
+        porkbun.purchase_domain.return_value = {"success": True, "domain": "fallback.xyz"}
+
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.add_api_client("namecheap", namecheap, make_primary=True)
+        manager.add_api_client("porkbun", porkbun, make_primary=False)
+
+        success = manager.purchase_domain_if_budget_allows(
+            "fallback.xyz",
+            2.49,
+            registrar="namecheap"
+        )
+
+        assert success is True
+        assert manager.active_registrar == "porkbun"
+        assert manager.active_domain == "fallback.xyz"
+        assert manager.current_spending == 2.49
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["registrar"] == "porkbun"
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap client local behavior (no network calls)."""
+
+    def test_can_purchase_requires_contact_profile(self):
+        """Namecheap purchases require complete contact profile."""
+        incomplete = NamecheapAPIClient(
+            api_key="nc_key",
+            username="nc_user",
+            client_ip="127.0.0.1",
+        )
+        assert incomplete.can_purchase() is False
+
+        complete = NamecheapAPIClient(
+            api_key="nc_key",
+            username="nc_user",
+            client_ip="127.0.0.1",
+            contact_profile={
+                "first_name": "Jane",
+                "last_name": "Doe",
+                "address1": "123 Main St",
+                "city": "Austin",
+                "state_province": "TX",
+                "postal_code": "73301",
+                "country": "US",
+                "phone": "+1.5555555555",
+                "email_address": "jane@example.com",
+            },
+        )
+        assert complete.can_purchase() is True
