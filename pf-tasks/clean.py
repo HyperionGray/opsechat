@@ -10,6 +10,25 @@ import shutil
 from pathlib import Path
 import argparse
 
+
+STALE_FILE_PATTERNS = (
+    "*~HEAD",
+    "*.orig",
+    "*.rej",
+    "*.bak",
+    "*.tmp",
+    "*.temp",
+    ".DS_Store",
+)
+
+SKIP_SCAN_DIRS = {
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "bak",
+}
+
 def run_command(cmd, cwd=None, check=True):
     """Run command with proper error handling"""
     print(f"[*] Running: {' '.join(cmd)}")
@@ -178,13 +197,146 @@ def clean_build_artifacts():
         pyc_file.unlink(missing_ok=True)
     
     # Remove test artifacts
-    test_dirs = ['test-results', 'playwright-report', '.pytest_cache']
+    test_dirs = ['test-results', 'playwright-report', '.pytest_cache', '.cache']
     for test_dir in test_dirs:
         test_path = project_root / test_dir
         if test_path.exists():
             print(f"[*] Removing {test_path}")
             shutil.rmtree(test_path, ignore_errors=True)
     
+    return True
+
+
+def _iter_repo_paths(project_root):
+    """
+    Yield files and directories while skipping noisy dependency/build trees.
+    """
+    for path in project_root.rglob("*"):
+        rel_parts = path.relative_to(project_root).parts
+        if any(part in SKIP_SCAN_DIRS for part in rel_parts):
+            continue
+        yield path
+
+
+def find_stale_files(project_root):
+    """Find stale/merge artifact files that should not stay in the repo."""
+    stale_files = set()
+    for pattern in STALE_FILE_PATTERNS:
+        for path in project_root.rglob(pattern):
+            if not path.is_file():
+                continue
+            rel_parts = path.relative_to(project_root).parts
+            if any(part in SKIP_SCAN_DIRS for part in rel_parts):
+                continue
+            stale_files.add(path)
+
+    return sorted(stale_files, key=lambda p: str(p.relative_to(project_root)))
+
+
+def find_redundant_directory_paths(project_root):
+    """
+    Find directories with repeated adjacent names (e.g. src/src or build/build).
+    """
+    redundant = []
+    for path in _iter_repo_paths(project_root):
+        if not path.is_dir():
+            continue
+        parts = path.relative_to(project_root).parts
+        for idx in range(len(parts) - 1):
+            if parts[idx] == parts[idx + 1]:
+                redundant.append(path)
+                break
+
+    return sorted(set(redundant), key=lambda p: str(p.relative_to(project_root)))
+
+
+def find_deep_directories(project_root, max_depth_warning):
+    """Find directories deeper than max_depth_warning for organization review."""
+    deep_dirs = []
+    for path in _iter_repo_paths(project_root):
+        if not path.is_dir():
+            continue
+        depth = len(path.relative_to(project_root).parts)
+        if depth > max_depth_warning:
+            deep_dirs.append(path)
+
+    return sorted(deep_dirs, key=lambda p: str(p.relative_to(project_root)))
+
+
+def collect_repo_hygiene_issues(project_root, max_depth_warning=6):
+    """Collect repository hygiene issues for reporting/fixing."""
+    return {
+        "stale_files": find_stale_files(project_root),
+        "redundant_dirs": find_redundant_directory_paths(project_root),
+        "deep_dirs": find_deep_directories(project_root, max_depth_warning=max_depth_warning),
+    }
+
+
+def print_repo_hygiene_report(project_root, issues, max_depth_warning):
+    """Print a human-readable hygiene report."""
+    stale_files = issues["stale_files"]
+    redundant_dirs = issues["redundant_dirs"]
+    deep_dirs = issues["deep_dirs"]
+
+    print("[*] Repository hygiene report")
+
+    if stale_files:
+        print(f"[!] Stale files found ({len(stale_files)}):")
+        for path in stale_files:
+            print(f"    - {path.relative_to(project_root)}")
+    else:
+        print("[✓] No stale files found")
+
+    if redundant_dirs:
+        print(f"[!] Redundant directory nesting found ({len(redundant_dirs)}):")
+        for path in redundant_dirs:
+            print(f"    - {path.relative_to(project_root)}")
+    else:
+        print("[✓] No redundant adjacent directory names found")
+
+    if deep_dirs:
+        print(
+            f"[!] Deep directory paths found ({len(deep_dirs)}) "
+            f"deeper than {max_depth_warning} levels:"
+        )
+        for path in deep_dirs:
+            print(f"    - {path.relative_to(project_root)}")
+    else:
+        print(f"[✓] No directories deeper than {max_depth_warning} levels")
+
+
+def remove_stale_files(stale_files):
+    """Remove stale files and return how many were deleted."""
+    removed = 0
+    for path in stale_files:
+        try:
+            path.unlink()
+            print(f"[*] Removed stale file: {path}")
+            removed += 1
+        except FileNotFoundError:
+            continue
+        except PermissionError:
+            print(f"[!] Permission denied removing stale file: {path}")
+    return removed
+
+
+def clean_repo_hygiene(fix=False, max_depth_warning=6):
+    """
+    Scan repository for hygiene issues.
+    If fix=True, stale files are removed automatically.
+    """
+    print("[*] Running repository hygiene scan")
+    project_root = Path(__file__).parent.parent
+    issues = collect_repo_hygiene_issues(
+        project_root,
+        max_depth_warning=max_depth_warning,
+    )
+    print_repo_hygiene_report(project_root, issues, max_depth_warning=max_depth_warning)
+
+    if fix and issues["stale_files"]:
+        removed = remove_stale_files(issues["stale_files"])
+        print(f"[✓] Removed {removed} stale file(s)")
+
     return True
 
 def determine_cleanup_method(args):
@@ -200,6 +352,9 @@ def determine_cleanup_method(args):
     Note: Images and build artifacts are only cleaned when their respective flags (--images, --artifacts) are set.
     """
     if args.method is None:
+        if (args.repo_hygiene or args.fix_repo_hygiene) and not args.images and not args.artifacts:
+            # Safety: repository hygiene scans should not implicitly stop/remove deployments.
+            return None
         if args.artifacts and not args.images:
             # Only clean artifacts when --artifacts is specified alone
             return None
@@ -218,6 +373,12 @@ def main():
     parser.add_argument('--images', action='store_true', help='Also remove container images')
     parser.add_argument('--force', action='store_true', help='Force removal of images')
     parser.add_argument('--artifacts', action='store_true', help='Clean build artifacts')
+    parser.add_argument('--repo-hygiene', action='store_true',
+                        help='Scan repository for stale files and structure issues')
+    parser.add_argument('--fix-repo-hygiene', action='store_true',
+                        help='Remove stale files discovered by --repo-hygiene scan')
+    parser.add_argument('--max-depth-warning', type=int, default=6,
+                        help='Directory depth threshold for hygiene warnings')
     
     args = parser.parse_args()
     
@@ -244,6 +405,12 @@ def main():
     # Only clean artifacts if explicitly requested via --artifacts flag
     if args.artifacts:
         success &= clean_build_artifacts()
+
+    if args.repo_hygiene or args.fix_repo_hygiene:
+        success &= clean_repo_hygiene(
+            fix=args.fix_repo_hygiene,
+            max_depth_warning=args.max_depth_warning,
+        )
     
     if success:
         print("[✓] Cleanup completed successfully")

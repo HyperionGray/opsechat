@@ -89,6 +89,12 @@ python pf-tasks/clean.py --images --force
 
 # Clean build artifacts
 python pf-tasks/clean.py --artifacts
+
+# Report repository hygiene (stale files, deep/duplicated directories)
+python pf-tasks/clean.py --repo-hygiene
+
+# Remove stale merge/backup artifacts found by hygiene scan
+python pf-tasks/clean.py --fix-repo-hygiene
 ```
 
 **Features:**
@@ -98,6 +104,8 @@ python pf-tasks/clean.py --artifacts
 - Removes networks and volumes
 - Optionally removes container images
 - Cleans build artifacts and cache
+- Scans repository hygiene for stale files and structural drift
+- Optionally removes stale merge/backup artifacts (`*~HEAD`, `*.orig`, etc.)
 
 ## Usage Patterns
 
