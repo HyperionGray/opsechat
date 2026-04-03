@@ -231,6 +231,28 @@ When Amazon Q becomes available, you'll need these permissions:
 }
 ```
 
+## Local deterministic analyzer mode (current behavior)
+
+The Amazon Q integration now includes a concrete local analysis mode for environments
+where cloud APIs are unavailable or intentionally disabled.
+
+What this mode does:
+- Computes code-quality metrics from repository contents (not fixed placeholder values)
+- Scans all source files for deterministic security patterns and severity counts
+- Calculates architecture scores from structure, dependencies, and detected patterns
+- Produces stable, repeatable output suitable for CI checks and local automation
+
+Scanner/analyzer identifiers emitted by this mode:
+- `amazon_q_local_security`
+- `amazon_q_local_heuristic`
+- `amazon_q_local_architecture`
+
+### Quick local verification
+
+```bash
+python -m pytest tests/test_amazon_q_local_analysis.py -q
+```
+
 ## Support
 
 For issues with:
@@ -240,4 +262,4 @@ For issues with:
 
 ---
 
-**Note**: This configuration is prepared for Amazon Q Developer CLI when it becomes publicly available. Current functionality uses alternative security scanning tools as placeholders.
+**Note**: This configuration is prepared for Amazon Q Developer CLI when it becomes publicly available. Current functionality uses deterministic local analyzers with optional cloud-assisted execution.
