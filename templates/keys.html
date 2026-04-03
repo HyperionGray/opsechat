@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpSecChat - Key Management</title>
+  <link rel="stylesheet" href="/static/keys.css">
+</head>
+<body>
+  <main class="container" role="main">
+    <h1>OpSecChat Key Management</h1>
+
+    <section class="panel" aria-label="Why keys matter">
+      <h2>Why this page exists</h2>
+      <ul>
+        <li>Your encryption keys are generated and stored in your browser only.</li>
+        <li>The server does not store private keys and cannot recover them.</li>
+        <li>Back up your private key if you need persistence across devices.</li>
+      </ul>
+    </section>
+
+    <section class="panel" aria-label="Key generation and import">
+      <h2>Manage Your Key Pair</h2>
+      <div class="actions">
+        <button id="generateKeyBtn" type="button">Generate New Key Pair</button>
+        <button id="importPrivateBtn" type="button">Import Private Key</button>
+        <button id="importPublicBtn" type="button">Import Public Key</button>
+        <button id="exportPrivateBtn" type="button">Export Private Key</button>
+        <button id="exportPublicBtn" type="button">Export Public Key</button>
+        <button id="deleteKeysBtn" class="danger" type="button">Delete Local Keys</button>
+      </div>
+      <div id="statusMsg" class="status" role="status" aria-live="polite"></div>
+    </section>
+
+    <section class="panel" aria-label="Stored key summary">
+      <h2>Current Key Status</h2>
+      <p id="hasPrivateKey">Private key: not loaded</p>
+      <p id="hasPublicKey">Public key: not loaded</p>
+      <textarea id="publicKeyPreview" readonly aria-label="Public key preview"></textarea>
+    </section>
+
+    <section class="panel" aria-label="First-time onboarding">
+      <h2>First-Time User Notes</h2>
+      <ul>
+        <li>Step 1: Generate a new key pair.</li>
+        <li>Step 2: Export your private key and store it securely.</li>
+        <li>Step 3: Share only your public key with contacts.</li>
+        <li>Step 4: Keep the private key secret; loss means unrecoverable access.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="footer">
+    OpSecChat {{ version|default('0.8.0-alpha') }}
+  </footer>
+
+  <input id="hiddenFileInput" type="file" accept=".asc,.txt" class="hidden-file-input" aria-label="Key file import">
+  <script src="{{ url_for('static', filename='openpgp.min.js') }}"></script>
+  <script src="/static/keys.js"></script>
+</body>
+</html>

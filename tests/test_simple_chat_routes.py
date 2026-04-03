@@ -465,3 +465,27 @@ class TestBugFixes:
             content_type="application/json",
         )
         assert response.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Key management UI route
+# ---------------------------------------------------------------------------
+
+class TestKeyManagementRoutes:
+    def test_keys_page_returns_200(self, client):
+        response = client.get("/keys")
+        assert response.status_code == 200
+
+    def test_keys_page_includes_external_assets_only(self, client):
+        response = client.get("/keys")
+        body = response.data.decode()
+        assert 'href="/static/keys.css"' in body
+        assert 'src="/static/openpgp.min.js"' in body
+        assert 'src="/static/keys.js"' in body
+        assert "<script>" not in body
+        assert "onclick=" not in body
+
+    def test_chat_index_links_to_keys_page(self, client):
+        response = client.get("/chat")
+        body = response.data.decode()
+        assert 'href="/keys"' in body

@@ -1,0 +1,110 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background: #000;
+    color: #0f0;
+    font-family: "Courier New", monospace;
+    line-height: 1.5;
+    padding: 20px;
+}
+
+.container {
+    margin: 0 auto;
+    max-width: 960px;
+}
+
+h1 {
+    margin-bottom: 24px;
+    text-align: center;
+}
+
+.panel {
+    background: #001100;
+    border: 1px solid #0f0;
+    margin-bottom: 18px;
+    padding: 16px;
+}
+
+.panel h2 {
+    margin-bottom: 10px;
+}
+
+.panel ul {
+    margin-left: 20px;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+button {
+    background: #0f0;
+    border: 0;
+    color: #000;
+    cursor: pointer;
+    font-family: "Courier New", monospace;
+    font-weight: bold;
+    padding: 10px 14px;
+}
+
+button:hover {
+    background: #00cc00;
+}
+
+button.danger {
+    background: #ff4040;
+    color: #fff;
+}
+
+button.danger:hover {
+    background: #cc2020;
+}
+
+.status {
+    min-height: 22px;
+}
+
+.status.is-info {
+    color: #0ff;
+}
+
+.status.is-error {
+    color: #ff5252;
+}
+
+.status.is-ok {
+    color: #00ff9a;
+}
+
+#publicKeyPreview {
+    background: #000;
+    border: 1px solid #0f0;
+    color: #0f0;
+    display: block;
+    font-family: "Courier New", monospace;
+    margin-top: 12px;
+    min-height: 140px;
+    padding: 10px;
+    resize: vertical;
+    width: 100%;
+}
+
+.hidden-file-input {
+    display: none;
+}
+
+.footer {
+    border-top: 1px solid #0f0;
+    color: #0a0;
+    font-size: 0.9rem;
+    margin-top: 30px;
+    padding-top: 10px;
+    text-align: center;
+}

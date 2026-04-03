@@ -82,8 +82,6 @@ def create_app():
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
@@ -96,6 +94,10 @@ def create_app():
     # Register simple chat routes (new simplified interface)
     from simple_chat_routes import register_simple_chat_routes
     register_simple_chat_routes(app)
+
+    # Register browser-side key management routes
+    from keys_routes import register_keys_routes
+    register_keys_routes(app)
     
     # Register email routes
     from email_routes import register_email_routes
