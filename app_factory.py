@@ -22,6 +22,12 @@ try:
 except ModuleNotFoundError:
     RateLimitExceeded = None
 
+_KNOWN_RATE_LIMITS = {
+    "chat_create": {"max_requests": 10, "window_seconds": 60},
+    "chat_message": {"max_requests": 30, "window_seconds": 60},
+    "dm_send": {"max_requests": 5, "window_seconds": 60},
+}
+
 
 def create_app():
     """Create and configure the Flask application"""
@@ -74,6 +80,7 @@ def create_app():
                 "endpoint": _map_rate_limit_endpoint(),
                 "retry_after_seconds": retry_after_seconds,
                 "limit": {
+                    **_KNOWN_RATE_LIMITS.get(_map_rate_limit_endpoint(), {}),
                     "configured": str(getattr(exc, "description", "")).strip() or None
                 },
             })
