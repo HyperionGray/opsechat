@@ -24,7 +24,9 @@ RUN pip install --no-cache-dir -r requirements.txt || \
      echo "Attempting installation with --trusted-host (NOT RECOMMENDED FOR PRODUCTION)..." && \
      pip install --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt)
 
-# Copy application code (wildcard captures all current and future modules)
+# Copy application code (core entry points explicit for clarity, wildcard for new modules)
+COPY runserver.py ./
+COPY email_system.py ./
 COPY *.py ./
 COPY MANIFEST.in .
 COPY VERSION .
@@ -39,6 +41,10 @@ EXPOSE 5000
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV TOR_CONTROL_PORT=9051
+
+# Container health check for orchestrators and local diagnostics
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl --fail --silent http://127.0.0.1:5000/health || exit 1
 
 # Run the application
 CMD ["python", "runserver.py"]

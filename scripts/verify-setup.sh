@@ -34,6 +34,13 @@ echo "========================================"
 echo "Opsechat Container Verification"
 echo "========================================"
 echo ""
+echo -e "${YELLOW}[*]${NC} Running compose status checks..."
+if "$REPO_ROOT/scripts/compose-status.sh" --detailed; then
+    echo -e "${GREEN}[✓]${NC} compose-status checks passed"
+else
+    echo -e "${YELLOW}[⚠]${NC} compose-status reported issues; continuing with legacy checks"
+fi
+echo ""
 
 # Check if containers are running
 echo -e "${YELLOW}[*]${NC} Checking container status..."
@@ -112,6 +119,7 @@ echo "========================================"
 echo ""
 echo "Useful commands:"
 echo "  View logs:          $COMPOSE_CMD -f $COMPOSE_FILE logs -f"
+echo "  Check health:       ./compose-status.sh"
 echo "  Restart services:   ./compose-down.sh && ./compose-up.sh"
 echo "  Stop services:      ./compose-down.sh"
 echo ""

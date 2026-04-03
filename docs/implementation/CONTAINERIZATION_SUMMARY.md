@@ -62,9 +62,10 @@ The opsechat application has been containerized using a two-container architectu
 3. **torrc** - Tor daemon configuration
 4. **compose-up.sh** - Convenience script to start services
 5. **compose-down.sh** - Convenience script to stop services
-6. **verify-setup.sh** - Post-deployment verification script
-7. **DOCKER.md** - Comprehensive containerization documentation
-8. **.dockerignore** - Build optimization (excludes tests, docs, etc.)
+6. **compose-status.sh** - Fast container health and state diagnostics
+7. **verify-setup.sh** - Post-deployment verification script
+8. **DOCKER.md** - Comprehensive containerization documentation
+9. **.dockerignore** - Build optimization (excludes tests, docs, etc.)
 
 ### Modified Files
 
@@ -210,6 +211,7 @@ For local development (NOT recommended for production):
 5. **Script Tests**
    - ✅ compose-up.sh is executable
    - ✅ compose-down.sh is executable
+   - ✅ compose-status.sh is executable
    - ✅ verify-setup.sh is executable
    - ✅ Auto-detection of compose tools works
 

@@ -262,6 +262,9 @@ class TestScripts:
     def test_install_quadlets_script_exists(self):
         self.assert_script_location('install-quadlets.sh')
 
+    def test_compose_status_script_exists(self):
+        self.assert_script_location('compose-status.sh')
+
 
 class TestReleaseSkeleton:
     """Test the requested release layout exists."""

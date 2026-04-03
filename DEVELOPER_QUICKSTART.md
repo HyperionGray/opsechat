@@ -68,6 +68,7 @@ The server prints the generated `.onion` URL and secret path at startup.
 ```bash
 cd /path/to/opsechat
 ./compose-up.sh
+./compose-status.sh
 ./compose-down.sh
 ```
 

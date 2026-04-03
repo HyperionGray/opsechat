@@ -37,17 +37,21 @@ echo "[*] Services starting..."
 echo "[*] Waiting for services to be ready..."
 sleep 5
 
-# Check if services are running
-if $COMPOSE_CMD -f "$COMPOSE_FILE" ps | grep -q "opsechat-tor"; then
-    echo "[✓] Tor daemon is running"
+# Check if services are running/healthy via status helper
+if [ -x "$REPO_ROOT/scripts/compose-status.sh" ]; then
+    "$REPO_ROOT/scripts/compose-status.sh"
 else
-    echo "[!] Tor daemon failed to start"
-fi
+    if $COMPOSE_CMD -f "$COMPOSE_FILE" ps | grep -q "opsechat-tor"; then
+        echo "[✓] Tor daemon is running"
+    else
+        echo "[!] Tor daemon failed to start"
+    fi
 
-if $COMPOSE_CMD -f "$COMPOSE_FILE" ps | grep -q "opsechat-app"; then
-    echo "[✓] Opsechat application is running"
-else
-    echo "[!] Opsechat application failed to start"
+    if $COMPOSE_CMD -f "$COMPOSE_FILE" ps | grep -q "opsechat-app"; then
+        echo "[✓] Opsechat application is running"
+    else
+        echo "[!] Opsechat application failed to start"
+    fi
 fi
 
 echo ""
@@ -56,6 +60,9 @@ echo "    $COMPOSE_CMD -f $COMPOSE_FILE logs opsechat"
 echo ""
 echo "[*] To verify the setup is working, run:"
 echo "    ./verify-setup.sh"
+echo ""
+echo "[*] To show runtime and health status, run:"
+echo "    ./compose-status.sh"
 echo ""
 echo "[*] To view all logs in real-time, run:"
 echo "    $COMPOSE_CMD logs -f"

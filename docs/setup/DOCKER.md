@@ -37,7 +37,22 @@ This script will:
 2. Build the opsechat container image
 3. Start the Tor daemon
 4. Start the opsechat application
-5. Display status and instructions
+5. Run a health/status snapshot via `./compose-status.sh`
+6. Display status and instructions
+
+### Service Status Snapshot
+
+Use the status helper at any time:
+
+```bash
+./compose-status.sh
+```
+
+This checks:
+- Container running status
+- Container health (`healthy` / `starting` / `unhealthy`)
+- Current compose `ps` output
+- Recent app logs containing hidden service startup lines
 
 ### Viewing the Onion Address
 
