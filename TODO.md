@@ -18,6 +18,7 @@
 - [x] Structured logging / APM via `monitoring.py`
 - [x] Test suite for `simple_chat_routes.py` (31 tests)
 - [x] Fixed `datetime.utcnow()` deprecation – use `datetime.now(timezone.utc)`
+- [x] Domain rotation CLI state hardening (datetime-safe persistence and expired-state pruning command)
 
 ---
 

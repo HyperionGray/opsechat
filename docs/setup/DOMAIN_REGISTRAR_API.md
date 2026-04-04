@@ -117,7 +117,7 @@ Opsechat includes budget controls to prevent accidental overspending:
 
 - **Monthly Budget**: Maximum amount to spend per month
 - **Domain Price Limit**: Maximum price per domain (default: $5)
-- **Current Spending**: Tracked in-memory (resets on restart)
+- **Current Spending**: Tracked and persisted in local CLI config (`~/.opsechat/domain_config.json`) for `domain_rotation_cli.py`
 
 View budget status:
 ```
@@ -135,7 +135,7 @@ http://yourservice.onion/{path}/email/config
 
 ### API Key Storage
 
-⚠️ **Important**: API keys are stored in-memory only. They are NOT persisted to disk. After restart, you must reconfigure.
+⚠️ **Important**: API keys are persisted by `domain_rotation_cli.py` in `~/.opsechat/domain_config.json` (permissions `0600`). Protect this file and never commit credentials to version control.
 
 For persistent configuration:
 - Use environment variables in your deployment
@@ -151,7 +151,7 @@ All domains purchased through the API will use registrar privacy protection (Por
 - Always set a monthly budget
 - Start with a low budget for testing ($10-20)
 - Monitor spending in the config page
-- Budget resets on application restart (intentional for ephemeral deployments)
+- CLI state can be cleaned with `python domain_rotation_cli.py prune` to remove expired local-domain records
 
 ## Troubleshooting
 

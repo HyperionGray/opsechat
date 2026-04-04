@@ -11,6 +11,7 @@ Usage:
     python domain_rotation_cli.py rotate        # Rotate to a new domain
     python domain_rotation_cli.py status        # Show budget status
     python domain_rotation_cli.py config        # Configure API credentials
+    python domain_rotation_cli.py prune         # Remove expired local domains
 """
 
 import argparse
@@ -19,10 +20,68 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _parse_datetime(value):
+    """Best-effort conversion of config timestamps to datetime."""
+    if isinstance(value, datetime):
+        return value
+    if not value:
+        return None
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            # Backward compatibility with common non-ISO datetime formatting.
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+                try:
+                    return datetime.strptime(value, fmt)
+                except ValueError:
+                    continue
+    return None
+
+
+def _serialize_domain_record(domain):
+    """Serialize one owned-domain record to JSON-safe values."""
+    record = dict(domain)
+    for field in ("purchased_at", "expires_at"):
+        value = record.get(field)
+        if isinstance(value, datetime):
+            record[field] = value.isoformat()
+    return record
+
+
+def _deserialize_domain_record(domain):
+    """Deserialize one owned-domain record from config."""
+    record = dict(domain)
+    for field in ("purchased_at", "expires_at"):
+        parsed = _parse_datetime(record.get(field))
+        if parsed is not None:
+            record[field] = parsed
+    return record
+
+
+def _serialize_owned_domains(domains):
+    return [_serialize_domain_record(domain) for domain in domains]
+
+
+def _deserialize_owned_domains(domains):
+    return [_deserialize_domain_record(domain) for domain in domains]
+
+
+def _is_expired_domain(domain, now=None):
+    """Return True when a domain record is expired."""
+    now = now or datetime.now()
+    expires_at = domain.get("expires_at")
+    expires_dt = _parse_datetime(expires_at) if not isinstance(expires_at, datetime) else expires_at
+    if expires_dt is None:
+        return False
+    return expires_dt <= now
 
 
 def load_config():
@@ -109,10 +168,14 @@ def get_manager():
     )
     
     # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
+    if config.get('current_spending') is not None:
+        try:
+            manager.current_spending = float(config['current_spending'])
+        except (TypeError, ValueError):
+            print("Warning: Invalid current_spending in config, resetting to 0")
+            manager.current_spending = 0.0
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = _deserialize_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +185,7 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = _serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -141,12 +204,53 @@ def list_domains():
         return
     
     for i, domain in enumerate(domains, 1):
+        purchased_at = domain.get('purchased_at')
+        expires_at = domain.get('expires_at')
+        purchased_display = (
+            purchased_at.strftime('%Y-%m-%d %H:%M')
+            if isinstance(purchased_at, datetime)
+            else str(purchased_at or 'unknown')
+        )
+        expires_display = (
+            expires_at.strftime('%Y-%m-%d')
+            if isinstance(expires_at, datetime)
+            else str(expires_at or 'unknown')
+        )
+
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
-        print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Price: ${domain.get('price', 'unknown')}")
+        print(f"   Purchased: {purchased_display}")
+        print(f"   Expires: {expires_display}")
         print()
+
+
+def prune_domains():
+    """Remove expired domains from local CLI state."""
+    manager, config = get_manager()
+
+    now = datetime.now()
+    kept = []
+    removed = []
+
+    for domain in manager.get_owned_domains():
+        if _is_expired_domain(domain, now=now):
+            removed.append(domain)
+        else:
+            kept.append(domain)
+
+    manager.owned_domains = kept
+
+    if manager.active_domain and manager.active_domain not in {d.get('domain') for d in kept}:
+        manager.active_domain = kept[-1]["domain"] if kept else None
+
+    if removed:
+        save_manager_state(manager, config)
+        print(f"Removed {len(removed)} expired domain(s) from saved state.")
+    else:
+        print("No expired domains found in saved state.")
+
+    print(f"Remaining domains: {len(kept)}")
 
 
 def search_domains():
@@ -245,12 +349,13 @@ Examples:
   python domain_rotation_cli.py search     # Search for available domains
   python domain_rotation_cli.py rotate     # Rotate to a new domain
   python domain_rotation_cli.py list       # List owned domains
+  python domain_rotation_cli.py prune      # Remove expired local domains
         """
     )
     
     parser.add_argument(
         'command',
-        choices=['config', 'status', 'search', 'rotate', 'list'],
+        choices=['config', 'status', 'search', 'rotate', 'list', 'prune'],
         help='Command to execute'
     )
     
@@ -266,6 +371,8 @@ Examples:
         rotate_domain()
     elif args.command == 'list':
         list_domains()
+    elif args.command == 'prune':
+        prune_domains()
 
 
 if __name__ == '__main__':

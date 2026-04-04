@@ -1,10 +1,15 @@
 """
 Tests for domain management module
 """
-import pytest
+from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+)
+from domain_rotation_cli import (
+    _deserialize_owned_domains,
+    _is_expired_domain,
+    _serialize_owned_domains,
 )
 
 
@@ -174,3 +179,42 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+
+class TestDomainRotationCLIStateSerialization:
+    """Test persisted state handling for domain rotation CLI."""
+
+    def test_serialize_owned_domains_converts_datetimes(self):
+        now = datetime.now()
+        domains = [{
+            "domain": "alpha.xyz",
+            "price": 1.99,
+            "purchased_at": now,
+            "expires_at": now + timedelta(days=365),
+        }]
+
+        serialized = _serialize_owned_domains(domains)
+
+        assert isinstance(serialized[0]["purchased_at"], str)
+        assert isinstance(serialized[0]["expires_at"], str)
+
+    def test_deserialize_owned_domains_restores_datetimes(self):
+        domains = [{
+            "domain": "alpha.xyz",
+            "price": 1.99,
+            "purchased_at": "2026-03-01T14:23:00",
+            "expires_at": "2027-03-01T14:23:00",
+        }]
+
+        deserialized = _deserialize_owned_domains(domains)
+
+        assert isinstance(deserialized[0]["purchased_at"], datetime)
+        assert isinstance(deserialized[0]["expires_at"], datetime)
+
+    def test_is_expired_domain_handles_string_timestamps(self):
+        now = datetime.now()
+        expired = {"expires_at": (now - timedelta(days=1)).isoformat()}
+        active = {"expires_at": (now + timedelta(days=1)).isoformat()}
+
+        assert _is_expired_domain(expired, now=now) is True
+        assert _is_expired_domain(active, now=now) is False

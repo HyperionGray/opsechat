@@ -284,7 +284,16 @@ After rotating domains, update your email configuration:
 - Set monthly budget to prevent overspending
 - CLI tracks spending automatically
 - Prevents purchases that would exceed budget
-- Resets monthly (manual reset required)
+- Local CLI state is persisted in `~/.opsechat/domain_config.json` with datetime-safe format
+
+#### Prune Expired Domains from Local CLI State
+```bash
+python domain_rotation_cli.py prune
+
+Output:
+Removed 1 expired domain(s) from saved state.
+Remaining domains: 3
+```
 
 ---
 
