@@ -85,6 +85,8 @@ class ChatClient:
         footer_text = [
             ('info', 'Enter'),
             ': Send | ',
+            ('info', '/help'),
+            ': Commands | ',
             ('info', 'Ctrl+C'),
             ': Quit | ',
             ('warn', 'Your username: '),
@@ -217,12 +219,61 @@ class ChatClient:
             username = msg.get('username', 'Unknown')
             message = msg.get('message', '')
             self.add_message(username, message)
+
+        elif msg_type == 'command_response':
+            self.handle_command_response(msg)
+
+    def handle_command_response(self, msg):
+        """Render a command response from the server in the system message area."""
+        command = msg.get('command', '')
+        success = msg.get('success', False)
+        base_message = msg.get('message', '')
+        data = msg.get('data', {}) or {}
+
+        if command == 'help' and success:
+            commands = data.get('commands') or ['/help', '/status', '/users', '/quit']
+            self.add_message("System", "Commands: " + ", ".join(commands), is_system=True)
+            return
+
+        if command == 'status' and success:
+            uptime = int(data.get('uptime_seconds', 0))
+            users = data.get('connected_users', 0)
+            messages = data.get('message_count', 0)
+            burn = data.get('message_lifetime_seconds', 0)
+            max_len = data.get('max_message_length', 0)
+            status_text = (
+                f"Status: uptime={uptime}s users={users} "
+                f"messages={messages} burn={burn}s max_len={max_len}"
+            )
+            self.add_message("System", status_text, is_system=True)
+            return
+
+        if command == 'users' and success:
+            users = data.get('connected_users', 0)
+            self.add_message("System", f"Connected users: {users}", is_system=True)
+            return
+
+        if command == 'quit' and msg.get('disconnect'):
+            self.add_message("System", base_message or "Disconnected by command.", is_system=True)
+            self.running = False
+            return
+
+        if base_message:
+            self.add_message("System", base_message, is_system=True)
+        else:
+            self.add_message(
+                "System",
+                f"Command {'succeeded' if success else 'failed'}: {command}",
+                is_system=True
+            )
     
     def update_footer(self):
         """Update the footer with current username"""
         footer_text = [
             ('info', 'Enter'),
             ': Send | ',
+            ('info', '/help'),
+            ': Commands | ',
             ('info', 'Ctrl+C'),
             ': Quit | ',
             ('warn', 'Your username: '),
@@ -249,13 +300,38 @@ class ChatClient:
             self.socket.send((json.dumps(msg_obj) + '\n').encode())
         except Exception as e:
             self.add_message("System", f"Failed to send: {e}", is_system=True)
+
+    def send_command(self, command):
+        """Send a slash command to the server."""
+        if not command or not self.socket:
+            return
+
+        command = command.strip()
+        if not command:
+            self.add_message("System", "Empty command. Use /help.", is_system=True)
+            return
+
+        try:
+            msg_obj = {
+                'type': 'command',
+                'command': command
+            }
+            self.socket.send((json.dumps(msg_obj) + '\n').encode())
+        except Exception as e:
+            self.add_message("System", f"Failed to send command: {e}", is_system=True)
     
     def handle_input(self, key):
         """Handle keyboard input"""
         if key == 'enter':
             message = self.input_box.get_edit_text()
             if message.strip():
-                self.send_message(message.strip())
+                text = message.strip()
+                if text.startswith('/'):
+                    self.send_command(text)
+                    if text.split(' ', 1)[0].lower() == '/quit':
+                        raise urwid.ExitMainLoop()
+                else:
+                    self.send_message(text)
                 self.input_box.set_edit_text("")
             return
         

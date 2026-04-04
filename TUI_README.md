@@ -15,6 +15,7 @@ This is a serious privacy and opsec tool for serious privacy and opsec people. I
 ✅ **Zero Disk** - Nothing touches disk except the application code  
 ✅ **Tor Integration** - Full support for Tor hidden services (.onion)  
 ✅ **SOCKS Proxy** - Client supports connecting via Tor SOCKS proxy  
+✅ **Slash Commands** - Built-in `/help`, `/status`, `/users`, and `/quit`  
 
 ## Quick Start
 
@@ -80,6 +81,17 @@ The client will automatically use Tor SOCKS proxy if:
 - Press **Ctrl+C** to quit
 - Your username is randomly assigned (e.g., `PhantomRaven4523`)
 - Messages automatically disappear after 4 minutes
+
+### 5. Use Slash Commands
+
+The TUI client supports lightweight built-in commands:
+
+- `/help` - list available commands
+- `/status` - show server diagnostics (uptime, users, message count, limits)
+- `/users` - show current connected user count
+- `/quit` - disconnect cleanly from the server
+
+Commands are entered in the same input box as normal messages.
 
 ## Privacy & Security Features
 
@@ -162,6 +174,7 @@ sudo systemctl start tor
 - Separate thread for receiving messages
 - Real-time message display
 - Color-coded messages (your messages vs others)
+- Slash-command input path for local diagnostics and graceful disconnect
 
 ## Development
 
@@ -248,6 +261,7 @@ Messages are:
 - [ ] Multi-room support
 - [ ] Message signing/verification
 - [ ] Improved standardized identity system
+- [ ] `/encrypt <on|off>` command
 
 ## Security Notes
 

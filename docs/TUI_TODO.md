@@ -74,6 +74,11 @@ This file tracks what needs to be done for the TUI chat system.
   - [ ] Server health
   - [ ] Number of connected users
   - [ ] Time until message burn
+- [x] Add slash-command status queries
+  - [x] `/help`
+  - [x] `/status`
+  - [x] `/users`
+  - [x] `/quit`
 - [ ] Improve error handling
   - [ ] Better error messages
   - [ ] Reconnection logic
@@ -186,5 +191,5 @@ This file tracks what needs to be done for the TUI chat system.
 ---
 
 **Created**: 2026-02-26  
-**Last Updated**: 2026-02-26  
+**Last Updated**: 2026-04-04  
 **Status**: Phase 1 Complete, Phase 2 In Progress

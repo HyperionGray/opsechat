@@ -71,7 +71,7 @@ You'll see the TUI interface:
 ┌────────────────────────────────────────────────────────┐
 │ >>> [Type your message here]                           │
 └────────────────────────────────────────────────────────┘
- Enter: Send | Ctrl+C: Quit | Your username: ShadowFox3421
+ Enter: Send | /help: Commands | Ctrl+C: Quit | Your username: ShadowFox3421
 ```
 
 ### Chat!
@@ -82,6 +82,15 @@ You'll see the TUI interface:
 4. Press **Ctrl+C** to quit
 
 **Try opening multiple clients** to test multi-user chat!
+
+### Useful Slash Commands
+
+Type these into the input prompt:
+
+- `/help` - List available slash commands
+- `/status` - Show server uptime and message stats
+- `/users` - Show connected user count
+- `/quit` - Gracefully disconnect from the server
 
 ## Production Use (With Tor)
 
