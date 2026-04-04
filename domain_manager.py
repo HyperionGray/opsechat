@@ -6,13 +6,14 @@ import requests
 import random
 import string
 import logging
+from abc import ABC, abstractmethod
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
 
-class DomainAPIClient:
+class DomainAPIClient(ABC):
     """
     Base class for domain registrar API clients
     """
@@ -21,17 +22,20 @@ class DomainAPIClient:
         self.api_key = api_key
         self.api_secret = api_secret
     
+    @abstractmethod
     def search_domain(self, domain: str) -> Dict:
         """Search if domain is available"""
-        raise NotImplementedError
+        ...
     
+    @abstractmethod
     def purchase_domain(self, domain: str, years: int = 1) -> Dict:
         """Purchase domain"""
-        raise NotImplementedError
+        ...
     
+    @abstractmethod
     def get_pricing(self, tld: str) -> Dict:
         """Get pricing for TLD"""
-        raise NotImplementedError
+        ...
 
 
 class PorkbunAPIClient(DomainAPIClient):
@@ -127,6 +131,8 @@ class DomainRotationManager:
     Automatically purchase cheap domains and rotate them
     """
     
+    STATE_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%f"
+
     def __init__(self, api_client: Optional[DomainAPIClient] = None, 
                  monthly_budget: float = 50.0):
         self.api_client = api_client
@@ -134,10 +140,165 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+        self.last_budget_reset = self._current_budget_cycle()
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+
+    @staticmethod
+    def _parse_price(raw_price) -> Optional[float]:
+        """Normalize registrar price values into a float."""
+        if isinstance(raw_price, (int, float)):
+            return float(raw_price)
+
+        if isinstance(raw_price, str):
+            normalized = raw_price.strip().replace(",", "")
+            for symbol in ("$", "€", "£"):
+                normalized = normalized.replace(symbol, "")
+
+            if not normalized:
+                return None
+
+            try:
+                return float(normalized)
+            except ValueError:
+                return None
+
+        return None
+
+    @staticmethod
+    def _current_budget_cycle() -> str:
+        """Return budget cycle key as YYYY-MM in UTC."""
+        return datetime.now(timezone.utc).strftime("%Y-%m")
+
+    def _ensure_budget_cycle(self):
+        """Reset monthly spend automatically when the month changes."""
+        current_cycle = self._current_budget_cycle()
+
+        if self.last_budget_reset != current_cycle:
+            logger.info(
+                "Resetting monthly domain budget usage: %s -> %s",
+                self.last_budget_reset,
+                current_cycle
+            )
+            self.current_spending = 0.0
+            self.last_budget_reset = current_cycle
+
+    @classmethod
+    def _serialize_datetime(cls, value: datetime) -> str:
+        return value.strftime(cls.STATE_DATETIME_FORMAT)
+
+    @classmethod
+    def _deserialize_datetime(cls, value, default: Optional[datetime] = None) -> datetime:
+        if isinstance(value, datetime):
+            return value
+
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                pass
+            try:
+                return datetime.strptime(value, cls.STATE_DATETIME_FORMAT)
+            except ValueError:
+                pass
+
+        return default or datetime.now()
+
+    def _serialize_domain_record(self, record: Dict) -> Optional[Dict]:
+        domain = str(record.get("domain", "")).strip()
+        if not domain:
+            return None
+
+        price = self._parse_price(record.get("price"))
+        purchased_at = self._deserialize_datetime(record.get("purchased_at"), default=datetime.now())
+        expires_at = self._deserialize_datetime(
+            record.get("expires_at"),
+            default=purchased_at + timedelta(days=365)
+        )
+
+        serialized = {
+            "domain": domain,
+            "price": 0.0 if price is None else price,
+            "purchased_at": self._serialize_datetime(purchased_at),
+            "expires_at": self._serialize_datetime(expires_at)
+        }
+
+        order_id = record.get("order_id")
+        if order_id:
+            serialized["order_id"] = order_id
+
+        return serialized
+
+    def _deserialize_domain_record(self, record: Dict) -> Optional[Dict]:
+        domain = str(record.get("domain", "")).strip()
+        if not domain:
+            return None
+
+        price = self._parse_price(record.get("price"))
+        purchased_at = self._deserialize_datetime(record.get("purchased_at"), default=datetime.now())
+        expires_at = self._deserialize_datetime(
+            record.get("expires_at"),
+            default=purchased_at + timedelta(days=365)
+        )
+
+        deserialized = {
+            "domain": domain,
+            "price": 0.0 if price is None else price,
+            "purchased_at": purchased_at,
+            "expires_at": expires_at
+        }
+
+        order_id = record.get("order_id")
+        if order_id:
+            deserialized["order_id"] = order_id
+
+        return deserialized
+
+    def export_state(self) -> Dict:
+        """
+        Export JSON-safe state for persistence.
+        """
+        self._ensure_budget_cycle()
+        serialized_domains = []
+        for record in self.owned_domains:
+            serialized = self._serialize_domain_record(record)
+            if serialized:
+                serialized_domains.append(serialized)
+
+        return {
+            "current_spending": self.current_spending,
+            "owned_domains": serialized_domains,
+            "active_domain": self.active_domain,
+            "last_budget_reset": self.last_budget_reset
+        }
+
+    def restore_state(self, state: Optional[Dict]):
+        """
+        Restore manager state from persisted config.
+        Handles old and mixed-format records safely.
+        """
+        if not state:
+            return
+
+        spending = self._parse_price(state.get("current_spending"))
+        self.current_spending = 0.0 if spending is None else spending
+
+        active_domain = state.get("active_domain")
+        self.active_domain = str(active_domain).strip() if active_domain else None
+
+        raw_cycle = state.get("last_budget_reset")
+        self.last_budget_reset = str(raw_cycle) if raw_cycle else self._current_budget_cycle()
+
+        self.owned_domains = []
+        for record in (state.get("owned_domains") or []):
+            if isinstance(record, dict):
+                parsed = self._deserialize_domain_record(record)
+                if parsed:
+                    self.owned_domains.append(parsed)
+
+        self._ensure_budget_cycle()
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -168,11 +329,10 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
+                price = self._parse_price(result.get("price"))
+                if price is None:
+                    logger.warning("Skipping %s due to unparseable price: %r", domain, result.get("price"))
+                    continue
                 
                 if price <= max_price:
                     return {
@@ -192,29 +352,38 @@ class DomainRotationManager:
             logger.error("No API client configured")
             return False
         
+        normalized_price = self._parse_price(price)
+        if normalized_price is None:
+            logger.error("Invalid domain price: %r", price)
+            return False
+
+        self._ensure_budget_cycle()
+
         # Check budget
-        if self.current_spending + price > self.monthly_budget:
+        if self.current_spending + normalized_price > self.monthly_budget:
             logger.warning(f"Budget exceeded. Current: ${self.current_spending}, "
-                          f"Requested: ${price}, Budget: ${self.monthly_budget}")
+                          f"Requested: ${normalized_price}, Budget: ${self.monthly_budget}")
             return False
         
         # Attempt purchase
         result = self.api_client.purchase_domain(domain, years=1)
         
         if result.get("success"):
-            self.current_spending += price
+            purchased_at = datetime.now()
+            self.current_spending += normalized_price
             self.owned_domains.append({
                 "domain": domain,
-                "price": price,
-                "purchased_at": datetime.now(),
-                "expires_at": datetime.now() + timedelta(days=365)
+                "price": normalized_price,
+                "purchased_at": purchased_at,
+                "expires_at": purchased_at + timedelta(days=365),
+                "order_id": result.get("order_id")
             })
             
             # Set as active if no active domain
             if not self.active_domain:
                 self.active_domain = domain
             
-            logger.info(f"Successfully purchased domain: {domain} for ${price}")
+            logger.info(f"Successfully purchased domain: {domain} for ${normalized_price}")
             return True
         else:
             logger.error(f"Failed to purchase domain: {result.get('message')}")
@@ -254,6 +423,7 @@ class DomainRotationManager:
     
     def get_budget_status(self) -> Dict:
         """Get budget information"""
+        self._ensure_budget_cycle()
         return {
             "monthly_budget": self.monthly_budget,
             "current_spending": self.current_spending,

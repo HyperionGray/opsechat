@@ -3,6 +3,7 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -174,3 +175,65 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_restore_state_normalizes_serialized_records(self):
+        """Test restoring state converts strings to normalized runtime values."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        state = {
+            "current_spending": "$12.50",
+            "active_domain": "active.example",
+            "last_budget_reset": DomainRotationManager._current_budget_cycle(),
+            "owned_domains": [
+                {
+                    "domain": "active.example",
+                    "price": "2.99",
+                    "purchased_at": "2026-03-01T10:30:00.000000",
+                    "expires_at": "2027-03-01T10:30:00.000000",
+                    "order_id": "abc123"
+                }
+            ]
+        }
+
+        manager.restore_state(state)
+        domains = manager.get_owned_domains()
+
+        assert manager.current_spending == 12.50
+        assert manager.active_domain == "active.example"
+        assert len(domains) == 1
+        assert isinstance(domains[0]["purchased_at"], datetime)
+        assert isinstance(domains[0]["expires_at"], datetime)
+        assert domains[0]["price"] == 2.99
+        assert domains[0]["order_id"] == "abc123"
+
+    def test_export_state_serializes_datetime_records(self):
+        """Test exporting state creates JSON-safe datetime strings."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 3.5
+        manager.active_domain = "sample.xyz"
+        manager.owned_domains = [
+            {
+                "domain": "sample.xyz",
+                "price": 3.5,
+                "purchased_at": datetime(2026, 4, 1, 10, 0, 0),
+                "expires_at": datetime(2027, 4, 1, 10, 0, 0)
+            }
+        ]
+
+        exported = manager.export_state()
+
+        assert exported["current_spending"] == 3.5
+        assert exported["active_domain"] == "sample.xyz"
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(exported["owned_domains"][0]["expires_at"], str)
+
+    def test_budget_cycle_resets_monthly_spending(self):
+        """Test monthly spending resets when budget cycle changes."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 20.0
+        manager.last_budget_reset = "1999-01"
+
+        status = manager.get_budget_status()
+
+        assert manager.current_spending == 0.0
+        assert status["current_spending"] == 0.0
+        assert manager.last_budget_reset == DomainRotationManager._current_budget_cycle()

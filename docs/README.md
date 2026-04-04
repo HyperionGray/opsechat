@@ -5,7 +5,7 @@ Welcome to the OpSecChat documentation. All documentation has been organized int
 ## Quick Links
 
 - **[Main README](../README.md)** - Start here for project overview
-- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes (TODO)
+- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes
 - **[Security](../SECURITY.md)** - Security information and best practices
 - **[License](../LICENSE.md)** - MIT License
 
@@ -33,10 +33,12 @@ Installation and deployment guides for different environments.
 - [Amazon Q Setup](setup/AMAZON_Q_SETUP_GUIDE.md) - Amazon Q integration
 - [Domain API Setup](setup/DOMAIN_API_SETUP.md) - Domain registrar API configuration
 - [Domain Registrar API](setup/DOMAIN_REGISTRAR_API.md) - Registrar API documentation
+- [Domain Rotation Guide](DOMAIN_ROTATION.md) - CLI and runtime domain rotation behavior
 
 ### 📖 User Guide
 Documentation for end users and operators.
 
+- [Domain Rotation Guide](DOMAIN_ROTATION.md) - Practical CLI/API domain rotation usage
 - [Email System](user-guide/EMAIL_SYSTEM.md) - Comprehensive email documentation
 - [Email Quick Start](user-guide/EMAIL_QUICKSTART.md) - Quick email setup guide
 - [PGP Usage](user-guide/PGP_USAGE.md) - PGP encryption guide
@@ -67,6 +69,7 @@ Implementation details and summaries of major features.
 - [CI/CD Implementation](implementation/CI_CD_IMPLEMENTATION_SUMMARY.md) - CI/CD setup
 - [Containerization Summary](implementation/CONTAINERIZATION_SUMMARY.md) - Container implementation
 - [jQuery Security Update](implementation/JQUERY_SECURITY_UPDATE.md) - jQuery 3.7.1 update
+- [Domain Rotation Guide](DOMAIN_ROTATION.md) - Domain rotation architecture and CLI usage
 - [Changelog](implementation/CHANGELOG.md) - Version history
 - [PR Summaries](implementation/PR_SUMMARY.md) - Pull request summaries
 
