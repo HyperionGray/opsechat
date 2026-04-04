@@ -216,6 +216,9 @@ class DomainRotationManager:
             client = self.api_clients.get(normalized)
             if client:
                 return normalized, client
+            if normalized == "primary" and self.api_client:
+                # Backward-compatible fallback for code that directly sets api_client.
+                return "primary", self.api_client
             logger.error(f"Provider '{provider_name}' is not configured")
             return None
 

@@ -268,3 +268,20 @@ class TestDomainRotationManager:
         cheap_provider.purchase_domain.assert_called_once()
         expensive_provider.purchase_domain.assert_not_called()
         assert manager.owned_domains[-1]["provider"] == "cheap"
+
+    def test_purchase_uses_legacy_direct_api_client_assignment(self):
+        """Legacy direct api_client usage should still work."""
+        legacy_client = Mock(spec=DomainAPIClient)
+        legacy_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "legacy.xyz"
+        }
+
+        manager = DomainRotationManager(monthly_budget=10.0)
+        manager.api_client = legacy_client
+
+        success = manager.purchase_domain_if_budget_allows("legacy.xyz", 1.0)
+
+        assert success is True
+        legacy_client.purchase_domain.assert_called_once_with("legacy.xyz", years=1)
+        assert manager.owned_domains[-1]["provider"] == "primary"
