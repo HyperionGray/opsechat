@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Domain Rotation CLI for Burner Emails
+Domain Rotation CLI for Burner Emails.
 
 This CLI tool allows easy rotation of domains for burner email services.
-It integrates with Porkbun API (and can be extended for other registrars).
+It supports Porkbun today and can register additional providers.
 
 Usage:
     python domain_rotation_cli.py list          # List owned domains
@@ -19,7 +19,7 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
-from domain_manager import PorkbunAPIClient, DomainRotationManager
+from domain_manager import DomainRotationManager, PorkbunAPIClient
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
@@ -109,21 +109,14 @@ def get_manager():
     )
     
     # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+    manager.import_state(config)
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    config.update(manager.export_state())
     save_config(config)
 
 
@@ -142,7 +135,9 @@ def list_domains():
     
     for i, domain in enumerate(domains, 1):
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
+        provider = domain.get("provider", "unknown")
         print(f"{i}. {domain['domain']}{active}")
+        print(f"   Provider: {provider}")
         print(f"   Price: ${domain['price']}")
         print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
         print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
