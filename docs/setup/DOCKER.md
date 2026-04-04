@@ -39,6 +39,14 @@ This script will:
 4. Start the opsechat application
 5. Display status and instructions
 
+If you want the command to block until the app health endpoint responds, use:
+
+```bash
+./compose-up.sh --wait
+```
+
+This mode checks `http://127.0.0.1:5000/health` from inside the `opsechat` container and fails fast if startup does not complete in time.
+
 ### Viewing the Onion Address
 
 After services start, view the logs to get your onion service URL:
@@ -67,6 +75,7 @@ Run the verification script to check that everything is working:
 This will check:
 - Container status
 - Tor service health
+- Application health endpoint (`/health`)
 - Network connectivity
 - Hidden service address
 

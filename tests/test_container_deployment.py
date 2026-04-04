@@ -252,6 +252,14 @@ class TestScripts:
     
     def test_compose_up_script_exists(self):
         self.assert_script_location('compose-up.sh')
+
+    def test_compose_up_script_supports_wait_flag(self):
+        path = os.path.join(REPO_DIR, 'scripts', 'compose-up.sh')
+        with open(path) as f:
+            content = f.read()
+
+        assert '--wait' in content
+        assert 'http://127.0.0.1:5000/health' in content
     
     def test_compose_down_script_exists(self):
         self.assert_script_location('compose-down.sh')

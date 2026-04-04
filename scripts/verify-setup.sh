@@ -68,6 +68,16 @@ else
     echo -e "${RED}[✗]${NC} Tor SOCKS port is not accessible"
 fi
 
+# Check application health endpoint from inside the app container
+echo ""
+echo -e "${YELLOW}[*]${NC} Checking opsechat /health endpoint..."
+if $COMPOSE_CMD -f "$COMPOSE_FILE" exec -T opsechat curl --fail --silent http://127.0.0.1:5000/health >/dev/null 2>&1; then
+    echo -e "${GREEN}[✓]${NC} Opsechat /health endpoint is responding"
+else
+    echo -e "${RED}[✗]${NC} Opsechat /health endpoint is not responding"
+    echo "    Check app logs: $COMPOSE_CMD -f $COMPOSE_FILE logs opsechat"
+fi
+
 # Check if opsechat generated an onion address
 echo ""
 echo -e "${YELLOW}[*]${NC} Checking for hidden service address..."

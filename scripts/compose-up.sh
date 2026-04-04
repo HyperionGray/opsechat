@@ -10,6 +10,11 @@ else
     REPO_ROOT="$SCRIPT_DIR"
 fi
 COMPOSE_FILE="$REPO_ROOT/container-compose.yml"
+WAIT_FOR_HEALTH=false
+
+if [ "${1:-}" = "--wait" ] || [ "${1:-}" = "-w" ]; then
+    WAIT_FOR_HEALTH=true
+fi
 
 # Determine which compose tool is available
 if command -v podman-compose &> /dev/null; then
@@ -50,12 +55,37 @@ else
     echo "[!] Opsechat application failed to start"
 fi
 
+if [ "$WAIT_FOR_HEALTH" = true ]; then
+    echo ""
+    echo "[*] Waiting for opsechat health endpoint to report healthy..."
+    max_attempts=30
+    attempt=1
+    while [ $attempt -le $max_attempts ]; do
+        if $COMPOSE_CMD -f "$COMPOSE_FILE" exec -T opsechat curl --fail --silent http://127.0.0.1:5000/health >/dev/null 2>&1; then
+            echo "[✓] Opsechat health endpoint is ready"
+            break
+        fi
+        echo "[*] Health not ready yet (attempt $attempt/$max_attempts)"
+        sleep 2
+        attempt=$((attempt + 1))
+    done
+
+    if [ $attempt -gt $max_attempts ]; then
+        echo "[!] Timed out waiting for opsechat health endpoint"
+        echo "    Check logs: $COMPOSE_CMD -f $COMPOSE_FILE logs opsechat"
+        exit 1
+    fi
+fi
+
 echo ""
 echo "[*] To view the onion address, run:"
 echo "    $COMPOSE_CMD -f $COMPOSE_FILE logs opsechat"
 echo ""
 echo "[*] To verify the setup is working, run:"
 echo "    ./verify-setup.sh"
+echo ""
+echo "[*] To start and block until /health is ready, run:"
+echo "    ./compose-up.sh --wait"
 echo ""
 echo "[*] To view all logs in real-time, run:"
 echo "    $COMPOSE_CMD logs -f"

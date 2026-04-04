@@ -43,6 +43,7 @@ env/
 *.swp
 *.swo
 *~
+*~HEAD
 .DS_Store
 
 # Testing

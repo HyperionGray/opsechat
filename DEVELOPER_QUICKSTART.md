@@ -32,6 +32,14 @@ python3 -m pytest tests/test_rate_limit_and_health.py tests/test_container_deplo
 npx playwright test tests/basic.spec.js
 ```
 
+Container startup readiness check:
+
+```bash
+./compose-up.sh --wait
+```
+
+`--wait` blocks until the app container serves `GET /health` successfully, which makes CI/local smoke loops more deterministic.
+
 These cover:
 
 - `/health` contract and security headers
