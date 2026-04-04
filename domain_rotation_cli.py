@@ -19,7 +19,8 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
-from domain_manager import PorkbunAPIClient, DomainRotationManager
+from datetime import datetime
+from domain_manager import DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
@@ -51,17 +52,31 @@ def save_config(config):
         print(f"Error saving config: {e}")
 
 
+def _domain_datetime(value):
+    """Parse datetime-like values from persisted state."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
 def configure_api():
     """Configure API credentials"""
     print("\n=== Domain API Configuration ===\n")
-    print("This tool supports Porkbun API for domain management.")
+    print("This tool supports Porkbun API (recommended) for domain management.")
     print("You can get API credentials from: https://porkbun.com/account/api\n")
     
     config = load_config()
     
     print("Current configuration:")
-    if config.get('api_key'):
-        print(f"  API Key: {'*' * 20}{config['api_key'][-4:]}")
+    providers = config.get('providers', {})
+    porkbun = providers.get('porkbun', {})
+    if porkbun.get('api_key'):
+        print(f"  API Key: {'*' * 20}{porkbun['api_key'][-4:]}")
     else:
         print("  API Key: Not configured")
     
@@ -73,12 +88,8 @@ def configure_api():
     print("\nEnter new values (or press Enter to keep current):\n")
     
     api_key = input("Porkbun API Key: ").strip()
-    if api_key:
-        config['api_key'] = api_key
     
     api_secret = getpass("Porkbun API Secret: ").strip()
-    if api_secret:
-        config['api_secret'] = api_secret
     
     budget = input("Monthly Budget (USD) [default: 50]: ").strip()
     if budget:
@@ -89,7 +100,23 @@ def configure_api():
     elif 'monthly_budget' not in config:
         config['monthly_budget'] = 50.0
     
-    save_config(config)
+    providers.setdefault('porkbun', {})
+    if api_key:
+        providers['porkbun']['api_key'] = api_key
+    if api_secret:
+        providers['porkbun']['secret_key'] = api_secret
+    config['providers'] = providers
+    config['active_provider'] = 'porkbun'
+
+    manager = DomainRotationManager()
+    if providers['porkbun'].get('api_key') and providers['porkbun'].get('secret_key'):
+        manager.configure(
+            api_key=providers['porkbun']['api_key'],
+            secret_key=providers['porkbun']['secret_key'],
+            monthly_budget=config.get('monthly_budget', 50.0),
+            provider='porkbun'
+        )
+    save_manager_state(manager, config)
     print("\n✅ Configuration updated successfully!")
 
 
@@ -97,33 +124,43 @@ def get_manager():
     """Get configured domain manager"""
     config = load_config()
     
-    if not config.get('api_key') or not config.get('api_secret'):
+    providers = config.get('providers')
+    if not providers and (config.get('api_key') or config.get('api_secret')):
+        providers = {
+            'porkbun': {
+                'api_key': config.get('api_key', ''),
+                'secret_key': config.get('api_secret', '')
+            }
+        }
+        config['providers'] = providers
+
+    active_provider = config.get('active_provider', 'porkbun')
+    provider_cfg = (providers or {}).get(active_provider, {})
+    if not provider_cfg.get('api_key') or not provider_cfg.get('secret_key'):
         print("❌ Error: API credentials not configured.")
         print("Run: python domain_rotation_cli.py config")
         sys.exit(1)
-    
-    client = PorkbunAPIClient(config['api_key'], config['api_secret'])
+
     manager = DomainRotationManager(
-        api_client=client,
-        monthly_budget=config.get('monthly_budget', 50.0)
+        monthly_budget=float(config.get('monthly_budget', 50.0))
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+    manager.configure(
+        api_key=provider_cfg['api_key'],
+        secret_key=provider_cfg['secret_key'],
+        monthly_budget=float(config.get('monthly_budget', 50.0)),
+        provider=active_provider
+    )
+
+    manager.load_state(config.get('manager_state'))
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    config['monthly_budget'] = manager.monthly_budget
+    config['active_provider'] = manager.active_provider
+    config['manager_state'] = manager.serialize_state()
     save_config(config)
 
 
@@ -144,8 +181,11 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        purchased_at = _domain_datetime(domain.get('purchased_at'))
+        expires_at = _domain_datetime(domain.get('expires_at'))
+        print(f"   Provider: {domain.get('provider', manager.active_provider or 'unknown')}")
+        print(f"   Purchased: {(purchased_at.strftime('%Y-%m-%d %H:%M') if purchased_at else 'unknown')}")
+        print(f"   Expires: {(expires_at.strftime('%Y-%m-%d') if expires_at else 'unknown')}")
         print()
 
 

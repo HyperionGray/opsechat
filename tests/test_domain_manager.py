@@ -1,10 +1,11 @@
 """
 Tests for domain management module
 """
+from datetime import datetime
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, DomainRotationManager, NamecheapAPIClient
 )
 
 
@@ -174,3 +175,110 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_porkbun_sets_provider_and_budget(self):
+        """Test manager configure for Porkbun provider"""
+        manager = DomainRotationManager()
+        result = manager.configure(
+            api_key="pk_test",
+            secret_key="sk_test",
+            monthly_budget=25.0,
+            provider="porkbun",
+        )
+        assert result is True
+        assert manager.active_provider == "porkbun"
+        assert manager.monthly_budget == 25.0
+        assert manager.api_client is not None
+
+    def test_set_active_provider_returns_false_for_unknown(self):
+        """Test provider switching failure case"""
+        manager = DomainRotationManager()
+        assert manager.set_active_provider("missing-provider") is False
+
+    def test_get_config_reports_expected_keys(self):
+        """Test config payload shape used by routes"""
+        manager = DomainRotationManager(monthly_budget=33.0)
+        cfg = manager.get_config()
+        assert "provider" in cfg
+        assert "api_configured" in cfg
+        assert "budget_status" in cfg
+        assert cfg["monthly_budget"] == 33.0
+
+    def test_serialize_and_load_state_roundtrip(self):
+        """Test JSON-safe state export/import"""
+        manager = DomainRotationManager(monthly_budget=40.0)
+        manager.current_spending = 5.5
+        manager.active_domain = "active.example"
+        manager.owned_domains = [{
+            "domain": "a.xyz",
+            "price": 1.99,
+            "provider": "porkbun",
+            "purchased_at": datetime.now(),
+            "expires_at": datetime.now(),
+        }]
+        state = manager.serialize_state()
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(state["owned_domains"][0]["expires_at"], str)
+
+        restored = DomainRotationManager()
+        restored.load_state(state)
+        assert restored.current_spending == 5.5
+        assert restored.active_domain == "active.example"
+        assert len(restored.owned_domains) == 1
+
+    def test_rotate_domain_result_structure(self):
+        """Test structured rotate result for API routes"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test456.xyz",
+            "price": 2.99
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "test456.xyz"
+        }
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        result = manager.rotate_domain_result()
+        assert result["success"] is True
+        assert "domain" in result
+        assert "budget_status" in result
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client basic behavior"""
+
+    @patch("domain_manager.requests.Session")
+    def test_search_domain_available(self, mock_session_class):
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = """<?xml version="1.0" encoding="utf-8"?>
+<ApiResponse Status="OK">
+  <CommandResponse>
+    <DomainCheckResult Domain="test-abc.xyz" Available="true" />
+  </CommandResponse>
+</ApiResponse>"""
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_key="api_key",
+            username="user",
+            client_ip="127.0.0.1",
+            sandbox=True,
+        )
+        result = client.search_domain("test-abc.xyz")
+        assert result["available"] is True
+
+    @patch("domain_manager.requests.Session")
+    def test_purchase_domain_requires_contact_profile(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        client = NamecheapAPIClient(
+            api_key="api_key",
+            username="user",
+            client_ip="127.0.0.1",
+            sandbox=True,
+        )
+        result = client.purchase_domain("example.xyz")
+        assert result["success"] is False
