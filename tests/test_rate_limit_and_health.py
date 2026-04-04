@@ -10,7 +10,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_backoff_store,
+    _rate_limit_lock,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -24,6 +29,7 @@ def _clear_store():
     """Helper: wipe the rate limit store between tests."""
     with _rate_limit_lock:
         _rate_limit_store.clear()
+        _rate_limit_backoff_store.clear()
 
 
 def test_rate_limit_allows_requests_within_window():
@@ -85,6 +91,33 @@ def test_rate_limit_chat_message_limit():
     allowed, retry_after = check_rate_limit("session-msg", "chat_message")
     assert allowed is False
     assert retry_after >= 1
+
+
+def test_rate_limit_backoff_escalates_after_repeated_violations():
+    _clear_store()
+    sid = "session-backoff"
+    endpoint = "chat_message"
+
+    # Fill the window exactly to the threshold.
+    for _ in range(30):
+        allowed, _ = check_rate_limit(sid, endpoint)
+        assert allowed is True
+
+    # First violation applies base backoff.
+    allowed, retry_after = check_rate_limit(sid, endpoint)
+    assert allowed is False
+    assert retry_after >= 2
+
+    # Force cooldown expiry while keeping the window saturated to trigger
+    # another violation and verify exponential escalation.
+    with _rate_limit_lock:
+        _rate_limit_backoff_store[sid][endpoint]["cooldown_until"] = (
+            datetime.datetime.now() - datetime.timedelta(seconds=1)
+        )
+
+    allowed, retry_after_2 = check_rate_limit(sid, endpoint)
+    assert allowed is False
+    assert retry_after_2 >= 4
 
 
 # ---------------------------------------------------------------------------

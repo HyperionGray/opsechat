@@ -142,6 +142,33 @@ POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
 
+### Adaptive Rate Limiting and Backoff
+
+Write endpoints are protected by a sliding-window limiter plus an adaptive
+exponential backoff penalty for repeated abuse from the same session.
+
+- `POST /chat/create`: 10/min baseline custom limit + adaptive backoff
+- `POST /chat/room/<room_id>/messages`: 30/min baseline + adaptive backoff
+- `POST /chat/dm/send`: 5/min baseline + adaptive backoff
+
+When throttled, the API returns:
+
+- HTTP `429 Too Many Requests`
+- `Retry-After` response header (seconds)
+- JSON payload fields:
+  - `retry_after_seconds`
+  - `retry_strategy` (`"exponential_backoff"`)
+
+Example:
+
+```json
+{
+  "error": "Rate limit exceeded. Try again in 8 seconds.",
+  "retry_after_seconds": 8,
+  "retry_strategy": "exponential_backoff"
+}
+```
+
 ### Encryption Implementation
 
 The E2E encryption uses native Web Crypto API:

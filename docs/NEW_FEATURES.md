@@ -172,6 +172,46 @@ When limit exceeded:
 
 ---
 
+## ⏱️ Adaptive Chat API Backoff (NEW)
+
+### What changed
+
+Chat write endpoints now apply adaptive exponential backoff in addition to
+sliding-window rate limits:
+
+- `POST /chat/create`
+- `POST /chat/room/<room_id>/messages`
+- `POST /chat/dm/send`
+
+When a client repeatedly exceeds limits, cooldown increases exponentially up to
+a per-endpoint cap.
+
+### Response contract
+
+Rate-limited responses now include machine-readable retry metadata:
+
+```json
+{
+  "error": "Rate limit exceeded. Try again in 12 seconds.",
+  "retry_after_seconds": 12,
+  "retry_strategy": "exponential_backoff"
+}
+```
+
+And HTTP header:
+
+```
+Retry-After: 12
+```
+
+### Why this matters
+
+- Reduces burst abuse effectiveness.
+- Gives clients deterministic retry timing.
+- Improves interoperability with automated clients and SDKs.
+
+---
+
 ## 🌐 Domain Rotation CLI
 
 ### Purpose

@@ -140,6 +140,28 @@ class TestCheckRateLimit:
         allowed, _ = check_rate_limit("sess-002", "nonexistent_endpoint")
         assert allowed is True
 
+    def test_violation_retry_after_increases_with_backoff(self):
+        session_id = "sess-backoff-growth"
+        # Fill the window.
+        for _ in range(RATE_LIMITS["chat_message"]["max_requests"]):
+            allowed, _ = check_rate_limit(session_id, "chat_message")
+            assert allowed is True
+
+        # First violation should apply base backoff (>= 2s for chat_message).
+        allowed, first_retry = check_rate_limit(session_id, "chat_message")
+        assert allowed is False
+        assert first_retry >= 2
+
+        # Simulate cooldown expiry while window remains saturated, then violate again.
+        with simple_chat_routes._rate_limit_lock:
+            simple_chat_routes._rate_limit_backoff_store[session_id]["chat_message"][
+                "cooldown_until"
+            ] = datetime.datetime.now() - datetime.timedelta(seconds=1)
+
+        allowed, second_retry = check_rate_limit(session_id, "chat_message")
+        assert allowed is False
+        assert second_retry >= 4
+
 
 # ---------------------------------------------------------------------------
 # HTTP routes – chat rooms
@@ -157,6 +179,20 @@ class TestChatRoutes:
         assert data["success"] is True
         assert "room_id" in data
         assert data["room_url"].startswith("/chat/room/")
+
+    def test_create_room_rate_limit_returns_retry_metadata(self, client):
+        # App-level limit is 3/minute for this endpoint.
+        for _ in range(3):
+            resp = client.post("/chat/create")
+            assert resp.status_code == 200
+
+        blocked = client.post("/chat/create")
+        assert blocked.status_code == 429
+        payload = blocked.get_json()
+        assert isinstance(payload.get("retry_after_seconds"), int)
+        assert payload["retry_after_seconds"] >= 1
+        assert payload.get("retry_strategy") == "exponential_backoff"
+        assert blocked.headers.get("Retry-After") == str(payload["retry_after_seconds"])
 
     def test_create_room_id_unique(self, client):
         r1 = client.post("/chat/create").get_json()["room_id"]
