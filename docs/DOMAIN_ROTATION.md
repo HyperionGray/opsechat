@@ -50,38 +50,38 @@ export DOMAIN_BUDGET="10"  # Monthly budget in USD
 ### Manual Rotation
 
 ```python
-from domain_manager import domain_rotation_manager
+from domain_manager import DomainRotationManager, PorkbunAPIClient
 
-# Check available domains
-available_domains = domain_rotation_manager.search_cheap_domains()
-print(available_domains)
+client = PorkbunAPIClient(api_key="pk...", api_secret="sk...")
+manager = DomainRotationManager(api_client=client, monthly_budget=10.0)
 
-# Purchase a domain
-result = domain_rotation_manager.rotate_to_new_domain()
-if result['success']:
-    print(f"New domain: {result['domain']}")
-    print(f"Cost: ${result['cost']}")
-else:
-    print(f"Error: {result['error']}")
+# Check for a cheap domain first
+domain_info = manager.find_cheap_available_domain(max_price=5.0, max_attempts=10)
+if domain_info:
+    print(f"Found {domain_info['domain']} for ${domain_info['price']}")
+    purchased = manager.purchase_domain_if_budget_allows(
+        domain_info["domain"], domain_info["price"]
+    )
+    print(f"Purchased: {purchased}")
 ```
 
 ### CLI Commands
 
 ```bash
-# Check available cheap domains
-python -c "from domain_manager import domain_rotation_manager; \
-    print(domain_rotation_manager.search_cheap_domains(tlds=['xyz', 'club', 'online']))"
+# Configure credentials and budget (interactive)
+python3 domain_rotation_cli.py config
 
-# Get current budget status
-python -c "from domain_manager import domain_rotation_manager; \
-    print(f'Budget: ${domain_rotation_manager.budget_manager.monthly_budget}'); \
-    print(f'Spent: ${domain_rotation_manager.budget_manager.get_month_spending()}'); \
-    print(f'Remaining: ${domain_rotation_manager.budget_manager.get_remaining_budget()}')"
+# Show current budget/domain status
+python3 domain_rotation_cli.py status
 
-# Rotate to new domain
-python -c "from domain_manager import domain_rotation_manager; \
-    result = domain_rotation_manager.rotate_to_new_domain(); \
-    print(result)"
+# Search for low-cost domains
+python3 domain_rotation_cli.py search
+
+# Purchase and rotate to a new domain
+python3 domain_rotation_cli.py rotate
+
+# List domains previously purchased by the CLI
+python3 domain_rotation_cli.py list
 ```
 
 ### Automated Rotation
@@ -93,7 +93,7 @@ Set up a cron job for weekly rotation:
 crontab -e
 
 # Add rotation job (runs every Sunday at 2 AM)
-0 2 * * 0 cd /path/to/opsechat && python -c "from domain_manager import domain_rotation_manager; domain_rotation_manager.rotate_to_new_domain()"
+0 2 * * 0 cd /path/to/opsechat && python3 domain_rotation_cli.py rotate
 ```
 
 ## Budget Management
@@ -101,18 +101,10 @@ crontab -e
 ### Set Budget Limits
 
 ```python
-from domain_manager import domain_rotation_manager
+from domain_manager import DomainRotationManager
 
-# Set monthly budget to $20
-domain_rotation_manager.budget_manager.set_monthly_budget(20.0)
-
-# Check spending
-spending = domain_rotation_manager.budget_manager.get_month_spending()
-print(f"Spent this month: ${spending}")
-
-# Check remaining budget
-remaining = domain_rotation_manager.budget_manager.get_remaining_budget()
-print(f"Remaining: ${remaining}")
+manager = DomainRotationManager(monthly_budget=20.0)
+print(manager.get_budget_status())
 ```
 
 ### Budget Safety Features
@@ -137,12 +129,11 @@ The system prioritizes these cheap TLDs:
 ### Search Parameters
 
 ```python
-# Search for available domains with specific TLDs
-domains = domain_rotation_manager.search_cheap_domains(
-    tlds=['xyz', 'club'],
-    max_price=3.00,
-    limit=10
-)
+from domain_manager import DomainRotationManager
+
+manager = DomainRotationManager()
+domain = manager.generate_random_domain(tld='xyz', length=8)
+print(domain)  # Example: k3s9mx2r.xyz
 ```
 
 ### Random Domain Generation
@@ -150,77 +141,46 @@ domains = domain_rotation_manager.search_cheap_domains(
 The system can generate random domain names:
 
 ```python
-# Generate random domain
-domain = domain_rotation_manager.generate_random_domain_name(
-    length=8,
-    tld='xyz'
-)
+from domain_manager import DomainRotationManager
+
+manager = DomainRotationManager()
+domain = manager.generate_random_domain(length=8, tld='xyz')
 # Example: "k3s9mx2r.xyz"
 ```
 
 ## Domain Configuration
 
-### DNS Setup
-
-After purchasing a domain, configure DNS:
-
-```python
-from domain_manager import domain_rotation_manager
-
-# Add MX record for email
-domain_rotation_manager.configure_domain_dns(
-    domain="example.xyz",
-    mx_records=[
-        {"priority": 10, "host": "mail.example.xyz"}
-    ]
-)
-
-# Add A record
-domain_rotation_manager.configure_domain_dns(
-    domain="example.xyz",
-    a_records=[
-        {"host": "@", "ip": "1.2.3.4"}
-    ]
-)
-```
+DNS record management is handled at the registrar and is not currently automated in `domain_manager.py`.
+Use your registrar dashboard/API to configure MX/A/AAAA/TXT records after purchase.
 
 ### Email Integration
 
 Link domain to burner email system:
 
 ```python
-from domain_manager import domain_rotation_manager
+from domain_manager import DomainRotationManager, PorkbunAPIClient
 from email_system import burner_manager
 
-# Rotate domain and update burner emails
-new_domain = domain_rotation_manager.rotate_to_new_domain()
-if new_domain['success']:
-    # Update all burner emails to use new domain
-    burner_manager.update_domain(new_domain['domain'])
+client = PorkbunAPIClient("pk...", "sk...")
+manager = DomainRotationManager(api_client=client)
+
+new_domain = manager.rotate_domain()
+if new_domain:
+    burner_manager.update_domain(new_domain)
 ```
 
 ## Testing Domain Rotation
 
 ### Test Mode
 
-Use test mode to verify setup without spending money:
-
-```python
-from domain_manager import domain_rotation_manager
-
-# Enable test mode
-domain_rotation_manager.set_test_mode(True)
-
-# This will simulate rotation without actual purchase
-result = domain_rotation_manager.rotate_to_new_domain()
-print(f"Test result: {result}")
-```
+There is no built-in purchase simulation mode in `domain_manager.py`.
+To test safely, mock `DomainAPIClient` in unit tests (see `tests/test_domain_manager.py`) and avoid running `domain_rotation_cli.py rotate` against live credentials.
 
 ### Validation Checklist
 
 - [ ] API credentials configured
 - [ ] Budget limits set
-- [ ] Test mode verified
+- [ ] Safe test approach verified (mock API client)
 - [ ] DNS configuration working
 - [ ] Email integration tested
 - [ ] Rotation cron job set up
@@ -291,13 +251,10 @@ curl -X POST https://porkbun.com/api/json/v3/ping \
 
 **Solution:**
 ```python
-from domain_manager import domain_rotation_manager
+from domain_manager import DomainRotationManager
 
-# Check current budget
-print(domain_rotation_manager.budget_manager.get_remaining_budget())
-
-# Increase monthly budget
-domain_rotation_manager.budget_manager.set_monthly_budget(50.0)
+manager = DomainRotationManager(monthly_budget=50.0)
+print(manager.get_budget_status()["remaining"])
 ```
 
 ### Domain Not Available
@@ -306,10 +263,11 @@ domain_rotation_manager.budget_manager.set_monthly_budget(50.0)
 
 **Solution:**
 ```python
-# Generate alternative domains
-alternatives = domain_rotation_manager.search_cheap_domains(limit=20)
-for domain in alternatives:
-    print(f"{domain['name']}: ${domain['price']}")
+from domain_manager import DomainRotationManager
+
+manager = DomainRotationManager()
+for _ in range(5):
+    print(manager.generate_random_domain("xyz"))
 ```
 
 ### DNS Not Updating
@@ -329,34 +287,22 @@ dig @8.8.8.8 yourdomain.xyz MX
 
 ### Multiple Registrars
 
-Add support for additional registrars:
+Add support for additional registrars by subclassing `DomainAPIClient` and passing your client to `DomainRotationManager`.
 
 ```python
-from domain_manager import DomainAPIClient
+from domain_manager import DomainAPIClient, DomainRotationManager
 
 class NamecheapAPIClient(DomainAPIClient):
-    def __init__(self, api_key: str):
-        super().__init__(api_key)
-    
     def search_domain(self, domain: str):
-        # Implementation here
-        pass
-    
+        return {"domain": domain, "available": False}
+
     def purchase_domain(self, domain: str, years: int = 1):
-        # Implementation here
-        pass
+        return {"success": False, "domain": domain}
 
-# Register new client
-domain_rotation_manager.add_api_client('namecheap', NamecheapAPIClient(api_key))
-```
+    def get_pricing(self, tld: str):
+        return {"tld": tld}
 
-### Custom Domain Patterns
-
-```python
-# Use specific naming pattern
-pattern = "burner-{timestamp}-{random}"
-domain = domain_rotation_manager.generate_domain_from_pattern(pattern, tld='xyz')
-# Example: burner-20260302-k3s9.xyz
+manager = DomainRotationManager(api_client=NamecheapAPIClient("api-key"))
 ```
 
 ## CLI Reference
@@ -364,26 +310,16 @@ domain = domain_rotation_manager.generate_domain_from_pattern(pattern, tld='xyz'
 All domain rotation commands:
 
 ```bash
-# Check available domains
-python -m domain_manager search --tld xyz --max-price 2.00
+# Configure API credentials and budget
+python3 domain_rotation_cli.py config
 
-# Purchase specific domain
-python -m domain_manager purchase --domain example.xyz
+# View status
+python3 domain_rotation_cli.py status
 
-# Rotate to new random domain
-python -m domain_manager rotate
-
-# Check budget status
-python -m domain_manager budget status
-
-# Set monthly budget
-python -m domain_manager budget set --amount 20.00
-
-# List all active domains
-python -m domain_manager list
-
-# Configure DNS
-python -m domain_manager dns --domain example.xyz --mx "mail.example.xyz"
+# Search / rotate / list
+python3 domain_rotation_cli.py search
+python3 domain_rotation_cli.py rotate
+python3 domain_rotation_cli.py list
 ```
 
 ## Summary

@@ -107,29 +107,38 @@ def get_manager():
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+
+    # Prefer normalized state format, but keep legacy compatibility.
+    manager.load_state(config.get('manager_state', config))
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
+    state = manager.export_state()
+    config['manager_state'] = state
+    # Keep legacy keys for compatibility with older versions.
+    config['monthly_budget'] = manager.monthly_budget
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = state.get('owned_domains', [])
     config['active_domain'] = manager.active_domain
     save_config(config)
+
+def _format_datetime_value(value):
+    """Format datetime-like values for terminal display."""
+    if value is None:
+        return "Unknown"
+    if hasattr(value, "strftime"):
+        return value.strftime('%Y-%m-%d %H:%M')
+    if isinstance(value, str):
+        return value
+    return str(value)
 
 
 def list_domains():
     """List owned domains"""
-    manager, config = get_manager()
+    manager, _config = get_manager()
     
     print("\n=== Owned Domains ===\n")
     
@@ -142,16 +151,19 @@ def list_domains():
     
     for i, domain in enumerate(domains, 1):
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
+        purchased_display = _format_datetime_value(domain.get('purchased_at'))
+        expires_display = _format_datetime_value(domain.get('expires_at'))
+
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {purchased_display}")
+        print(f"   Expires: {expires_display}")
         print()
 
 
 def search_domains():
     """Search for available cheap domains"""
-    manager, config = get_manager()
+    manager, _config = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
     print("Searching for domains under $5...\n")
@@ -215,7 +227,7 @@ def rotate_domain():
 
 def show_status():
     """Show current status"""
-    manager, config = get_manager()
+    manager, _config = get_manager()
     
     print("\n=== Domain Rotation Status ===\n")
     

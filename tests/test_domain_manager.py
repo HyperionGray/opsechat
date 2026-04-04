@@ -1,7 +1,7 @@
 """
 Tests for domain management module
 """
-import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +174,61 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_export_state_serializes_datetimes(self):
+        """Exported state should be JSON-safe."""
+        manager = DomainRotationManager(monthly_budget=15.0)
+        manager.current_spending = 2.5
+        manager.active_domain = "test.xyz"
+        manager.owned_domains = [{
+            "domain": "test.xyz",
+            "price": 2.5,
+            "purchased_at": datetime(2026, 1, 1, 10, 30, 0),
+            "expires_at": datetime(2027, 1, 1, 10, 30, 0),
+        }]
+
+        state = manager.export_state()
+
+        assert state["monthly_budget"] == 15.0
+        assert state["current_spending"] == 2.5
+        assert state["active_domain"] == "test.xyz"
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(state["owned_domains"][0]["expires_at"], str)
+        assert state["owned_domains"][0]["purchased_at"].startswith("2026-01-01T10:30:00")
+
+    def test_load_state_parses_iso_timestamps(self):
+        """Loading state should normalize ISO datetime fields."""
+        manager = DomainRotationManager()
+        state = {
+            "monthly_budget": "25",
+            "current_spending": "4.75",
+            "active_domain": "loaded.xyz",
+            "owned_domains": [{
+                "domain": "loaded.xyz",
+                "price": 4.75,
+                "purchased_at": "2026-02-01T12:00:00",
+                "expires_at": "2027-02-01T12:00:00",
+            }],
+        }
+
+        manager.load_state(state)
+
+        assert manager.monthly_budget == 25.0
+        assert manager.current_spending == 4.75
+        assert manager.active_domain == "loaded.xyz"
+        assert isinstance(manager.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(manager.owned_domains[0]["expires_at"], datetime)
+
+    def test_load_state_ignores_invalid_numeric_fields(self):
+        """Invalid numeric values should not clobber current state."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 10.0
+
+        manager.load_state({
+            "monthly_budget": "not-a-number",
+            "current_spending": {"bad": "value"},
+            "owned_domains": [],
+        })
+
+        assert manager.monthly_budget == 50.0
+        assert manager.current_spending == 10.0

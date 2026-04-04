@@ -261,6 +261,72 @@ class DomainRotationManager:
             "domains_owned": len(self.owned_domains)
         }
 
+    def export_state(self) -> Dict:
+        """
+        Export manager state using JSON-safe values.
+        Datetime fields are stored as ISO 8601 strings.
+        """
+        domains: List[Dict] = []
+        for domain in self.owned_domains:
+            normalized = dict(domain)
+            purchased_at = normalized.get("purchased_at")
+            expires_at = normalized.get("expires_at")
+
+            if isinstance(purchased_at, datetime):
+                normalized["purchased_at"] = purchased_at.isoformat()
+            if isinstance(expires_at, datetime):
+                normalized["expires_at"] = expires_at.isoformat()
+
+            domains.append(normalized)
+
+        return {
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "owned_domains": domains,
+            "active_domain": self.active_domain,
+        }
+
+    def load_state(self, state: Dict):
+        """
+        Load manager state from a dict, normalizing legacy values.
+        Accepts datetime fields as datetime objects or ISO 8601 strings.
+        """
+        if not state:
+            return
+
+        if "monthly_budget" in state:
+            try:
+                self.monthly_budget = float(state["monthly_budget"])
+            except (TypeError, ValueError):
+                logger.warning("Ignoring invalid monthly_budget in state")
+
+        if "current_spending" in state:
+            try:
+                self.current_spending = float(state["current_spending"])
+            except (TypeError, ValueError):
+                logger.warning("Ignoring invalid current_spending in state")
+
+        loaded_domains: List[Dict] = []
+        raw_domains = state.get("owned_domains", [])
+        if isinstance(raw_domains, list):
+            for raw_domain in raw_domains:
+                if not isinstance(raw_domain, dict):
+                    continue
+
+                domain_entry = dict(raw_domain)
+                for key in ("purchased_at", "expires_at"):
+                    value = domain_entry.get(key)
+                    if isinstance(value, str):
+                        try:
+                            domain_entry[key] = datetime.fromisoformat(value)
+                        except ValueError:
+                            # Keep original string for display if it is not ISO.
+                            pass
+                loaded_domains.append(domain_entry)
+
+        self.owned_domains = loaded_domains
+        self.active_domain = state.get("active_domain")
+
 
 # Global domain rotation manager
 domain_rotation_manager = DomainRotationManager()
