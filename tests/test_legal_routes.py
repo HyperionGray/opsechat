@@ -47,10 +47,9 @@ class TestLegalRoutes:
         assert 'href="/aup"' in body
 
     def test_external_links_open_in_new_tab_safely(self):
-        response = self.client.get("/terms")
-        body = response.data.decode()
-        assert 'target="_blank"' in body
-        assert 'rel="noopener noreferrer"' in body
+        rendered = legal_routes._render_inline("[x](https://example.com)")
+        assert 'target="_blank"' in rendered
+        assert 'rel="noopener noreferrer"' in rendered
 
     def test_disallow_javascript_url_scheme_in_links(self):
         rendered = legal_routes._render_inline("[x](javascript:alert(1))")
