@@ -108,22 +108,28 @@ def get_manager():
         monthly_budget=config.get('monthly_budget', 50.0)
     )
     
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+    # Load saved state using manager-native serializer/deserializer.
+    state_fields = {
+        "monthly_budget": config.get("monthly_budget", manager.monthly_budget),
+        "current_spending": config.get("current_spending", 0.0),
+        "active_domain": config.get("active_domain"),
+        "owned_domains": config.get("owned_domains", []),
+        "active_provider": config.get("active_provider"),
+        "test_mode": config.get("test_mode", False),
+    }
+    manager.import_state(state_fields)
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    state = manager.export_state()
+    config['current_spending'] = state['current_spending']
+    config['owned_domains'] = state['owned_domains']
+    config['active_domain'] = state['active_domain']
+    config['active_provider'] = state['active_provider']
+    config['test_mode'] = state['test_mode']
     save_config(config)
 
 

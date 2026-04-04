@@ -8,6 +8,7 @@ OpSecChat supports automated domain rotation for burner email systems. This allo
 
 Currently supported:
 - **Porkbun** (Recommended - cheap .xyz, .club domains)
+- **Mock provider** (`--provider mock`) for safe local testing and CI flows
 - Additional registrars can be added by extending `DomainAPIClient`
 
 ## Setup
@@ -67,21 +68,22 @@ else:
 
 ### CLI Commands
 
+The preferred interface is now the module CLI:
+
+```bash
+# Show command help
+python -m domain_manager --help
+```
+
 ```bash
 # Check available cheap domains
-python -c "from domain_manager import domain_rotation_manager; \
-    print(domain_rotation_manager.search_cheap_domains(tlds=['xyz', 'club', 'online']))"
+python -m domain_manager --provider mock search --tld xyz --tld club --limit 5
 
 # Get current budget status
-python -c "from domain_manager import domain_rotation_manager; \
-    print(f'Budget: ${domain_rotation_manager.budget_manager.monthly_budget}'); \
-    print(f'Spent: ${domain_rotation_manager.budget_manager.get_month_spending()}'); \
-    print(f'Remaining: ${domain_rotation_manager.budget_manager.get_remaining_budget()}')"
+python -m domain_manager --provider mock budget status
 
 # Rotate to new domain
-python -c "from domain_manager import domain_rotation_manager; \
-    result = domain_rotation_manager.rotate_to_new_domain(); \
-    print(result)"
+python -m domain_manager --provider mock rotate --max-price 3.00
 ```
 
 ### Automated Rotation
@@ -365,25 +367,48 @@ All domain rotation commands:
 
 ```bash
 # Check available domains
-python -m domain_manager search --tld xyz --max-price 2.00
+python -m domain_manager --provider mock search --tld xyz --max-price 2.00
 
 # Purchase specific domain
-python -m domain_manager purchase --domain example.xyz
+python -m domain_manager --provider mock purchase --domain example.xyz --price 1.99
 
 # Rotate to new random domain
-python -m domain_manager rotate
+python -m domain_manager --provider mock rotate
 
 # Check budget status
-python -m domain_manager budget status
+python -m domain_manager --provider mock budget status
 
 # Set monthly budget
-python -m domain_manager budget set --amount 20.00
+python -m domain_manager --provider mock budget set --amount 20.00
 
 # List all active domains
-python -m domain_manager list
+python -m domain_manager --provider mock list
+
+# List domains from active provider API
+python -m domain_manager --provider mock provider-list
 
 # Configure DNS
-python -m domain_manager dns --domain example.xyz --mx "mail.example.xyz"
+python -m domain_manager --provider mock dns --domain example.xyz --mx "mail.example.xyz"
+```
+
+### Using live Porkbun API credentials
+
+For production-like runs, either pass credentials directly:
+
+```bash
+python -m domain_manager --provider porkbun \
+  --api-key "$PORKBUN_API_KEY" \
+  --secret-key "$PORKBUN_SECRET_KEY" \
+  rotate
+```
+
+Or export environment variables first:
+
+```bash
+export PORKBUN_API_KEY="pk1_..."
+export PORKBUN_SECRET_KEY="sk1_..."
+export DOMAIN_BUDGET="20"
+python -m domain_manager --provider porkbun budget status
 ```
 
 ## Summary

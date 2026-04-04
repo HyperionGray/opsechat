@@ -174,3 +174,40 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_rotate_to_new_domain_structured_result(self):
+        """Test structured rotate helper response"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test789.xyz",
+            "price": 1.99
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "test789.xyz"
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=10.0)
+        result = manager.rotate_to_new_domain(max_price=3.0)
+
+        assert result["success"] is True
+        assert result["domain"] == manager.active_domain
+        assert result["cost"] <= 3.0
+
+    def test_configure_with_mock_provider(self):
+        """Test built-in mock provider configuration path"""
+        manager = DomainRotationManager(monthly_budget=15.0)
+        manager.configure(provider="mock", monthly_budget=15.0)
+
+        result = manager.rotate_to_new_domain(max_price=3.0)
+        assert result["success"] is True
+        assert manager.get_config()["active_provider"] == "mock"
+
+    def test_generate_domain_from_pattern(self):
+        """Test deterministic parts in pattern-based generation"""
+        manager = DomainRotationManager()
+        domain = manager.generate_domain_from_pattern("burner-{date}-{random}", tld="xyz")
+
+        assert domain.endswith(".xyz")
+        assert "burner-" in domain
