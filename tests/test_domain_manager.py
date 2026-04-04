@@ -4,7 +4,7 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, NamecheapAPIClient, DomainRotationManager
 )
 
 
@@ -74,6 +74,73 @@ class TestPorkbunAPIClient:
         
         assert result["tld"] == "com"
         assert result["registration"] == "9.99"
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch("domain_manager.requests.Session")
+    def test_search_domain_available(self, mock_session_class):
+        """Test Namecheap domain availability parsing"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = (
+            "<ApiResponse Status='OK'>"
+            "<CommandResponse>"
+            "<DomainCheckResult Domain='examplexyz123.xyz' Available='true' "
+            "IsPremiumName='false'/>"
+            "</CommandResponse>"
+            "</ApiResponse>"
+        )
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_user="testuser",
+            api_key="testkey",
+            client_ip="127.0.0.1",
+            sandbox=True,
+        )
+        with patch.object(client, "get_pricing", return_value={"registration": "2.98"}):
+            result = client.search_domain("examplexyz123.xyz")
+
+        assert result["available"] is True
+        assert result["provider"] == "namecheap"
+        assert result["price"] == "2.98"
+
+    @patch("domain_manager.requests.Session")
+    def test_get_pricing(self, mock_session_class):
+        """Test Namecheap pricing parsing"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = (
+            "<ApiResponse Status='OK'>"
+            "<CommandResponse>"
+            "<UserGetPricingResult>"
+            "<ProductType Name='DOMAIN'>"
+            "<ProductCategory Name='register'>"
+            "<Product Name='XYZ'>"
+            "<Price Duration='1' YourPrice='3.88' Currency='USD'/>"
+            "</Product>"
+            "</ProductCategory>"
+            "</ProductType>"
+            "</UserGetPricingResult>"
+            "</CommandResponse>"
+            "</ApiResponse>"
+        )
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_user="testuser",
+            api_key="testkey",
+            client_ip="127.0.0.1",
+            sandbox=True,
+        )
+        result = client.get_pricing("xyz")
+
+        assert result["provider"] == "namecheap"
+        assert result["registration"] == "3.88"
 
 
 class TestDomainRotationManager:
@@ -174,3 +241,43 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_add_second_provider_and_rotate_specific_provider(self):
+        """Test provider-specific rotation with multiple registrars"""
+        porkbun_client = Mock(spec=DomainAPIClient)
+        porkbun_client.provider_name = "porkbun"
+        porkbun_client.search_domain.return_value = {
+            "available": True,
+            "domain": "pb123.xyz",
+            "price": 3.10,
+            "provider": "porkbun",
+        }
+        porkbun_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "pb123.xyz",
+            "provider": "porkbun",
+        }
+
+        namecheap_client = Mock(spec=DomainAPIClient)
+        namecheap_client.provider_name = "namecheap"
+        namecheap_client.search_domain.return_value = {
+            "available": True,
+            "domain": "nc123.xyz",
+            "price": "2.20",
+            "provider": "namecheap",
+        }
+        namecheap_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "nc123.xyz",
+            "provider": "namecheap",
+        }
+
+        manager = DomainRotationManager(porkbun_client, monthly_budget=50.0)
+        manager.add_api_client("namecheap", namecheap_client)
+
+        new_domain = manager.rotate_domain(provider="namecheap")
+
+        assert new_domain is not None
+        assert manager.active_provider == "namecheap"
+        assert manager.active_domain == new_domain
+        assert manager.owned_domains[0]["provider"] == "namecheap"
