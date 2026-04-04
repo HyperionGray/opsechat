@@ -283,6 +283,16 @@ Features
 
 For Amazon Q setup instructions, see [Amazon Q Setup Guide](docs/setup/AMAZON_Q_SETUP_GUIDE.md).
 
+### Legal Policy Pages and Version Metadata
+
+- Public policy pages are available at:
+  - `/terms` (Terms of Service)
+  - `/aup` (Acceptable Use Policy)
+  - `/privacy` (Privacy Policy)
+- Policy version metadata is available as JSON at `/policy/versions`
+- The metadata endpoint provides version, effective date, and last updated
+  values from policy source files in `docs/legal/`
+
 #### Getting Started with Email
 1. Start the server: `python runserver.py` or use deployment method above
 2. Access email configuration: `http://yourservice.onion/{path}/email/config`
