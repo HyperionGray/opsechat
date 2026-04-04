@@ -50,7 +50,7 @@
 
 ```bash
 # Usage examples:
-python rotate-domain.py --search example.xyz
+python rotate-domain.py --search
 python rotate-domain.py --buy example.xyz --years 1
 python rotate-domain.py --list-owned
 python rotate-domain.py --get-pricing xyz

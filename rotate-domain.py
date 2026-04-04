@@ -110,6 +110,10 @@ def _run_get_pricing(tld):
 def main(argv=None):
     args = _parse_args(argv or sys.argv[1:])
 
+    if args.years != 1 and not args.buy:
+        print("--years can only be used with --buy")
+        return 1
+
     if args.search:
         cli.run_command("search")
         return 0
@@ -121,9 +125,6 @@ def main(argv=None):
         return 0
     if args.buy:
         return _run_buy(args.buy, auto_confirm=args.yes, years=args.years)
-    if args.years != 1:
-        print("--years can only be used with --buy")
-        return 1
     if args.get_pricing:
         return _run_get_pricing(args.get_pricing)
     return 1
