@@ -11,10 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- Domain rotation manager configuration APIs (`configure`, `get_config`) and compatibility helpers
+- Structured domain rotation flow (`rotate_to_new_domain`) and cheap domain search helper
+- Domain CLI state serialization/deserialization for persisted datetime-safe domain history
 
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- Updated domain rotation guide with accurate, runnable API/CLI examples
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022

@@ -174,3 +174,86 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_sets_api_client_and_budget(self):
+        """Configure should initialize Porkbun client and budget state."""
+        manager = DomainRotationManager()
+        result = manager.configure(
+            api_key="pk_test_123",
+            secret_key="sk_test_456",
+            monthly_budget=25.0
+        )
+
+        assert result["success"] is True
+        assert result["provider"] == "porkbun"
+        assert manager.monthly_budget == 25.0
+        assert manager.api_client is not None
+        assert isinstance(manager.api_client, PorkbunAPIClient)
+
+    def test_get_config_returns_non_sensitive_state(self):
+        """Config API should not expose secrets and should include budget info."""
+        manager = DomainRotationManager(monthly_budget=40.0)
+        config = manager.get_config()
+
+        assert config["configured"] is False
+        assert config["monthly_budget"] == 40.0
+        assert "budget_status" in config
+        assert "api_key" not in config
+        assert "secret_key" not in config
+
+    def test_search_cheap_domains_returns_limited_results(self):
+        """search_cheap_domains should respect max price and limit."""
+        mock_client = Mock(spec=DomainAPIClient)
+        # Always available with cheap pricing.
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": "1.99"
+        }
+
+        manager = DomainRotationManager(mock_client)
+        results = manager.search_cheap_domains(max_price=3.0, limit=2, max_attempts=10)
+
+        assert len(results) == 2
+        for entry in results:
+            assert entry["price"] <= 3.0
+            assert entry["domain"].endswith((".xyz", ".club", ".online", ".site", ".website"))
+
+    def test_rotate_to_new_domain_returns_result_dict(self):
+        """Compatibility rotate method should return detailed status dictionary."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": 2.50
+        }
+        mock_client.purchase_domain.return_value = {"success": True}
+
+        manager = DomainRotationManager(mock_client, monthly_budget=10.0)
+        result = manager.rotate_to_new_domain(max_price=3.0)
+
+        assert result["success"] is True
+        assert isinstance(result["domain"], str)
+        assert result["cost"] == 2.50
+        assert manager.active_domain == result["domain"]
+
+    def test_purchase_in_test_mode_skips_live_api_purchase(self):
+        """Test mode should not call registrar purchase API."""
+        mock_client = Mock(spec=DomainAPIClient)
+        manager = DomainRotationManager(mock_client, monthly_budget=10.0)
+        manager.set_test_mode(True)
+
+        success = manager.purchase_domain_if_budget_allows("example.xyz", 1.0)
+
+        assert success is True
+        mock_client.purchase_domain.assert_not_called()
+
+    def test_budget_manager_adapter_compatibility(self):
+        """Legacy budget_manager interface should map to manager budget state."""
+        manager = DomainRotationManager(monthly_budget=15.0)
+        manager.current_spending = 3.5
+
+        assert manager.budget_manager.monthly_budget == 15.0
+        assert manager.budget_manager.get_month_spending() == 3.5
+        assert manager.budget_manager.get_remaining_budget() == 11.5
+
+        manager.budget_manager.set_monthly_budget(20.0)
+        assert manager.monthly_budget == 20.0
