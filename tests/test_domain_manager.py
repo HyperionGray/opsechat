@@ -1,6 +1,8 @@
 """
 Tests for domain management module
 """
+from datetime import datetime
+
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
@@ -174,3 +176,93 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_sets_client_and_budget(self):
+        """configure() should initialize provider and budget"""
+        manager = DomainRotationManager(monthly_budget=10.0)
+        config = manager.configure(
+            api_key="pk_test_1234",
+            secret_key="sk_test_5678",
+            monthly_budget=25.0
+        )
+
+        assert manager.api_client is not None
+        assert manager.monthly_budget == 25.0
+        assert config["configured"] is True
+        assert config["api_key_last4"] == "1234"
+        assert config["remaining_budget"] == 25.0
+
+    def test_search_cheap_domains_returns_sorted_matches(self):
+        """search_cheap_domains should return sorted priced results"""
+        mock_client = Mock(spec=DomainAPIClient)
+        responses = [
+            {"available": True, "price": "3.50", "currency": "USD"},
+            {"available": True, "price": "1.99", "currency": "USD"},
+            {"available": False, "price": "0.99", "currency": "USD"},
+            {"available": True, "price": "2.25", "currency": "USD"},
+        ]
+
+        def search_side_effect(_domain):
+            if responses:
+                return responses.pop(0)
+            return {"available": False, "price": "99.99", "currency": "USD"}
+
+        mock_client.search_domain.side_effect = search_side_effect
+
+        manager = DomainRotationManager(mock_client)
+        results = manager.search_cheap_domains(tlds=["xyz"], max_price=5.0, limit=3)
+
+        assert len(results) == 3
+        assert [entry["price"] for entry in results] == [1.99, 2.25, 3.5]
+        assert all(entry["domain"].endswith(".xyz") for entry in results)
+
+    def test_export_and_load_state_normalizes_datetime(self):
+        """state export/load should be JSON-safe and type-safe"""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 3.0
+        manager.active_domain = "one.xyz"
+        manager.owned_domains = [{
+            "domain": "one.xyz",
+            "price": 3.0,
+            "purchased_at": datetime(2026, 1, 1, 12, 0, 0),
+            "expires_at": datetime(2027, 1, 1, 12, 0, 0)
+        }]
+
+        exported = manager.export_state()
+        assert exported["current_spending"] == 3.0
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(exported["owned_domains"][0]["expires_at"], str)
+
+        loaded = DomainRotationManager(monthly_budget=50.0)
+        loaded.load_state(
+            owned_domains=exported["owned_domains"],
+            current_spending=exported["current_spending"],
+            active_domain=exported["active_domain"]
+        )
+        assert loaded.current_spending == 3.0
+        assert loaded.active_domain == "one.xyz"
+        assert isinstance(loaded.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(loaded.owned_domains[0]["expires_at"], datetime)
+
+    def test_rotate_to_new_domain_returns_structured_success(self):
+        """rotate_to_new_domain should return structured API response"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": 2.99,
+            "currency": "USD"
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "new.xyz"
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=20.0)
+        manager.active_domain = "old.xyz"
+        result = manager.rotate_to_new_domain()
+
+        assert result["success"] is True
+        assert result["previous_domain"] == "old.xyz"
+        assert result["domain"].endswith((".xyz", ".club", ".online", ".site", ".website"))
+        assert result["cost"] == 2.99
+        assert "budget_status" in result
