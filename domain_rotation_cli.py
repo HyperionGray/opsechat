@@ -109,21 +109,21 @@ def get_manager():
     )
     
     # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+    manager.import_state({
+        "current_spending": config.get("current_spending", 0.0),
+        "owned_domains": config.get("owned_domains", []),
+        "active_domain": config.get("active_domain")
+    })
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    state = manager.export_state()
+    config['current_spending'] = state['current_spending']
+    config['owned_domains'] = state['owned_domains']
+    config['active_domain'] = state['active_domain']
     save_config(config)
 
 
@@ -141,11 +141,23 @@ def list_domains():
         return
     
     for i, domain in enumerate(domains, 1):
+        purchased_at = domain.get('purchased_at')
+        expires_at = domain.get('expires_at')
+        purchased_str = (
+            purchased_at.strftime('%Y-%m-%d %H:%M')
+            if hasattr(purchased_at, 'strftime')
+            else str(purchased_at)
+        )
+        expires_str = (
+            expires_at.strftime('%Y-%m-%d')
+            if hasattr(expires_at, 'strftime')
+            else str(expires_at)
+        )
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {purchased_str}")
+        print(f"   Expires: {expires_str}")
         print()
 
 

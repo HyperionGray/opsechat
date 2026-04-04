@@ -2,6 +2,7 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +175,48 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    @patch('domain_manager.requests.Session')
+    def test_configure_and_get_config(self, mock_session_class):
+        """Test manager configuration and exposed config state"""
+        mock_session_class.return_value = Mock()
+        manager = DomainRotationManager(monthly_budget=20.0)
+
+        config = manager.configure(
+            api_key="pk1_example1234",
+            secret_key="sk1_example1234",
+            monthly_budget=35.0
+        )
+
+        assert config["api_configured"] is True
+        assert config["api_provider"] == "porkbun"
+        assert config["api_key_masked"].endswith("1234")
+        assert config["monthly_budget"] == 35.0
+        assert "budget_status" in config
+        assert config["budget_status"]["remaining"] == 35.0
+
+    def test_export_import_state_roundtrip(self):
+        """Test JSON-safe state export/import with datetime restoration"""
+        now = datetime.now()
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 6.25
+        manager.active_domain = "active-test.xyz"
+        manager.owned_domains = [{
+            "domain": "active-test.xyz",
+            "price": 3.12,
+            "purchased_at": now,
+            "expires_at": now + timedelta(days=365)
+        }]
+
+        exported = manager.export_state()
+        assert exported["current_spending"] == 6.25
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(exported["owned_domains"][0]["expires_at"], str)
+
+        restored = DomainRotationManager(monthly_budget=50.0)
+        restored.import_state(exported)
+
+        assert restored.current_spending == 6.25
+        assert restored.active_domain == "active-test.xyz"
+        assert isinstance(restored.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(restored.owned_domains[0]["expires_at"], datetime)
