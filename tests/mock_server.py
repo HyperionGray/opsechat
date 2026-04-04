@@ -85,9 +85,8 @@ except ImportError as e:
 # Add security headers
 @app.after_request
 def remove_headers(response):
-    # Strip framework-identifying headers and avoid version leakage
-    response.headers.pop("Server", None)
-    response.headers["Server"] = "OpSecChat"
+    # Match production header hardening in tests.
+    response.headers["Server"] = ""
     response.headers["Date"] = ""
     return response
 
@@ -109,6 +108,17 @@ def health_check():
             'hostname': app.config.get('hostname'),
             'path': app.config.get('path')
         }
+    }), 200
+
+
+@app.route('/version', methods=["GET"])
+def version_check():
+    """Version endpoint for basic diagnostics."""
+    from flask import jsonify
+    return jsonify({
+        'service': 'opsechat',
+        'version': '0.8.0-alpha',
+        'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }), 200
 
 

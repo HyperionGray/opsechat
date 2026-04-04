@@ -1,8 +1,7 @@
 {
   "name": "opsechat",
   "version": "1.0.0",
-  "description": "Platform ========",
-  "main": "index.js",
+  "description": "Playwright test suite and tooling for OpSecChat",
   "scripts": {
     "test": "playwright test",
     "test:headless": "playwright test --project=chromium-headless --project=firefox-headless --project=webkit-headless",

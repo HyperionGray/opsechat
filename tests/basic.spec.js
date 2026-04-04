@@ -139,4 +139,16 @@ test.describe('API endpoint smoke checks', () => {
     expect(data).toHaveProperty('status');
     expect(data).toHaveProperty('timestamp');
   });
+
+  test('should expose a version endpoint', async ({ request }) => {
+    const response = await request.get('/version');
+
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toContain('application/json');
+
+    const data = await response.json();
+    expect(data).toHaveProperty('service', 'opsechat');
+    expect(data).toHaveProperty('version');
+    expect(data).toHaveProperty('timestamp');
+  });
 });

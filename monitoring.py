@@ -321,9 +321,19 @@ def _read_version() -> str:
         return 'unknown'
 
 
+def get_version_info() -> Dict[str, Any]:
+    """Get lightweight version metadata for runtime diagnostics."""
+    return {
+        'service': 'opsechat',
+        'version': _read_version(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+    }
+
+
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
     return {
+        'service': 'opsechat',
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],

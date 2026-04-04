@@ -5,7 +5,6 @@ This module handles Flask application creation and configuration,
 extracted from runserver.py to improve code organization.
 """
 
-import os
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
@@ -109,12 +108,16 @@ def create_app():
     from http_mail_routes import register_http_mail_routes
     register_http_mail_routes(app)
     
-    # Health check endpoint
-    from monitoring import get_health_status
+    # Health/version endpoints
+    from monitoring import get_health_status, get_version_info
 
     @app.route('/health', methods=["GET"])
     def health():
         return jsonify(get_health_status())
+
+    @app.route('/version', methods=["GET"])
+    def version():
+        return jsonify(get_version_info())
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])

@@ -417,4 +417,4 @@ If you encounter issues:
 - [SECURITY.md](SECURITY.md) - Security best practices
 - [PGP_USAGE.md](PGP_USAGE.md) - PGP encryption guide
 - [EMAIL_SYSTEM.md](EMAIL_SYSTEM.md) - Email system documentation
-- [TESTING.md](TESTING.md) - Running tests
+- [TESTING.md](../user-guide/TESTING.md) - Running tests

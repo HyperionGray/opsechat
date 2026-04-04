@@ -166,3 +166,32 @@ def test_health_endpoint_date_header_is_blank():
     response = client.get("/health")
 
     assert response.headers["Date"] == ""
+
+
+def test_version_endpoint_returns_200_and_json():
+    client = _test_app.test_client()
+    response = client.get("/version")
+
+    assert response.status_code == 200
+    assert response.content_type == "application/json"
+
+
+def test_version_endpoint_returns_required_fields():
+    client = _test_app.test_client()
+    response = client.get("/version")
+    data = response.get_json()
+
+    assert data is not None
+    assert data["service"] == "opsechat"
+    assert "version" in data
+    assert "timestamp" in data
+
+
+def test_version_endpoint_timestamp_is_iso8601_utc():
+    client = _test_app.test_client()
+    response = client.get("/version")
+    data = response.get_json()
+
+    parsed = datetime.datetime.fromisoformat(data["timestamp"])
+    assert parsed.tzinfo is not None
+    assert parsed.utcoffset() == datetime.timedelta(0)

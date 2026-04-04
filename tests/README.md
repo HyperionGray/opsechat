@@ -14,7 +14,7 @@ This directory contains the automated test suite for opsechat.
 
 ## Running Tests
 
-See the main [TESTING.md](../TESTING.md) file for detailed instructions on running tests.
+See the main [TESTING.md](../docs/user-guide/TESTING.md) file for detailed instructions on running tests.
 
 Quick commands:
 ```bash

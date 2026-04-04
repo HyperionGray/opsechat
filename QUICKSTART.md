@@ -40,6 +40,13 @@ curl http://localhost:5000/health
 # {"active_rooms":0,"status":"healthy","version":"0.8.0-alpha"}
 ```
 
+### Check running version metadata
+
+```bash
+curl http://localhost:5000/version
+# {"service":"opsechat","version":"0.8.0-alpha","timestamp":"..."}
+```
+
 ---
 
 ## Prerequisites

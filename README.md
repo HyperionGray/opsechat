@@ -46,6 +46,16 @@ python chat-room.py --tor
 
 Access the chat at `/chat` to create rooms and share with your contacts.
 
+### Runtime diagnostics endpoints
+
+```bash
+# Service health (used by container healthchecks)
+curl http://127.0.0.1:5000/health
+
+# Lightweight service/version metadata
+curl http://127.0.0.1:5000/version
+```
+
 ### Terminal UI (TUI)
 - ✅ **TUI Only** - No web browser required
 - ✅ **Tor Integration** - Built-in Tor hidden service support
