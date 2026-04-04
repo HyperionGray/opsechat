@@ -19,10 +19,14 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
     """Register all chat-related routes with the Flask app"""
     # Security headers are applied globally via @app.after_request in app_factory.
 
+    def _is_valid_path(url_addition):
+        configured_path = app.config.get("path")
+        return bool(configured_path) and url_addition == configured_path
+
     @app.route('/<string:url_addition>')
     def drop(url_addition):
         """Main chat landing page"""
-        if url_addition != app.config["path"]:
+        if not _is_valid_path(url_addition):
             return ('', 404)
         return render_template("landing.html", 
                               hostname=app.config["hostname"], 
@@ -31,7 +35,7 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
     @app.route('/<string:url_addition>/landing')
     def drop_landing(url_addition):
         """Chat landing page with explicit landing route"""
-        if url_addition != app.config["path"]:
+        if not _is_valid_path(url_addition):
             return ('', 404)
         return render_template("landing.html", 
                               hostname=app.config["hostname"], 
@@ -40,7 +44,7 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
     @app.route('/<string:url_addition>/landing/auto')
     def drop_landing_auto(url_addition):
         """Auto-redirect landing page for JavaScript detection"""
-        if url_addition != app.config["path"]:
+        if not _is_valid_path(url_addition):
             return ('', 404)
         return render_template("landing_auto.html", 
                               hostname=app.config["hostname"], 
@@ -49,7 +53,7 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
     @app.route('/<string:url_addition>/yesscript')
     def drop_yes(url_addition):
         """JavaScript-enabled chat interface"""
-        if url_addition != app.config["path"]:
+        if not _is_valid_path(url_addition):
             return ('', 404)
         
         if "_id" not in session:
@@ -64,7 +68,7 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
     @app.route('/<string:url_addition>/noscript')
     def drop_noscript(url_addition):
         """No-JavaScript chat interface"""
-        if url_addition != app.config["path"]:
+        if not _is_valid_path(url_addition):
             return ('', 404)
         
         if "_id" not in session:
@@ -79,7 +83,7 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
     @app.route('/<string:url_addition>/messages', methods=["GET", "POST"])
     def chat_messages(url_addition):
         """Handle chat messages for no-JavaScript interface"""
-        if url_addition != app.config["path"]:
+        if not _is_valid_path(url_addition):
             return ('', 404)
         
         if "_id" not in session:
@@ -132,7 +136,7 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
     @app.route('/<string:url_addition>/messages.json', methods=["GET", "POST"])
     def chat_messages_js(url_addition):
         """Handle chat messages for JavaScript interface"""
-        if url_addition != app.config["path"]:
+        if not _is_valid_path(url_addition):
             return ('', 404)
         
         if "_id" not in session:
