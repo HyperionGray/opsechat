@@ -4,8 +4,8 @@
 <title>OpSec Email Inbox</title>
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 {% if script_enabled %}
-  <script src="{{ url_for('static', filename='jquery.js') }}"></script>
-  <script src="{{ url_for('static', filename='openpgp.min.js') }}"></script>
+  <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='jquery.js') }}"></script>
+  <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='openpgp.min.js') }}"></script>
 {% endif %}
 </head>
 
@@ -188,7 +188,7 @@
             <a href="/{{ path }}/email/view/{{ email.id }}">View</a>
             <a href="/{{ path }}/email/edit/{{ email.id }}">Edit (Raw)</a>
             <form method="POST" action="/{{ path }}/email/delete/{{ email.id }}">
-              <button type="submit" onclick="return confirm('Delete this email?')">Delete</button>
+              <button type="submit" class="js-confirm-delete-email">Delete</button>
             </form>
           </div>
         </div>
@@ -208,11 +208,20 @@
   </div>
 
   {% if script_enabled %}
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Auto-refresh inbox every 30 seconds
     setTimeout(function() {
       location.reload();
     }, 30000);
+
+    // Keep no-script form behavior but move confirmation out of inline handlers.
+    document.querySelectorAll('.js-confirm-delete-email').forEach(function(button) {
+      button.addEventListener('click', function(event) {
+        if (!confirm('Delete this email?')) {
+          event.preventDefault();
+        }
+      });
+    });
   </script>
   {% else %}
   <div style="margin-top: 20px;">

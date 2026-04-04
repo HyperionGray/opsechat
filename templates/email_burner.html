@@ -316,7 +316,7 @@
         </div>
         
         <div class="burner-actions">
-          <button onclick="copyToClipboard('{{ burner.email }}')">📋 Copy Email</button>
+          <button class="copy-burner-btn" data-email="{{ burner.email }}">📋 Copy Email</button>
           <a href="/{{ path }}/email" class="button">📧 View Inbox</a>
           <form method="POST" action="/{{ path }}/email/burner" style="display: inline;">
             <input type="hidden" name="action" value="rotate">
@@ -376,7 +376,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     function copyToClipboard(text) {
       if (navigator.clipboard) {
         navigator.clipboard.writeText(text).then(function() {
@@ -469,6 +469,13 @@
     }
 
     setInterval(refreshBurnerList, 30000);
+
+    // Avoid inline onclick handlers to keep CSP strict for scripts.
+    document.querySelectorAll('.copy-burner-btn').forEach(function(button) {
+      button.addEventListener('click', function() {
+        copyToClipboard(button.dataset.email || '');
+      });
+    });
     {% endif %}
   </script>
 </body>

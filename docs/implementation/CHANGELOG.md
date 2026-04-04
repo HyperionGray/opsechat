@@ -11,13 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- CSP hardening implementation note: `docs/implementation/CSP_NONCE_HARDENING_2026-04-04.md`
 
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- Added per-request CSP nonce handling and stricter script policy in `app_factory.py`
+- Updated active templates to use CSP nonce-backed `<script>` tags and removed inline script handlers
+- Removed stale backup/helper files and an unreferenced legacy burner template
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022
+- Strengthened CSP directives (`script-src` nonce, `script-src-attr 'none'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`)
 
 ## [2.0.0] - 2024-12-08
 

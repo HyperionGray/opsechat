@@ -193,9 +193,16 @@
     <div class="actions">
       <a href="/{{ path }}/email/edit/{{ email.id }}">Edit (Raw Mode)</a>
       <form method="POST" action="/{{ path }}/email/delete/{{ email.id }}">
-        <button type="submit" onclick="return confirm('Delete this email?')">Delete</button>
+        <button type="submit" id="delete-email-btn">Delete</button>
       </form>
     </div>
   </div>
+  <script nonce="{{ csp_nonce }}">
+    document.getElementById('delete-email-btn').addEventListener('click', function(event) {
+      if (!confirm('Delete this email?')) {
+        event.preventDefault();
+      }
+    });
+  </script>
 </body>
 </html>

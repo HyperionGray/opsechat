@@ -5,8 +5,8 @@ This module handles Flask application creation and configuration,
 extracted from runserver.py to improve code organization.
 """
 
-import os
-from flask import Flask, jsonify
+import secrets
+from flask import Flask, jsonify, g
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -68,22 +68,41 @@ def create_app():
         return add_review(reviews, user_id, rating, review_text)
     
     # Add security headers after every response
+    @app.before_request
+    def set_csp_nonce():
+        # Per-request nonce allows vetted inline scripts without enabling
+        # global unsafe-inline script execution.
+        g.csp_nonce = secrets.token_urlsafe(16)
+
+    @app.context_processor
+    def inject_csp_nonce():
+        return {"csp_nonce": getattr(g, "csp_nonce", "")}
+
     @app.after_request
     def add_security_headers(response):
+        nonce = getattr(g, "csp_nonce", "")
+        script_src = "script-src 'self'"
+        if nonce:
+            script_src += f" 'nonce-{nonce}'"
+
         response.headers["Server"] = ""
         response.headers["Date"] = ""
-        # Content Security Policy: restrict resources to same origin, block inline scripts
+        # Content Security Policy: strict scripts with nonce support.
+        # Inline style attributes are still used across legacy templates, so
+        # style-src currently allows unsafe-inline until templates are refactored.
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self'; "
-            "style-src 'self'; "
+            f"{script_src}; "
+            "script-src-attr 'none'; "
+            "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data:; "
             "font-src 'self'; "
             "connect-src 'self'; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
@@ -120,15 +139,5 @@ def create_app():
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # CHANGELOG (AI assistant):
-    # - Made rate_limiter import optional with a no-op fallback to prevent
-    #   ModuleNotFoundError in containerized installs that omit rate_limiter.py.
-    #
-    # Remaining checklist (non-blocking for runtime):
-    # - Update container/Podman build configuration to ensure rate_limiter.py
-    #   is included in the image (e.g., COPY list or packaging config).
-    # - Once packaging reliably includes rate_limiter.py, consider removing
-    #   the fallback or turning it into an explicit configuration option.
     
     return app

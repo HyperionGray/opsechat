@@ -125,9 +125,9 @@
 <!--  Section controls                                       -->
 <!-- ======================================================= -->
 <div class="section-toggle">
-  <button onclick="showSection('create')">➕ Create New Mailbox</button>
-  <button onclick="showSection('compose')">✉️ Send a Message</button>
-  <button onclick="showSection('read')">📬 Read My Inbox</button>
+  <button id="show-create-btn">➕ Create New Mailbox</button>
+  <button id="show-compose-btn">✉️ Send a Message</button>
+  <button id="show-read-btn">📬 Read My Inbox</button>
 </div>
 
 <!-- ======================================================= -->
@@ -139,7 +139,7 @@
     A unique address and secret read key will be generated.
     <strong>Save your read key</strong> — it is shown only once.
   </p>
-  <button id="create-btn" onclick="createMailbox()">Create Mailbox</button>
+  <button id="create-btn">Create Mailbox</button>
 
   <div id="new-mailbox-result">
     <div class="warn">
@@ -149,12 +149,12 @@
     <div class="form-group">
       <div class="token-label">Your Mailbox Address (share with senders)</div>
       <div class="token-box" id="result-address"></div>
-      <button onclick="copyText('result-address')">📋 Copy Address</button>
+      <button id="copy-address-btn">📋 Copy Address</button>
     </div>
     <div class="form-group">
       <div class="token-label">Your Read Key (keep secret — required to read messages)</div>
       <div class="token-box" id="result-read-key"></div>
-      <button onclick="copyText('result-read-key')">📋 Copy Read Key</button>
+      <button id="copy-read-key-btn">📋 Copy Read Key</button>
     </div>
     <div class="form-group">
       <div class="token-label">Send URL (share this link with senders)</div>
@@ -234,7 +234,7 @@
              value="{{ inbox_read_key or '' }}"
              placeholder="Your private read key">
     </div>
-    <button type="button" onclick="fetchInbox()">Open Inbox</button>
+    <button id="open-inbox-btn" type="button">Open Inbox</button>
   </form>
 
   <!-- Inbox messages rendered from server (non-JS fallback) -->
@@ -256,8 +256,7 @@
         <form method="POST"
               action="/{{ path }}/mail/{{ inbox_address }}/delete/{{ msg.id }}">
           <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
-          <button type="submit" class="danger"
-                  onclick="return confirm('Delete this message?')">🗑 Delete</button>
+          <button type="submit" class="danger">🗑 Delete</button>
         </form>
       </div>
     </div>
@@ -269,8 +268,7 @@
       <h3 style="color:#f00;">Danger Zone</h3>
       <form method="POST" action="/{{ path }}/mail/{{ inbox_address }}/destroy">
         <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
-        <button type="submit" class="danger"
-                onclick="return confirm('Destroy mailbox and all messages permanently?')">
+        <button type="submit" class="danger">
           💣 Destroy Mailbox
         </button>
       </form>
@@ -282,7 +280,7 @@
   <div id="js-inbox-messages"></div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
   // Show/hide sections
   function showSection(name) {
     ['create', 'compose', 'read'].forEach(function(s) {
@@ -467,6 +465,42 @@
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#x27;');
   }
+
+  // Bind interactive controls without inline handlers.
+  document.getElementById('show-create-btn').addEventListener('click', function() {
+    showSection('create');
+  });
+  document.getElementById('show-compose-btn').addEventListener('click', function() {
+    showSection('compose');
+  });
+  document.getElementById('show-read-btn').addEventListener('click', function() {
+    showSection('read');
+  });
+  document.getElementById('create-btn').addEventListener('click', createMailbox);
+  document.getElementById('copy-address-btn').addEventListener('click', function() {
+    copyText('result-address');
+  });
+  document.getElementById('copy-read-key-btn').addEventListener('click', function() {
+    copyText('result-read-key');
+  });
+  document.getElementById('open-inbox-btn').addEventListener('click', fetchInbox);
+  document.getElementById('compose-address-input').addEventListener('input', updateComposeAction);
+
+  // Server-rendered forms keep non-JS fallback; add confirm behavior here for JS mode.
+  document.querySelectorAll('form[action*="/delete/"] button[type="submit"]').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      if (!confirm('Delete this message?')) {
+        e.preventDefault();
+      }
+    });
+  });
+  document.querySelectorAll('form[action$="/destroy"] button[type="submit"]').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      if (!confirm('Destroy mailbox and all messages permanently?')) {
+        e.preventDefault();
+      }
+    });
+  });
 </script>
 </body>
 </html>

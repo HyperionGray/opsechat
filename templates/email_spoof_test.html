@@ -216,8 +216,8 @@
   </div>
 
   <div class="tabs">
-    <button class="tab-button active" onclick="showTab('detect')">Spoofing Detection</button>
-    <button class="tab-button" onclick="showTab('generate')">Generate Variants</button>
+    <button id="tab-detect" class="tab-button active">Spoofing Detection</button>
+    <button id="tab-generate" class="tab-button">Generate Variants</button>
   </div>
 
   <!-- Spoofing Detection Tab -->
@@ -354,7 +354,7 @@
     </ul>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     function showTab(tabName) {
       // Hide all tabs
       document.querySelectorAll('.tab-content').forEach(tab => {
@@ -366,8 +366,15 @@
       
       // Show selected tab
       document.getElementById(tabName + '-tab').classList.add('active');
-      event.target.classList.add('active');
+      document.getElementById('tab-' + tabName).classList.add('active');
     }
+
+    document.getElementById('tab-detect').addEventListener('click', function() {
+      showTab('detect');
+    });
+    document.getElementById('tab-generate').addEventListener('click', function() {
+      showTab('generate');
+    });
   </script>
 </body>
 </html>

@@ -140,7 +140,7 @@
       </div>
 
       <button type="submit">Save Changes</button>
-      <button type="button" onclick="window.location.href='/{{ path }}/email/view/{{ email.id }}'">Cancel</button>
+      <button type="button" id="cancel-edit-btn">Cancel</button>
     </form>
   </div>
 
@@ -155,5 +155,10 @@
       <li>PGP encrypted messages are preserved</li>
     </ul>
   </div>
+  <script nonce="{{ csp_nonce }}">
+    document.getElementById('cancel-edit-btn').addEventListener('click', function() {
+      window.location.href = '/{{ path }}/email/view/{{ email.id }}';
+    });
+  </script>
 </body>
 </html>

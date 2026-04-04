@@ -108,3 +108,34 @@ See `TODO-automation.md` for:
 - Issue: "Automation: Direction"
 - Requirements: Per P4X-ng comment - keep only triggered workflows, fix continuous progress, bi-weekly security, keep sync
 - Full Documentation: `docs/AUTOMATION_CONSOLIDATION.md`
+
+## 2026-04-04 - Scheduled hardening and cleanup
+
+### Summary
+- Implemented CSP nonce-based script hardening in the Flask app factory.
+- Updated active templates to use nonce-tagged scripts and removed inline script event handlers in active paths.
+- Cleaned stale repository artifacts discovered during scheduled maintenance.
+
+### Added
+- `docs/implementation/CSP_NONCE_HARDENING_2026-04-04.md` documenting the implementation and follow-up direction.
+
+### Changed
+- `app_factory.py` now issues per-request `csp_nonce` and injects it into templates.
+- `Content-Security-Policy` updated to enforce:
+  - `script-src 'self' 'nonce-...'`
+  - `script-src-attr 'none'`
+  - `object-src 'none'`
+  - `base-uri 'self'`
+  - `form-action 'self'`
+- Active templates now bind events via JavaScript listeners rather than inline HTML handlers.
+
+### Removed
+- Deleted stale files:
+  - `docker-compose.yml~HEAD`
+  - `Dockerfile~HEAD`
+  - `test-ci-fix.js`
+  - `test-server.js`
+  - `templates/email_burner_old.html`
+
+### Tests
+- Updated CSP/security-header tests to validate nonce-compatible strict script behavior.
