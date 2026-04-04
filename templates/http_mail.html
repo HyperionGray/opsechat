@@ -282,7 +282,7 @@
   <div id="js-inbox-messages"></div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
   // Show/hide sections
   function showSection(name) {
     ['create', 'compose', 'read'].forEach(function(s) {

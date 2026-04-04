@@ -154,7 +154,12 @@ def test_health_endpoint_sets_json_and_security_headers():
     response = client.get("/health")
 
     assert response.content_type == "application/json"
-    assert response.headers["Content-Security-Policy"].startswith("default-src 'self';")
+    csp = response.headers["Content-Security-Policy"]
+    assert csp.startswith("default-src 'self';")
+    script_src = csp.split("script-src ", 1)[1].split(";", 1)[0]
+    assert "'unsafe-inline'" not in script_src
+    assert "'self'" in script_src
+    assert "'nonce-" in script_src
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert response.headers["X-Frame-Options"] == "DENY"
     assert response.headers["Referrer-Policy"] == "no-referrer"
