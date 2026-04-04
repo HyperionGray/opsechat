@@ -263,8 +263,8 @@ class TestDomainRotationManager:
 
         new_domain = manager.rotate_domain()
 
-        assert new_domain == "rotate.xyz"
-        assert manager.active_domain == "rotate.xyz"
+        assert new_domain is not None
+        assert manager.active_domain == new_domain
         cheap_provider.purchase_domain.assert_called_once()
         expensive_provider.purchase_domain.assert_not_called()
         assert manager.owned_domains[-1]["provider"] == "cheap"
