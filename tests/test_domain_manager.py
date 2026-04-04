@@ -1,6 +1,7 @@
 """
 Tests for domain management module
 """
+from datetime import datetime, timedelta
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
@@ -174,3 +175,97 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_sets_client_and_budget(self):
+        """Test manager configuration with credentials and budget"""
+        manager = DomainRotationManager()
+        manager.configure("pk_test", "sk_test", monthly_budget=25.0)
+
+        assert isinstance(manager.api_client, PorkbunAPIClient)
+        assert manager.monthly_budget == 25.0
+
+    def test_get_config_reports_configured_status(self):
+        """Test high-level configuration status output"""
+        manager = DomainRotationManager()
+        config = manager.get_config()
+        assert config["configured"] is False
+        assert config["provider"] is None
+
+        manager.configure("pk_test", "sk_test", monthly_budget=15.0)
+        config = manager.get_config()
+        assert config["configured"] is True
+        assert config["provider"] == "porkbun"
+        assert config["monthly_budget"] == 15.0
+
+    def test_import_and_export_state_round_trip(self):
+        """State should serialize and restore datetime fields safely"""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        state = {
+            "current_spending": "12.5",
+            "active_domain": "example.xyz",
+            "owned_domains": [
+                {
+                    "domain": "example.xyz",
+                    "price": "$1.99",
+                    "purchased_at": "2026-01-01T12:00:00",
+                    "expires_at": "2027-01-01T12:00:00",
+                }
+            ],
+        }
+
+        manager.import_state(state)
+        assert manager.current_spending == 12.5
+        assert manager.active_domain == "example.xyz"
+        assert manager.owned_domains[0]["domain"] == "example.xyz"
+        assert isinstance(manager.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(manager.owned_domains[0]["expires_at"], datetime)
+
+        exported = manager.export_state()
+        assert exported["active_domain"] == "example.xyz"
+        assert exported["current_spending"] == 12.5
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(exported["owned_domains"][0]["expires_at"], str)
+
+    def test_cleanup_expired_domains_removes_expired_and_updates_active(self):
+        """Expired domains should be pruned and active domain repaired"""
+        now = datetime(2026, 4, 1, 10, 0, 0)
+        manager = DomainRotationManager()
+        manager.owned_domains = [
+            {
+                "domain": "expired.xyz",
+                "price": 1.0,
+                "purchased_at": now - timedelta(days=370),
+                "expires_at": now - timedelta(days=1),
+            },
+            {
+                "domain": "active.xyz",
+                "price": 1.5,
+                "purchased_at": now - timedelta(days=20),
+                "expires_at": now + timedelta(days=340),
+            },
+        ]
+        manager.active_domain = "expired.xyz"
+
+        removed = manager.cleanup_expired_domains(now=now)
+
+        assert removed == 1
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["domain"] == "active.xyz"
+        assert manager.active_domain == "active.xyz"
+
+    def test_configure_rejects_invalid_budget(self):
+        """Configuration should reject non-positive monthly budgets"""
+        manager = DomainRotationManager()
+        with pytest.raises(ValueError):
+            manager.configure("pk_test", "sk_test", monthly_budget=0)
+
+    def test_import_state_removes_stale_active_domain(self):
+        """Active domain should clear if not in imported owned domains"""
+        manager = DomainRotationManager()
+        manager.import_state(
+            {
+                "active_domain": "missing.xyz",
+                "owned_domains": [{"domain": "kept.xyz", "price": 1.0}],
+            }
+        )
+        assert manager.active_domain is None
