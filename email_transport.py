@@ -8,7 +8,7 @@ import email
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.header import Header
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import logging
 import time
 from datetime import datetime
@@ -288,6 +288,17 @@ class EmailTransportManager:
     def __init__(self):
         self.smtp_transport: Optional[SMTPTransport] = None
         self.imap_transport: Optional[IMAPTransport] = None
+        self._smtp_config: Dict[str, Any] = {}
+        self._imap_config: Dict[str, Any] = {}
+
+    @staticmethod
+    def _mask_secret(value: str) -> str:
+        """Mask sensitive string values for safe config introspection."""
+        if not value:
+            return ""
+        if len(value) <= 4:
+            return "*" * len(value)
+        return f"{'*' * (len(value) - 4)}{value[-4:]}"
     
     def configure_smtp(self, smtp_server: str, smtp_port: int, username: str, 
                       password: str, use_tls: bool = True) -> bool:
@@ -296,9 +307,19 @@ class EmailTransportManager:
             self.smtp_transport = SMTPTransport(
                 smtp_server, smtp_port, username, password, use_tls
             )
-            return self.smtp_transport.test_connection()
+            success = self.smtp_transport.test_connection()
+            self._smtp_config = {
+                "configured": success,
+                "server": smtp_server,
+                "port": smtp_port,
+                "username": username,
+                "password": self._mask_secret(password),
+                "use_tls": use_tls,
+            }
+            return success
         except Exception as e:
             logger.error(f"Failed to configure SMTP: {e}")
+            self._smtp_config = {"configured": False}
             return False
     
     def configure_imap(self, imap_server: str, imap_port: int, username: str, 
@@ -308,9 +329,19 @@ class EmailTransportManager:
             self.imap_transport = IMAPTransport(
                 imap_server, imap_port, username, password, use_ssl
             )
-            return self.imap_transport.test_connection()
+            success = self.imap_transport.test_connection()
+            self._imap_config = {
+                "configured": success,
+                "server": imap_server,
+                "port": imap_port,
+                "username": username,
+                "password": self._mask_secret(password),
+                "use_ssl": use_ssl,
+            }
+            return success
         except Exception as e:
             logger.error(f"Failed to configure IMAP: {e}")
+            self._imap_config = {"configured": False}
             return False
     
     def send_email(self, from_addr: str, to_addr: str, subject: str, 
@@ -338,6 +369,18 @@ class EmailTransportManager:
         return {
             'smtp': self.smtp_transport is not None,
             'imap': self.imap_transport is not None
+        }
+
+    def get_config(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Return current SMTP/IMAP configuration summary.
+        Secrets are always masked.
+        """
+        smtp_default = {"configured": False}
+        imap_default = {"configured": False}
+        return {
+            "smtp": self._smtp_config or smtp_default,
+            "imap": self._imap_config or imap_default,
         }
 
 
