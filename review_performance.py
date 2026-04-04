@@ -6,17 +6,29 @@ Implements caching as recommended by Amazon Q Code Review
 import datetime
 from functools import lru_cache
 import time
+from typing import Dict, List
 
 # Cache for review statistics
 _review_stats_cache = None
 _review_stats_cache_time = 0
 _cache_ttl = 60  # Cache for 60 seconds
+_review_user_count_by_hash: Dict[int, Dict[str, int]] = {}
+_review_hash_order: List[int] = []
+_review_hash_cache_limit = 32
 
 def invalidate_review_cache():
     """Invalidate the review statistics cache"""
     global _review_stats_cache, _review_stats_cache_time
+    global _review_user_count_by_hash, _review_hash_order
     _review_stats_cache = None
     _review_stats_cache_time = 0
+    _review_user_count_by_hash = {}
+    _review_hash_order = []
+    # Safe to clear here because the function is called after module import.
+    try:
+        get_user_review_count.cache_clear()
+    except NameError:
+        pass
 
 def get_cached_review_stats(reviews):
     """
@@ -87,20 +99,56 @@ def get_user_review_count(user_id, reviews_hash):
     Get review count for a specific user (cached)
     reviews_hash is used to invalidate cache when reviews change
     """
-    # This would need to be implemented with actual review data
-    # For now, return 0 as placeholder
-    return 0
+    if user_id is None:
+        return 0
+    review_counts = _review_user_count_by_hash.get(reviews_hash, {})
+    return review_counts.get(str(user_id), 0)
+
+
+def _build_user_review_counts(reviews):
+    """Build user->review_count mapping for the supplied review list."""
+    counts = {}
+    for review in reviews:
+        user_id = review.get("user_id")
+        if user_id is None:
+            continue
+        user_key = str(user_id)
+        counts[user_key] = counts.get(user_key, 0) + 1
+    return counts
+
+
+def _remember_review_counts(reviews_hash, review_counts):
+    """Store user review count mappings with bounded in-memory retention."""
+    if reviews_hash in _review_hash_order:
+        _review_hash_order.remove(reviews_hash)
+    _review_hash_order.append(reviews_hash)
+    _review_user_count_by_hash[reviews_hash] = review_counts
+
+    while len(_review_hash_order) > _review_hash_cache_limit:
+        stale_hash = _review_hash_order.pop(0)
+        _review_user_count_by_hash.pop(stale_hash, None)
 
 def create_reviews_hash(reviews):
     """
     Create a hash of reviews for cache invalidation
     """
     if not reviews:
-        return hash(())
-    
-    # Create hash based on review count and latest timestamp
+        reviews_hash = hash(())
+        _remember_review_counts(reviews_hash, {})
+        return reviews_hash
+
+    review_counts = _build_user_review_counts(reviews)
+
+    # Generate a deterministic signature that changes when per-user counts change.
     latest_timestamp = max(review["timestamp"] for review in reviews)
-    return hash((len(reviews), latest_timestamp.isoformat()))
+    signature = (
+        len(reviews),
+        latest_timestamp.isoformat(),
+        tuple(sorted(review_counts.items())),
+    )
+    reviews_hash = hash(signature)
+    _remember_review_counts(reviews_hash, review_counts)
+    return reviews_hash
 
 # Performance monitoring for review operations
 class ReviewPerformanceMonitor:

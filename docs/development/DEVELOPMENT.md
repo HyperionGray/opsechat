@@ -73,6 +73,7 @@ These are development and testing utilities that help during development:
 - **`simple_test.py`** - Quick sanity checks
 - **`quick_import_test.py`** - Test Python imports
 - **`review_performance.py`** - Performance benchmarking tool
+- **`tests/test_review_performance.py`** - Unit tests for cached review counting and hash invalidation
 - **`usability_assessment.py`** - UI/UX testing helper
 - **`comprehensive_functionality_test.py`** - Full functional test suite
 
