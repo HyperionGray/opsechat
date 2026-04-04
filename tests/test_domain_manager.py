@@ -112,6 +112,21 @@ class TestDomainRotationManager:
         assert result is not None
         assert result["domain"].endswith((".xyz", ".club", ".online", ".site", ".website"))
         assert result["price"] <= 5.0
+
+    def test_find_cheap_available_domain_parses_string_price(self):
+        """Test domain search parses currency-formatted prices"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test123.xyz",
+            "price": "$2.99"
+        }
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["price"] == 2.99
     
     def test_purchase_domain_if_budget_allows_success(self):
         """Test domain purchase within budget"""
@@ -174,3 +189,59 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    @patch('domain_manager.PorkbunAPIClient')
+    def test_configure_sets_client_and_budget(self, mock_porkbun):
+        """Test configure creates API client and sets budget"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_porkbun.return_value = mock_client
+
+        manager = DomainRotationManager()
+        manager.configure("pk_test", "sk_test", monthly_budget=25.0)
+
+        assert manager.api_client is mock_client
+        assert manager.monthly_budget == 25.0
+
+    @patch('domain_manager.PorkbunAPIClient')
+    def test_get_config_masks_secrets_by_default(self, mock_porkbun):
+        """Test get_config hides credential values unless requested"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.api_key = "pk_example_1234"
+        mock_client.api_secret = "sk_example_5678"
+        mock_porkbun.return_value = mock_client
+
+        manager = DomainRotationManager()
+        manager.configure("pk_example_1234", "sk_example_5678", monthly_budget=10.0)
+
+        masked = manager.get_config()
+        assert masked["configured"] is True
+        assert masked["api_key"].endswith("1234")
+        assert "*" in masked["api_key"]
+        assert masked["secret_key"].endswith("5678")
+        assert "*" in masked["secret_key"]
+
+        unmasked = manager.get_config(mask_secrets=False)
+        assert unmasked["api_key"] == "pk_example_1234"
+        assert unmasked["secret_key"] == "sk_example_5678"
+
+    def test_export_import_state_round_trip(self):
+        """Test manager state can be exported and imported safely"""
+        manager = DomainRotationManager(monthly_budget=20.0)
+        manager.current_spending = 4.5
+        manager.active_domain = "alpha.xyz"
+        manager.owned_domains = [{
+            "domain": "alpha.xyz",
+            "price": "4.5",
+            "purchased_at": "2026-01-01T10:00:00",
+            "expires_at": "2027-01-01T10:00:00",
+        }]
+
+        # Import converts serialized values to runtime-safe objects.
+        manager.import_state(manager.export_state())
+
+        domains = manager.get_owned_domains()
+        assert len(domains) == 1
+        assert domains[0]["domain"] == "alpha.xyz"
+        assert isinstance(domains[0]["price"], float)
+        assert hasattr(domains[0]["purchased_at"], "isoformat")
+        assert hasattr(domains[0]["expires_at"], "isoformat")

@@ -6,7 +6,7 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -134,10 +134,145 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+        self._api_provider = (
+            api_client.__class__.__name__.replace("APIClient", "").lower()
+            if api_client else None
+        )
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+        self._api_provider = api_client.__class__.__name__.replace("APIClient", "").lower()
+
+    @staticmethod
+    def _parse_price(price_value: Any, default: float = 999.0) -> float:
+        """Parse registrar price values that may include currency symbols."""
+        if isinstance(price_value, (int, float)):
+            return float(price_value)
+
+        if isinstance(price_value, str):
+            cleaned = price_value.strip().replace("$", "").replace("€", "").replace(",", "")
+            try:
+                return float(cleaned)
+            except ValueError:
+                return default
+
+        return default
+
+    @staticmethod
+    def _parse_datetime(value: Any) -> Optional[datetime]:
+        """Parse ISO datetime values from persisted state."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return None
+        return None
+
+    def configure(self, api_key: str, secret_key: str, monthly_budget: float = 50.0):
+        """
+        Configure domain rotation with Porkbun credentials.
+
+        This supports the email configuration UI, which expects a manager-level
+        configure API rather than direct client instantiation.
+        """
+        if not api_key or not secret_key:
+            raise ValueError("API key and secret key are required")
+
+        if monthly_budget <= 0:
+            raise ValueError("Monthly budget must be greater than zero")
+
+        self.monthly_budget = float(monthly_budget)
+        self.set_api_client(PorkbunAPIClient(api_key, secret_key))
+
+    def get_config(self, mask_secrets: bool = True) -> Dict[str, Any]:
+        """Get current domain rotation configuration."""
+        api_key = getattr(self.api_client, "api_key", "") if self.api_client else ""
+        secret_key = getattr(self.api_client, "api_secret", "") if self.api_client else ""
+
+        if mask_secrets:
+            api_key = self._mask_secret(api_key)
+            secret_key = self._mask_secret(secret_key)
+
+        return {
+            "provider": self._api_provider,
+            "configured": self.api_client is not None,
+            "api_key": api_key,
+            "secret_key": secret_key,
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "active_domain": self.active_domain,
+            "domains_owned": len(self.owned_domains),
+        }
+
+    @staticmethod
+    def _mask_secret(value: str) -> str:
+        """Mask sensitive values while preserving a short suffix for debugging."""
+        if not value:
+            return ""
+        if len(value) <= 4:
+            return "*" * len(value)
+        return f"{'*' * (len(value) - 4)}{value[-4:]}"
+
+    def export_state(self) -> Dict[str, Any]:
+        """Export JSON-serializable manager state for persistence."""
+        serialized_domains = []
+        for domain in self.owned_domains:
+            serialized = dict(domain)
+            purchased_at = serialized.get("purchased_at")
+            expires_at = serialized.get("expires_at")
+
+            if isinstance(purchased_at, datetime):
+                serialized["purchased_at"] = purchased_at.isoformat()
+            if isinstance(expires_at, datetime):
+                serialized["expires_at"] = expires_at.isoformat()
+
+            serialized_domains.append(serialized)
+
+        return {
+            "current_spending": self.current_spending,
+            "monthly_budget": self.monthly_budget,
+            "owned_domains": serialized_domains,
+            "active_domain": self.active_domain,
+            "provider": self._api_provider,
+        }
+
+    def import_state(self, state: Optional[Dict[str, Any]]):
+        """Import persisted manager state from JSON-safe dictionaries."""
+        if not state:
+            return
+
+        self.current_spending = self._parse_price(state.get("current_spending"), default=0.0)
+
+        if "monthly_budget" in state:
+            budget = self._parse_price(state.get("monthly_budget"), default=self.monthly_budget)
+            if budget > 0:
+                self.monthly_budget = budget
+
+        self.active_domain = state.get("active_domain") or None
+        self._api_provider = state.get("provider") or self._api_provider
+
+        imported_domains: List[Dict[str, Any]] = []
+        for raw_domain in state.get("owned_domains", []):
+            domain_name = raw_domain.get("domain")
+            if not domain_name:
+                continue
+
+            purchased_at = self._parse_datetime(raw_domain.get("purchased_at")) or datetime.now()
+            expires_at = self._parse_datetime(raw_domain.get("expires_at")) or (
+                purchased_at + timedelta(days=365)
+            )
+
+            imported_domains.append({
+                "domain": domain_name,
+                "price": self._parse_price(raw_domain.get("price"), default=0.0),
+                "purchased_at": purchased_at,
+                "expires_at": expires_at,
+            })
+
+        self.owned_domains = imported_domains
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -168,12 +303,7 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
-                
+                price = self._parse_price(result.get("price"), default=999.0)
                 if price <= max_price:
                     return {
                         "domain": domain,

@@ -19,7 +19,7 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
-from domain_manager import PorkbunAPIClient, DomainRotationManager
+from domain_manager import DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
@@ -102,28 +102,22 @@ def get_manager():
         print("Run: python domain_rotation_cli.py config")
         sys.exit(1)
     
-    client = PorkbunAPIClient(config['api_key'], config['api_secret'])
-    manager = DomainRotationManager(
-        api_client=client,
-        monthly_budget=config.get('monthly_budget', 50.0)
+    manager = DomainRotationManager(monthly_budget=config.get('monthly_budget', 50.0))
+    manager.configure(
+        api_key=config['api_key'],
+        secret_key=config['api_secret'],
+        monthly_budget=config.get('monthly_budget', 50.0),
     )
     
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+    # Load saved state using manager's JSON-safe import logic.
+    manager.import_state(config)
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    config.update(manager.export_state())
     save_config(config)
 
 
@@ -144,8 +138,18 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        purchased_at = domain.get('purchased_at')
+        expires_at = domain.get('expires_at')
+        if hasattr(purchased_at, 'strftime'):
+            purchased_text = purchased_at.strftime('%Y-%m-%d %H:%M')
+        else:
+            purchased_text = str(purchased_at) if purchased_at else "unknown"
+        if hasattr(expires_at, 'strftime'):
+            expiry_text = expires_at.strftime('%Y-%m-%d')
+        else:
+            expiry_text = str(expires_at) if expires_at else "unknown"
+        print(f"   Purchased: {purchased_text}")
+        print(f"   Expires: {expiry_text}")
         print()
 
 
