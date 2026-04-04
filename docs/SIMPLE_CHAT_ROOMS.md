@@ -78,17 +78,16 @@ python chat-room.py --port 8080
 
 ### Enabling E2E Encryption
 
-1. In the chat room, toggle the "Encryption" switch
-2. All your messages will be encrypted using AES-GCM
-3. Other users must also enable encryption to read your messages
-4. The encryption key is stored in your browser's sessionStorage
-5. Keys are NOT shared - this is for protection against server compromise
+1. In the chat room, encryption is auto-enabled on page load when the room key is available
+2. You can still use the "Encryption" toggle to turn it off/on manually
+3. All encrypted messages use AES-GCM
+4. The room key is fetched from `/chat/room/<room_id>/key`
+5. Keys are kept in browser memory/session and expire with the room lifecycle
 
-**Important**: E2E encryption is per-user. If you want to chat with encrypted messages:
-- All participants should enable encryption
-- The encryption protects against server compromise
+**Important**: E2E encryption is room-shared for participants in that room:
+- Users joining the same room fetch the same room key
+- Encryption protects message content from passive server-side reading of plaintext
 - Messages are still deleted after 3 minutes
-- Encryption keys are session-only (lost when you close the tab)
 
 ## Security Features
 
@@ -141,6 +140,15 @@ GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
+
+#### Direct Messages (One-Time Invite Links)
+```
+POST /chat/dm/send
+GET  /chat/dm/<dm_id>
+```
+- DMs expire after 60 seconds
+- DMs are single-use and self-destruct immediately after first successful read
+- DM fields are overwritten in memory before deletion
 
 ### Encryption Implementation
 

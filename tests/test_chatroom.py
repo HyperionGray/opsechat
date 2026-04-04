@@ -200,10 +200,11 @@ class TestDirectMessageCleanup:
     def test_expired_dm_message_data_is_overwritten(self):
         original_message = "secret room invite"
         original_room_id = "super-secret-room-id"
+        original_sender_name = "Alice"
         dm = {
             "dm_id": "overwrite-dm",
             "sender_id": "u1",
-            "sender_name": "Alice",
+            "sender_name": original_sender_name,
             "room_id": original_room_id,
             "message": original_message,
             "timestamp": datetime.datetime.now() - datetime.timedelta(seconds=90),
@@ -214,3 +215,4 @@ class TestDirectMessageCleanup:
         cleanup_old_dms()
         assert dm["message"] == "X" * len(original_message)
         assert dm["room_id"] == "X" * len(original_room_id)
+        assert dm["sender_name"] == "X" * len(original_sender_name)

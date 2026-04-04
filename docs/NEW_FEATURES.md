@@ -36,6 +36,7 @@ Simple, ephemeral messaging for sharing room IDs with specific users. DMs are de
 
 ### Features
 - **1-minute expiry** - Messages disappear after 60 seconds
+- **One-time view** - Messages self-destruct immediately after first successful read
 - **Simple text only** - Max 200 characters
 - **Memory overwriting** - Data is overwritten before deletion
 - **Non-discoverable** - Cryptographically secure DM IDs
@@ -57,7 +58,8 @@ Response:
   "success": true,
   "dm_id": "14gvVa4l3SPsLJc1Ijb_sA",
   "dm_url": "/chat/dm/14gvVa4l3SPsLJc1Ijb_sA",
-  "expires_in": 60
+  "expires_in": 60,
+  "one_time_view": true
 }
 ```
 
@@ -72,6 +74,12 @@ Response:
   "room_id": "wWR_qXjnWQlr4oXqlR2JLxA...",
   "message": "Join me in the secure room...",
   "expires_in": 45
+}
+
+# Any second read attempt returns:
+GET /chat/dm/{dm_id}
+{
+  "error": "DM not found or expired"
 }
 ```
 
@@ -440,11 +448,10 @@ curl -X POST http://localhost:5001/chat/dm/send \
   -H "Content-Type: application/json" \
   -d '{"room_id": "test123", "message": "Join me!"}'
 
-# View DM (within 60 seconds)
+# View DM (within 60 seconds, only once)
 curl http://localhost:5001/chat/dm/{dm_id}
 
-# Wait 61 seconds and try again (should be expired)
-sleep 61
+# Try reading the same DM again (should fail - one-time view)
 curl http://localhost:5001/chat/dm/{dm_id}
 ```
 

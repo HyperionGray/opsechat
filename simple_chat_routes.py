@@ -18,8 +18,8 @@ import secrets
 import threading
 import base64
 import binascii
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from flask import render_template, request, session, jsonify
+from utils import sanitize_emojis, filter_to_ascii
 from rate_limiter import limiter
 
 # Absolute path to this file's directory (used for reliable VERSION lookup)
@@ -140,6 +140,14 @@ class ChatRoom:
             return active_users
 
 
+def _secure_erase_dm_fields(dm_data):
+    """Overwrite sensitive DM fields in-memory before deletion."""
+    for field in ("message", "room_id", "sender_name"):
+        value = dm_data.get(field)
+        if isinstance(value, str):
+            dm_data[field] = "X" * len(value)
+
+
 def cleanup_old_rooms():
     """Remove rooms inactive for more than 1 hour"""
     with rooms_lock:
@@ -176,8 +184,7 @@ def cleanup_old_dms():
         for dm_id in expired_dms:
             # Overwrite message before deletion
             dm = direct_messages[dm_id]
-            dm["message"] = "X" * len(dm["message"])
-            dm["room_id"] = "X" * len(dm["room_id"])
+            _secure_erase_dm_fields(dm)
             del direct_messages[dm_id]
 
 
@@ -494,12 +501,13 @@ def register_simple_chat_routes(app):
             "success": True,
             "dm_id": dm_id,
             "dm_url": f"/chat/dm/{dm_id}",
-            "expires_in": 60
+            "expires_in": 60,
+            "one_time_view": True
         })
     
     @app.route('/chat/dm/<string:dm_id>')
     def view_dm(dm_id):
-        """View a direct message"""
+        """View a direct message once (self-destructs on successful read)."""
         with dm_lock:
             if dm_id not in direct_messages:
                 return jsonify({"error": "DM not found or expired"}), 404
@@ -509,18 +517,22 @@ def register_simple_chat_routes(app):
             # Check if expired
             age = (datetime.datetime.now() - dm["timestamp"]).total_seconds()
             if age > 60:
+                _secure_erase_dm_fields(dm)
+                del direct_messages[dm_id]
                 return jsonify({"error": "DM expired"}), 404
-            
-            # Mark as read
-            dm["read"] = True
-            
-            return jsonify({
+
+            response = {
                 "dm_id": dm["dm_id"],
                 "sender_name": dm["sender_name"],
                 "room_id": dm["room_id"],
                 "message": dm["message"],
                 "expires_in": max(0, 60 - int(age))
-            })
+            }
+
+            # One-time read semantics: securely erase and remove immediately.
+            _secure_erase_dm_fields(dm)
+            del direct_messages[dm_id]
+            return jsonify(response)
     
     @app.route('/chat/room/<string:room_id>/key', methods=['GET'])
     def get_room_key(room_id):
