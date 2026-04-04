@@ -74,3 +74,6 @@ bfg-*.jar
 **/**.bish.**
 **bish**
 .bish.sqlite
+
+# Temporary merge-backup artifacts created by tooling
+*~HEAD
