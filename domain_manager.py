@@ -183,7 +183,7 @@ class DomainRotationManager:
         
         return None
     
-    def purchase_domain_if_budget_allows(self, domain: str, price: float) -> bool:
+    def purchase_domain_if_budget_allows(self, domain: str, price: float, years: int = 1) -> bool:
         """
         Purchase domain if within budget
         Returns True on success
@@ -199,15 +199,16 @@ class DomainRotationManager:
             return False
         
         # Attempt purchase
-        result = self.api_client.purchase_domain(domain, years=1)
+        result = self.api_client.purchase_domain(domain, years=years)
         
         if result.get("success"):
             self.current_spending += price
             self.owned_domains.append({
                 "domain": domain,
                 "price": price,
+                "years": years,
                 "purchased_at": datetime.now(),
-                "expires_at": datetime.now() + timedelta(days=365)
+                "expires_at": datetime.now() + timedelta(days=365 * years)
             })
             
             # Set as active if no active domain

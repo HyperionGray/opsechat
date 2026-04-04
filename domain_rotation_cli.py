@@ -19,10 +19,45 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _parse_iso_datetime(value):
+    """Parse an ISO timestamp into datetime, returning None on failure."""
+    if isinstance(value, datetime):
+        return value
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _serialize_domain_record(record):
+    """Convert a domain record into JSON-safe primitives."""
+    serialized = dict(record)
+    for key in ("purchased_at", "expires_at"):
+        value = serialized.get(key)
+        if isinstance(value, datetime):
+            serialized[key] = value.isoformat()
+        elif value is not None and not isinstance(value, str):
+            serialized[key] = str(value)
+    return serialized
+
+
+def _deserialize_domain_record(record):
+    """Normalize persisted domain records back into runtime values."""
+    normalized = dict(record)
+    for key in ("purchased_at", "expires_at"):
+        parsed = _parse_iso_datetime(normalized.get(key))
+        if parsed is not None:
+            normalized[key] = parsed
+    return normalized
 
 
 def load_config():
@@ -109,10 +144,18 @@ def get_manager():
     )
     
     # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
+    if config.get('current_spending') is not None:
+        try:
+            manager.current_spending = float(config['current_spending'])
+        except (TypeError, ValueError):
+            print("Warning: invalid saved current_spending value; resetting to 0.0")
+            manager.current_spending = 0.0
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = [
+            _deserialize_domain_record(record)
+            for record in config['owned_domains']
+            if isinstance(record, dict)
+        ]
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +165,11 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = [
+        _serialize_domain_record(record)
+        for record in manager.owned_domains
+        if isinstance(record, dict)
+    ]
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -142,10 +189,22 @@ def list_domains():
     
     for i, domain in enumerate(domains, 1):
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
+        purchased_at = domain.get('purchased_at')
+        expires_at = domain.get('expires_at')
+        purchased_label = (
+            purchased_at.strftime('%Y-%m-%d %H:%M')
+            if isinstance(purchased_at, datetime)
+            else (str(purchased_at) if purchased_at else "Unknown")
+        )
+        expires_label = (
+            expires_at.strftime('%Y-%m-%d')
+            if isinstance(expires_at, datetime)
+            else (str(expires_at) if expires_at else "Unknown")
+        )
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {purchased_label}")
+        print(f"   Expires: {expires_label}")
         print()
 
 
@@ -168,7 +227,7 @@ def search_domains():
     print("\nTo purchase a domain, run: python domain_rotation_cli.py rotate")
 
 
-def rotate_domain():
+def rotate_domain(auto_confirm: bool = False):
     """Rotate to a new domain"""
     manager, config = get_manager()
     
@@ -194,7 +253,10 @@ def rotate_domain():
     
     print(f"\nFound: {domain_info['domain']} for ${domain_info['price']}")
     
-    confirm = input("\nProceed with purchase? (yes/no): ").strip().lower()
+    if auto_confirm:
+        confirm = "yes"
+    else:
+        confirm = input("\nProceed with purchase? (yes/no): ").strip().lower()
     
     if confirm != 'yes':
         print("Purchase cancelled.")
@@ -233,6 +295,22 @@ def show_status():
         print(f"   Configure your email system to use: user@{manager.active_domain}")
 
 
+def run_command(command: str, auto_confirm: bool = False):
+    """Execute a CLI command, optionally auto-confirming rotate purchases."""
+    if command == 'config':
+        configure_api()
+    elif command == 'status':
+        show_status()
+    elif command == 'search':
+        search_domains()
+    elif command == 'rotate':
+        rotate_domain(auto_confirm=auto_confirm)
+    elif command == 'list':
+        list_domains()
+    else:
+        raise ValueError(f"Unsupported command: {command}")
+
+
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
@@ -253,19 +331,18 @@ Examples:
         choices=['config', 'status', 'search', 'rotate', 'list'],
         help='Command to execute'
     )
+    parser.add_argument(
+        '--yes',
+        action='store_true',
+        help='Auto-confirm rotation purchase (only valid with rotate)'
+    )
     
     args = parser.parse_args()
-    
-    if args.command == 'config':
-        configure_api()
-    elif args.command == 'status':
-        show_status()
-    elif args.command == 'search':
-        search_domains()
-    elif args.command == 'rotate':
-        rotate_domain()
-    elif args.command == 'list':
-        list_domains()
+
+    if args.yes and args.command != 'rotate':
+        parser.error("--yes can only be used with the 'rotate' command")
+
+    run_command(args.command, auto_confirm=args.yes)
 
 
 if __name__ == '__main__':
