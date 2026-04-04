@@ -140,6 +140,7 @@ The client automatically detects `.onion` and uses Tor SOCKS proxy.
 
 ### ✅ Security Features
 - **Message Validation** - Max 1000 chars
+- **Rate Limiting** - 20 messages per minute per client
 - **Secure Deletion** - Overwrite before delete
 - **No Configuration Files** - Ephemeral by design
 - **No Logs** - Zero persistence
