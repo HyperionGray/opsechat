@@ -273,6 +273,17 @@ Output:
    Expires: 2027-03-02
 ```
 
+#### Cleanup Expired Local Records
+```bash
+python domain_rotation_cli.py cleanup
+
+Output:
+=== Domain Rotation Cleanup ===
+
+Expired records removed: 1
+Current active domain: n5x8q2k7.xyz
+```
+
 ### Integration with Burner Email
 After rotating domains, update your email configuration:
 1. Run `python domain_rotation_cli.py status` to get active domain
@@ -284,7 +295,8 @@ After rotating domains, update your email configuration:
 - Set monthly budget to prevent overspending
 - CLI tracks spending automatically
 - Prevents purchases that would exceed budget
-- Resets monthly (manual reset required)
+- Local state is persisted in `~/.opsechat/domain_config.json`
+- Datetime fields are stored as ISO8601 strings and restored automatically
 
 ---
 
