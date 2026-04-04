@@ -33,6 +33,7 @@ services:
     environment:
       - TOR_CONTROL_PORT=9051
       - TOR_CONTROL_HOST=tor
+      - OPSECHAT_REQUIRE_TOR_READY=1
       - FLASK_DEBUG=0
     # No ports exposed to host - access only via Tor hidden service
     # Uncomment for debugging/development only:
@@ -41,6 +42,12 @@ services:
     networks:
       - opsechat-network
     restart: on-failure
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:5000/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     stdin_open: true
     tty: true
 

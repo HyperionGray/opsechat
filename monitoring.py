@@ -8,6 +8,7 @@ import json
 import time
 import sys
 import os
+import socket
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from functools import wraps
@@ -319,6 +320,85 @@ def _read_version() -> str:
             return f.read().strip()
     except OSError:
         return 'unknown'
+
+
+def _is_truthy_env(value: str) -> bool:
+    """Interpret common truthy environment values."""
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _can_connect(host: str, port: int, timeout: float = 0.75) -> bool:
+    """Fast TCP connectivity probe used by readiness checks."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _tor_target() -> tuple[str, int]:
+    """Resolve Tor control endpoint from environment with safe defaults."""
+    host = os.environ.get("TOR_CONTROL_HOST", "127.0.0.1")
+    raw_port = os.environ.get("TOR_CONTROL_PORT", "9051")
+    try:
+        port = int(raw_port)
+    except ValueError:
+        port = 9051
+    return host, port
+
+
+def get_liveness_status() -> Dict[str, Any]:
+    """Return process liveness information (no dependency checks)."""
+    return {
+        "status": "alive",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": _read_version(),
+    }
+
+
+def get_readiness_status() -> Dict[str, Any]:
+    """
+    Return dependency readiness status.
+
+    Tor connectivity is optional by default for local development. Set
+    OPSECHAT_REQUIRE_TOR_READY=1 to make Tor control reachability mandatory.
+    """
+    host, port = _tor_target()
+    require_tor = _is_truthy_env(os.environ.get("OPSECHAT_REQUIRE_TOR_READY", "0"))
+
+    checks: Dict[str, Dict[str, Any]] = {
+        "app": {"status": "ok"},
+        "memory_usage": {"status": "ok"},
+        "tor_control": {
+            "status": "skipped",
+            "required": require_tor,
+            "host": host,
+            "port": port,
+        },
+    }
+
+    apm.update_system_metrics()
+    memory_usage = apm.metrics["system"].get("memory_usage_mb")
+    if isinstance(memory_usage, (int, float)) and memory_usage > 0:
+        checks["memory_usage"]["memory_usage_mb"] = round(memory_usage, 2)
+
+    tor_reachable = _can_connect(host, port)
+    if require_tor:
+        checks["tor_control"]["status"] = "ok" if tor_reachable else "unavailable"
+    else:
+        # Keep visibility into Tor reachability without blocking readiness.
+        checks["tor_control"]["status"] = "ok" if tor_reachable else "optional_unavailable"
+
+    ready = checks["app"]["status"] == "ok" and checks["memory_usage"]["status"] == "ok"
+    if require_tor and not tor_reachable:
+        ready = False
+
+    return {
+        "status": "ready" if ready else "not_ready",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": _read_version(),
+        "checks": checks,
+    }
 
 
 def get_health_status() -> Dict[str, Any]:

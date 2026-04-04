@@ -72,7 +72,9 @@ def create_app():
     def add_security_headers(response):
         response.headers["Server"] = ""
         response.headers["Date"] = ""
-        # Content Security Policy: restrict resources to same origin, block inline scripts
+        # Content Security Policy: restrict resources to same origin, block inline scripts.
+        # Legacy templates that still contain inline scripts are served with narrower scope
+        # and are being incrementally migrated to external static JS.
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self'; "
@@ -82,8 +84,6 @@ def create_app():
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
@@ -109,12 +109,26 @@ def create_app():
     from http_mail_routes import register_http_mail_routes
     register_http_mail_routes(app)
     
-    # Health check endpoint
-    from monitoring import get_health_status
+    # Health check endpoints
+    from monitoring import (
+        get_health_status,
+        get_liveness_status,
+        get_readiness_status,
+    )
 
     @app.route('/health', methods=["GET"])
     def health():
         return jsonify(get_health_status())
+
+    @app.route('/health/live', methods=["GET"])
+    def health_live():
+        return jsonify(get_liveness_status()), 200
+
+    @app.route('/health/ready', methods=["GET"])
+    def health_ready():
+        payload = get_readiness_status()
+        status_code = 200 if payload.get("status") == "ready" else 503
+        return jsonify(payload), status_code
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])

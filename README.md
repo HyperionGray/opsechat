@@ -128,6 +128,13 @@ $ cd opsechat
 $ ./compose-up.sh
 ```
 
+Health probes are available at:
+
+```bash
+curl http://127.0.0.1:5000/health/live
+curl http://127.0.0.1:5000/health/ready
+```
+
 That's it! The script will handle everything. See [Docker Guide](docs/setup/DOCKER.md) for full documentation.
 
 ### Podman Quadlets (systemd integration)

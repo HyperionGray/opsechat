@@ -70,6 +70,22 @@ This will check:
 - Network connectivity
 - Hidden service address
 
+### Health Probe Endpoints
+
+The application now exposes three probe endpoints:
+
+- `/health` - backward-compatible summary health payload
+- `/health/live` - process liveness probe (always returns 200 when app process is alive)
+- `/health/ready` - dependency readiness probe (returns 200 when ready, 503 when not ready)
+
+By default, readiness does not hard-fail when Tor control is unreachable (useful for local dev).
+To require Tor connectivity for readiness, set:
+
+```yaml
+environment:
+  - OPSECHAT_REQUIRE_TOR_READY=1
+```
+
 ### Viewing Logs
 
 Watch logs in real-time:

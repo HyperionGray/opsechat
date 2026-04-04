@@ -166,3 +166,28 @@ def test_health_endpoint_date_header_is_blank():
     response = client.get("/health")
 
     assert response.headers["Date"] == ""
+
+
+def test_health_live_endpoint_returns_200_and_alive_status():
+    client = _test_app.test_client()
+    response = client.get("/health/live")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data is not None
+    assert data.get("status") == "alive"
+    assert "timestamp" in data
+    assert "version" in data
+
+
+def test_health_ready_endpoint_returns_200_by_default():
+    client = _test_app.test_client()
+    response = client.get("/health/ready")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data is not None
+    assert data.get("status") == "ready"
+    assert "checks" in data
+    assert data["checks"]["app"]["status"] == "ok"
+    assert "tor_control" in data["checks"]

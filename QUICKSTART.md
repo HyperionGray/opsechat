@@ -38,6 +38,10 @@ Access at `http://localhost:5000/chat` or your `.onion` address.
 ```bash
 curl http://localhost:5000/health
 # {"active_rooms":0,"status":"healthy","version":"0.8.0-alpha"}
+
+# Liveness/readiness probes (for orchestrators and load balancers)
+curl http://localhost:5000/health/live
+curl http://localhost:5000/health/ready
 ```
 
 ---
