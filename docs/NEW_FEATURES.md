@@ -177,6 +177,16 @@ When limit exceeded:
 ### Purpose
 Easy domain rotation for burner email service to avoid domain bans and maintain service availability.
 
+### Update: Multi-Registrar Support
+
+The domain rotation stack now supports a second registrar and provider fallback:
+
+- Added `NamecheapAPIClient` alongside `PorkbunAPIClient`
+- Added provider registration and primary-provider selection in `DomainRotationManager`
+- Added fallback search across providers when the primary provider has no cheap available domain
+- Added structured rotation responses with provider + budget data for API consumers
+- Updated CLI configuration flow to choose `porkbun` or `namecheap`
+
 ### Installation
 ```bash
 # The CLI is included in the main repository
@@ -189,8 +199,8 @@ chmod +x domain_rotation_cli.py
 python domain_rotation_cli.py config
 
 # You'll be prompted for:
-# - Porkbun API Key
-# - Porkbun API Secret
+# - Registrar (porkbun/namecheap)
+# - Provider API credentials
 # - Monthly Budget (default: $50)
 ```
 

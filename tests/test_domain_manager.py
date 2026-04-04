@@ -261,6 +261,7 @@ class TestDomainRotationManager:
         manager = DomainRotationManager(monthly_budget=10.0)
         manager.add_api_client("porkbun", mock_client)
         manager.set_primary_provider("porkbun")
+        manager.generate_random_domain = Mock(return_value="abc123.xyz")
 
         result = manager.rotate_domain(return_details=True)
 
