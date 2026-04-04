@@ -189,8 +189,8 @@ chmod +x domain_rotation_cli.py
 python domain_rotation_cli.py config
 
 # You'll be prompted for:
-# - Porkbun API Key
-# - Porkbun API Secret
+# - Provider selection (porkbun or namecheap)
+# - Provider-specific credentials
 # - Monthly Budget (default: $50)
 ```
 
@@ -199,11 +199,14 @@ python domain_rotation_cli.py config
 #### Check Current Status
 ```bash
 python domain_rotation_cli.py status
+python domain_rotation_cli.py status --provider namecheap
 
 Output:
 === Domain Rotation Status ===
 
 Active Domain: abc123xyz.club
+Active Provider: porkbun
+Configured Providers: porkbun, namecheap
 
 Budget:
   Monthly: $50.00
@@ -219,6 +222,7 @@ Domains Owned: 1
 #### Search for Available Domains
 ```bash
 python domain_rotation_cli.py search
+python domain_rotation_cli.py search --provider namecheap --max-price 4.50
 
 Output:
 === Searching for Available Cheap Domains ===
@@ -235,6 +239,7 @@ Attempt 2/5...
 #### Rotate to New Domain
 ```bash
 python domain_rotation_cli.py rotate
+python domain_rotation_cli.py rotate --provider porkbun
 
 Output:
 === Domain Rotation ===
