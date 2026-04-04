@@ -237,9 +237,25 @@ Messages are:
 2. Removed from the message list
 3. Gone forever (in-memory only, no disk)
 
-### Can I extend the 4-minute timer?
+### Can I configure the message burn timer?
 
-**No.** This is by design. Messages burn after 4 minutes, **no negotiation, no config**. If you need longer persistence, this tool is not for you.
+Yes. The default is 4 minutes (240 seconds), but operators can tune retention:
+
+```bash
+# CLI option
+python tui-server.py --message-lifetime-seconds 180
+
+# Environment variable (used when CLI option is not provided)
+OPSECHAT_TUI_MESSAGE_LIFETIME_SECONDS=180 python tui-server.py
+```
+
+You can also tune cleanup frequency (how often expiry runs):
+
+```bash
+python tui-server.py --cleanup-interval-seconds 5
+```
+
+If you do not set any options, the secure default remains 4 minutes.
 
 ## Coming Soon
 

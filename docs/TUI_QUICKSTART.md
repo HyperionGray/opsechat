@@ -39,6 +39,16 @@ python -c "import urwid, socks, stem; print('✓ All dependencies installed')"
 python tui-server.py
 ```
 
+Optional retention tuning:
+
+```bash
+# 2-minute burn window
+python tui-server.py --message-lifetime-seconds 120
+
+# Same via environment variable
+OPSECHAT_TUI_MESSAGE_LIFETIME_SECONDS=120 python tui-server.py
+```
+
 You should see:
 ```
 ============================================================
@@ -60,8 +70,8 @@ python tui-client.py
 You'll see the TUI interface:
 ```
 ┌────────────────────────────────────────────────────────┐
-│    OpSecChat TUI - Privacy First | Messages burn in    │
-│         4 min | Text only - No images/video            │
+│   OpSecChat TUI - Privacy First | Ephemeral messages   │
+│          | Text only - No images/video                 │
 ├────────────────────────────────────────────────────────┤
 │                                                        │
 │  * Welcome! You are ShadowFox3421. Messages burn in   │
@@ -149,6 +159,8 @@ The client automatically detects `.onion` and uses Tor SOCKS proxy.
 - **No File Sharing** - Text only
 - **No Username Choice** - Server assigns random names
 - **No Persistence** - Nothing saved to disk
+
+If you explicitly set `--message-lifetime-seconds`, the burn window follows that value.
 
 ## Troubleshooting
 

@@ -13,7 +13,7 @@ Features:
 - Optional PGP encryption
 """
 
-import sys
+import os
 import time
 import datetime
 import secrets
@@ -25,20 +25,47 @@ from typing import Dict, List, Any, Optional
 # Message storage (in-memory only)
 class ChatServer:
     MAX_MESSAGE_LENGTH = 1000  # Prevent b64 encoded images
-    MESSAGE_LIFETIME = 180  # 3 minutes in seconds
-    
-    def __init__(self, host='127.0.0.1', port=5555):
+    MESSAGE_LIFETIME = 240  # 4 minutes in seconds
+
+    def __init__(self, host='127.0.0.1', port=5555, message_lifetime: int = MESSAGE_LIFETIME,
+                 cleanup_interval_seconds: int = 10):
         self.host = host
         self.port = port
+        self.MESSAGE_LIFETIME = self._validate_positive_int(
+            message_lifetime, "message_lifetime"
+        )
+        self.cleanup_interval_seconds = self._validate_positive_int(
+            cleanup_interval_seconds, "cleanup_interval_seconds"
+        )
         self.messages: List[Dict[str, Any]] = []
         self.clients: Dict[socket.socket, str] = {}
         self.lock = threading.Lock()
         self.server_socket = None
         self.running = False
-        
-        # Start cleanup thread
-        self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
-        self.cleanup_thread.start()
+        self.stop_event = threading.Event()
+        self.cleanup_thread = None
+        self._stopped = False
+
+    @staticmethod
+    def _validate_positive_int(value: int, name: str) -> int:
+        """Validate integer configuration values."""
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+
+        if parsed <= 0:
+            raise ValueError(f"{name} must be greater than zero")
+
+        return parsed
+
+    def _format_lifetime_text(self) -> str:
+        """Human-readable message lifetime used in logs and UX text."""
+        if self.MESSAGE_LIFETIME % 60 == 0:
+            minutes = self.MESSAGE_LIFETIME // 60
+            unit = "minute" if minutes == 1 else "minutes"
+            return f"{minutes} {unit}"
+        return f"{self.MESSAGE_LIFETIME} seconds"
     
     def generate_username(self) -> str:
         """Generate a random username - no user choice allowed"""
@@ -49,8 +76,7 @@ class ChatServer:
     
     def _cleanup_loop(self):
         """Continuously clean up old messages"""
-        while True:
-            time.sleep(10)  # Check every 10 seconds
+        while not self.stop_event.wait(self.cleanup_interval_seconds):
             self._cleanup_old_messages()
     
     def _cleanup_old_messages(self):
@@ -113,7 +139,10 @@ class ChatServer:
             welcome = {
                 'type': 'welcome',
                 'username': username,
-                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
+                'message': (
+                    f'Welcome! You are {username}. '
+                    f'Messages burn in {self._format_lifetime_text()}.'
+                )
             }
             client_socket.send((json.dumps(welcome) + '\n').encode())
             
@@ -191,14 +220,18 @@ class ChatServer:
     
     def start(self):
         """Start the chat server"""
+        self._stopped = False
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen(5)
         self.running = True
+        self.stop_event.clear()
+        self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
+        self.cleanup_thread.start()
         
         print(f"[*] OpSecChat TUI Server running on {self.host}:{self.port}")
-        print(f"[*] Messages burn after {self.MESSAGE_LIFETIME} seconds")
+        print(f"[*] Messages burn after {self.MESSAGE_LIFETIME} seconds ({self._format_lifetime_text()})")
         print(f"[*] Max message length: {self.MAX_MESSAGE_LENGTH} chars")
         print(f"[*] Press Ctrl+C to stop")
         
@@ -221,7 +254,11 @@ class ChatServer:
     
     def stop(self):
         """Stop the chat server"""
+        if self._stopped:
+            return
+        self._stopped = True
         self.running = False
+        self.stop_event.set()
         
         # Close all client connections
         with self.lock:
@@ -238,6 +275,9 @@ class ChatServer:
                 self.server_socket.close()
             except (OSError, socket.error):
                 pass
+
+        if self.cleanup_thread and self.cleanup_thread.is_alive():
+            self.cleanup_thread.join(timeout=2)
         
         # Overwrite and clear messages (security)
         with self.lock:
@@ -300,7 +340,33 @@ def main():
     parser.add_argument('--port', type=int, default=5555, help='Port to bind to')
     parser.add_argument('--tor', action='store_true', help='Enable Tor hidden service')
     parser.add_argument('--test', action='store_true', help='Test mode (skip Tor even if --tor specified)')
+    parser.add_argument(
+        '--message-lifetime-seconds',
+        type=int,
+        default=None,
+        help=(
+            'Message burn lifetime in seconds. '
+            'Defaults to OPSECHAT_TUI_MESSAGE_LIFETIME_SECONDS or 240.'
+        )
+    )
+    parser.add_argument(
+        '--cleanup-interval-seconds',
+        type=int,
+        default=10,
+        help='How often expired messages are removed (default: 10 seconds).'
+    )
     args = parser.parse_args()
+
+    env_lifetime = None
+    if args.message_lifetime_seconds is None:
+        env_lifetime = os.environ.get("OPSECHAT_TUI_MESSAGE_LIFETIME_SECONDS")
+
+    effective_lifetime = (
+        args.message_lifetime_seconds
+        if args.message_lifetime_seconds is not None
+        else env_lifetime if env_lifetime is not None
+        else ChatServer.MESSAGE_LIFETIME
+    )
     
     # Tor integration
     tor_info = None
@@ -313,12 +379,17 @@ def main():
             print(f"[*] Clients should connect to: {hostname}")
     
     # Create and start server
-    server = ChatServer(host=args.host, port=args.port)
+    server = ChatServer(
+        host=args.host,
+        port=args.port,
+        message_lifetime=effective_lifetime,
+        cleanup_interval_seconds=args.cleanup_interval_seconds
+    )
     
     print("\n" + "="*60)
     if tor_info:
-        print(f"🧅 Tor Hidden Service: {tor_info[0]}")
-    print(f"📡 Local Server: {args.host}:{args.port}")
+        print(f"Tor Hidden Service: {tor_info[0]}")
+    print(f"Local Server: {args.host}:{args.port}")
     print("="*60 + "\n")
     
     try:

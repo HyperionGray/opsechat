@@ -74,7 +74,7 @@ class ChatClient:
             urwid.Text([
                 ('title', 'OpSecChat TUI - Privacy First'),
                 ' | ',
-                ('info', 'Messages burn in 4 min'),
+                ('info', 'Ephemeral messages'),
                 ' | ',
                 ('warn', 'Text only - No images/video')
             ], align='center'),

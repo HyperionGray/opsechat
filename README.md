@@ -49,7 +49,7 @@ Access the chat at `/chat` to create rooms and share with your contacts.
 ### Terminal UI (TUI)
 - ✅ **TUI Only** - No web browser required
 - ✅ **Tor Integration** - Built-in Tor hidden service support
-- ✅ **Messages Burn** - Auto-delete after 3 minutes with overwriting
+- ✅ **Messages Burn** - Auto-delete after 4 minutes with overwriting (configurable)
 - ✅ **Randomized Usernames** - Server-assigned, no reuse
 - ✅ **Text Only** - No images, videos, or encoded data
 - ✅ **In-Memory Only** - Zero disk writes
@@ -71,6 +71,16 @@ tor --ControlPort 9051 --CookieAuthentication 1
 
 # Start server with Tor hidden service
 python tui-server.py --tor
+```
+
+**Optional custom retention:**
+```bash
+# Override 4-minute default to 2 minutes
+python tui-server.py --message-lifetime-seconds 120
+
+# Or set via environment variable
+export OPSECHAT_TUI_MESSAGE_LIFETIME_SECONDS=180
+python tui-server.py
 ```
 
 📖 **Full TUI Guide:** [TUI_README.md](TUI_README.md) | [Quick Start](docs/TUI_QUICKSTART.md)
