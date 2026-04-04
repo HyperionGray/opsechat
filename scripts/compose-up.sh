@@ -1,65 +1,67 @@
-#!/bin/bash
-# Script to start opsechat services with podman-compose or docker-compose
+#!/usr/bin/env bash
+# Script to start opsechat services with health-based readiness checks.
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -f "$SCRIPT_DIR/../container-compose.yml" ]; then
-    REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-else
-    REPO_ROOT="$SCRIPT_DIR"
-fi
-COMPOSE_FILE="$REPO_ROOT/container-compose.yml"
+# shellcheck source=scripts/compose-common.sh
+source "$SCRIPT_DIR/compose-common.sh"
 
-# Determine which compose tool is available
-if command -v podman-compose &> /dev/null; then
-    COMPOSE_CMD="podman-compose"
-    echo "[*] Using podman-compose"
-elif command -v docker-compose &> /dev/null; then
-    COMPOSE_CMD="docker-compose"
-    echo "[*] Using docker-compose"
-elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
-    COMPOSE_CMD="docker compose"
-    echo "[*] Using docker compose (plugin)"
-else
-    echo "[!] Error: Neither podman-compose nor docker-compose found."
-    echo "[!] Please install one of them:"
-    echo "    - Podman: https://podman.io/getting-started/installation"
-    echo "    - Docker: https://docs.docker.com/get-docker/"
-    exit 1
-fi
+setup_compose_paths "$SCRIPT_DIR"
+detect_compose_runtime
 
+echo "[*] Using ${COMPOSE_LABEL}"
 echo "[*] Starting opsechat services..."
-$COMPOSE_CMD -f "$COMPOSE_FILE" up -d
+run_compose up -d
 
-echo ""
-echo "[*] Services starting..."
-echo "[*] Waiting for services to be ready..."
-sleep 5
-
-# Check if services are running
-if $COMPOSE_CMD -f "$COMPOSE_FILE" ps | grep -q "opsechat-tor"; then
-    echo "[✓] Tor daemon is running"
+echo
+echo "[*] Waiting for Tor container readiness..."
+if wait_for_container_ready "opsechat-tor" 60; then
+  echo "[+] Tor container is ready"
 else
-    echo "[!] Tor daemon failed to start"
+  echo "[!] Tor container did not become ready within 60 seconds"
+  run_compose logs tor || true
+  exit 1
 fi
 
-if $COMPOSE_CMD -f "$COMPOSE_FILE" ps | grep -q "opsechat-app"; then
-    echo "[✓] Opsechat application is running"
+echo "[*] Waiting for opsechat app container readiness..."
+if wait_for_container_ready "opsechat-app" 90; then
+  echo "[+] Opsechat app container is ready"
 else
-    echo "[!] Opsechat application failed to start"
+  echo "[!] Opsechat app container did not become ready within 90 seconds"
+  run_compose logs opsechat || true
+  exit 1
 fi
 
-echo ""
+echo "[*] Validating /health endpoint inside app container..."
+health_ok=0
+for _ in 1 2 3 4 5; do
+  if check_app_health_endpoint; then
+    health_ok=1
+    break
+  fi
+  sleep 2
+done
+
+if [ "$health_ok" -eq 1 ]; then
+  echo "[+] /health endpoint is responding"
+else
+  echo "[!] /health endpoint failed inside container"
+  run_compose logs opsechat || true
+  exit 1
+fi
+
+echo
+echo "[*] Startup checks passed."
 echo "[*] To view the onion address, run:"
-echo "    $COMPOSE_CMD -f $COMPOSE_FILE logs opsechat"
-echo ""
+echo "    ${COMPOSE_CMD[*]} -f ${COMPOSE_FILE} logs opsechat"
+echo
 echo "[*] To verify the setup is working, run:"
 echo "    ./verify-setup.sh"
-echo ""
+echo
 echo "[*] To view all logs in real-time, run:"
-echo "    $COMPOSE_CMD logs -f"
-echo ""
+echo "    ${COMPOSE_CMD[*]} -f ${COMPOSE_FILE} logs -f"
+echo
 echo "[*] To stop services, run:"
 echo "    ./compose-down.sh"
-echo ""
+echo

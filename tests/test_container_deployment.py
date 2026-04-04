@@ -262,6 +262,38 @@ class TestScripts:
     def test_install_quadlets_script_exists(self):
         self.assert_script_location('install-quadlets.sh')
 
+    def test_compose_common_script_exists(self):
+        path = os.path.join(REPO_DIR, 'scripts', 'compose-common.sh')
+        assert os.path.exists(path)
+        assert os.access(path, os.X_OK)
+
+    def test_compose_up_uses_shared_helpers_and_health_check(self):
+        path = os.path.join(REPO_DIR, 'scripts', 'compose-up.sh')
+        with open(path) as f:
+            content = f.read()
+
+        assert 'source "$SCRIPT_DIR/compose-common.sh"' in content
+        assert 'wait_for_container_ready "opsechat-tor"' in content
+        assert 'wait_for_container_ready "opsechat-app"' in content
+        assert 'check_app_health_endpoint' in content
+
+    def test_compose_down_uses_shared_helpers(self):
+        path = os.path.join(REPO_DIR, 'scripts', 'compose-down.sh')
+        with open(path) as f:
+            content = f.read()
+
+        assert 'source "$SCRIPT_DIR/compose-common.sh"' in content
+        assert 'run_compose down' in content
+
+    def test_verify_setup_uses_shared_helpers(self):
+        path = os.path.join(REPO_DIR, 'scripts', 'verify-setup.sh')
+        with open(path) as f:
+            content = f.read()
+
+        assert 'source "$SCRIPT_DIR/compose-common.sh"' in content
+        assert 'run_compose ps' in content
+        assert 'check_app_health_endpoint' in content
+
 
 class TestReleaseSkeleton:
     """Test the requested release layout exists."""

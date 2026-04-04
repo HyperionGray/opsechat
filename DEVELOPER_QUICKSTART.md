@@ -71,7 +71,13 @@ cd /path/to/opsechat
 ./compose-down.sh
 ```
 
-The application container now includes a `/health` healthcheck, and the compose configuration also probes the same endpoint.
+`./compose-up.sh` now performs readiness checks before returning:
+
+- verifies `opsechat-tor` readiness
+- verifies `opsechat-app` readiness
+- verifies the app container serves `http://127.0.0.1:5000/health`
+
+The application container includes a `/health` healthcheck, and compose probes the same endpoint.
 
 ## Full test commands already in the repo
 

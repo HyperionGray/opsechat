@@ -37,7 +37,11 @@ This script will:
 2. Build the opsechat container image
 3. Start the Tor daemon
 4. Start the opsechat application
-5. Display status and instructions
+5. Wait for container readiness checks to pass
+6. Verify the app `/health` endpoint from inside the container
+7. Display status and instructions
+
+The startup script now fails fast with container logs if readiness checks fail, which makes release troubleshooting much easier than waiting for manual log inspection.
 
 ### Viewing the Onion Address
 
@@ -66,7 +70,9 @@ Run the verification script to check that everything is working:
 
 This will check:
 - Container status
+- Container readiness state (health/running)
 - Tor service health
+- App `/health` endpoint reachability from inside the container
 - Network connectivity
 - Hidden service address
 
