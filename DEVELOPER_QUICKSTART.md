@@ -88,8 +88,9 @@ python3 pf-tasks/test.py --skip-e2e
 - `runserver.py` - main runtime entrypoint
 - `app_factory.py` - Flask app creation and route registration
 - `monitoring.py` - `/health` payload generation
-- `docker-compose.yml` - local container deployment
-- `Dockerfile` - container build and app healthcheck
+- `container-compose.yml` - local container deployment (legacy `docker-compose.yml` symlink)
+- `containers/Dockerfile` - container build and app healthcheck (legacy `Dockerfile` symlink)
+- `scripts/compose-runtime.sh` - compose runtime auto-detection (podman-first)
 - `tests/test_rate_limit_and_health.py` - health endpoint and security header coverage
 - `tests/test_container_deployment.py` - deployment safety checks
 - `tests/basic.spec.js` - lightweight Playwright smoke tests

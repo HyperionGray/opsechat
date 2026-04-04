@@ -80,7 +80,7 @@ class TestDockerComposeConfig:
         assert 'ports' not in opsechat_service or not opsechat_service['ports']
 
     def test_compose_app_healthcheck_targets_local_health_endpoint(self):
-        compose_path = os.path.join(REPO_DIR, 'docker-compose.yml')
+        compose_path = self.get_compose_path()
         with open(compose_path) as f:
             config = yaml.safe_load(f)
 
@@ -261,6 +261,20 @@ class TestScripts:
     
     def test_install_quadlets_script_exists(self):
         self.assert_script_location('install-quadlets.sh')
+
+    def test_compose_runtime_helper_exists(self):
+        helper_path = os.path.join(REPO_DIR, 'scripts', 'compose-runtime.sh')
+        assert os.path.exists(helper_path)
+        assert os.access(helper_path, os.R_OK)
+
+    def test_compose_scripts_source_runtime_helper(self):
+        expected = 'scripts/compose-runtime.sh'
+        for script in ['compose-up.sh', 'compose-down.sh', 'verify-setup.sh']:
+            path = os.path.join(REPO_DIR, 'scripts', script)
+            with open(path) as f:
+                content = f.read()
+            assert expected in content
+            assert 'detect_compose_cmd' in content
 
 
 class TestReleaseSkeleton:
