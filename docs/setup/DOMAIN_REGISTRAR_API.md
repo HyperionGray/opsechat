@@ -8,7 +8,12 @@ Opsechat supports automated domain purchasing for rotating burner email addresse
 
 ## Supported Registrars
 
-### Porkbun (Recommended)
+Opsechat currently supports:
+
+- **Porkbun** (JSON API)
+- **Namecheap** (XML API)
+
+### Porkbun (Recommended for simple setup)
 
 **Why Porkbun?**
 - Competitive pricing on cheap TLDs (.xyz from $1.99/yr)
@@ -59,14 +64,28 @@ Key endpoints used by opsechat:
 - `pricing/get` - Get TLD pricing
 - `domain/listAll` - List owned domains
 
+### Namecheap
+
+Namecheap is now supported by the `NamecheapAPIClient` in `domain_manager.py`.
+
+**Required fields**
+- API key
+- API user
+- username
+- client IP (must be allow-listed in Namecheap API settings)
+
+**Limitations to be aware of**
+- Namecheap purchase requests require full contact profile fields for registration
+- CLI currently supports Namecheap search and pricing lookup cleanly; purchases require additional contact profile configuration
+
+**References**
+- API docs: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
+- Pricing endpoint details: `namecheap.users.getPricing`
+- Availability endpoint details: `namecheap.domains.check`
+
 ## Other Registrars (Future Support)
 
-The opsechat domain manager is designed to be extensible. Future registrar support may include:
-
-### Namecheap
-- API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
-- Cheap TLDs: .xyz, .club, .online
+The opsechat domain manager remains extensible for additional providers:
 
 ### Namesilo
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)
@@ -92,8 +111,8 @@ The opsechat domain manager is designed to be extensible. Future registrar suppo
    ```
 
 2. Under "Domain API Configuration":
-   - Enter your API Key
-   - Enter your API Secret
+   - Select provider (`porkbun` or `namecheap`)
+   - Enter provider credentials
    - Set monthly budget limit (recommended: start with $20-50)
 
 3. Click "Configure"
@@ -103,9 +122,17 @@ The opsechat domain manager is designed to be extensible. Future registrar suppo
 For container deployments, you can set:
 
 ```bash
-# In docker-compose.yml or quadlet
+# Porkbun
 Environment=PORKBUN_API_KEY=pk1_xxxxx
 Environment=PORKBUN_API_SECRET=sk1_xxxxx
+
+# Namecheap
+Environment=NAMECHEAP_API_KEY=xxxx
+Environment=NAMECHEAP_API_USER=xxxx
+Environment=NAMECHEAP_USERNAME=xxxx
+Environment=NAMECHEAP_CLIENT_IP=203.0.113.10
+
+# Shared
 Environment=DOMAIN_MONTHLY_BUDGET=50.0
 ```
 
@@ -182,7 +209,7 @@ Possible causes:
 - API access not enabled on registrar account
 - Account suspended
 
-Solution: Verify credentials in registrar dashboard
+Solution: Verify credentials in registrar dashboard and confirm Namecheap client IP allow-list if applicable.
 
 ## Example: Complete Setup
 

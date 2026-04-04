@@ -8,7 +8,7 @@
 - 🔑 **Automated Key Exchange** - No manual key sharing needed
 - 💬 **Direct Messages** - Ephemeral DM feature for sharing room IDs (1-min expiry)
 - 🔒 **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
-- 🌐 **Domain Rotation CLI** - Easy burner email domain management
+- 🌐 **Domain Rotation CLI** - Easy burner email domain management (Porkbun + Namecheap providers)
 - 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
 - ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use
 - 🚀 **Production Deployment** - Robust systemd units with auto-restart
@@ -263,7 +263,7 @@ Features
   - **Quick Rotation** - One-click generation and rotation to new addresses
   - **Instant Copy** - Copy burner emails to clipboard with one click
   - **Smart Stats Dashboard** - Track active burners and total time remaining
-- **Automated Domain Purchasing** - Porkbun API integration for cheap domain rotation (.xyz, .club, etc.) - see [Domain Registrar API](docs/setup/DOMAIN_REGISTRAR_API.md)
+- **Automated Domain Purchasing** - Multi-provider domain integration (Porkbun + Namecheap) for burner domain rotation - see [Domain Registrar API](docs/setup/DOMAIN_REGISTRAR_API.md)
 - **Budget Management** - Configurable monthly spending limits for domain purchases
 - **Spoofing Detection** - Test emails for spoofing attempts (unicode lookalikes, typosquatting, homographs)
 - **Phishing Simulation** - Gamified training with scoring and achievements
@@ -288,7 +288,7 @@ For Amazon Q setup instructions, see [Amazon Q Setup Guide](docs/setup/AMAZON_Q_
 2. Access email configuration: `http://yourservice.onion/{path}/email/config`
 3. Configure SMTP for sending (optional): Add your email server settings
 4. Configure IMAP for receiving (optional): Add your IMAP server settings
-5. Configure Porkbun API for domain rotation (optional): Add API credentials and budget (see [Domain API Setup Guide](docs/setup/DOMAIN_API_SETUP.md))
+5. Configure a domain registrar API for domain rotation (optional): Add credentials and budget for Porkbun or Namecheap (see [Domain API Setup Guide](docs/setup/DOMAIN_API_SETUP.md))
 6. Compose and send emails: `http://yourservice.onion/{path}/email/compose`
 7. View your inbox: `http://yourservice.onion/{path}/email`
 

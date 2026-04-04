@@ -4,6 +4,10 @@ This guide explains how to set up domain registrar API access for automated burn
 
 ## Supported Registrars
 
+Opsechat now supports multiple provider backends through `domain_manager.py`:
+- `porkbun` (default)
+- `namecheap`
+
 ### Porkbun (Recommended)
 
 Porkbun offers cheap domains and a simple API, making it ideal for burner email rotation.
@@ -81,7 +85,8 @@ Porkbun offers cheap domains and a simple API, making it ideal for burner email 
 
 ### Namecheap
 
-While not directly integrated, Namecheap offers competitive pricing and API access.
+Namecheap is now supported in `domain_rotation_cli.py` and `domain_manager.py`.
+Use it if you already operate on Namecheap and have API access enabled for your account.
 
 #### Getting Started
 - Website: [namecheap.com](https://namecheap.com)
@@ -89,9 +94,10 @@ While not directly integrated, Namecheap offers competitive pricing and API acce
 - Pricing: .com domains ~$8.88/year, .xyz ~$1.98/year
 
 #### Integration Notes
-- Requires custom API client implementation
-- More complex API than Porkbun
-- Good for high-volume usage
+- Uses Namecheap XML API backend
+- Requires API allowlisted client IP
+- Domain purchase requires complete contact profile fields
+- Availability checks can run without contact profile data
 
 ### GoDaddy
 
