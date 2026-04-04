@@ -174,3 +174,42 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_find_cheap_available_domain_with_custom_tlds_and_price_string(self):
+        """Test custom TLD normalization and price parsing."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "ignored",
+            "price": "$2.50",
+        }
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(
+            max_price=3.0,
+            max_attempts=1,
+            tld_candidates=[".DEV"],
+        )
+
+        assert result is not None
+        assert result["tld"] == "dev"
+        assert result["domain"].endswith(".dev")
+        assert result["price"] == 2.5
+
+    def test_find_cheap_available_domain_skips_unparseable_price(self):
+        """Test domains with invalid price strings are skipped safely."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "ignored",
+            "price": "free",
+        }
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(
+            max_price=5.0,
+            max_attempts=1,
+            tld_candidates=["xyz"],
+        )
+
+        assert result is None

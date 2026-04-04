@@ -19,10 +19,99 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+DEFAULT_SEARCH_TLDS = ["xyz", "club", "online", "site", "website"]
+DEFAULT_MAX_SEARCH_PRICE = 5.0
+
+
+def _safe_float(value, default):
+    """Convert value to float with fallback default."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _parse_tld_list(raw_value):
+    """Parse comma-separated TLDs into normalized list."""
+    if not raw_value:
+        return []
+
+    if isinstance(raw_value, list):
+        values = raw_value
+    else:
+        values = str(raw_value).split(",")
+
+    normalized = []
+    seen = set()
+    for value in values:
+        tld = str(value).strip().lower().lstrip(".")
+        if tld and tld not in seen:
+            normalized.append(tld)
+            seen.add(tld)
+
+    return normalized
+
+
+def _iso_datetime(value):
+    """Convert datetime to ISO-8601 string."""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
+
+
+def _parse_datetime(value):
+    """Parse ISO-8601 datetime values; leave unknown values unchanged."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return value
+    return value
+
+
+def _serialize_owned_domains(domains):
+    """Serialize owned domain records for JSON persistence."""
+    serialized = []
+    for domain in domains or []:
+        if not isinstance(domain, dict):
+            continue
+        entry = dict(domain)
+        entry["purchased_at"] = _iso_datetime(entry.get("purchased_at"))
+        entry["expires_at"] = _iso_datetime(entry.get("expires_at"))
+        serialized.append(entry)
+    return serialized
+
+
+def _deserialize_owned_domains(domains):
+    """Deserialize owned domain records from JSON persistence."""
+    deserialized = []
+    for domain in domains or []:
+        if not isinstance(domain, dict):
+            continue
+        entry = dict(domain)
+        entry["purchased_at"] = _parse_datetime(entry.get("purchased_at"))
+        entry["expires_at"] = _parse_datetime(entry.get("expires_at"))
+        entry["price"] = _safe_float(entry.get("price"), entry.get("price"))
+        deserialized.append(entry)
+    return deserialized
+
+
+def _format_timestamp(value, fmt):
+    """Format timestamps safely for CLI output."""
+    parsed = _parse_datetime(value)
+    if isinstance(parsed, datetime):
+        return parsed.strftime(fmt)
+    if parsed in (None, ""):
+        return "N/A"
+    return str(parsed)
 
 
 def load_config():
@@ -69,6 +158,14 @@ def configure_api():
         print(f"  Monthly Budget: ${config['monthly_budget']}")
     else:
         print("  Monthly Budget: Not configured")
+    if config.get('search_tlds'):
+        print(f"  Search TLDs: {', '.join(config['search_tlds'])}")
+    else:
+        print(f"  Search TLDs: {', '.join(DEFAULT_SEARCH_TLDS)} (default)")
+    if 'max_search_price' in config:
+        print(f"  Max Search Price: ${config['max_search_price']}")
+    else:
+        print(f"  Max Search Price: ${DEFAULT_MAX_SEARCH_PRICE} (default)")
     
     print("\nEnter new values (or press Enter to keep current):\n")
     
@@ -88,6 +185,28 @@ def configure_api():
             print("Invalid budget amount, keeping previous value")
     elif 'monthly_budget' not in config:
         config['monthly_budget'] = 50.0
+
+    tlds = input(
+        f"Preferred TLDs (comma-separated) [default: {','.join(DEFAULT_SEARCH_TLDS)}]: "
+    ).strip()
+    if tlds:
+        parsed_tlds = _parse_tld_list(tlds)
+        if parsed_tlds:
+            config['search_tlds'] = parsed_tlds
+        else:
+            print("Invalid TLD list, keeping previous/default value")
+    elif 'search_tlds' not in config:
+        config['search_tlds'] = DEFAULT_SEARCH_TLDS
+
+    max_price = input(f"Max domain search price [default: {DEFAULT_MAX_SEARCH_PRICE}]: ").strip()
+    if max_price:
+        parsed_price = _safe_float(max_price, None)
+        if parsed_price is None or parsed_price <= 0:
+            print("Invalid max search price, keeping previous/default value")
+        else:
+            config['max_search_price'] = parsed_price
+    elif 'max_search_price' not in config:
+        config['max_search_price'] = DEFAULT_MAX_SEARCH_PRICE
     
     save_config(config)
     print("\n✅ Configuration updated successfully!")
@@ -105,14 +224,14 @@ def get_manager():
     client = PorkbunAPIClient(config['api_key'], config['api_secret'])
     manager = DomainRotationManager(
         api_client=client,
-        monthly_budget=config.get('monthly_budget', 50.0)
+        monthly_budget=_safe_float(config.get('monthly_budget', 50.0), 50.0)
     )
     
     # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
+    if 'current_spending' in config:
+        manager.current_spending = _safe_float(config['current_spending'], 0.0)
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = _deserialize_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,8 +241,13 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = _serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
+    config['monthly_budget'] = manager.monthly_budget
+    if 'search_tlds' not in config:
+        config['search_tlds'] = DEFAULT_SEARCH_TLDS
+    if 'max_search_price' not in config:
+        config['max_search_price'] = DEFAULT_MAX_SEARCH_PRICE
     save_config(config)
 
 
@@ -143,9 +267,9 @@ def list_domains():
     for i, domain in enumerate(domains, 1):
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
-        print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Price: ${domain.get('price', 'N/A')}")
+        print(f"   Purchased: {_format_timestamp(domain.get('purchased_at'), '%Y-%m-%d %H:%M')}")
+        print(f"   Expires: {_format_timestamp(domain.get('expires_at'), '%Y-%m-%d')}")
         print()
 
 
@@ -154,11 +278,17 @@ def search_domains():
     manager, config = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
-    print("Searching for domains under $5...\n")
+    configured_tlds = _parse_tld_list(config.get('search_tlds')) or DEFAULT_SEARCH_TLDS
+    max_price = _safe_float(config.get('max_search_price', DEFAULT_MAX_SEARCH_PRICE), DEFAULT_MAX_SEARCH_PRICE)
+    print(f"Searching for domains under ${max_price} in TLDs: {', '.join(configured_tlds)}\n")
     
     for i in range(5):
         print(f"Attempt {i+1}/5...")
-        domain_info = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+        domain_info = manager.find_cheap_available_domain(
+            max_price=max_price,
+            max_attempts=1,
+            tld_candidates=configured_tlds
+        )
         
         if domain_info:
             print(f"  ✅ Found: {domain_info['domain']} - ${domain_info['price']}")
@@ -185,8 +315,13 @@ def rotate_domain():
         return
     
     print("Searching for available cheap domain...")
+    configured_tlds = _parse_tld_list(config.get('search_tlds')) or DEFAULT_SEARCH_TLDS
+    max_price = _safe_float(config.get('max_search_price', DEFAULT_MAX_SEARCH_PRICE), DEFAULT_MAX_SEARCH_PRICE)
     
-    domain_info = manager.find_cheap_available_domain(max_price=min(5.0, budget_status['remaining']))
+    domain_info = manager.find_cheap_available_domain(
+        max_price=min(max_price, budget_status['remaining']),
+        tld_candidates=configured_tlds
+    )
     
     if not domain_info:
         print("❌ Could not find an available cheap domain within budget.")

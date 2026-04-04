@@ -134,6 +134,22 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+
+    @staticmethod
+    def _normalize_price(price) -> Optional[float]:
+        """Normalize API price formats to float, returning None on invalid input."""
+        if isinstance(price, (int, float)):
+            return float(price)
+        if isinstance(price, str):
+            cleaned = price.strip().replace("$", "").replace("€", "")
+            if not cleaned:
+                return None
+            try:
+                return float(cleaned)
+            except ValueError:
+                logger.warning("Skipping domain with non-numeric price: %s", price)
+                return None
+        return None
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
@@ -148,8 +164,12 @@ class DomainRotationManager:
         random_name = ''.join(random.choice(chars) for _ in range(length))
         return f"{random_name}.{tld}"
     
-    def find_cheap_available_domain(self, max_price: float = 5.0, 
-                                   max_attempts: int = 10) -> Optional[Dict]:
+    def find_cheap_available_domain(
+        self,
+        max_price: float = 5.0,
+        max_attempts: int = 10,
+        tld_candidates: Optional[List[str]] = None,
+    ) -> Optional[Dict]:
         """
         Find a cheap available domain
         Returns domain info or None
@@ -158,8 +178,16 @@ class DomainRotationManager:
             logger.error("No API client configured")
             return None
         
-        # Try cheap TLDs
+        # Try cheap TLDs; caller may override with a curated list.
         cheap_tlds = ["xyz", "club", "online", "site", "website"]
+        if tld_candidates:
+            normalized_tlds = []
+            for tld in tld_candidates:
+                cleaned = tld.strip().lower().lstrip(".")
+                if cleaned:
+                    normalized_tlds.append(cleaned)
+            if normalized_tlds:
+                cheap_tlds = normalized_tlds
         
         for attempt in range(max_attempts):
             tld = random.choice(cheap_tlds)
@@ -168,13 +196,8 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
-                
-                if price <= max_price:
+                price = self._normalize_price(result.get("price", 999))
+                if price is not None and price <= max_price:
                     return {
                         "domain": domain,
                         "price": price,

@@ -5,7 +5,7 @@ Welcome to the OpSecChat documentation. All documentation has been organized int
 ## Quick Links
 
 - **[Main README](../README.md)** - Start here for project overview
-- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes (TODO)
+- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes
 - **[Security](../SECURITY.md)** - Security information and best practices
 - **[License](../LICENSE.md)** - MIT License
 
@@ -51,6 +51,12 @@ Information for developers contributing to the project.
 - [Code of Conduct](development/CODE_OF_CONDUCT.md) - Community guidelines
 - [Modernization Notes](development/MODERNIZATION.md) - Upgrade notes
 - [Agent Guidelines](development/AGENTS.md) - Repository guidelines for AI agents
+
+### 🌐 Domain Management
+Domain purchasing and rotation for burner email infrastructure.
+
+- [Domain Rotation Guide](DOMAIN_ROTATION.md) - CLI usage, persistence behavior, and rotation workflow
+- [Domain API Setup](setup/DOMAIN_API_SETUP.md) - Registrar API setup and operational guidance
 
 ### ⚖️ Legal
 Legal documents and policies.
