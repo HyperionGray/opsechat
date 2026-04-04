@@ -53,6 +53,15 @@ else
     exit 1
 fi
 
+# Check app health endpoint inside container network
+echo ""
+echo -e "${YELLOW}[*]${NC} Checking app /health endpoint..."
+if $COMPOSE_CMD -f "$COMPOSE_FILE" exec -T opsechat curl --fail --silent http://127.0.0.1:5000/health >/dev/null 2>&1; then
+    echo -e "${GREEN}[✓]${NC} Opsechat /health endpoint is reachable"
+else
+    echo -e "${RED}[✗]${NC} Opsechat /health endpoint is not reachable"
+fi
+
 # Check Tor health
 echo ""
 echo -e "${YELLOW}[*]${NC} Checking Tor service health..."

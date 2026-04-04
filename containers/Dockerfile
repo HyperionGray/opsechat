@@ -36,6 +36,10 @@ COPY templates/ templates/
 # Expose Flask port
 EXPOSE 5000
 
+# Container-level health check used by compose/quadlet orchestration.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=5 \
+    CMD curl --fail --silent http://127.0.0.1:5000/health || exit 1
+
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV TOR_CONTROL_PORT=9051

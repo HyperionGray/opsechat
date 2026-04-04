@@ -51,6 +51,14 @@ else
 fi
 
 echo ""
+echo "[*] Checking application /health endpoint inside container..."
+if $COMPOSE_CMD -f "$COMPOSE_FILE" exec -T opsechat curl --fail --silent http://127.0.0.1:5000/health >/dev/null 2>&1; then
+    echo "[✓] Opsechat /health endpoint is responding"
+else
+    echo "[!] Opsechat /health endpoint is not ready yet"
+fi
+
+echo ""
 echo "[*] To view the onion address, run:"
 echo "    $COMPOSE_CMD -f $COMPOSE_FILE logs opsechat"
 echo ""
