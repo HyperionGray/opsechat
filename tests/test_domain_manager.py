@@ -3,8 +3,9 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+import xml.etree.ElementTree as ET
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, NamecheapAPIClient, DomainRotationManager
 )
 
 
@@ -74,6 +75,37 @@ class TestPorkbunAPIClient:
         
         assert result["tld"] == "com"
         assert result["registration"] == "9.99"
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    def test_search_domain_available_with_pricing(self):
+        """Search returns availability and pricing lookup is used."""
+        client = NamecheapAPIClient(api_user="api-user", api_key="api-key")
+        client._make_request = Mock(return_value={
+            "success": True,
+            "root": ET.fromstring(
+                '<ApiResponse Status="OK"><CommandResponse>'
+                '<DomainCheckResult Domain="example.xyz" Available="true" />'
+                '</CommandResponse></ApiResponse>'
+            )
+        })
+        client.get_pricing = Mock(return_value={"registration": 1.49})
+
+        result = client.search_domain("example.xyz")
+
+        assert result["available"] is True
+        assert result["price"] == 1.49
+        client.get_pricing.assert_called_once_with("xyz")
+
+    def test_purchase_domain_requires_contact(self):
+        """Purchase fails when contact details are missing."""
+        client = NamecheapAPIClient(api_user="api-user", api_key="api-key")
+        result = client.purchase_domain("example.xyz")
+
+        assert result["success"] is False
+        assert "Missing required Namecheap contact fields" in result["message"]
 
 
 class TestDomainRotationManager:
@@ -174,3 +206,65 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_and_get_config_porkbun(self):
+        """Manager stores provider configuration and budget."""
+        manager = DomainRotationManager(monthly_budget=25.0)
+        manager.configure(
+            api_key="pk_live_test",
+            secret_key="sk_live_test",
+            monthly_budget=50.0,
+            provider="porkbun"
+        )
+
+        config = manager.get_config()
+        assert config["primary_provider"] == "porkbun"
+        assert config["monthly_budget"] == 50.0
+        assert config["providers"]["porkbun"]["configured"] is True
+
+    def test_multi_provider_fallback_finds_domain(self):
+        """If primary provider has no result, fallback provider can succeed."""
+        primary = Mock(spec=DomainAPIClient)
+        fallback = Mock(spec=DomainAPIClient)
+
+        primary.search_domain.return_value = {"available": False}
+        fallback.search_domain.return_value = {
+            "available": True,
+            "domain": "fallback123.xyz",
+            "price": 1.99,
+        }
+
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.add_api_client("porkbun", primary)
+        manager.add_api_client("namecheap", fallback)
+        manager.set_primary_provider("porkbun")
+
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=2)
+
+        assert result is not None
+        assert result["provider"] == "namecheap"
+        assert result["price"] == 1.99
+
+    def test_rotate_domain_return_details(self):
+        """Detailed rotate response includes provider and budget status."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "abc123.xyz",
+            "price": 1.49,
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "abc123.xyz",
+        }
+
+        manager = DomainRotationManager(monthly_budget=10.0)
+        manager.add_api_client("porkbun", mock_client)
+        manager.set_primary_provider("porkbun")
+
+        result = manager.rotate_domain(return_details=True)
+
+        assert result["success"] is True
+        assert result["domain"] == "abc123.xyz"
+        assert result["provider"] == "porkbun"
+        assert result["budget_status"]["current_spending"] == 1.49
