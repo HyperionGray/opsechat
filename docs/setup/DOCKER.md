@@ -26,18 +26,34 @@ OR
 
 ### Starting Services
 
-Simply run:
+Start with auto-detection (prefers Podman runtimes):
 
 ```bash
 ./compose-up.sh
 ```
 
-This script will:
-1. Detect whether you have podman-compose or docker-compose
-2. Build the opsechat container image
-3. Start the Tor daemon
-4. Start the opsechat application
-5. Display status and instructions
+Useful startup options:
+
+```bash
+# Build images before startup
+./compose-up.sh --build
+
+# Full recreate: down + up --build
+./compose-up.sh --rebuild
+
+# Pin runtime explicitly
+./compose-up.sh --runtime podman
+./compose-up.sh --runtime docker
+
+# Follow app logs after startup
+./compose-up.sh --follow
+```
+
+The startup script now supports:
+1. Runtime selection (`--runtime auto|podman|docker`)
+2. Optional build/rebuild flows (`--build`, `--rebuild`)
+3. Startup status view (`--status`) and wait controls (`--wait-timeout`, `--no-wait`)
+4. Optional log follow mode (`--follow`)
 
 ### Viewing the Onion Address
 
@@ -62,6 +78,7 @@ Run the verification script to check that everything is working:
 
 ```bash
 ./verify-setup.sh
+./verify-setup.sh --runtime podman
 ```
 
 This will check:
@@ -88,16 +105,18 @@ Run:
 
 ```bash
 ./compose-down.sh
+./compose-down.sh --runtime podman --status
 ```
 
 To also remove persistent data (Tor keys):
 
 ```bash
-# For podman-compose
-podman-compose -f container-compose.yml down -v
+# Preferred scripted option
+./compose-down.sh --volumes
 
-# For docker-compose
-docker-compose -f container-compose.yml down -v
+# Manual compose equivalent:
+# podman-compose -f container-compose.yml down -v
+# docker-compose -f container-compose.yml down -v
 ```
 
 ## Manual Usage

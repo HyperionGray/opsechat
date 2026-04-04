@@ -1,37 +1,82 @@
 #!/bin/bash
-# Script to stop opsechat services with podman-compose or docker-compose
+# Script to stop opsechat services with podman-compose or docker-compose.
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -f "$SCRIPT_DIR/../container-compose.yml" ]; then
-    REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-else
-    REPO_ROOT="$SCRIPT_DIR"
-fi
-COMPOSE_FILE="$REPO_ROOT/container-compose.yml"
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/compose-common.sh"
 
-# Determine which compose tool is available
-if command -v podman-compose &> /dev/null; then
-    COMPOSE_CMD="podman-compose"
-    echo "[*] Using podman-compose"
-elif command -v docker-compose &> /dev/null; then
-    COMPOSE_CMD="docker-compose"
-    echo "[*] Using docker-compose"
-elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
-    COMPOSE_CMD="docker compose"
-    echo "[*] Using docker compose (plugin)"
-else
-    echo "[!] Error: Neither podman-compose nor docker-compose found."
-    exit 1
-fi
+SHOW_STATUS=false
+REMOVE_VOLUMES=false
 
+usage() {
+    cat <<'EOF'
+Usage: ./compose-down.sh [options]
+
+Options:
+  --runtime {auto|podman|docker}  Choose runtime backend (default: auto)
+  --volumes                        Remove volumes as well (destructive)
+  --status                         Show status after stop
+  -h, --help                       Show this help text
+
+Examples:
+  ./compose-down.sh
+  ./compose-down.sh --runtime podman --status
+  ./compose-down.sh --volumes
+EOF
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --runtime)
+            shift
+            [ $# -gt 0 ] || { echo "[!] Missing value for --runtime" >&2; exit 1; }
+            set_compose_runtime "$1"
+            ;;
+        --volumes)
+            REMOVE_VOLUMES=true
+            ;;
+        --status)
+            SHOW_STATUS=true
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "[!] Unknown option: $1" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+set_compose_cmd
+echo "[*] Using $COMPOSE_DISPLAY"
 echo "[*] Stopping opsechat services..."
-$COMPOSE_CMD -f "$COMPOSE_FILE" down
 
-echo ""
-echo "[✓] All services stopped and removed"
-echo ""
-echo "[*] To remove volumes as well (WARNING: This deletes Tor data), run:"
-echo "    $COMPOSE_CMD -f $COMPOSE_FILE down -v"
-echo ""
+if [ "$REMOVE_VOLUMES" = true ]; then
+    compose_exec down -v
+else
+    compose_exec down
+fi
+
+echo
+if [ "$REMOVE_VOLUMES" = true ]; then
+    echo "[✓] Services and volumes removed"
+else
+    echo "[✓] Services stopped and removed"
+fi
+
+if [ "$SHOW_STATUS" = true ]; then
+    echo
+    echo "[*] Current service status:"
+    compose_exec ps || true
+fi
+
+echo
+echo "[*] Start again with:"
+echo "    ./compose-up.sh --runtime $COMPOSE_RUNTIME"
+echo

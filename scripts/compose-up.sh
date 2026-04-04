@@ -1,65 +1,141 @@
 #!/bin/bash
-# Script to start opsechat services with podman-compose or docker-compose
+# Start opsechat services with a selected compose runtime.
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -f "$SCRIPT_DIR/../container-compose.yml" ]; then
-    REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-else
-    REPO_ROOT="$SCRIPT_DIR"
-fi
-COMPOSE_FILE="$REPO_ROOT/container-compose.yml"
+source "$SCRIPT_DIR/compose-common.sh"
 
-# Determine which compose tool is available
-if command -v podman-compose &> /dev/null; then
-    COMPOSE_CMD="podman-compose"
-    echo "[*] Using podman-compose"
-elif command -v docker-compose &> /dev/null; then
-    COMPOSE_CMD="docker-compose"
-    echo "[*] Using docker-compose"
-elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
-    COMPOSE_CMD="docker compose"
-    echo "[*] Using docker compose (plugin)"
-else
-    echo "[!] Error: Neither podman-compose nor docker-compose found."
-    echo "[!] Please install one of them:"
-    echo "    - Podman: https://podman.io/getting-started/installation"
-    echo "    - Docker: https://docs.docker.com/get-docker/"
-    exit 1
+DO_BUILD=0
+DO_REBUILD=0
+FOLLOW_LOGS=0
+STATUS_ONLY=0
+NO_WAIT=0
+WAIT_TIMEOUT=60
+
+print_help() {
+    cat <<EOF
+Usage: ./compose-up.sh [options]
+
+Options:
+  --runtime <auto|podman|docker>  Compose runtime selection (default: auto)
+  --build                          Build images before starting
+  --rebuild                        Recreate stack from scratch (down + up --build)
+  --status                         Show service status and exit
+  --follow                         Follow opsechat logs after startup
+  --wait-timeout <seconds>         Wait timeout for startup checks (default: 60)
+  --no-wait                        Skip startup wait checks
+  -h, --help                       Show this help
+
+Examples:
+  ./compose-up.sh
+  ./compose-up.sh --runtime podman --build
+  ./compose-up.sh --rebuild --follow
+EOF
+    print_compose_help
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --runtime)
+            shift
+            if [[ $# -eq 0 ]]; then
+                echo "[!] Missing value for --runtime" >&2
+                exit 1
+            fi
+            set_compose_runtime "$1"
+            shift
+            ;;
+        --build)
+            DO_BUILD=1
+            shift
+            ;;
+        --rebuild)
+            DO_REBUILD=1
+            DO_BUILD=1
+            shift
+            ;;
+        --follow)
+            FOLLOW_LOGS=1
+            shift
+            ;;
+        --status)
+            STATUS_ONLY=1
+            shift
+            ;;
+        --wait-timeout)
+            shift
+            if [[ $# -eq 0 ]]; then
+                echo "[!] Missing value for --wait-timeout" >&2
+                exit 1
+            fi
+            WAIT_TIMEOUT="$1"
+            shift
+            ;;
+        --no-wait)
+            NO_WAIT=1
+            shift
+            ;;
+        -h|--help)
+            print_help
+            exit 0
+            ;;
+        *)
+            echo "[!] Unknown option: $1" >&2
+            print_help >&2
+            exit 1
+            ;;
+    esac
+done
+
+set_compose_cmd
+echo "[*] Using $COMPOSE_DISPLAY"
+echo "[*] Compose file: $COMPOSE_FILE"
+
+if [[ "$STATUS_ONLY" -eq 1 ]]; then
+    compose_exec ps
+    exit 0
+fi
+
+if [[ "$DO_REBUILD" -eq 1 ]]; then
+    echo "[*] Rebuilding stack: stopping existing services first..."
+    compose_exec down --remove-orphans || true
+fi
+
+UP_ARGS=(up -d)
+if [[ "$DO_BUILD" -eq 1 ]]; then
+    UP_ARGS+=(--build)
 fi
 
 echo "[*] Starting opsechat services..."
-$COMPOSE_CMD -f "$COMPOSE_FILE" up -d
+compose_exec "${UP_ARGS[@]}"
 
-echo ""
-echo "[*] Services starting..."
-echo "[*] Waiting for services to be ready..."
-sleep 5
-
-# Check if services are running
-if $COMPOSE_CMD -f "$COMPOSE_FILE" ps | grep -q "opsechat-tor"; then
-    echo "[✓] Tor daemon is running"
-else
-    echo "[!] Tor daemon failed to start"
+if [[ "$NO_WAIT" -eq 0 ]]; then
+    echo "[*] Waiting for services to be visible in compose status..."
+    end_time=$((SECONDS + WAIT_TIMEOUT))
+    while (( SECONDS < end_time )); do
+        if services_appear_running; then
+            break
+        fi
+        sleep 2
+    done
 fi
 
-if $COMPOSE_CMD -f "$COMPOSE_FILE" ps | grep -q "opsechat-app"; then
-    echo "[✓] Opsechat application is running"
+if services_appear_running; then
+    echo "[OK] Services are running: opsechat-tor and opsechat-app"
 else
-    echo "[!] Opsechat application failed to start"
+    echo "[WARN] Services started, but status did not stabilize yet"
 fi
 
 echo ""
-echo "[*] To view the onion address, run:"
-echo "    $COMPOSE_CMD -f $COMPOSE_FILE logs opsechat"
+echo "[*] Next commands:"
+echo "    ./verify-setup.sh --runtime $COMPOSE_RUNTIME"
+echo "    $COMPOSE_DISPLAY -f $COMPOSE_FILE logs opsechat"
+echo "    $COMPOSE_DISPLAY -f $COMPOSE_FILE logs -f"
+echo "    ./compose-down.sh --runtime $COMPOSE_RUNTIME"
 echo ""
-echo "[*] To verify the setup is working, run:"
-echo "    ./verify-setup.sh"
-echo ""
-echo "[*] To view all logs in real-time, run:"
-echo "    $COMPOSE_CMD logs -f"
-echo ""
-echo "[*] To stop services, run:"
-echo "    ./compose-down.sh"
-echo ""
+
+if [[ "$FOLLOW_LOGS" -eq 1 ]]; then
+    echo "[*] Following opsechat logs (Ctrl+C to stop)..."
+    compose_exec logs -f --tail=100 opsechat
+fi

@@ -68,10 +68,28 @@ The server prints the generated `.onion` URL and secret path at startup.
 ```bash
 cd /path/to/opsechat
 ./compose-up.sh
+./verify-setup.sh
 ./compose-down.sh
 ```
 
 The application container now includes a `/health` healthcheck, and the compose configuration also probes the same endpoint.
+
+Useful script options:
+
+```bash
+# Explicit runtime selection
+./compose-up.sh --runtime podman
+./verify-setup.sh --runtime podman
+
+# Rebuild stack from scratch
+./compose-up.sh --rebuild
+
+# Follow logs after startup
+./compose-up.sh --follow
+
+# Stop and remove named volumes
+./compose-down.sh --volumes
+```
 
 ## Full test commands already in the repo
 

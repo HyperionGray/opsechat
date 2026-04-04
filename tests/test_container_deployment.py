@@ -130,9 +130,9 @@ class TestDockerfile:
         with open(dockerfile_path) as f:
             content = f.read()
         
-        # Key app files should be copied
-        assert 'runserver.py' in content
-        assert 'email_system.py' in content
+        # Key app files should be copied directly or via wildcard.
+        copies_py_files = ('COPY *.py ./' in content) or ('COPY . ./' in content)
+        assert copies_py_files or ('runserver.py' in content and 'email_system.py' in content)
         assert 'templates/' in content
 
 
@@ -261,6 +261,44 @@ class TestScripts:
     
     def test_install_quadlets_script_exists(self):
         self.assert_script_location('install-quadlets.sh')
+
+    def test_compose_common_helper_exists(self):
+        path = os.path.join(REPO_DIR, 'scripts', 'compose-common.sh')
+        assert os.path.exists(path)
+        with open(path) as f:
+            content = f.read()
+        assert 'set_compose_cmd' in content
+        assert 'compose_exec' in content
+
+    def test_compose_up_supports_runtime_and_rebuild_options(self):
+        path = os.path.join(REPO_DIR, 'scripts', 'compose-up.sh')
+        with open(path) as f:
+            content = f.read()
+
+        assert 'source "$SCRIPT_DIR/compose-common.sh"' in content
+        assert '--runtime' in content
+        assert '--rebuild' in content
+        assert '--follow' in content
+        assert '--status' in content
+        assert '--wait-timeout' in content
+
+    def test_compose_down_supports_runtime_and_volume_options(self):
+        path = os.path.join(REPO_DIR, 'scripts', 'compose-down.sh')
+        with open(path) as f:
+            content = f.read()
+
+        assert 'source "$SCRIPT_DIR/compose-common.sh"' in content
+        assert '--runtime' in content
+        assert '--volumes' in content
+        assert '--status' in content
+
+    def test_verify_setup_supports_runtime_option(self):
+        path = os.path.join(REPO_DIR, 'scripts', 'verify-setup.sh')
+        with open(path) as f:
+            content = f.read()
+
+        assert 'source "$SCRIPT_DIR/compose-common.sh"' in content
+        assert '--runtime' in content
 
 
 class TestReleaseSkeleton:
