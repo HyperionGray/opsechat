@@ -121,8 +121,8 @@ def create_email_security_blueprint(id_generator, get_random_color):
             
             elif config_type == "domain":
                 domain_config_data = {
-                    "api_key": request.form.get("porkbun_api_key", "").strip(),
-                    "secret_key": request.form.get("porkbun_secret_key", "").strip(),
+                    "api_key": request.form.get("api_key", "").strip(),
+                    "secret_key": request.form.get("api_secret", "").strip(),
                     "monthly_budget": float(request.form.get("monthly_budget", 10.0))
                 }
                 
@@ -132,12 +132,17 @@ def create_email_security_blueprint(id_generator, get_random_color):
                 except Exception as e:
                     message = {"type": "error", "text": f"Domain configuration failed: {str(e)}"}
         
+        current_config = transport_manager.get_config()
+        domain_config = domain_rotation_manager.get_config()
         return render_template("email_config.html",
                               hostname=app.config["hostname"],
                               path=app.config["path"],
                               message=message,
+                              config_status=current_config.get("configured", {}),
                               current_config=current_config,
-                              domain_config=domain_config)
+                              domain_config=domain_config,
+                              active_domain=domain_config.get("active_domain"),
+                              budget_status=domain_rotation_manager.get_budget_status())
 
     @email_security_bp.route('/<string:url_addition>/email/send', methods=["POST"])
     def email_send_api(url_addition):

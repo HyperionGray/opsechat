@@ -340,6 +340,28 @@ class EmailTransportManager:
             'imap': self.imap_transport is not None
         }
 
+    def get_config(self) -> Dict:
+        """
+        Return non-sensitive transport configuration and status.
+        This powers the email security config route/template.
+        """
+        configured = self.is_configured()
+        return {
+            "configured": configured,
+            "smtp": {
+                "server": self.smtp_transport.smtp_server if self.smtp_transport else "",
+                "port": self.smtp_transport.smtp_port if self.smtp_transport else None,
+                "username": self.smtp_transport.username if self.smtp_transport else "",
+                "use_tls": self.smtp_transport.use_tls if self.smtp_transport else True,
+            },
+            "imap": {
+                "server": self.imap_transport.imap_server if self.imap_transport else "",
+                "port": self.imap_transport.imap_port if self.imap_transport else None,
+                "username": self.imap_transport.username if self.imap_transport else "",
+                "use_ssl": self.imap_transport.use_ssl if self.imap_transport else True,
+            },
+        }
+
 
 # Global transport manager
 transport_manager = EmailTransportManager()

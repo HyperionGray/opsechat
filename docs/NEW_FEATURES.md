@@ -284,7 +284,8 @@ After rotating domains, update your email configuration:
 - Set monthly budget to prevent overspending
 - CLI tracks spending automatically
 - Prevents purchases that would exceed budget
-- Resets monthly (manual reset required)
+- Spending state persists in `~/.opsechat/domain_config.json` (0600 permissions)
+- Resets automatically on calendar month boundaries
 
 ---
 
