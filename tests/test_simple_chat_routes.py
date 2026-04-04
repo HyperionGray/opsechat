@@ -180,13 +180,22 @@ class TestChatRoutes:
         assert "room_id" in data
         assert data["room_url"].startswith("/chat/room/")
 
-    def test_create_room_rate_limit_returns_retry_metadata(self, client):
-        # App-level limit is 3/minute for this endpoint.
-        for _ in range(3):
-            resp = client.post("/chat/create")
+    def test_rate_limit_returns_retry_metadata(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        # Custom chat message limit is 30/minute; send one more to trigger 429.
+        for _ in range(30):
+            resp = client.post(
+                f"/chat/room/{room_id}/messages",
+                json={"message": "hello world"},
+                content_type="application/json",
+            )
             assert resp.status_code == 200
 
-        blocked = client.post("/chat/create")
+        blocked = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "hello world"},
+            content_type="application/json",
+        )
         assert blocked.status_code == 429
         payload = blocked.get_json()
         assert isinstance(payload.get("retry_after_seconds"), int)
