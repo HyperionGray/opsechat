@@ -2,6 +2,17 @@
 
 This document describes how to run opsechat using containers with Podman (preferred) or Docker.
 
+## Health probe endpoints
+
+The app exposes three probe endpoints for operations:
+
+- `/live` - liveness probe (process is running)
+- `/ready` - readiness probe (service can serve traffic)
+- `/health` - richer diagnostic status payload
+
+Container health checks in this repository use `/ready` so orchestration
+decisions rely on readiness semantics instead of broad diagnostics.
+
 ## Overview
 
 The containerized setup includes:

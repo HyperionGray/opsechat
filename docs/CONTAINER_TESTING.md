@@ -104,7 +104,7 @@ podman-compose logs opsechat
 
 ## Functionality Tests
 
-### Test 6: Access Health Endpoint
+### Test 6: Access Probe Endpoints
 
 If you've exposed port 5000 for testing:
 
@@ -117,15 +117,33 @@ If you've exposed port 5000 for testing:
 ./compose-down.sh
 ./compose-up.sh
 
-# Test health endpoint
+# Test liveness endpoint (process is running)
+curl http://localhost:5000/live
+
+# Test readiness endpoint (container/orchestrator probe target)
+curl http://localhost:5000/ready
+
+# Test extended health endpoint (diagnostics)
 curl http://localhost:5000/health
 ```
 
 **Expected Result:**
 ```json
 {
-  "status": "ok",
+  "status": "alive",
   "timestamp": "2026-03-02T..."
+}
+```
+
+Readiness should return HTTP 200 with:
+```json
+{
+  "status": "ready",
+  "checks": {
+    "version_loaded": true,
+    "memory_usage": "ok",
+    "disk_space": "ok"
+  }
 }
 ```
 

@@ -79,14 +79,14 @@ class TestDockerComposeConfig:
         opsechat_service = config['services']['opsechat']
         assert 'ports' not in opsechat_service or not opsechat_service['ports']
 
-    def test_compose_app_healthcheck_targets_local_health_endpoint(self):
+    def test_compose_app_healthcheck_targets_local_readiness_endpoint(self):
         compose_path = os.path.join(REPO_DIR, 'docker-compose.yml')
         with open(compose_path) as f:
             config = yaml.safe_load(f)
 
         healthcheck = config['services']['opsechat']['healthcheck']
         assert healthcheck['test'] == [
-            'CMD', 'curl', '--fail', '--silent', 'http://127.0.0.1:5000/health'
+            'CMD', 'curl', '--fail', '--silent', 'http://127.0.0.1:5000/ready'
         ]
 
 
@@ -123,7 +123,7 @@ class TestDockerfile:
             content = f.read()
 
         assert 'HEALTHCHECK' in content
-        assert '/health' in content
+        assert '/ready' in content
     
     def test_dockerfile_copies_app_files(self):
         dockerfile_path = self.get_dockerfile_path()

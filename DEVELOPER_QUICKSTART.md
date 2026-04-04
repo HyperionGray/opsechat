@@ -50,6 +50,8 @@ python3 runserver.py test
 Useful checks:
 
 ```bash
+curl -i http://127.0.0.1:5000/live
+curl -i http://127.0.0.1:5000/ready
 curl -i http://127.0.0.1:5000/health
 curl -i http://127.0.0.1:5000/
 ```
@@ -71,7 +73,7 @@ cd /path/to/opsechat
 ./compose-down.sh
 ```
 
-The application container now includes a `/health` healthcheck, and the compose configuration also probes the same endpoint.
+The application container now uses `/ready` for health checks. Keep `/ready` lightweight and deterministic for orchestrators, and use `/health` for richer diagnostics.
 
 ## Full test commands already in the repo
 
@@ -87,7 +89,7 @@ python3 pf-tasks/test.py --skip-e2e
 
 - `runserver.py` - main runtime entrypoint
 - `app_factory.py` - Flask app creation and route registration
-- `monitoring.py` - `/health` payload generation
+- `monitoring.py` - `/live`, `/ready`, and `/health` payload generation
 - `docker-compose.yml` - local container deployment
 - `Dockerfile` - container build and app healthcheck
 - `tests/test_rate_limit_and_health.py` - health endpoint and security header coverage
@@ -96,7 +98,8 @@ python3 pf-tasks/test.py --skip-e2e
 
 ## Maintenance checklist
 
-- Keep `/health` stable and lightweight; deployment checks rely on it.
+- Keep `/ready` stable and lightweight; container deployment checks rely on it.
+- Keep `/health` backward compatible; diagnostics and existing tooling rely on it.
 - When changing runtime wiring, update `tests/basic.spec.js`.
 - When changing container behavior, update `tests/test_container_deployment.py`.
 - Re-run Python tests and the basic Playwright smoke test before pushing.

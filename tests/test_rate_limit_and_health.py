@@ -1,5 +1,5 @@
 """
-Tests for rate limiting (simple_chat_routes) and the /health endpoint (app_factory).
+Tests for rate limiting and probe endpoints (app_factory).
 """
 
 import datetime
@@ -88,7 +88,7 @@ def test_rate_limit_chat_message_limit():
 
 
 # ---------------------------------------------------------------------------
-# Health endpoint integration tests
+# Probe endpoint integration tests
 # ---------------------------------------------------------------------------
 
 def test_health_endpoint_returns_200():
@@ -166,3 +166,31 @@ def test_health_endpoint_date_header_is_blank():
     response = client.get("/health")
 
     assert response.headers["Date"] == ""
+
+
+def test_live_endpoint_returns_200_with_required_fields():
+    client = _test_app.test_client()
+    response = client.get("/live")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data is not None
+    assert data.get("status") == "alive"
+    assert "timestamp" in data
+    assert "uptime_seconds" in data
+
+
+def test_ready_endpoint_returns_200_when_ready():
+    client = _test_app.test_client()
+    response = client.get("/ready")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data is not None
+    assert data.get("status") == "ready"
+    assert "timestamp" in data
+    assert "version" in data
+    assert "checks" in data
+    assert data["checks"]["version_loaded"] is True
+    assert data["checks"]["memory_usage"] == "ok"
+    assert data["checks"]["disk_space"] == "ok"

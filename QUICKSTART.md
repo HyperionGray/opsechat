@@ -40,6 +40,13 @@ curl http://localhost:5000/health
 # {"active_rooms":0,"status":"healthy","version":"0.8.0-alpha"}
 ```
 
+Probe endpoints:
+
+```bash
+curl http://localhost:5000/live   # liveness probe, should return {"status":"alive", ...}
+curl http://localhost:5000/ready  # readiness probe, returns 200 only when app is ready
+```
+
 ---
 
 ## Prerequisites

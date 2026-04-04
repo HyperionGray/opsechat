@@ -322,7 +322,7 @@ def _read_version() -> str:
 
 
 def get_health_status() -> Dict[str, Any]:
-    """Get application health status"""
+    """Get application health status with operational metadata."""
     return {
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
@@ -336,6 +336,37 @@ def get_health_status() -> Dict[str, Any]:
             'memory_usage': 'ok',
             'disk_space': 'ok'
         }
+    }
+
+
+def get_liveness_status() -> Dict[str, Any]:
+    """Get lightweight liveness status for orchestrators."""
+    return {
+        'status': 'alive',
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
+    }
+
+
+def get_readiness_status() -> Dict[str, Any]:
+    """Get readiness status used by container health checks."""
+    version = _read_version()
+    checks = {
+        'version_loaded': version != 'unknown',
+        'memory_usage': 'ok',
+        'disk_space': 'ok',
+    }
+    is_ready = all([
+        checks['version_loaded'],
+        checks['memory_usage'] == 'ok',
+        checks['disk_space'] == 'ok',
+    ])
+
+    return {
+        'status': 'ready' if is_ready else 'not_ready',
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'version': version,
+        'checks': checks,
     }
 
 # Security event logging
