@@ -11,10 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- HTTP mail background maintenance loop that automatically expires old mail
+  and removes stale empty mailboxes
+- Runtime protection against writes to destroyed HTTP mailboxes
 
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- Hardened HTTP mail send behavior to return a clean 404 if a mailbox is
+  destroyed during a concurrent send operation
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022

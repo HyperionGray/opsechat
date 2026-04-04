@@ -133,6 +133,42 @@ First-time users see a prominent security warning:
 
 ---
 
+## 📧 HTTP Mailbox Maintenance & Hardening
+
+### Purpose
+Improve long-running stability and reduce stale in-memory mailbox buildup while
+preserving the zero-disk design.
+
+### What Changed
+- Added automatic maintenance cleanup for HTTP mail storage
+  - Expires old messages (24-hour retention)
+  - Removes stale empty mailboxes (48-hour retention)
+  - Runs in a daemon background thread every 5 minutes
+- Added lifecycle hardening for deleted mailboxes
+  - Mailboxes are marked `destroyed` on delete
+  - Writes to destroyed mailboxes are rejected
+  - Route layer converts this race condition into a clean 404
+
+### Why This Matters
+- Prevents silent in-memory growth in long-lived server processes
+- Closes a potential race where a mailbox could be deleted while a send was in flight
+- Keeps behavior deterministic and easier to reason about under concurrency
+
+### Configuration
+You can disable the cleanup thread in tests/controlled environments:
+
+```bash
+export OPSECHAT_DISABLE_HTTP_MAIL_CLEANUP_THREAD=1
+```
+
+### Validation
+New tests now cover:
+- Maintenance cleanup removing expired messages
+- Maintenance cleanup removing stale empty mailboxes
+- Rejection of writes to destroyed mailboxes
+
+---
+
 ## 📧 Email Rate Limiting
 
 ### Purpose

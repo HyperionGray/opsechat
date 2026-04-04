@@ -21,6 +21,7 @@ from http_mail_system import (
     HttpMessage,
     http_mail_storage,
     MAX_MAIL_MESSAGE_LENGTH,
+    MAIL_EXPIRY_HOURS,
 )
 from email_system import email_storage as _global_email_storage, EmailComposer
 from app_factory import create_app
@@ -115,6 +116,29 @@ class TestHttpMailStorage:
         self.storage.cleanup_empty_old_mailboxes()
         assert self.storage.get_mailbox(mb.address) is not None
 
+    def test_run_maintenance_cleanup_expires_old_messages(self):
+        mb = self.storage.create_mailbox()
+        mb.add_message("subj", "body", "sender")
+        with mb.lock:
+            mb.messages[0].timestamp = (
+                datetime.datetime.now()
+                - datetime.timedelta(hours=MAIL_EXPIRY_HOURS + 1)
+            )
+
+        self.storage.run_maintenance_cleanup()
+
+        mailbox = self.storage.get_mailbox(mb.address)
+        assert mailbox is not None
+        assert mailbox.message_count() == 0
+
+    def test_run_maintenance_cleanup_removes_stale_empty_mailbox(self):
+        mb = self.storage.create_mailbox()
+        mb.created_at = datetime.datetime.now() - datetime.timedelta(hours=49)
+
+        self.storage.run_maintenance_cleanup()
+
+        assert self.storage.get_mailbox(mb.address) is None
+
 
 # ===========================================================================
 # HttpMailbox unit tests
@@ -196,6 +220,11 @@ class TestHttpMailbox:
         assert "Secret" not in msg.subject
         assert "Secret" not in msg.body
         assert "Alice" not in msg.sender_handle
+
+    def test_add_message_fails_when_mailbox_destroyed(self):
+        self.mailbox.destroyed = True
+        with pytest.raises(RuntimeError):
+            self.mailbox.add_message("Subj", "Body", "alice")
 
 
 # ===========================================================================
