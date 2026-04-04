@@ -286,8 +286,8 @@ Continued use of the Service after changes constitutes acceptance of the updated
 ## 15. Legal Framework
 
 This AUP is governed by:
-- Terms of Service (see TERMS_OF_SERVICE.md)
-- Privacy Policy (see PRIVACY_POLICY.md)
+- Terms of Service (see /terms)
+- Privacy Policy (see /privacy)
 - Applicable laws of [jurisdiction TBD]
 
 In case of conflict between this AUP and other documents, the most restrictive interpretation applies for prohibited activities.
@@ -308,7 +308,7 @@ In case of conflict between this AUP and other documents, the most restrictive i
 
 *This is a template document. Legal review and customization are required before production use.*
 
-**TODO before alpha:**
+**Remaining actions before alpha:**
 - [ ] Legal counsel review
 - [ ] Add specific contact information
 - [ ] Determine jurisdiction

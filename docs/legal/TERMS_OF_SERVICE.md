@@ -100,7 +100,7 @@ Despite our privacy-first design, we may temporarily have:
 - Technical logs for debugging (minimal, short retention)
 
 ### 5.4 For More Information
-See our [Privacy Policy](PRIVACY_POLICY.md) for complete details.
+See our [Privacy Policy](/privacy) for complete details.
 
 ---
 
@@ -130,7 +130,7 @@ You must:
 ## 7. Acceptable Use
 
 ### 7.1 Compliance with AUP
-You must comply with our [Acceptable Use Policy](ACCEPTABLE_USE_POLICY.md), which prohibits:
+You must comply with our [Acceptable Use Policy](/aup), which prohibits:
 - Illegal activities
 - Abuse, harassment, or threats
 - Spam or malicious content
@@ -447,7 +447,7 @@ CONSULT A LAWYER IF YOU HAVE QUESTIONS ABOUT YOUR LEGAL OBLIGATIONS.
 - [ ] Set up arbitration procedures
 - [ ] Add contact information
 - [ ] Integrate with UI (checkbox acknowledgment)
-- [ ] Publish privacy policy
+- [x] Publish privacy policy
 - [ ] Set effective date
 - [ ] Translate to other languages (if needed)
 - [ ] Add dispute resolution contact information
