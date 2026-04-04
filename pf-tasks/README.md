@@ -89,6 +89,12 @@ python pf-tasks/clean.py --images --force
 
 # Clean build artifacts
 python pf-tasks/clean.py --artifacts
+
+# Audit repository hygiene without changing files
+python pf-tasks/clean.py --repo-hygiene
+
+# Remove stale tracked backups/artifacts and broken symlinks
+python pf-tasks/clean.py --repo-hygiene-fix
 ```
 
 **Features:**
@@ -98,6 +104,8 @@ python pf-tasks/clean.py --artifacts
 - Removes networks and volumes
 - Optionally removes container images
 - Cleans build artifacts and cache
+- Audits stale tracked files (`*~HEAD`, `.bish-index`, `.bish.sqlite`)
+- Optionally removes stale tracked files and broken symlinks
 
 ## Usage Patterns
 

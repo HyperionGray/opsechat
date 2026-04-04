@@ -9,6 +9,7 @@ import sys
 import shutil
 from pathlib import Path
 import argparse
+from typing import Dict, List
 
 def run_command(cmd, cwd=None, check=True):
     """Run command with proper error handling"""
@@ -187,6 +188,119 @@ def clean_build_artifacts():
     
     return True
 
+
+def _list_tracked_files(project_root: Path) -> List[str]:
+    """Return tracked files from git index."""
+    try:
+        result = subprocess.run(
+            ['git', 'ls-files'],
+            cwd=project_root,
+            check=True,
+            capture_output=True,
+            text=True
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return []
+
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def scan_repo_hygiene(project_root: Path) -> Dict[str, List[str]]:
+    """
+    Scan repository for stale tracked artifacts and broken symlinks.
+
+    Returns:
+        dict with keys:
+          - tracked_backups: tracked *~HEAD files
+          - tracked_bish_artifacts: tracked .bish-index/.bish.sqlite files
+          - broken_symlinks: broken symlinks anywhere in repo (excluding .git)
+    """
+    tracked_files = _list_tracked_files(project_root)
+    tracked_set = set(tracked_files)
+
+    tracked_backups = sorted([
+        path for path in tracked_files if path.endswith('~HEAD')
+    ])
+    tracked_bish_artifacts = sorted([
+        path for path in tracked_files if Path(path).name in {'.bish-index', '.bish.sqlite'}
+    ])
+
+    broken_symlinks: List[str] = []
+    for path in project_root.rglob('*'):
+        if '.git' in path.parts:
+            continue
+        if path.is_symlink() and not path.exists():
+            broken_symlinks.append(str(path.relative_to(project_root)))
+
+    return {
+        'tracked_backups': tracked_backups,
+        'tracked_bish_artifacts': tracked_bish_artifacts,
+        'broken_symlinks': sorted(broken_symlinks),
+        'tracked_set': sorted(tracked_set),
+    }
+
+
+def _print_repo_hygiene_report(findings: Dict[str, List[str]]) -> None:
+    """Print repo hygiene findings in a readable summary."""
+    tracked_backups = findings.get('tracked_backups', [])
+    tracked_bish = findings.get('tracked_bish_artifacts', [])
+    broken_symlinks = findings.get('broken_symlinks', [])
+
+    print("[*] Repository hygiene report")
+    print(f"    - tracked backup files (~HEAD): {len(tracked_backups)}")
+    print(f"    - tracked .bish artifacts: {len(tracked_bish)}")
+    print(f"    - broken symlinks: {len(broken_symlinks)}")
+
+    for label, items in [
+        ("tracked backup", tracked_backups),
+        ("tracked .bish artifact", tracked_bish),
+        ("broken symlink", broken_symlinks),
+    ]:
+        if items:
+            print(f"[*] {label} entries:")
+            for item in items:
+                print(f"    - {item}")
+
+
+def apply_repo_hygiene_fixes(project_root: Path, findings: Dict[str, List[str]]) -> bool:
+    """Remove detected stale files and broken symlinks."""
+    tracked_set = set(findings.get('tracked_set', []))
+    removal_candidates = sorted(set(
+        findings.get('tracked_backups', [])
+        + findings.get('tracked_bish_artifacts', [])
+        + findings.get('broken_symlinks', [])
+    ))
+
+    if not removal_candidates:
+        print("[*] No repo hygiene fixes needed")
+        return True
+
+    print("[*] Applying repository hygiene fixes")
+    success = True
+
+    for rel_path in removal_candidates:
+        abs_path = project_root / rel_path
+        if rel_path in tracked_set:
+            print(f"[*] Removing tracked file: {rel_path}")
+            result = run_command(
+                ['git', 'rm', '-f', '--', rel_path],
+                cwd=project_root,
+                check=False
+            )
+            if result.returncode != 0:
+                success = False
+            continue
+
+        if abs_path.is_symlink() or abs_path.exists():
+            print(f"[*] Removing file/symlink: {rel_path}")
+            try:
+                abs_path.unlink(missing_ok=True)
+            except OSError as exc:
+                print(f"[!] Failed to remove {rel_path}: {exc}")
+                success = False
+
+    return success
+
 def determine_cleanup_method(args):
     """
     Determine which cleanup method to use based on arguments.
@@ -200,6 +314,9 @@ def determine_cleanup_method(args):
     Note: Images and build artifacts are only cleaned when their respective flags (--images, --artifacts) are set.
     """
     if args.method is None:
+        if (args.repo_hygiene or args.repo_hygiene_fix) and not args.images and not args.artifacts:
+            # Repo hygiene-only mode should not touch deployment resources by default
+            return None
         if args.artifacts and not args.images:
             # Only clean artifacts when --artifacts is specified alone
             return None
@@ -218,6 +335,16 @@ def main():
     parser.add_argument('--images', action='store_true', help='Also remove container images')
     parser.add_argument('--force', action='store_true', help='Force removal of images')
     parser.add_argument('--artifacts', action='store_true', help='Clean build artifacts')
+    parser.add_argument(
+        '--repo-hygiene',
+        action='store_true',
+        help='Audit repository for stale tracked backups/artifacts and broken symlinks'
+    )
+    parser.add_argument(
+        '--repo-hygiene-fix',
+        action='store_true',
+        help='Apply repo hygiene fixes (removes findings from --repo-hygiene audit)'
+    )
     
     args = parser.parse_args()
     
@@ -244,6 +371,13 @@ def main():
     # Only clean artifacts if explicitly requested via --artifacts flag
     if args.artifacts:
         success &= clean_build_artifacts()
+
+    if args.repo_hygiene or args.repo_hygiene_fix:
+        project_root = Path(__file__).parent.parent
+        findings = scan_repo_hygiene(project_root)
+        _print_repo_hygiene_report(findings)
+        if args.repo_hygiene_fix:
+            success &= apply_repo_hygiene_fixes(project_root, findings)
     
     if success:
         print("[✓] Cleanup completed successfully")

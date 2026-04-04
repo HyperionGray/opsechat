@@ -81,6 +81,7 @@ cd /path/to/opsechat
 python3 -m pytest
 npx playwright test
 python3 pf-tasks/test.py --skip-e2e
+python3 pf-tasks/clean.py --repo-hygiene
 ```
 
 ## Files to know
@@ -93,6 +94,7 @@ python3 pf-tasks/test.py --skip-e2e
 - `tests/test_rate_limit_and_health.py` - health endpoint and security header coverage
 - `tests/test_container_deployment.py` - deployment safety checks
 - `tests/basic.spec.js` - lightweight Playwright smoke tests
+- `pf-tasks/clean.py` - deployment cleanup plus repo hygiene audit/fix mode
 
 ## Maintenance checklist
 
@@ -100,4 +102,5 @@ python3 pf-tasks/test.py --skip-e2e
 - When changing runtime wiring, update `tests/basic.spec.js`.
 - When changing container behavior, update `tests/test_container_deployment.py`.
 - Re-run Python tests and the basic Playwright smoke test before pushing.
+- Run `python3 pf-tasks/clean.py --repo-hygiene` periodically to detect stale tracked artifacts and broken symlinks.
 - Review `SECURITY.md`, `README.md`, and this file when setup or deployment steps change.
