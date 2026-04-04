@@ -11,10 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- Implemented cached per-user review counting in `review_performance.py`:
+  - `get_user_review_count` now returns real counts instead of a placeholder.
+  - `create_reviews_hash` now stores bounded per-hash user count mappings.
+  - Added unit coverage in `tests/test_review_performance.py`.
 
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- Updated docs index wording in `docs/README.md` and added review performance test reference in `docs/development/DEVELOPMENT.md`.
+
+### Removed
+- Removed stale merge-backup artifacts from repository root:
+  - `Dockerfile~HEAD`
+  - `docker-compose.yml~HEAD`
+- Removed tracked build artifact index file:
+  - `.bish-index`
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022
