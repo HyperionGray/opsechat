@@ -107,6 +107,26 @@ Enterprise-focused with comprehensive API.
 - More expensive than Porkbun
 - Better for production/enterprise use
 
+## Persistence and Runtime Behavior
+
+The domain manager now exposes a stable configuration/persistence interface:
+
+- `DomainRotationManager.configure(...)` configures API credentials and budget
+- `DomainRotationManager.get_config()` returns a safe, UI-facing state payload
+- `DomainRotationManager.export_state()` returns JSON-safe state (datetime fields are ISO strings)
+- `DomainRotationManager.import_state(...)` restores state from persisted JSON
+
+This resolves prior state-save issues where datetime objects in `owned_domains` could break JSON serialization in CLI workflows.
+
+### CLI State Persistence
+
+`domain_rotation_cli.py` now persists state through manager helpers:
+
+- save path: manager `export_state()` -> config JSON
+- load path: config JSON -> manager `import_state(...)`
+
+This keeps date fields compatible across restarts and avoids runtime crashes when listing previously purchased domains.
+
 ## Security Considerations
 
 ### API Key Security
