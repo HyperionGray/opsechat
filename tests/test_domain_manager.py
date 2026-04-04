@@ -155,6 +155,62 @@ class TestDomainRotationManager:
         assert status["current_spending"] == 10.0
         assert status["remaining"] == 40.0
         assert status["domains_owned"] == 1
+
+    @patch('domain_manager.requests.Session')
+    def test_configure_and_get_config(self, _mock_session_class):
+        """Test runtime configuration and safe config retrieval"""
+        manager = DomainRotationManager()
+        manager.configure("pk1_test1234", "sk1_secret", monthly_budget=25.0)
+
+        config = manager.get_config()
+        assert config["configured"] is True
+        assert config["api_key_last4"] == "1234"
+        assert config["monthly_budget"] == 25.0
+        assert config["current_spending"] == 0.0
+        assert config["active_domain"] is None
+        assert config["domains_owned"] == 0
+
+    def test_configure_requires_credentials_and_positive_budget(self):
+        """Test configure validation rules"""
+        manager = DomainRotationManager()
+
+        with pytest.raises(ValueError):
+            manager.configure("", "secret", monthly_budget=10.0)
+
+        with pytest.raises(ValueError):
+            manager.configure("key", "", monthly_budget=10.0)
+
+        with pytest.raises(ValueError):
+            manager.configure("key", "secret", monthly_budget=0)
+
+    def test_export_import_state_serializes_datetimes(self):
+        """Exported state should be JSON-safe and importable"""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 7.5
+        manager.active_domain = "active.xyz"
+        manager.owned_domains = [{
+            "domain": "active.xyz",
+            "price": 2.5,
+            "purchased_at": "2026-01-01T10:00:00",
+            "expires_at": "2027-01-01T10:00:00",
+        }]
+
+        exported = manager.export_state()
+        assert exported["current_spending"] == 7.5
+        assert exported["active_domain"] == "active.xyz"
+        assert exported["owned_domains"][0]["domain"] == "active.xyz"
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(exported["owned_domains"][0]["expires_at"], str)
+
+        restored = DomainRotationManager(monthly_budget=50.0)
+        restored.import_state(exported)
+        assert restored.current_spending == 7.5
+        assert restored.active_domain == "active.xyz"
+        assert len(restored.owned_domains) == 1
+        assert restored.owned_domains[0]["domain"] == "active.xyz"
+        assert restored.owned_domains[0]["price"] == 2.5
+        assert restored.owned_domains[0]["purchased_at"].year == 2026
+        assert restored.owned_domains[0]["expires_at"].year == 2027
     
     def test_rotate_domain(self):
         """Test domain rotation"""
@@ -170,7 +226,8 @@ class TestDomainRotationManager:
         }
         
         manager = DomainRotationManager(mock_client, monthly_budget=50.0)
-        new_domain = manager.rotate_domain()
+        result = manager.rotate_domain()
         
-        assert new_domain is not None
-        assert manager.active_domain == new_domain
+        assert result["success"] is True
+        assert result["domain"] is not None
+        assert manager.active_domain == result["domain"]

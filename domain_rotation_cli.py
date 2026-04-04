@@ -105,25 +105,24 @@ def get_manager():
     client = PorkbunAPIClient(config['api_key'], config['api_secret'])
     manager = DomainRotationManager(
         api_client=client,
-        monthly_budget=config.get('monthly_budget', 50.0)
+        monthly_budget=float(config.get('monthly_budget', 50.0))
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+    manager.import_state({
+        "current_spending": config.get("current_spending", 0.0),
+        "owned_domains": config.get("owned_domains", []),
+        "active_domain": config.get("active_domain"),
+    })
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    exported_state = manager.export_state()
+    config['current_spending'] = exported_state['current_spending']
+    config['owned_domains'] = exported_state['owned_domains']
+    config['active_domain'] = exported_state['active_domain']
+    config['monthly_budget'] = manager.monthly_budget
     save_config(config)
 
 
@@ -201,16 +200,15 @@ def rotate_domain():
         return
     
     print("\nPurchasing domain...")
-    success = manager.purchase_domain_if_budget_allows(
-        domain_info['domain'],
-        domain_info['price']
-    )
+    result = manager.rotate_domain()
     
-    if success:
-        print(f"\n✅ Successfully purchased and activated: {domain_info['domain']}")
+    if result["success"]:
+        print(f"\n✅ Successfully purchased and activated: {result['domain']}")
+        if "price" in result:
+            print(f"   Purchase price: ${result['price']}")
         save_manager_state(manager, config)
     else:
-        print("\n❌ Failed to purchase domain. Check API credentials and budget.")
+        print(f"\n❌ {result['error']}")
 
 
 def show_status():
