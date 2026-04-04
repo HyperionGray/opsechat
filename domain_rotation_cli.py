@@ -17,12 +17,66 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from getpass import getpass
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+VALID_PROVIDER_STRATEGIES = {"priority", "cheapest"}
+
+
+def _normalize_provider_strategy(value):
+    """Validate and normalize provider selection strategy."""
+    strategy = str(value).strip().lower()
+    if strategy not in VALID_PROVIDER_STRATEGIES:
+        raise ValueError(
+            f"Invalid provider strategy '{value}'. "
+            f"Expected one of: {sorted(VALID_PROVIDER_STRATEGIES)}"
+        )
+    return strategy
+
+
+def _parse_datetime(value):
+    """Parse ISO datetime values from persisted config data."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return value
+    return value
+
+
+def _serialize_datetime(value):
+    """Serialize datetime values to ISO strings for JSON storage."""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
+
+
+def _deserialize_owned_domains(owned_domains):
+    """Convert persisted owned domain records into runtime values."""
+    normalized = []
+    for domain in owned_domains or []:
+        item = dict(domain)
+        item['purchased_at'] = _parse_datetime(item.get('purchased_at'))
+        item['expires_at'] = _parse_datetime(item.get('expires_at'))
+        normalized.append(item)
+    return normalized
+
+
+def _serialize_owned_domains(owned_domains):
+    """Convert runtime owned domain records into JSON-safe values."""
+    serialized = []
+    for domain in owned_domains or []:
+        item = dict(domain)
+        item['purchased_at'] = _serialize_datetime(item.get('purchased_at'))
+        item['expires_at'] = _serialize_datetime(item.get('expires_at'))
+        serialized.append(item)
+    return serialized
 
 
 def load_config():
@@ -69,6 +123,9 @@ def configure_api():
         print(f"  Monthly Budget: ${config['monthly_budget']}")
     else:
         print("  Monthly Budget: Not configured")
+
+    current_strategy = config.get('provider_strategy', 'priority')
+    print(f"  Provider Strategy: {current_strategy}")
     
     print("\nEnter new values (or press Enter to keep current):\n")
     
@@ -88,6 +145,17 @@ def configure_api():
             print("Invalid budget amount, keeping previous value")
     elif 'monthly_budget' not in config:
         config['monthly_budget'] = 50.0
+
+    strategy = input(
+        "Provider Strategy (priority/cheapest) [default: priority]: "
+    ).strip()
+    if strategy:
+        try:
+            config['provider_strategy'] = _normalize_provider_strategy(strategy)
+        except ValueError as exc:
+            print(f"{exc}; keeping previous value")
+    elif 'provider_strategy' not in config:
+        config['provider_strategy'] = 'priority'
     
     save_config(config)
     print("\n✅ Configuration updated successfully!")
@@ -103,16 +171,24 @@ def get_manager():
         sys.exit(1)
     
     client = PorkbunAPIClient(config['api_key'], config['api_secret'])
+    strategy = config.get('provider_strategy', 'priority')
+    try:
+        strategy = _normalize_provider_strategy(strategy)
+    except ValueError:
+        print("Invalid provider strategy in config; defaulting to 'priority'")
+        strategy = 'priority'
+
     manager = DomainRotationManager(
         api_client=client,
-        monthly_budget=config.get('monthly_budget', 50.0)
+        monthly_budget=config.get('monthly_budget', 50.0),
+        provider_strategy=strategy
     )
     
     # Load saved state
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = _deserialize_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +198,7 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = _serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -142,10 +218,21 @@ def list_domains():
     
     for i, domain in enumerate(domains, 1):
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
+        purchased_at = _parse_datetime(domain.get('purchased_at'))
+        expires_at = _parse_datetime(domain.get('expires_at'))
+        if isinstance(purchased_at, datetime):
+            purchased_display = purchased_at.strftime('%Y-%m-%d %H:%M')
+        else:
+            purchased_display = str(purchased_at or "unknown")
+        if isinstance(expires_at, datetime):
+            expires_display = expires_at.strftime('%Y-%m-%d')
+        else:
+            expires_display = str(expires_at or "unknown")
+
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {purchased_display}")
+        print(f"   Expires: {expires_display}")
         print()
 
 
@@ -203,7 +290,8 @@ def rotate_domain():
     print("\nPurchasing domain...")
     success = manager.purchase_domain_if_budget_allows(
         domain_info['domain'],
-        domain_info['price']
+        domain_info['price'],
+        provider_name=domain_info.get('provider')
     )
     
     if success:

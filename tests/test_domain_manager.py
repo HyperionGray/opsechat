@@ -174,3 +174,97 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_priority_strategy_falls_back_to_secondary_provider(self):
+        """Priority strategy should fail over when primary is unavailable."""
+        primary_client = Mock(spec=DomainAPIClient)
+        primary_client.search_domain.return_value = {
+            "available": False,
+            "domain": "fallback.xyz",
+            "price": 2.99
+        }
+        primary_client.purchase_domain.return_value = {"success": False}
+
+        secondary_client = Mock(spec=DomainAPIClient)
+        secondary_client.search_domain.return_value = {
+            "available": True,
+            "domain": "fallback.xyz",
+            "price": 1.99
+        }
+        secondary_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "fallback.xyz"
+        }
+
+        manager = DomainRotationManager(provider_strategy="priority")
+        manager.add_api_client("primary", primary_client, make_primary=True)
+        manager.add_api_client("secondary", secondary_client)
+
+        result = manager.find_cheap_available_domain(max_attempts=1)
+
+        assert result is not None
+        assert result["provider"] == "secondary"
+
+    def test_cheapest_strategy_selects_lower_priced_provider(self):
+        """Cheapest strategy should pick provider with lowest price."""
+        provider_a = Mock(spec=DomainAPIClient)
+        provider_a.search_domain.return_value = {
+            "available": True,
+            "domain": "cheap.xyz",
+            "price": "2.49"
+        }
+        provider_a.purchase_domain.return_value = {"success": True, "domain": "cheap.xyz"}
+
+        provider_b = Mock(spec=DomainAPIClient)
+        provider_b.search_domain.return_value = {
+            "available": True,
+            "domain": "cheap.xyz",
+            "price": "1.25"
+        }
+        provider_b.purchase_domain.return_value = {"success": True, "domain": "cheap.xyz"}
+
+        manager = DomainRotationManager(provider_strategy="cheapest")
+        manager.add_api_client("provider-a", provider_a, make_primary=True)
+        manager.add_api_client("provider-b", provider_b)
+
+        result = manager.find_cheap_available_domain(max_attempts=1)
+
+        assert result is not None
+        assert result["provider"] == "provider-b"
+        assert result["price"] == 1.25
+
+    def test_rotate_domain_uses_selected_provider(self):
+        """Rotate domain should purchase through selected provider."""
+        expensive_provider = Mock(spec=DomainAPIClient)
+        expensive_provider.search_domain.return_value = {
+            "available": True,
+            "domain": "rotate.xyz",
+            "price": "4.50"
+        }
+        expensive_provider.purchase_domain.return_value = {
+            "success": True,
+            "domain": "rotate.xyz"
+        }
+
+        cheap_provider = Mock(spec=DomainAPIClient)
+        cheap_provider.search_domain.return_value = {
+            "available": True,
+            "domain": "rotate.xyz",
+            "price": "1.10"
+        }
+        cheap_provider.purchase_domain.return_value = {
+            "success": True,
+            "domain": "rotate.xyz"
+        }
+
+        manager = DomainRotationManager(provider_strategy="cheapest", monthly_budget=50.0)
+        manager.add_api_client("expensive", expensive_provider, make_primary=True)
+        manager.add_api_client("cheap", cheap_provider)
+
+        new_domain = manager.rotate_domain()
+
+        assert new_domain == "rotate.xyz"
+        assert manager.active_domain == "rotate.xyz"
+        cheap_provider.purchase_domain.assert_called_once()
+        expensive_provider.purchase_domain.assert_not_called()
+        assert manager.owned_domains[-1]["provider"] == "cheap"
