@@ -96,6 +96,10 @@ def create_app():
     # Register simple chat routes (new simplified interface)
     from simple_chat_routes import register_simple_chat_routes
     register_simple_chat_routes(app)
+
+    # Register legal/policy routes
+    from legal_routes import register_legal_routes
+    register_legal_routes(app)
     
     # Register email routes
     from email_routes import register_email_routes

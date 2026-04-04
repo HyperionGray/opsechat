@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title }} - OpSecChat</title>
+    <link rel="stylesheet" href="/static/legal-policy.css">
+</head>
+<body>
+    <div class="legal-shell">
+        <header class="legal-header">
+            <h1>{{ page_title }}</h1>
+            <p class="legal-subtitle">{{ page_description }}</p>
+            <nav class="policy-nav" aria-label="Policy navigation">
+                <a href="/terms" class="{% if policy_key == 'terms' %}active{% endif %}">Terms</a>
+                <a href="/aup" class="{% if policy_key == 'aup' %}active{% endif %}">AUP</a>
+                <a href="/privacy" class="{% if policy_key == 'privacy' %}active{% endif %}">Privacy</a>
+            </nav>
+        </header>
+
+        <main class="legal-layout">
+            <aside class="toc-panel" aria-label="Table of contents">
+                <h2>Contents</h2>
+                {% if toc %}
+                    <ul class="toc-list">
+                        {% for item in toc %}
+                            <li class="level-{{ item.level }}">
+                                <a href="#{{ item.id }}">{{ item.title }}</a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>No sections available.</p>
+                {% endif %}
+            </aside>
+
+            <article class="legal-content" role="main">
+                {{ content_html | safe }}
+            </article>
+        </main>
+
+        <footer class="legal-footer">
+            <span>Last updated: {{ updated_at }}</span>
+            <span class="divider">|</span>
+            <a href="/chat">Back to chat</a>
+            <span class="divider">|</span>
+            <a href="https://github.com/HyperionGray/opsechat">Project repository</a>
+        </footer>
+    </div>
+</body>
+</html>

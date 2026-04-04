@@ -2,6 +2,29 @@
 
 This guide covers the new features added in the final push for OpSecHat production readiness.
 
+## ⚖️ Public Policy Pages
+
+### What Changed
+Legal policy pages are now available as first-class public routes:
+
+- `/terms` → Terms of Service
+- `/aup` → Acceptable Use Policy
+- `/privacy` → Privacy Policy
+
+### Implementation Notes
+- Policy content is sourced from `docs/legal/*.md`
+- Markdown is rendered server-side with a safe parser (escape-first)
+- Policy links are normalized across docs (`TERMS_OF_SERVICE.md` → `/terms`, etc.)
+- Rendered output includes a table of contents generated from headings
+- Rendered pages are cached in memory and invalidated when the source file changes
+
+### Why This Matters
+- Completes the policy-page integration TODO needed for release readiness
+- Makes legal documentation accessible from product UI and direct links
+- Keeps docs and routes synchronized from a single source of truth
+
+---
+
 ## 🔑 Automated Key Exchange
 
 ### What Changed

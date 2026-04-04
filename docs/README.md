@@ -7,6 +7,9 @@ Welcome to the OpSecChat documentation. All documentation has been organized int
 - **[Main README](../README.md)** - Start here for project overview
 - **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes (TODO)
 - **[Security](../SECURITY.md)** - Security information and best practices
+- **[Terms of Service](legal/TERMS_OF_SERVICE.md)** - Usage terms and legal framework
+- **[Acceptable Use Policy](legal/ACCEPTABLE_USE_POLICY.md)** - Prohibited and permitted activity
+- **[Privacy Policy](legal/PRIVACY_POLICY.md)** - Data handling and retention details
 - **[License](../LICENSE.md)** - MIT License
 
 ## Documentation Categories
@@ -57,6 +60,7 @@ Legal documents and policies.
 
 - [Acceptable Use Policy](legal/ACCEPTABLE_USE_POLICY.md) - AUP (requires legal review)
 - [Terms of Service](legal/TERMS_OF_SERVICE.md) - ToS (requires legal review)
+- [Privacy Policy](legal/PRIVACY_POLICY.md) - Privacy and data handling policy
 
 ### 🔧 Implementation
 Implementation details and summaries of major features.

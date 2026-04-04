@@ -1,0 +1,172 @@
+body {
+    margin: 0;
+    background: #0b0f14;
+    color: #d7e2f0;
+    font-family: Arial, sans-serif;
+    line-height: 1.55;
+}
+
+a {
+    color: #8bc4ff;
+}
+
+a:hover {
+    color: #b7dcff;
+}
+
+.legal-shell {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px 20px 36px;
+}
+
+.legal-header {
+    border-bottom: 1px solid #213244;
+    padding-bottom: 16px;
+    margin-bottom: 20px;
+}
+
+.legal-header h1 {
+    margin: 0 0 8px;
+    font-size: 30px;
+}
+
+.legal-subtitle {
+    margin: 0;
+    color: #a9bbcf;
+}
+
+.policy-nav {
+    margin-top: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.policy-nav a {
+    border: 1px solid #2f4257;
+    padding: 6px 10px;
+    text-decoration: none;
+    border-radius: 4px;
+    color: #b8c8d8;
+}
+
+.policy-nav a.active {
+    border-color: #5aa7ff;
+    color: #d9ecff;
+    background: #152233;
+}
+
+.legal-layout {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 20px;
+}
+
+.toc-panel {
+    background: #101823;
+    border: 1px solid #203041;
+    border-radius: 6px;
+    padding: 14px;
+    align-self: start;
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 36px);
+    overflow-y: auto;
+}
+
+.toc-panel h2 {
+    margin: 0 0 10px;
+    font-size: 16px;
+}
+
+.toc-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.toc-list li {
+    margin: 7px 0;
+}
+
+.toc-list li.level-2 {
+    margin-left: 10px;
+}
+
+.toc-list li.level-3 {
+    margin-left: 20px;
+}
+
+.toc-list a {
+    text-decoration: none;
+    color: #99b5d0;
+}
+
+.toc-list a:hover {
+    color: #c0dbf6;
+    text-decoration: underline;
+}
+
+.legal-content {
+    background: #101823;
+    border: 1px solid #203041;
+    border-radius: 6px;
+    padding: 18px 20px;
+}
+
+.legal-content h1,
+.legal-content h2,
+.legal-content h3 {
+    color: #e6f1ff;
+    margin-top: 1.25em;
+}
+
+.legal-content h1 {
+    font-size: 28px;
+}
+
+.legal-content h2 {
+    font-size: 22px;
+}
+
+.legal-content h3 {
+    font-size: 18px;
+}
+
+.legal-content p {
+    margin: 0.55em 0;
+}
+
+.legal-content ul {
+    padding-left: 22px;
+}
+
+.legal-content li {
+    margin: 5px 0;
+}
+
+.legal-content hr {
+    border: 0;
+    border-top: 1px solid #22384e;
+    margin: 20px 0;
+}
+
+.legal-footer {
+    margin-top: 20px;
+    padding-top: 14px;
+    border-top: 1px solid #213244;
+    color: #9ab0c7;
+    font-size: 14px;
+}
+
+@media (max-width: 900px) {
+    .legal-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .toc-panel {
+        position: static;
+        max-height: none;
+    }
+}
