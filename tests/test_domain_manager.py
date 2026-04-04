@@ -174,3 +174,67 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_sets_client_and_budget(self):
+        """Test manager configure helper"""
+        manager = DomainRotationManager()
+
+        configured = manager.configure("pk1_test", "sk1_test", 25.0)
+
+        assert configured is True
+        assert isinstance(manager.api_client, PorkbunAPIClient)
+        assert manager.monthly_budget == 25.0
+        assert manager.get_config()["configured"] is True
+
+    def test_configure_from_env_success(self):
+        """Test environment-based configuration"""
+        manager = DomainRotationManager()
+        env = {
+            "PORKBUN_API_KEY": "pk1_from_env",
+            "PORKBUN_API_SECRET": "sk1_from_env",
+            "DOMAIN_MONTHLY_BUDGET": "42.5",
+        }
+
+        configured = manager.configure_from_env(env)
+
+        assert configured is True
+        assert isinstance(manager.api_client, PorkbunAPIClient)
+        assert manager.monthly_budget == 42.5
+        assert manager.configured_via_env is True
+
+    def test_configure_from_env_invalid_budget_falls_back(self):
+        """Test invalid budget fallback when configuring from env"""
+        manager = DomainRotationManager()
+        env = {
+            "PORKBUN_API_KEY": "pk1_from_env",
+            "PORKBUN_API_SECRET": "sk1_from_env",
+            "DOMAIN_MONTHLY_BUDGET": "not-a-number",
+        }
+
+        configured = manager.configure_from_env(env)
+
+        assert configured is True
+        assert manager.monthly_budget == 50.0
+
+    def test_configure_from_env_missing_credentials(self):
+        """Test configure_from_env returns False without credentials"""
+        manager = DomainRotationManager()
+        env = {"DOMAIN_MONTHLY_BUDGET": "10"}
+
+        configured = manager.configure_from_env(env)
+
+        assert configured is False
+        assert manager.api_client is None
+
+    def test_find_cheap_available_domain_skips_invalid_price(self):
+        """Test invalid price values are ignored safely"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": "not-a-price",
+        }
+        manager = DomainRotationManager(mock_client)
+
+        result = manager.find_cheap_available_domain(max_attempts=1)
+
+        assert result is None

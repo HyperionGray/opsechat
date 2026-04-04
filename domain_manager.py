@@ -2,6 +2,7 @@
 Domain management and API integration
 Supports automated domain purchasing for burner email rotation
 """
+import os
 import requests
 import random
 import string
@@ -134,10 +135,92 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+        self.configured_via_env = False
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+
+    @staticmethod
+    def _coerce_price(price_value) -> Optional[float]:
+        """Convert API price value to a float when possible."""
+        if isinstance(price_value, (int, float)):
+            return float(price_value)
+
+        if isinstance(price_value, str):
+            cleaned = price_value.strip().replace("$", "").replace("€", "")
+            try:
+                return float(cleaned)
+            except ValueError:
+                return None
+
+        return None
+
+    def configure(self, api_key: str, secret_key: str, monthly_budget: float = 50.0) -> bool:
+        """
+        Configure registrar credentials and budget.
+        """
+        if not api_key or not secret_key:
+            raise ValueError("api_key and secret_key are required")
+
+        budget = float(monthly_budget)
+        if budget <= 0:
+            raise ValueError("monthly_budget must be greater than zero")
+
+        self.api_client = PorkbunAPIClient(api_key, secret_key)
+        self.monthly_budget = budget
+        logger.info("Domain rotation manager configured")
+        return True
+
+    def configure_from_env(self, environ: Optional[Dict[str, str]] = None) -> bool:
+        """
+        Configure from environment variables if credentials are present.
+
+        Expected environment variables:
+        - PORKBUN_API_KEY
+        - PORKBUN_API_SECRET
+        - DOMAIN_MONTHLY_BUDGET (optional, default 50.0)
+        """
+        env = environ or os.environ
+        api_key = env.get("PORKBUN_API_KEY", "").strip()
+        secret_key = env.get("PORKBUN_API_SECRET", "").strip()
+
+        if not api_key or not secret_key:
+            return False
+
+        budget_raw = env.get("DOMAIN_MONTHLY_BUDGET", "50.0").strip()
+        try:
+            monthly_budget = float(budget_raw)
+        except ValueError:
+            logger.warning(
+                "Invalid DOMAIN_MONTHLY_BUDGET value '%s'; defaulting to 50.0",
+                budget_raw
+            )
+            monthly_budget = 50.0
+
+        if monthly_budget <= 0:
+            logger.warning(
+                "Non-positive DOMAIN_MONTHLY_BUDGET value '%s'; defaulting to 50.0",
+                budget_raw
+            )
+            monthly_budget = 50.0
+
+        self.configure(api_key, secret_key, monthly_budget)
+        self.configured_via_env = True
+        logger.info("Domain rotation manager configured from environment")
+        return True
+
+    def get_config(self) -> Dict:
+        """Return safe configuration and runtime status."""
+        return {
+            "configured": self.api_client is not None,
+            "configured_via_env": self.configured_via_env,
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "remaining_budget": self.monthly_budget - self.current_spending,
+            "domains_owned": len(self.owned_domains),
+            "active_domain": self.active_domain
+        }
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -168,13 +251,8 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
-                
-                if price <= max_price:
+                price = self._coerce_price(result.get("price"))
+                if price is not None and price <= max_price:
                     return {
                         "domain": domain,
                         "price": price,
@@ -225,24 +303,38 @@ class DomainRotationManager:
         Rotate to a new domain
         Finds and purchases a new cheap domain
         """
+        result = self.rotate_domain_with_result()
+        if result.get("success"):
+            return result.get("domain")
+        return None
+
+    def rotate_domain_with_result(self) -> Dict:
+        """
+        Rotate to a new domain and return a detailed operation result.
+        """
+        if not self.api_client:
+            return {"success": False, "error": "No API client configured"}
+
         # Find cheap domain
         domain_info = self.find_cheap_available_domain()
-        
         if not domain_info:
-            logger.error("Could not find available cheap domain")
-            return None
-        
+            return {"success": False, "error": "Could not find available cheap domain"}
+
         # Purchase domain
         success = self.purchase_domain_if_budget_allows(
             domain_info["domain"], 
             domain_info["price"]
         )
-        
+
         if success:
             self.active_domain = domain_info["domain"]
-            return self.active_domain
-        
-        return None
+            return {
+                "success": True,
+                "domain": self.active_domain,
+                "price": domain_info["price"]
+            }
+
+        return {"success": False, "error": "Purchase failed or budget exceeded"}
     
     def get_active_domain(self) -> Optional[str]:
         """Get currently active domain"""
@@ -264,3 +356,4 @@ class DomainRotationManager:
 
 # Global domain rotation manager
 domain_rotation_manager = DomainRotationManager()
+domain_rotation_manager.configure_from_env()

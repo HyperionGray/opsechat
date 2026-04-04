@@ -100,7 +100,7 @@ The opsechat domain manager is designed to be extensible. Future registrar suppo
 
 ### Via Environment Variables (Advanced)
 
-For container deployments, you can set:
+For container deployments, set these environment variables:
 
 ```bash
 # In docker-compose.yml or quadlet
@@ -109,7 +109,14 @@ Environment=PORKBUN_API_SECRET=sk1_xxxxx
 Environment=DOMAIN_MONTHLY_BUDGET=50.0
 ```
 
-Then modify the runserver.py to read these on startup.
+Opsechat now auto-loads these variables at startup via `domain_manager.py`; no
+`runserver.py` changes are required.
+
+You can verify the values are picked up by visiting:
+
+```
+http://yourservice.onion/{path}/email/config
+```
 
 ## Budget Management
 
