@@ -298,7 +298,7 @@
     </div>
     {% endif %}
     
-    <form method="POST" {% if script_enabled %}id="review-form"{% endif %}>
+    <form method="POST" {% if script_enabled %}id="review-form" action="/{{ path }}/reviews/submit"{% endif %}>
       <div class="form-group">
         <label class="form-label">Rating *</label>
         <div class="rating-input">
@@ -364,91 +364,135 @@
 
 {% if script_enabled %}
 <script>
-$(document).ready(function() {
+document.addEventListener('DOMContentLoaded', function() {
+  var reviewForm = document.getElementById('review-form');
+
   // Auto-refresh reviews every 30 seconds
   setInterval(function() {
     refreshReviews();
   }, 30000);
-  
-  // Handle form submission via AJAX
-  $('#review-form').on('submit', function(e) {
-    e.preventDefault();
-    
-    var formData = $(this).serialize();
-    
-    $.post('/{{ path }}/reviews/submit', formData)
-      .done(function(response) {
-        if (response.success) {
-          // Show success message
-          $('.message').remove();
-          $('#review-form').before('<div class="message success">' + response.message + '</div>');
-          
-          // Clear form
-          $('#review-form')[0].reset();
-          
-          // Refresh reviews
-          refreshReviews();
-        } else {
-          // Show error message
-          $('.message').remove();
-          $('#review-form').before('<div class="message error">' + response.message + '</div>');
-        }
-      })
-      .fail(function() {
-        $('.message').remove();
-        $('#review-form').before('<div class="message error">Error submitting review. Please try again.</div>');
+
+  if (!reviewForm) {
+    return;
+  }
+
+  // Handle form submission via AJAX without requiring jQuery.
+  reviewForm.addEventListener('submit', async function(event) {
+    event.preventDefault();
+
+    var formData = new URLSearchParams(new FormData(reviewForm));
+    try {
+      var submitResponse = await fetch('/{{ path }}/reviews/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+        },
+        body: formData.toString()
       });
+
+      var payload = await submitResponse.json();
+      if (payload.success) {
+        showFormMessage('success', payload.message);
+        reviewForm.reset();
+        await refreshReviews();
+      } else {
+        showFormMessage('error', payload.message);
+      }
+    } catch (error) {
+      showFormMessage('error', 'Error submitting review. Please try again.');
+    }
   });
 });
 
-function refreshReviews() {
-  $.get('/{{ path }}/reviews/list')
-    .done(function(data) {
-      updateReviewsDisplay(data.reviews, data.stats);
-    })
-    .fail(function() {
-      console.log('Failed to refresh reviews');
-    });
+function showFormMessage(type, text) {
+  var form = document.getElementById('review-form');
+  if (!form) {
+    return;
+  }
+
+  var existingMessages = document.querySelectorAll('.review-form .message');
+  existingMessages.forEach(function(messageNode) {
+    messageNode.remove();
+  });
+
+  var messageEl = document.createElement('div');
+  messageEl.className = 'message ' + type;
+  messageEl.textContent = text;
+  form.parentNode.insertBefore(messageEl, form);
+}
+
+async function refreshReviews() {
+  try {
+    var response = await fetch('/{{ path }}/reviews/list');
+    var data = await response.json();
+    updateReviewsDisplay(data.reviews, data.stats);
+  } catch (error) {
+    console.log('Failed to refresh reviews');
+  }
 }
 
 function updateReviewsDisplay(reviews, stats) {
-  // Update stats
-  $('.stat-value').eq(0).text(stats.total);
-  $('.stat-value').eq(1).text(stats.average_rating);
-  
-  // Update rating distribution
+  var statValues = document.querySelectorAll('.stat-value');
+  if (statValues.length >= 2) {
+    statValues[0].textContent = stats.total;
+    statValues[1].textContent = stats.average_rating;
+  }
+
   if (stats.total > 0) {
     for (var rating = 1; rating <= 5; rating++) {
-      var percentage = (stats.rating_distribution[rating] / stats.total * 100);
-      $('.rating-bar').eq(5 - rating).find('.rating-bar-fill').css('width', percentage + '%');
-      $('.rating-bar').eq(5 - rating).find('span').last().text(stats.rating_distribution[rating]);
+      var distributionCount = Number(stats.rating_distribution[rating] || 0);
+      var percentage = (distributionCount / stats.total) * 100;
+      var ratingBar = document.querySelectorAll('.rating-bar')[5 - rating];
+      if (!ratingBar) {
+        continue;
+      }
+      var fill = ratingBar.querySelector('.rating-bar-fill');
+      if (fill) {
+        fill.style.width = percentage + '%';
+      }
+      var spans = ratingBar.querySelectorAll('span');
+      if (spans.length > 0) {
+        spans[spans.length - 1].textContent = distributionCount;
+      }
     }
   }
-  
-  // Update reviews list
+
+  var reviewsContainer = document.getElementById('reviews-list');
+  if (!reviewsContainer) {
+    return;
+  }
+
   var reviewsHtml = '<h2>💬 User Reviews (' + stats.total + ')</h2>';
-  
   if (reviews.length > 0) {
     reviews.forEach(function(review) {
       var stars = '';
       for (var i = 0; i < review.rating; i++) stars += '★';
-      for (var i = review.rating; i < 5; i++) stars += '☆';
-      
+      for (var j = review.rating; j < 5; j++) stars += '☆';
+
       reviewsHtml += '<div class="review-item">';
       reviewsHtml += '<div class="review-header">';
       reviewsHtml += '<div class="review-rating">' + stars + '</div>';
-      reviewsHtml += '<div class="review-meta">' + review.timestamp + ' | User: ' + review.user_id + '</div>';
+      reviewsHtml += '<div class="review-meta">' + escapeHtml(review.timestamp) + ' | User: ' + escapeHtml(review.user_id) + '</div>';
       reviewsHtml += '</div>';
       if (review.text) {
-        reviewsHtml += '<div class="review-text">' + review.text + '</div>';
+        reviewsHtml += '<div class="review-text">' + escapeHtml(review.text) + '</div>';
       }
       reviewsHtml += '</div>';
     });
   } else {
     reviewsHtml += '<div class="no-reviews">No reviews yet. Be the first to share your experience!</div>';
   }
-  
-  $('#reviews-list').html(reviewsHtml);
+
+  reviewsContainer.innerHTML = reviewsHtml;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 </script>
 {% endif %}

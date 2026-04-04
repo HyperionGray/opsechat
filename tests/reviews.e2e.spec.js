@@ -72,6 +72,17 @@ test.describe('Reviews Functionality', () => {
     const submitPayload = await submitResponse.json();
     expect(submitPayload.success).toBe(true);
     expect(submitPayload.message).toContain('Thank you for your review');
+    expect(submitPayload.my_stats).toBeDefined();
+    expect(submitPayload.my_stats.review_count).toBeGreaterThan(0);
+    expect(submitPayload.my_stats.average_rating).toBe(5);
+    expect(submitPayload.my_stats.rating_distribution).toMatchObject({
+      1: 0,
+      2: 0,
+      3: 0,
+      4: 0,
+      5: expect.any(Number),
+    });
+    expect(submitPayload.my_stats.last_review_timestamp).toBeTruthy();
 
     await expect(page.locator('#reviews-list')).toContainText(message);
 
@@ -81,6 +92,10 @@ test.describe('Reviews Functionality', () => {
     expect(insertedReview).toBeDefined();
     expect(insertedReview.rating).toBe(5);
     expect(insertedReview.user_id).toMatch(ANONYMIZED_USER_ID_PATTERN);
+    expect(reviewData.my_stats).toBeDefined();
+    expect(reviewData.my_stats.review_count).toBeGreaterThan(0);
+    expect(reviewData.my_stats.average_rating).toBe(5);
+    expect(reviewData.my_stats.last_review_timestamp).toBeTruthy();
   });
 
   test('should reject invalid AJAX submissions without a rating', async ({ page }) => {

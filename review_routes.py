@@ -1,4 +1,7 @@
 # Review System Routes
+from review_performance import get_user_review_stats
+
+
 def register_review_routes(app, id_generator, get_random_color, add_review, get_reviews, get_review_stats):
     """Register review routes with the Flask app"""
     from flask import render_template, jsonify, request, session
@@ -20,7 +23,7 @@ def register_review_routes(app, id_generator, get_random_color, add_review, get_
             review_text = request.form.get("review_text", "")
             
             if rating and rating.isdigit() and 1 <= int(rating) <= 5:
-                review_id = add_review(session["_id"], rating, review_text)
+                review_id = add_review(session["_id"], int(rating), review_text)
                 message = {
                     'type': 'success',
                     'text': 'Thank you for your review! It has been submitted anonymously.'
@@ -79,11 +82,12 @@ def register_review_routes(app, id_generator, get_random_color, add_review, get_
         review_text = request.form.get("review_text", "")
         
         if rating and rating.isdigit() and 1 <= int(rating) <= 5:
-            review_id = add_review(session["_id"], rating, review_text)
+            review_id = add_review(session["_id"], int(rating), review_text)
             return jsonify({
                 "success": True, 
                 "message": "Thank you for your review! It has been submitted anonymously.",
-                "review_id": review_id
+                "review_id": review_id,
+                "my_stats": get_user_review_stats(session["_id"], get_reviews()),
             })
         else:
             return jsonify({
@@ -100,6 +104,7 @@ def register_review_routes(app, id_generator, get_random_color, add_review, get_
         
         all_reviews = get_reviews()
         stats = get_review_stats()
+        session_user_id = session.get("_id")
         
         # Format reviews for JSON response
         formatted_reviews = []
@@ -114,5 +119,6 @@ def register_review_routes(app, id_generator, get_random_color, add_review, get_
         
         return jsonify({
             "reviews": formatted_reviews,
-            "stats": stats
+            "stats": stats,
+            "my_stats": get_user_review_stats(session_user_id, all_reviews),
         })

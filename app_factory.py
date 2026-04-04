@@ -8,6 +8,7 @@ extracted from runserver.py to improve code organization.
 import os
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
+from review_performance import get_cached_review_stats, invalidate_review_cache
 try:
     from rate_limiter import init_limiter
 except ModuleNotFoundError:
@@ -43,29 +44,14 @@ def create_app():
         return reviews
     
     def get_review_stats():
-        if not reviews:
-            return {
-                "total": 0,
-                "average_rating": 0,
-                "rating_distribution": {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
-            }
-        
-        total = len(reviews)
-        total_rating = sum(review["rating"] for review in reviews)
-        average_rating = round(total_rating / total, 1)
-        
-        rating_distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
-        for review in reviews:
-            rating_distribution[review["rating"]] += 1
-        
-        return {
-            "total": total,
-            "average_rating": average_rating,
-            "rating_distribution": rating_distribution
-        }
+        return get_cached_review_stats(reviews)
     
     def add_review_wrapper(user_id, rating, review_text):
-        return add_review(reviews, user_id, rating, review_text)
+        review = add_review(reviews, user_id, rating, review_text)
+        # Keep compatibility with templates/routes expecting `text`.
+        review["text"] = str(review.get("review_text", "")).strip()
+        invalidate_review_cache()
+        return review["id"]
     
     # Add security headers after every response
     @app.after_request

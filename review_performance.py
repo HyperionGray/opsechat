@@ -12,11 +12,53 @@ _review_stats_cache = None
 _review_stats_cache_time = 0
 _cache_ttl = 60  # Cache for 60 seconds
 
+def _coerce_rating(value):
+    """Convert rating values to validated integers in range [1, 5]."""
+    try:
+        rating = int(value)
+    except (TypeError, ValueError):
+        return None
+    if 1 <= rating <= 5:
+        return rating
+    return None
+
+
+def _normalize_review_text(review):
+    """
+    Support both historical review payloads:
+    - {'text': '...'}
+    - {'review_text': '...'}
+    """
+    text = review.get("text")
+    if text is None:
+        text = review.get("review_text", "")
+    return str(text)
+
+
+def _timestamp_to_sortable(value):
+    """Normalize timestamps to a comparable value for hashing/sorting."""
+    if isinstance(value, datetime.datetime):
+        return value.isoformat()
+    if value is None:
+        return ""
+    return str(value)
+
+
+@lru_cache(maxsize=256)
+def _cached_user_review_count(user_id, reviews_hash, review_user_ids):
+    """
+    Cached helper for user review counts.
+    reviews_hash is included to provide explicit cache invalidation semantics.
+    """
+    return sum(1 for review_user_id in review_user_ids if review_user_id == user_id)
+
+
 def invalidate_review_cache():
     """Invalidate the review statistics cache"""
     global _review_stats_cache, _review_stats_cache_time
     _review_stats_cache = None
     _review_stats_cache_time = 0
+    _cached_user_review_count.cache_clear()
 
 def get_cached_review_stats(reviews):
     """
@@ -41,13 +83,18 @@ def get_cached_review_stats(reviews):
         }
     else:
         total = len(reviews)
-        total_rating = sum(review["rating"] for review in reviews)
-        average_rating = round(total_rating / total, 1)
-        
+        valid_ratings = []
         rating_distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+
         for review in reviews:
-            rating_distribution[review["rating"]] += 1
-        
+            rating = _coerce_rating(review.get("rating"))
+            if rating is None:
+                continue
+            valid_ratings.append(rating)
+            rating_distribution[rating] += 1
+
+        average_rating = round(sum(valid_ratings) / len(valid_ratings), 1) if valid_ratings else 0
+
         stats = {
             "total": total,
             "average_rating": average_rating,
@@ -81,15 +128,65 @@ def optimized_cleanup_old_reviews(reviews, secs_to_live=86400):
     
     return cleaned_reviews
 
-@lru_cache(maxsize=32)
-def get_user_review_count(user_id, reviews_hash):
+def get_user_review_count(user_id, reviews_hash, reviews=None):
     """
     Get review count for a specific user (cached)
-    reviews_hash is used to invalidate cache when reviews change
+    reviews_hash is used to invalidate cache when reviews change.
     """
-    # This would need to be implemented with actual review data
-    # For now, return 0 as placeholder
-    return 0
+    if not user_id or not reviews:
+        return 0
+
+    review_user_ids = tuple(review.get("user_id") for review in reviews)
+    return _cached_user_review_count(user_id, reviews_hash, review_user_ids)
+
+
+def get_user_review_stats(user_id, reviews):
+    """Return per-session anonymous review insights for the current user."""
+    empty_stats = {
+        "review_count": 0,
+        "average_rating": 0,
+        "rating_distribution": {1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
+        "last_review_timestamp": None,
+    }
+    if not user_id or not reviews:
+        return empty_stats
+
+    reviews_hash = create_reviews_hash(reviews)
+    review_count = get_user_review_count(user_id, reviews_hash, reviews=reviews)
+    if review_count == 0:
+        return empty_stats
+
+    user_reviews = [review for review in reviews if review.get("user_id") == user_id]
+    rating_distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+    valid_ratings = []
+    latest_timestamp = None
+
+    for review in user_reviews:
+        rating = _coerce_rating(review.get("rating"))
+        if rating is not None:
+            valid_ratings.append(rating)
+            rating_distribution[rating] += 1
+
+        timestamp = review.get("timestamp")
+        if isinstance(timestamp, datetime.datetime):
+            if latest_timestamp is None or timestamp > latest_timestamp:
+                latest_timestamp = timestamp
+        elif isinstance(timestamp, str):
+            if latest_timestamp is None:
+                latest_timestamp = timestamp
+            elif isinstance(latest_timestamp, str) and timestamp > latest_timestamp:
+                latest_timestamp = timestamp
+
+    average_rating = round(sum(valid_ratings) / len(valid_ratings), 1) if valid_ratings else 0
+    if isinstance(latest_timestamp, datetime.datetime):
+        latest_timestamp = latest_timestamp.isoformat()
+
+    return {
+        "review_count": review_count,
+        "average_rating": average_rating,
+        "rating_distribution": rating_distribution,
+        "last_review_timestamp": latest_timestamp,
+    }
 
 def create_reviews_hash(reviews):
     """
@@ -98,9 +195,19 @@ def create_reviews_hash(reviews):
     if not reviews:
         return hash(())
     
-    # Create hash based on review count and latest timestamp
-    latest_timestamp = max(review["timestamp"] for review in reviews)
-    return hash((len(reviews), latest_timestamp.isoformat()))
+    review_signature = []
+    for review in reviews:
+        review_signature.append(
+            (
+                review.get("id"),
+                review.get("user_id"),
+                _coerce_rating(review.get("rating")),
+                _normalize_review_text(review),
+                _timestamp_to_sortable(review.get("timestamp")),
+            )
+        )
+
+    return hash(tuple(review_signature))
 
 # Performance monitoring for review operations
 class ReviewPerformanceMonitor:

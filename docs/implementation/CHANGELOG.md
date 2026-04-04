@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- Per-session review insights in review JSON APIs (`my_stats`) with:
+  - user review count
+  - user average rating
+  - user rating distribution
+  - timestamp of most recent review
+
+### Fixed
+- Implemented `review_performance.get_user_review_count(...)` instead of returning a placeholder value.
+- Hardened review stats calculations to safely handle malformed or mixed-type ratings.
+- Review hash invalidation now includes review body text, user ID, rating, and timestamp to prevent stale cache collisions.
 
 ### Changed
 - Improved repository structure and documentation organization
