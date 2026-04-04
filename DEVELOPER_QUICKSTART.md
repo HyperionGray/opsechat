@@ -71,7 +71,11 @@ cd /path/to/opsechat
 ./compose-down.sh
 ```
 
-The application container now includes a `/health` healthcheck, and the compose configuration also probes the same endpoint.
+`compose-up.sh` now blocks until both runtime checks pass:
+- `tor` control port responds on `9051`
+- `opsechat` serves `http://127.0.0.1:5000/health`
+
+The application image and compose service both define `/health` checks for deployment visibility.
 
 ## Full test commands already in the repo
 

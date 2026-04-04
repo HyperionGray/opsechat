@@ -33,11 +33,12 @@ Simply run:
 ```
 
 This script will:
-1. Detect whether you have podman-compose or docker-compose
+1. Detect whether you have podman-compose, docker-compose, or docker compose plugin
 2. Build the opsechat container image
 3. Start the Tor daemon
 4. Start the opsechat application
-5. Display status and instructions
+5. Run startup health checks (`tor:9051` and app `/health`)
+6. Display status and follow-up commands
 
 ### Viewing the Onion Address
 
@@ -139,6 +140,16 @@ docker-compose -f container-compose.yml down
 4. **Internal-Only Ports**: Tor control port and SOCKS proxy are only accessible within the container network.
 5. **No Disk Storage**: The opsechat app stores nothing on disk (in-memory only).
 6. **Ephemeral Hidden Services**: Services are created dynamically and destroyed on shutdown.
+
+### Health Checks
+
+The container stack now includes explicit health checks:
+
+- `tor` service health: `nc -z localhost 9051`
+- `opsechat` service health: `curl --fail --silent http://127.0.0.1:5000/health`
+- image-level `HEALTHCHECK` in `containers/Dockerfile` for standalone runtime visibility
+
+`./compose-up.sh` waits for these checks to pass before returning success.
 
 ## Configuration
 

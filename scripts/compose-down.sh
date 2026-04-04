@@ -1,37 +1,18 @@
 #!/bin/bash
-# Script to stop opsechat services with podman-compose or docker-compose
+# Stop opsechat services with the detected compose tool.
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -f "$SCRIPT_DIR/../container-compose.yml" ]; then
-    REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-else
-    REPO_ROOT="$SCRIPT_DIR"
-fi
-COMPOSE_FILE="$REPO_ROOT/container-compose.yml"
+source "$SCRIPT_DIR/compose-common.sh"
 
-# Determine which compose tool is available
-if command -v podman-compose &> /dev/null; then
-    COMPOSE_CMD="podman-compose"
-    echo "[*] Using podman-compose"
-elif command -v docker-compose &> /dev/null; then
-    COMPOSE_CMD="docker-compose"
-    echo "[*] Using docker-compose"
-elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
-    COMPOSE_CMD="docker compose"
-    echo "[*] Using docker compose (plugin)"
-else
-    echo "[!] Error: Neither podman-compose nor docker-compose found."
-    exit 1
-fi
-
+echo "[*] Using $COMPOSE_CMD_LABEL"
 echo "[*] Stopping opsechat services..."
-$COMPOSE_CMD -f "$COMPOSE_FILE" down
+compose down
 
 echo ""
-echo "[✓] All services stopped and removed"
+echo "[OK] All services stopped and removed"
 echo ""
 echo "[*] To remove volumes as well (WARNING: This deletes Tor data), run:"
-echo "    $COMPOSE_CMD -f $COMPOSE_FILE down -v"
+echo "    $COMPOSE_CMD_DISPLAY -f $COMPOSE_FILE down -v"
 echo ""

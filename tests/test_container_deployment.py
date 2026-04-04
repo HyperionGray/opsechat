@@ -262,6 +262,10 @@ class TestScripts:
     def test_install_quadlets_script_exists(self):
         self.assert_script_location('install-quadlets.sh')
 
+    def test_compose_common_script_exists(self):
+        script_path = os.path.join(REPO_DIR, 'scripts', 'compose-common.sh')
+        assert os.path.exists(script_path)
+
 
 class TestReleaseSkeleton:
     """Test the requested release layout exists."""
@@ -299,3 +303,33 @@ class TestDocumentation:
         
         assert 'Docker' in content or 'docker' in content
         assert 'compose-up.sh' in content or 'DOCKER.md' in content
+
+
+class TestComposeScripts:
+    """Validate compose helper script expectations."""
+
+    def test_compose_up_uses_shared_compose_helper(self):
+        path = os.path.join(REPO_DIR, 'scripts', 'compose-up.sh')
+        with open(path) as f:
+            content = f.read()
+
+        assert 'source "$SCRIPT_DIR/compose-common.sh"' in content
+        assert 'compose up -d' in content
+        assert 'compose exec -T opsechat curl --fail --silent http://127.0.0.1:5000/health' in content
+
+    def test_compose_down_uses_shared_compose_helper(self):
+        path = os.path.join(REPO_DIR, 'scripts', 'compose-down.sh')
+        with open(path) as f:
+            content = f.read()
+
+        assert 'source "$SCRIPT_DIR/compose-common.sh"' in content
+        assert 'compose down' in content
+
+    def test_verify_setup_uses_shared_compose_helper(self):
+        path = os.path.join(REPO_DIR, 'scripts', 'verify-setup.sh')
+        with open(path) as f:
+            content = f.read()
+
+        assert 'source "$SCRIPT_DIR/compose-common.sh"' in content
+        assert 'compose ps' in content
+        assert 'compose logs opsechat' in content
