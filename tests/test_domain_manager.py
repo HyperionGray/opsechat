@@ -2,6 +2,7 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, NamecheapAPIClient, DomainRotationManager
@@ -274,8 +275,8 @@ class TestDomainRotationManager:
                 "domain": "active.xyz",
                 "price": 1.99,
                 "provider": "porkbun",
-                "purchased_at": __import__("datetime").datetime.now(),
-                "expires_at": __import__("datetime").datetime.now(),
+                "purchased_at": datetime.now(),
+                "expires_at": datetime.now(),
             }
         ]
 
@@ -287,4 +288,4 @@ class TestDomainRotationManager:
         assert imported_manager.current_spending == 7.5
         assert imported_manager.active_domain == "active.xyz"
         assert len(imported_manager.owned_domains) == 1
-        assert isinstance(imported_manager.owned_domains[0]["purchased_at"], __import__("datetime").datetime)
+        assert isinstance(imported_manager.owned_domains[0]["purchased_at"], datetime)

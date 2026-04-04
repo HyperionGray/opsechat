@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from getpass import getpass
 from domain_manager import DomainRotationManager, PorkbunAPIClient
@@ -54,8 +55,9 @@ def save_config(config):
 def configure_api():
     """Configure API credentials"""
     print("\n=== Domain API Configuration ===\n")
-    print("This tool supports Porkbun API for domain management.")
-    print("You can get API credentials from: https://porkbun.com/account/api\n")
+    print("This tool currently configures Porkbun credentials directly.")
+    print("Namecheap is supported in the core manager API for multi-provider fallback.")
+    print("You can get Porkbun API credentials from: https://porkbun.com/account/api\n")
     
     config = load_config()
     
@@ -120,6 +122,18 @@ def save_manager_state(manager, config):
     save_config(config)
 
 
+def _format_dt(value):
+    """Format datetime-like values loaded from manager state."""
+    if isinstance(value, datetime):
+        return value.strftime('%Y-%m-%d %H:%M')
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value).strftime('%Y-%m-%d %H:%M')
+        except ValueError:
+            return value
+    return "unknown"
+
+
 def list_domains():
     """List owned domains"""
     manager, config = get_manager()
@@ -139,8 +153,9 @@ def list_domains():
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Provider: {provider}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {_format_dt(domain.get('purchased_at'))}")
+        expires = _format_dt(domain.get('expires_at'))
+        print(f"   Expires: {expires.split(' ')[0] if expires != 'unknown' else expires}")
         print()
 
 
@@ -188,6 +203,7 @@ def rotate_domain():
         return
     
     print(f"\nFound: {domain_info['domain']} for ${domain_info['price']}")
+    print(f"Provider: {domain_info.get('provider', manager.primary_provider or 'unknown')}")
     
     confirm = input("\nProceed with purchase? (yes/no): ").strip().lower()
     
@@ -198,7 +214,8 @@ def rotate_domain():
     print("\nPurchasing domain...")
     success = manager.purchase_domain_if_budget_allows(
         domain_info['domain'],
-        domain_info['price']
+        domain_info['price'],
+        provider=domain_info.get('provider')
     )
     
     if success:
@@ -222,6 +239,8 @@ def show_status():
     print(f"  Spent: ${budget_status['current_spending']}")
     print(f"  Remaining: ${budget_status['remaining']}")
     print(f"\nDomains Owned: {budget_status['domains_owned']}")
+    print(f"Providers Configured: {budget_status.get('providers_configured', 0)}")
+    print(f"Primary Provider: {budget_status.get('primary_provider') or 'none'}")
     
     if manager.active_domain:
         print(f"\n✅ Current burner email domain: {manager.active_domain}")
