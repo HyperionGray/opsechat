@@ -2,6 +2,7 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +175,60 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_sets_api_client_and_budget(self):
+        """Configure should initialize API client and budget"""
+        manager = DomainRotationManager()
+        ok = manager.configure(
+            api_key="pk_live_test",
+            api_secret="sk_live_test",
+            monthly_budget=25.0,
+        )
+
+        assert ok is True
+        assert manager.api_client is not None
+        assert manager.monthly_budget == 25.0
+        assert manager.get_config()["api_key_configured"] is True
+        assert manager.get_config()["secret_key_configured"] is True
+
+    def test_load_and_export_state_round_trip_with_datetimes(self):
+        """Persisted ISO datetimes should round-trip to datetime objects"""
+        manager = DomainRotationManager(monthly_budget=20.0)
+        state = {
+            "monthly_budget": 20.0,
+            "current_spending": 4.5,
+            "owned_domains": [
+                {
+                    "domain": "alpha.xyz",
+                    "price": 2.25,
+                    "purchased_at": "2026-01-02T03:04:05",
+                    "expires_at": "2027-01-02T03:04:05",
+                }
+            ],
+            "active_domain": "alpha.xyz",
+        }
+
+        manager.load_state(state)
+        domains = manager.get_owned_domains()
+        assert isinstance(domains[0]["purchased_at"], datetime)
+        assert isinstance(domains[0]["expires_at"], datetime)
+
+        exported = manager.export_state()
+        assert exported["active_domain"] == "alpha.xyz"
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert exported["owned_domains"][0]["purchased_at"].startswith("2026-01-02T03:04:05")
+
+    def test_search_cheap_domains_returns_limited_unique_results(self):
+        """Bulk cheap search returns unique domains and respects limit"""
+        mock_client = Mock(spec=DomainAPIClient)
+        # Always available and cheap; generated name randomness keeps uniqueness.
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": "1.99",
+        }
+        manager = DomainRotationManager(mock_client)
+        results = manager.search_cheap_domains(limit=3)
+
+        assert len(results) == 3
+        assert len({entry["domain"] for entry in results}) == 3
+        assert all(entry["price"] <= 5.0 for entry in results)
