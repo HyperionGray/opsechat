@@ -130,9 +130,9 @@ class TestDockerfile:
         with open(dockerfile_path) as f:
             content = f.read()
         
-        # Key app files should be copied
+        # Key app files should be copied, either explicitly or via wildcard.
         assert 'runserver.py' in content
-        assert 'email_system.py' in content
+        assert 'COPY *.py ./' in content or 'COPY email_system.py' in content
         assert 'templates/' in content
 
 
