@@ -98,6 +98,30 @@ The opsechat domain manager is designed to be extensible. Future registrar suppo
 
 3. Click "Configure"
 
+### Via Domain Rotation CLI
+
+Use the dedicated CLI for local setup and scripted workflows:
+
+```bash
+# Configure API credentials and monthly budget
+python domain_rotation_cli.py config
+
+# Check current status/budget
+python domain_rotation_cli.py status
+
+# Search for available cheap domains
+python domain_rotation_cli.py search
+
+# Purchase and rotate to a newly found domain
+python domain_rotation_cli.py rotate
+
+# List purchased domains
+python domain_rotation_cli.py list
+```
+
+State (current spending, owned domains, active domain) is now persisted in
+`~/.opsechat/domain_config.json` using JSON-safe timestamps.
+
 ### Via Environment Variables (Advanced)
 
 For container deployments, you can set:
@@ -124,12 +148,44 @@ View budget status:
 http://yourservice.onion/{path}/email/config
 ```
 
+Or via CLI:
+```bash
+python domain_rotation_cli.py status
+```
+
 ## Domain Rotation Workflow
 
 1. **Initial Setup**: Configure API and budget
 2. **Generate Burner**: Creates email with current domain
 3. **Auto-Rotate**: When domain is flagged/old, rotate to new domain
 4. **Manual Rotate**: Force rotation via email config page
+
+## Extending to Multiple Registrars
+
+`domain_manager.py` exposes a provider registry API so additional registrar
+clients can be wired in without replacing existing Porkbun support:
+
+```python
+from domain_manager import DomainRotationManager, DomainAPIClient
+
+class ExampleRegistrar(DomainAPIClient):
+    def search_domain(self, domain: str):
+        ...
+    def purchase_domain(self, domain: str, years: int = 1):
+        ...
+    def get_pricing(self, tld: str):
+        ...
+
+manager = DomainRotationManager()
+manager.add_api_client("example", ExampleRegistrar("api-key"), make_default=True)
+manager.set_active_api_client("example")
+```
+
+For safe dry-runs during integration tests:
+
+```python
+manager.set_test_mode(True)  # Simulates purchases without registrar charges
+```
 
 ## Security Considerations
 
