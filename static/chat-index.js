@@ -12,6 +12,11 @@ document.getElementById('createRoomBtn').addEventListener('click', async functio
         });
 
         if (!response.ok) {
+            if (response.status === 429) {
+                const payload = await response.json().catch(() => ({}));
+                const wait = payload.retry_after_seconds || response.headers.get('Retry-After');
+                throw new Error(`Rate limit exceeded. Try again in ${wait || '?'} seconds.`);
+            }
             throw new Error('Failed to create room');
         }
 

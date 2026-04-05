@@ -11,10 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- Chat rate-limit status endpoint: `GET /chat/rate-limit-status`
+- Standardized 429 API contract for chat write endpoints with `Retry-After` header and structured JSON payload
 
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- Frontend chat error handling now surfaces rate-limit wait times to users
+- Repository cleanup removed stale artifact files (`Dockerfile~HEAD`, `docker-compose.yml~HEAD`, `.bish-index` trackers)
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022

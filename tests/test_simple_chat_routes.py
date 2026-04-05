@@ -158,6 +158,23 @@ class TestChatRoutes:
         assert "room_id" in data
         assert data["room_url"].startswith("/chat/room/")
 
+    def test_create_room_rate_limit_response_includes_retry_metadata(self, client):
+        # /chat/create is limited to 3/minute in this app.
+        for _ in range(3):
+            ok = client.post("/chat/create")
+            assert ok.status_code == 200
+
+        blocked = client.post("/chat/create")
+        assert blocked.status_code == 429
+        assert blocked.headers.get("Retry-After") is not None
+
+        data = blocked.get_json()
+        assert data["error_code"] == "RATE_LIMIT_EXCEEDED"
+        assert data["endpoint"] == "chat_create"
+        assert data["retry_after_seconds"] >= 1
+        assert data["limit"]["max_requests"] == 3
+        assert data["limit"]["window_seconds"] == 60
+
     def test_create_room_id_unique(self, client):
         r1 = client.post("/chat/create").get_json()["room_id"]
         r2 = client.post("/chat/create").get_json()["room_id"]
@@ -274,6 +291,31 @@ class TestDMRoutes:
         )
         assert response.status_code == 400
 
+    def test_send_dm_rate_limit_response_includes_retry_metadata(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        for _ in range(5):
+            ok = client.post(
+                "/chat/dm/send",
+                json={"room_id": room_id, "message": "hello"},
+                content_type="application/json",
+            )
+            assert ok.status_code == 200
+
+        blocked = client.post(
+            "/chat/dm/send",
+            json={"room_id": room_id, "message": "blocked"},
+            content_type="application/json",
+        )
+        assert blocked.status_code == 429
+        assert blocked.headers.get("Retry-After") is not None
+
+        data = blocked.get_json()
+        assert data["error_code"] == "RATE_LIMIT_EXCEEDED"
+        assert data["endpoint"] == "dm_send"
+        assert data["retry_after_seconds"] >= 1
+        assert data["limit"]["max_requests"] == 5
+        assert data["limit"]["window_seconds"] == 60
+
     def test_view_dm_success(self, client):
         room_id = client.post("/chat/create").get_json()["room_id"]
         dm_id = client.post(
@@ -307,6 +349,39 @@ class TestDMRoutes:
 
         response = client.get(f"/chat/dm/{dm_id}")
         assert response.status_code == 404
+
+
+class TestRateLimitStatusEndpoint:
+    def test_rate_limit_status_returns_all_limit_buckets(self, client):
+        response = client.get("/chat/rate-limit-status")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert "timestamp" in data
+        assert "limits" in data
+        limits = data["limits"]
+        for endpoint in ("chat_create", "chat_message", "dm_send"):
+            assert endpoint in limits
+            bucket = limits[endpoint]
+            assert bucket["max_requests"] >= 1
+            assert bucket["window_seconds"] >= 1
+            assert bucket["used"] >= 0
+            assert bucket["remaining"] >= 0
+            assert isinstance(bucket["limited"], bool)
+            assert bucket["retry_after_seconds"] >= 0
+
+    def test_rate_limit_status_reflects_usage(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        post_resp = client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "count me"},
+            content_type="application/json",
+        )
+        assert post_resp.status_code == 200
+
+        status = client.get("/chat/rate-limit-status")
+        assert status.status_code == 200
+        limits = status.get_json()["limits"]
+        assert limits["chat_message"]["used"] >= 1
 
 
 # ---------------------------------------------------------------------------

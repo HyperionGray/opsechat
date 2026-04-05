@@ -135,6 +135,63 @@ POST /chat/create
 Response: {"success": true, "room_id": "...", "room_url": "/chat/room/..."}
 ```
 
+#### Rate Limit Status
+```
+GET /chat/rate-limit-status
+Response:
+{
+  "limits": {
+    "chat_create": {
+      "max_requests": 3,
+      "window_seconds": 60,
+      "used": 0,
+      "remaining": 3,
+      "limited": false,
+      "retry_after_seconds": 0
+    },
+    "chat_message": {
+      "max_requests": 30,
+      "window_seconds": 60,
+      "used": 0,
+      "remaining": 30,
+      "limited": false,
+      "retry_after_seconds": 0
+    },
+    "dm_send": {
+      "max_requests": 5,
+      "window_seconds": 60,
+      "used": 0,
+      "remaining": 5,
+      "limited": false,
+      "retry_after_seconds": 0
+    }
+  },
+  "timestamp": "2026-04-05T03:02:03.007000+00:00"
+}
+```
+
+#### 429 Rate-Limit Response Contract
+When a write endpoint is throttled (`/chat/create`, `/chat/room/<id>/messages` POST, `/chat/dm/send`), the API now returns:
+
+```
+Status: 429
+Retry-After: <seconds>
+{
+  "error": "Rate limit exceeded.",
+  "error_code": "RATE_LIMIT_EXCEEDED",
+  "endpoint": "chat_message",
+  "message": "Too many requests for message sending. Try again in 12 seconds.",
+  "retry_after_seconds": 12,
+  "limit": {
+    "max_requests": 30,
+    "window_seconds": 60
+  }
+}
+```
+
+This contract is intended for both browser UI and automation clients so they can
+display consistent backoff guidance without parsing free-form strings.
+
 #### Get/Post Messages
 ```
 GET  /chat/room/<room_id>/messages

@@ -240,7 +240,23 @@ async function sendMessage() {
             input.value = '';
             await pollMessages();
         } else {
-            showStatus('Error sending message');
+            let errorMessage = 'Error sending message';
+            try {
+                const data = await response.json();
+                if (response.status === 429) {
+                    const retryAfter = data.retry_after_seconds || response.headers.get('Retry-After');
+                    errorMessage = retryAfter
+                        ? `Rate limit exceeded. Try again in ${retryAfter}s.`
+                        : 'Rate limit exceeded. Please wait and try again.';
+                } else if (data && data.error) {
+                    errorMessage = data.error;
+                } else if (data && data.message) {
+                    errorMessage = data.message;
+                }
+            } catch (e) {
+                // Keep generic message when response body isn't JSON.
+            }
+            showStatus(errorMessage, 4000);
         }
     } catch (error) {
         showStatus('Error: ' + error.message);
