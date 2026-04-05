@@ -217,6 +217,15 @@ class TestQuadletFiles:
         
         assert 'After=opsechat-tor' in content
         assert 'Requires=opsechat-tor' in content
+
+    def test_app_container_has_healthcheck(self):
+        path = self.get_quadlet_path('opsechat-app.container')
+        with open(path) as f:
+            content = f.read()
+
+        assert 'HealthCmd=/usr/bin/curl --fail --silent http://127.0.0.1:5000/health' in content
+        assert 'HealthInterval=' in content
+        assert 'HealthTimeout=' in content
     
     def test_containers_use_same_network(self):
         for quadlet in ['opsechat-tor.container', 'opsechat-app.container']:
@@ -261,6 +270,14 @@ class TestScripts:
     
     def test_install_quadlets_script_exists(self):
         self.assert_script_location('install-quadlets.sh')
+
+    def test_verify_setup_checks_app_health_endpoint(self):
+        path = os.path.join(REPO_DIR, 'scripts', 'verify-setup.sh')
+        with open(path) as f:
+            content = f.read()
+
+        assert 'Checking opsechat app health endpoint' in content
+        assert 'http://127.0.0.1:5000/health' in content
 
 
 class TestReleaseSkeleton:

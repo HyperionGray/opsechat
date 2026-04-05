@@ -37,7 +37,8 @@ This script will:
 2. Build the opsechat container image
 3. Start the Tor daemon
 4. Start the opsechat application
-5. Display status and instructions
+5. Wait until the app `/health` endpoint is reachable from inside the container
+6. Display status and instructions
 
 ### Viewing the Onion Address
 
@@ -67,8 +68,19 @@ Run the verification script to check that everything is working:
 This will check:
 - Container status
 - Tor service health
+- Application `/health` endpoint health
 - Network connectivity
 - Hidden service address
+
+### Health Checks
+
+Health checks are enabled at multiple layers:
+
+- `tor` service health check verifies Tor control port `9051`
+- `opsechat` service health check verifies `http://127.0.0.1:5000/health`
+- Container image `HEALTHCHECK` in `containers/Dockerfile` validates `/health`
+
+This gives both compose-level startup gating and runtime liveness visibility.
 
 ### Viewing Logs
 
@@ -129,7 +141,7 @@ docker-compose -f container-compose.yml down
 - The opsechat app connects to the Tor daemon via the control port (9051)
 - **No ports are exposed to the host by default for security**
 - Access is **only through the Tor hidden service** (.onion address)
-- For debugging/development, you can uncomment the port mapping in docker-compose.yml
+- For debugging/development, you can uncomment the port mapping in `container-compose.yml`
 
 ### Security Considerations
 

@@ -31,6 +31,13 @@ Environment=PYTHONUNBUFFERED=1
 # Join the opsechat network (same as Tor container)
 Network=opsechat-network
 
+# Health check: verify local app endpoint is responding
+HealthCmd=/usr/bin/curl --fail --silent http://127.0.0.1:5000/health
+HealthInterval=15s
+HealthTimeout=5s
+HealthRetries=6
+HealthStartPeriod=30s
+
 # ⚠️ SECURITY WARNING: NO PORTS EXPOSED BY DEFAULT ⚠️
 # Access is only via Tor hidden service for anonymity.
 # 

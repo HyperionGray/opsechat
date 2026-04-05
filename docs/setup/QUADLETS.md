@@ -131,6 +131,7 @@ Key settings:
 - Connects to Tor via internal network
 - No ports exposed to host (Tor-only access)
 - Environment variables for Tor connection
+- Health checks verify the local `/health` endpoint
 - Depends on Tor container being healthy
 
 ## Managing Services

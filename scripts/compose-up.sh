@@ -51,6 +51,24 @@ else
 fi
 
 echo ""
+echo "[*] Waiting for /health endpoint to report ready..."
+APP_HEALTHY=0
+for i in $(seq 1 24); do
+    if $COMPOSE_CMD -f "$COMPOSE_FILE" exec -T opsechat curl --fail --silent http://127.0.0.1:5000/health >/dev/null 2>&1; then
+        APP_HEALTHY=1
+        break
+    fi
+    sleep 5
+done
+
+if [ "$APP_HEALTHY" -eq 1 ]; then
+    echo "[✓] Opsechat /health endpoint is ready"
+else
+    echo "[!] Opsechat /health endpoint did not become ready in time"
+    echo "[!] Check logs with: $COMPOSE_CMD -f $COMPOSE_FILE logs opsechat"
+fi
+
+echo ""
 echo "[*] To view the onion address, run:"
 echo "    $COMPOSE_CMD -f $COMPOSE_FILE logs opsechat"
 echo ""
