@@ -167,7 +167,7 @@ class TestDomainRotationManager:
         assert config["monthly_budget"] == 25.0
         assert config["has_api_key"] is True
         assert config["has_secret_key"] is True
-        assert config["api_key_suffix"] == "key"
+        assert config["api_key_suffix"] == "_key"
 
         config_with_secrets = manager.get_config(include_secrets=True)
         assert config_with_secrets["api_key"] == "pk_test_key"
