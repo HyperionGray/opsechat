@@ -11,10 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- End-to-end email domain configuration flow in the web UI:
+  - Added `DomainRotationManager.configure()` and `get_config()` for in-memory API setup
+  - Added `/email/domain/rotate` route integration from the configuration page
+  - Added state export/import helpers for CLI-safe JSON persistence of domain dates
+- New automated tests:
+  - `tests/test_email_routes.py` for email configuration and domain rotation route behavior
+  - Extended `tests/test_domain_manager.py` coverage for configuration and state roundtrip
 
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- Fixed domain pricing parsing to safely handle string/currency values and invalid inputs
+- Updated `domain_rotation_cli.py` to persist and reload domain manager state without datetime serialization errors
+- Cleaned repository by removing tracked stale artifacts and backup files:
+  - `.bish-index` files across directories
+  - `Dockerfile~HEAD`
+  - `docker-compose.yml~HEAD`
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022
