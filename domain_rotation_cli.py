@@ -17,9 +17,10 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from getpass import getpass
-from domain_manager import PorkbunAPIClient, DomainRotationManager
+from domain_manager import DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
@@ -54,8 +55,8 @@ def save_config(config):
 def configure_api():
     """Configure API credentials"""
     print("\n=== Domain API Configuration ===\n")
-    print("This tool supports Porkbun API for domain management.")
-    print("You can get API credentials from: https://porkbun.com/account/api\n")
+    print("This tool supports Porkbun API and mock mode for local testing.")
+    print("Porkbun API docs: https://porkbun.com/account/api\n")
     
     config = load_config()
     
@@ -64,6 +65,8 @@ def configure_api():
         print(f"  API Key: {'*' * 20}{config['api_key'][-4:]}")
     else:
         print("  API Key: Not configured")
+    mode = config.get("provider", "porkbun")
+    print(f"  Provider: {mode}")
     
     if config.get('monthly_budget'):
         print(f"  Monthly Budget: ${config['monthly_budget']}")
@@ -71,14 +74,29 @@ def configure_api():
         print("  Monthly Budget: Not configured")
     
     print("\nEnter new values (or press Enter to keep current):\n")
+
+    provider = input("Provider [porkbun/mock] (default: porkbun): ").strip().lower()
+    if provider in {"porkbun", "mock"}:
+        config["provider"] = provider
+    elif "provider" not in config:
+        config["provider"] = "porkbun"
+    provider = config.get("provider", "porkbun")
     
-    api_key = input("Porkbun API Key: ").strip()
-    if api_key:
-        config['api_key'] = api_key
-    
-    api_secret = getpass("Porkbun API Secret: ").strip()
-    if api_secret:
-        config['api_secret'] = api_secret
+    if provider == "mock":
+        mock_key = input("Mock API Key (optional): ").strip()
+        if mock_key:
+            config['api_key'] = mock_key
+        if "api_secret" in config:
+            config.pop("api_secret")
+        print("Mock mode selected: no secret/API calls will be used.")
+    else:
+        api_key = input("Porkbun API Key: ").strip()
+        if api_key:
+            config['api_key'] = api_key
+        
+        api_secret = getpass("Porkbun API Secret: ").strip()
+        if api_secret:
+            config['api_secret'] = api_secret
     
     budget = input("Monthly Budget (USD) [default: 50]: ").strip()
     if budget:
@@ -96,23 +114,27 @@ def configure_api():
 def get_manager():
     """Get configured domain manager"""
     config = load_config()
-    
-    if not config.get('api_key') or not config.get('api_secret'):
+    provider = config.get("provider", "porkbun")
+    manager = DomainRotationManager(monthly_budget=config.get('monthly_budget', 50.0))
+
+    try:
+        manager.configure(
+            api_key=config.get("api_key", ""),
+            secret_key=config.get("api_secret", ""),
+            monthly_budget=config.get("monthly_budget", 50.0),
+            provider=provider,
+            use_mock=(provider == "mock"),
+        )
+    except ValueError:
         print("❌ Error: API credentials not configured.")
         print("Run: python domain_rotation_cli.py config")
         sys.exit(1)
-    
-    client = PorkbunAPIClient(config['api_key'], config['api_secret'])
-    manager = DomainRotationManager(
-        api_client=client,
-        monthly_budget=config.get('monthly_budget', 50.0)
-    )
     
     # Load saved state
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.set_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,9 +144,22 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = manager.get_owned_domains()
     config['active_domain'] = manager.active_domain
+    config['provider'] = manager.get_config().get("provider", config.get("provider", "porkbun"))
     save_config(config)
+
+
+def _parse_display_datetime(value):
+    """Convert persisted datetime values to datetime for formatting."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
 
 
 def list_domains():
@@ -144,8 +179,12 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        purchased_at = _parse_display_datetime(domain.get('purchased_at'))
+        expires_at = _parse_display_datetime(domain.get('expires_at'))
+        purchased_label = purchased_at.strftime('%Y-%m-%d %H:%M') if purchased_at else str(domain.get('purchased_at', 'unknown'))
+        expires_label = expires_at.strftime('%Y-%m-%d') if expires_at else str(domain.get('expires_at', 'unknown'))
+        print(f"   Purchased: {purchased_label}")
+        print(f"   Expires: {expires_label}")
         print()
 
 

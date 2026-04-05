@@ -50,6 +50,24 @@ Porkbun offers cheap domains and a simple API, making it ideal for burner email 
    - System will validate credentials
    - Check budget status display
 
+#### Local Testing Mode (No Real Purchases)
+
+If you want to test domain rotation workflows without calling external APIs or
+buying real domains, use **mock provider mode** in `domain_rotation_cli.py`.
+
+```bash
+python domain_rotation_cli.py config
+# choose provider: mock
+```
+
+Mock mode behavior:
+- Uses deterministic in-memory pricing for common TLDs
+- Simulates domain availability checks and purchases
+- Never performs network requests
+- Never charges registrar accounts
+
+This mode is recommended for local development, CI experiments, and demos.
+
 #### Recommended Domain Extensions
 
 **Cheapest Options:**
@@ -224,6 +242,11 @@ Enterprise-focused with comprehensive API.
 - Allow 15-30 minutes for DNS propagation
 - Check MX record configuration
 - Verify email server settings
+
+**"CLI list fails on purchased_at/strftime"**
+- Use latest code with state normalization support
+- Existing persisted state is accepted in ISO8601 format
+- Re-run `python domain_rotation_cli.py status` after upgrading to verify state loads
 
 ### Cost Management
 

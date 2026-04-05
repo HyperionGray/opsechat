@@ -2,9 +2,10 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, DomainRotationManager, MockDomainAPIClient
 )
 
 
@@ -174,3 +175,50 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_mock_provider(self):
+        """Test configuring manager in mock mode"""
+        manager = DomainRotationManager()
+
+        result = manager.configure(
+            api_key="mock_12345",
+            provider="mock",
+            use_mock=True,
+            monthly_budget=12.5
+        )
+
+        assert result["success"] is True
+        assert result["provider"] == "mock"
+        assert isinstance(manager.api_client, MockDomainAPIClient)
+        assert manager.get_config()["configured"] is True
+        assert manager.get_config()["provider"] == "mock"
+        assert manager.monthly_budget == 12.5
+
+    def test_configure_porkbun_requires_secret(self):
+        """Test porkbun mode rejects incomplete credentials"""
+        manager = DomainRotationManager()
+
+        with pytest.raises(ValueError):
+            manager.configure(api_key="pk_test", secret_key="", provider="porkbun")
+
+    def test_owned_domain_state_roundtrip_serialization(self):
+        """Ensure persisted domain records survive serialize/deserialize cycle"""
+        manager = DomainRotationManager()
+        purchased_at = datetime(2026, 4, 5, 12, 30, 0)
+        expires_at = datetime(2027, 4, 5, 12, 30, 0)
+
+        manager.set_owned_domains([
+            {
+                "domain": "abc123.xyz",
+                "price": "$1.99",
+                "purchased_at": purchased_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
+            }
+        ])
+
+        serialized = manager.get_owned_domains()
+        assert len(serialized) == 1
+        assert serialized[0]["domain"] == "abc123.xyz"
+        assert serialized[0]["price"] == 1.99
+        assert serialized[0]["purchased_at"] == purchased_at.isoformat()
+        assert serialized[0]["expires_at"] == expires_at.isoformat()

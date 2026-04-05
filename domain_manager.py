@@ -6,13 +6,14 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from abc import ABC, abstractmethod
+from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
 
-class DomainAPIClient:
+class DomainAPIClient(ABC):
     """
     Base class for domain registrar API clients
     """
@@ -21,14 +22,17 @@ class DomainAPIClient:
         self.api_key = api_key
         self.api_secret = api_secret
     
+    @abstractmethod
     def search_domain(self, domain: str) -> Dict:
         """Search if domain is available"""
         raise NotImplementedError
     
+    @abstractmethod
     def purchase_domain(self, domain: str, years: int = 1) -> Dict:
         """Purchase domain"""
         raise NotImplementedError
     
+    @abstractmethod
     def get_pricing(self, tld: str) -> Dict:
         """Get pricing for TLD"""
         raise NotImplementedError
@@ -121,6 +125,75 @@ class PorkbunAPIClient(DomainAPIClient):
         return []
 
 
+class MockDomainAPIClient(DomainAPIClient):
+    """
+    In-memory mock registrar client for local testing.
+    Never performs network requests or real purchases.
+    """
+
+    _BASE_PRICES = {
+        "xyz": 0.99,
+        "club": 1.99,
+        "online": 2.99,
+        "site": 2.49,
+        "website": 2.99,
+        "com": 8.99,
+    }
+
+    def __init__(self, api_key: str = "mock-key", api_secret: Optional[str] = None):
+        super().__init__(api_key=api_key, api_secret=api_secret)
+        self._purchased: List[str] = []
+
+    def _price_for_tld(self, tld: str) -> float:
+        return self._BASE_PRICES.get(tld.lower(), 4.99)
+
+    def search_domain(self, domain: str) -> Dict:
+        tld = domain.rsplit(".", 1)[-1].lower()
+        # Keep behavior deterministic-ish while looking realistic:
+        # reserved domains look unavailable; others available.
+        blocked_prefixes = ("admin", "mail", "root", "support")
+        label = domain.split(".", 1)[0].lower()
+        available = not label.startswith(blocked_prefixes) and domain not in self._purchased
+
+        return {
+            "domain": domain,
+            "available": available,
+            "price": self._price_for_tld(tld),
+            "currency": "USD",
+            "mock": True,
+        }
+
+    def purchase_domain(self, domain: str, years: int = 1) -> Dict:
+        if domain in self._purchased:
+            return {
+                "success": False,
+                "domain": domain,
+                "message": "Domain already purchased in mock mode",
+                "order_id": None,
+                "mock": True,
+            }
+
+        self._purchased.append(domain)
+        return {
+            "success": True,
+            "domain": domain,
+            "message": f"Mock purchase successful for {years} year(s)",
+            "order_id": f"mock-{len(self._purchased):06d}",
+            "mock": True,
+        }
+
+    def get_pricing(self, tld: str) -> Dict:
+        price = self._price_for_tld(tld)
+        return {
+            "tld": tld,
+            "registration": f"{price:.2f}",
+            "renewal": f"{(price * 1.5):.2f}",
+            "transfer": f"{price:.2f}",
+            "currency": "USD",
+            "mock": True,
+        }
+
+
 class DomainRotationManager:
     """
     Manage domain rotation for burner emails
@@ -134,10 +207,116 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+        self._provider = "custom" if api_client else "unconfigured"
+        self._api_key_preview: Optional[str] = self._mask_key(
+            getattr(api_client, "api_key", None)
+        ) if api_client else None
     
-    def set_api_client(self, api_client: DomainAPIClient):
+    def set_api_client(self, api_client: DomainAPIClient, provider: str = "custom"):
         """Set the domain API client"""
         self.api_client = api_client
+        self._provider = provider
+        self._api_key_preview = self._mask_key(getattr(api_client, "api_key", None))
+
+    @staticmethod
+    def _mask_key(key: Optional[str]) -> Optional[str]:
+        if not key:
+            return None
+        key = str(key)
+        if len(key) <= 4:
+            return "*" * len(key)
+        return f"{'*' * (len(key) - 4)}{key[-4:]}"
+
+    @staticmethod
+    def _parse_datetime(value: Any) -> Optional[datetime]:
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _serialize_datetime(value: Any) -> Optional[str]:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, str):
+            return value
+        return None
+
+    @staticmethod
+    def _coerce_price(value: Any, default: float = 999.0) -> float:
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            normalized = value.replace("$", "").replace("€", "").strip()
+            try:
+                return float(normalized)
+            except ValueError:
+                return default
+        return default
+
+    def configure(self, api_key: str = "", secret_key: str = "",
+                  monthly_budget: float = 50.0, provider: str = "porkbun",
+                  use_mock: bool = False) -> Dict:
+        """
+        Configure domain API integration.
+        Supports real Porkbun credentials or mock mode for testing.
+        """
+        self.monthly_budget = float(monthly_budget)
+
+        if use_mock or provider.lower() == "mock":
+            self.set_api_client(MockDomainAPIClient(api_key or "mock-key"), provider="mock")
+            return {
+                "success": True,
+                "provider": "mock",
+                "monthly_budget": self.monthly_budget,
+                "message": "Configured mock registrar mode",
+            }
+
+        if not api_key or not secret_key:
+            raise ValueError("API key and secret key are required for Porkbun configuration")
+
+        self.set_api_client(PorkbunAPIClient(api_key, secret_key), provider="porkbun")
+        return {
+            "success": True,
+            "provider": "porkbun",
+            "monthly_budget": self.monthly_budget,
+            "message": "Configured Porkbun API client",
+        }
+
+    def get_config(self) -> Dict:
+        """Get non-sensitive configuration status."""
+        return {
+            "configured": self.api_client is not None,
+            "provider": self._provider,
+            "api_key_preview": self._api_key_preview,
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "active_domain": self.active_domain,
+            "domains_owned": len(self.owned_domains),
+        }
+
+    def set_owned_domains(self, domains: List[Dict]):
+        """
+        Load owned domains from persisted state.
+        Accepts datetime objects or ISO8601 strings for dates.
+        """
+        normalized: List[Dict] = []
+        for record in domains or []:
+            if not isinstance(record, dict):
+                continue
+            purchased_at = self._parse_datetime(record.get("purchased_at")) or datetime.now()
+            expires_at = self._parse_datetime(record.get("expires_at")) or (purchased_at + timedelta(days=365))
+            normalized.append({
+                "domain": record.get("domain"),
+                "price": self._coerce_price(record.get("price"), default=0.0),
+                "purchased_at": purchased_at,
+                "expires_at": expires_at,
+            })
+        self.owned_domains = normalized
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -168,11 +347,7 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
+                price = self._coerce_price(result.get("price", 999))
                 
                 if price <= max_price:
                     return {
@@ -190,6 +365,10 @@ class DomainRotationManager:
         """
         if not self.api_client:
             logger.error("No API client configured")
+            return False
+        price = self._coerce_price(price, default=float("inf"))
+        if price == float("inf"):
+            logger.error(f"Invalid price for domain purchase: {price}")
             return False
         
         # Check budget
@@ -250,7 +429,15 @@ class DomainRotationManager:
     
     def get_owned_domains(self) -> List[Dict]:
         """Get list of owned domains"""
-        return self.owned_domains
+        return [
+            {
+                "domain": d.get("domain"),
+                "price": d.get("price"),
+                "purchased_at": self._serialize_datetime(d.get("purchased_at")),
+                "expires_at": self._serialize_datetime(d.get("expires_at")),
+            }
+            for d in self.owned_domains
+        ]
     
     def get_budget_status(self) -> Dict:
         """Get budget information"""
