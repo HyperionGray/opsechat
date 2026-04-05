@@ -286,6 +286,25 @@ After rotating domains, update your email configuration:
 - Prevents purchases that would exceed budget
 - Resets monthly (manual reset required)
 
+### State Persistence Improvements
+
+Domain rotation state persistence is now more robust and maintenance-friendly:
+
+- Purchased domain timestamps are stored in JSON-safe ISO8601 format
+- Saved state is normalized back into datetime objects on load
+- Expired domains are automatically pruned from persisted state when status is checked
+- Active domain is repaired automatically if the previous active domain has expired
+
+New CLI maintenance commands:
+
+```bash
+# Remove expired domains from saved local state
+python domain_rotation_cli.py prune-expired
+
+# Reset monthly spending counter without deleting owned-domain history
+python domain_rotation_cli.py reset-budget
+```
+
 ---
 
 ## 🚀 Production Deployment

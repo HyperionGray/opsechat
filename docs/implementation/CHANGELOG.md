@@ -11,10 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- Domain rotation state maintenance commands in CLI:
+  - `prune-expired` to remove expired domains from persisted state
+  - `reset-budget` to reset monthly spending counter without deleting history
 
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- `DomainRotationManager` now includes configuration and state APIs used by routes:
+  - `configure(...)`, `get_config()`, `export_state()`, `load_state(...)`
+- Domain rotation now returns structured results (`success`, `domain`/`error`) for safer API handling
+- Domain state persistence now normalizes datetime fields for JSON-safe save/load
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022
