@@ -121,35 +121,107 @@ def register_email_routes(app, id_generator, get_random_color):
         if "_id" not in session:
             session["_id"] = id_generator()
             session["color"] = get_random_color()
-        
+
         if request.method == "POST":
-            # Handle configuration updates
-            config_data = {
-                'smtp_server': request.form.get('smtp_server', ''),
-                'smtp_port': request.form.get('smtp_port', '587'),
-                'smtp_username': request.form.get('smtp_username', ''),
-                'smtp_password': request.form.get('smtp_password', ''),
-                'imap_server': request.form.get('imap_server', ''),
-                'imap_port': request.form.get('imap_port', '993'),
-                'imap_username': request.form.get('imap_username', ''),
-                'imap_password': request.form.get('imap_password', ''),
-                'porkbun_api_key': request.form.get('porkbun_api_key', ''),
-                'porkbun_secret_key': request.form.get('porkbun_secret_key', ''),
-                'domain_budget': request.form.get('domain_budget', '10')
+            action = request.form.get("action", "").strip()
+            message = None
+
+            try:
+                if action == "configure_smtp":
+                    smtp_server = request.form.get("smtp_server", "").strip()
+                    smtp_port = int(request.form.get("smtp_port", "587"))
+                    smtp_username = request.form.get("smtp_username", "").strip()
+                    smtp_password = request.form.get("smtp_password", "").strip()
+                    use_tls = request.form.get("use_tls") in {"on", "true", "1"}
+
+                    success = transport_manager.configure_smtp(
+                        smtp_server=smtp_server,
+                        smtp_port=smtp_port,
+                        username=smtp_username,
+                        password=smtp_password,
+                        use_tls=use_tls,
+                    )
+                    if success:
+                        message = {"type": "success", "text": "SMTP configuration saved successfully"}
+                    else:
+                        message = {"type": "error", "text": "SMTP configuration failed. Check server and credentials."}
+
+                elif action == "configure_imap":
+                    imap_server = request.form.get("imap_server", "").strip()
+                    imap_port = int(request.form.get("imap_port", "993"))
+                    imap_username = request.form.get("imap_username", "").strip()
+                    imap_password = request.form.get("imap_password", "").strip()
+                    use_ssl = request.form.get("use_ssl") in {"on", "true", "1"}
+
+                    success = transport_manager.configure_imap(
+                        imap_server=imap_server,
+                        imap_port=imap_port,
+                        username=imap_username,
+                        password=imap_password,
+                        use_ssl=use_ssl,
+                    )
+                    if success:
+                        message = {"type": "success", "text": "IMAP configuration saved successfully"}
+                    else:
+                        message = {"type": "error", "text": "IMAP configuration failed. Check server and credentials."}
+
+                elif action == "configure_domain_api":
+                    api_key = request.form.get("api_key", "").strip()
+                    api_secret = request.form.get("api_secret", "").strip()
+                    monthly_budget = float(request.form.get("monthly_budget", "50"))
+                    domain_rotation_manager.configure(
+                        api_key=api_key,
+                        secret_key=api_secret,
+                        monthly_budget=monthly_budget,
+                    )
+                    message = {"type": "success", "text": "Domain API configuration saved successfully"}
+                else:
+                    message = {"type": "error", "text": "Unknown configuration action"}
+            except Exception as exc:
+                message = {"type": "error", "text": f"Configuration failed: {exc}"}
+
+            session["email_config_message"] = message
+            return redirect(url_for("email_config", url_addition=url_addition))
+
+        message = session.pop("email_config_message", None)
+        config_status = transport_manager.is_configured()
+        budget_status = domain_rotation_manager.get_budget_status()
+        active_domain = domain_rotation_manager.get_active_domain()
+        domain_config = domain_rotation_manager.get_config()
+
+        return render_template(
+            "email_config.html",
+            hostname=app.config["hostname"],
+            path=app.config["path"],
+            message=message,
+            config_status=config_status,
+            budget_status=budget_status,
+            active_domain=active_domain,
+            domain_config=domain_config,
+        )
+
+    @app.route('/<string:url_addition>/email/domain/rotate', methods=["POST"])
+    def email_domain_rotate(url_addition):
+        """Rotate burner email domain from web configuration page"""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
+
+        new_domain = domain_rotation_manager.rotate_domain()
+        if new_domain:
+            session["email_config_message"] = {
+                "type": "success",
+                "text": f"Domain rotated successfully: {new_domain}",
             }
-            
-            # Store configuration (in memory for this session)
-            session['email_config'] = config_data
-            
-            return redirect(url_for('email_config', url_addition=url_addition))
-        
-        # Get current configuration
-        config = session.get('email_config', {})
-        
-        return render_template("email_config.html",
-                              hostname=app.config["hostname"],
-                              path=app.config["path"],
-                              config=config)
+        else:
+            session["email_config_message"] = {
+                "type": "error",
+                "text": "Domain rotation failed. Configure Domain API and verify remaining budget.",
+            }
+        return redirect(url_for("email_config", url_addition=url_addition))
     
     @app.route('/<string:url_addition>/email/compose', methods=["GET", "POST"])
     def email_compose(url_addition):
@@ -229,9 +301,8 @@ def register_email_routes(app, id_generator, get_random_color):
             return ('', 404)
 
         if "_id" not in session:
-            _ensure_session()
-
-        email = email_storage.get_email(session["_id"], email_id)
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
 
         email = email_storage.get_email(session["_id"], email_id)
         if email is None:

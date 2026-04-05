@@ -1,6 +1,7 @@
 """
 Tests for domain management module
 """
+from datetime import datetime, timedelta
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
@@ -174,3 +175,50 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_and_get_config(self):
+        """Test manager configuration helpers used by web UI"""
+        manager = DomainRotationManager()
+        manager.configure("pk_test", "sk_test", monthly_budget=25.0)
+        config = manager.get_config()
+
+        assert config["configured"] is True
+        assert config["api_key_configured"] is True
+        assert config["secret_key_configured"] is True
+        assert config["monthly_budget"] == 25.0
+        assert config["domains_owned"] == 0
+
+    def test_configure_requires_credentials(self):
+        """Test missing API credentials are rejected"""
+        manager = DomainRotationManager()
+        with pytest.raises(ValueError):
+            manager.configure("", "secret", monthly_budget=10.0)
+        with pytest.raises(ValueError):
+            manager.configure("key", "", monthly_budget=10.0)
+
+    def test_export_import_state_roundtrip(self):
+        """Test CLI-safe state serialization and deserialization"""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        now = datetime.now()
+        manager.current_spending = 8.99
+        manager.active_domain = "active-example.xyz"
+        manager.owned_domains = [{
+            "domain": "active-example.xyz",
+            "price": 8.99,
+            "purchased_at": now,
+            "expires_at": now + timedelta(days=365),
+        }]
+
+        exported = manager.export_state()
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(exported["owned_domains"][0]["expires_at"], str)
+
+        imported = DomainRotationManager(monthly_budget=50.0)
+        imported.import_state(exported)
+
+        assert imported.current_spending == 8.99
+        assert imported.active_domain == "active-example.xyz"
+        assert len(imported.owned_domains) == 1
+        assert imported.owned_domains[0]["domain"] == "active-example.xyz"
+        assert isinstance(imported.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(imported.owned_domains[0]["expires_at"], datetime)
