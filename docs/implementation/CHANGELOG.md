@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- `runserver.py` and `runserver_refactored.py` now honor `TOR_CONTROL_HOST` and `TOR_CONTROL_PORT`
+  with validation and safe fallback to `127.0.0.1:9051`
+- Added regression tests for Tor control environment parsing in `tests/test_runserver_helpers.py`
+- Removed stale tracked backup artifacts (`Dockerfile~HEAD`, `docker-compose.yml~HEAD`, `.github/d`)
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022

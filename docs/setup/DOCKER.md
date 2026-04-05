@@ -146,9 +146,14 @@ docker-compose -f container-compose.yml down
 
 You can customize the setup by setting environment variables in `container-compose.yml`:
 
-- `TOR_CONTROL_HOST`: Hostname of Tor daemon (default: `tor`)
+- `TOR_CONTROL_HOST`: Hostname of Tor daemon (default: `127.0.0.1` for native runs, `tor` in compose)
 - `TOR_CONTROL_PORT`: Control port (default: `9051`)
 - `FLASK_DEBUG`: Enable Flask debug mode (default: `0`)
+
+Runtime behavior:
+- `runserver.py` validates `TOR_CONTROL_PORT` at startup.
+- If the value is missing/invalid/out of range, it safely falls back to `9051`.
+- The configured host/port are used both for hidden-service creation and cleanup on shutdown.
 
 ### Custom Tor Configuration
 
@@ -205,8 +210,9 @@ podman-compose logs tor
 
 This usually means:
 1. Tor isn't fully started yet (wait 10-30 seconds)
-2. Control port authentication failed (check torrc configuration)
+2. Control port authentication failed (check torrc configuration and cookie auth)
 3. Network connectivity issues between containers
+4. `TOR_CONTROL_HOST` / `TOR_CONTROL_PORT` points to an unreachable endpoint
 
 Restart services:
 ```bash

@@ -1,5 +1,6 @@
 import datetime
 import string
+import os
 
 from flask import session
 
@@ -58,3 +59,30 @@ def test_process_chat_preserves_pgp_blocks():
     assert len(chats) == 1
     assert chats[0]["msg"] == pgp_message
     assert chats[0]["username"] == "pgp"
+
+
+def test_get_tor_control_settings_defaults_when_env_missing(monkeypatch):
+    monkeypatch.delenv("TOR_CONTROL_HOST", raising=False)
+    monkeypatch.delenv("TOR_CONTROL_PORT", raising=False)
+
+    host, port = runserver._get_tor_control_settings()
+    assert host == "127.0.0.1"
+    assert port == 9051
+
+
+def test_get_tor_control_settings_reads_valid_env(monkeypatch):
+    monkeypatch.setenv("TOR_CONTROL_HOST", "tor")
+    monkeypatch.setenv("TOR_CONTROL_PORT", "19051")
+
+    host, port = runserver._get_tor_control_settings()
+    assert host == "tor"
+    assert port == 19051
+
+
+def test_get_tor_control_settings_falls_back_on_invalid_port(monkeypatch):
+    monkeypatch.setenv("TOR_CONTROL_HOST", "tor")
+    monkeypatch.setenv("TOR_CONTROL_PORT", "invalid-port")
+
+    host, port = runserver._get_tor_control_settings()
+    assert host == "tor"
+    assert port == 9051

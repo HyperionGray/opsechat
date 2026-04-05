@@ -22,10 +22,29 @@ log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
 
-def setup_tor_configuration():
-    """Setup Tor hidden service configuration"""
+def _get_tor_control_settings():
+    """Return validated Tor control host/port from environment."""
+    control_host = os.environ.get("TOR_CONTROL_HOST", "127.0.0.1").strip() or "127.0.0.1"
+
+    raw_port = os.environ.get("TOR_CONTROL_PORT", "9051")
     try:
-        with Controller.from_port(port=9051) as controller:
+        control_port = int(raw_port)
+        if control_port < 1 or control_port > 65535:
+            raise ValueError
+    except (TypeError, ValueError):
+        print(f"[!] Invalid TOR_CONTROL_PORT={raw_port!r}; using default 9051")
+        control_port = 9051
+
+    return control_host, control_port
+
+
+def setup_tor_configuration(control_host=None, control_port=None):
+    """Setup Tor hidden service configuration."""
+    if control_host is None or control_port is None:
+        control_host, control_port = _get_tor_control_settings()
+
+    try:
+        with Controller.from_port(address=control_host, port=control_port) as controller:
             controller.authenticate()
             
             # Create ephemeral hidden service
@@ -43,8 +62,8 @@ def setup_tor_configuration():
                 return "localhost", None
                 
     except SocketError as e:
-        print(f"[!] Tor proxy or Control Port are not running: {e}")
-        print("Try starting the Tor Browser or Tor daemon and ensure the ControlPort is open.")
+        print(f"[!] Tor proxy or Control Port are not running at {control_host}:{control_port}: {e}")
+        print("Try starting the Tor Browser or Tor daemon and ensure the configured ControlPort is open.")
         return "localhost", None
     except Exception as e:
         print(f"Warning: Tor configuration error: {e}")
@@ -70,7 +89,8 @@ def main():
         return
     
     # Production mode with Tor
-    hostname, service_id = setup_tor_configuration()
+    control_host, control_port = _get_tor_control_settings()
+    hostname, service_id = setup_tor_configuration(control_host, control_port)
     
     # Configure application
     app.config['path'] = path
@@ -86,7 +106,7 @@ def main():
         if service_id:
             print(" * Shutting down our hidden service")
             try:
-                with Controller.from_port(port=9051) as controller:
+                with Controller.from_port(address=control_host, port=control_port) as controller:
                     controller.authenticate()
                     controller.remove_ephemeral_hidden_service(service_id)
             except Exception as e:

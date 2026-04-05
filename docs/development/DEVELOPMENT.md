@@ -77,7 +77,7 @@ These are development and testing utilities that help during development:
 - **`comprehensive_functionality_test.py`** - Full functional test suite
 
 ### Main Application Files
-- **`runserver.py`** - Main entry point (legacy monolithic)
+- **`runserver.py`** - Main entry point (app-factory based, Tor control host/port configurable via env)
 - **`runserver_refactored.py`** - Refactored version (blueprint-based)
 - **`app_factory.py`** - Flask app factory pattern
 - **`chat-room.py`** - Standalone chat room creator
@@ -219,6 +219,7 @@ npm run lint
 
 ## Environment Variables
 
+- `TOR_CONTROL_HOST` - Tor control host (default: `127.0.0.1`; use `tor` in compose)
 - `TOR_CONTROL_PORT` - Tor control port (default: 9051)
 - `PORT` - Flask server port (default: 5000)
 - `FLASK_ENV` - Development/production mode
@@ -263,5 +264,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed contribution guidelines.
 
 ---
 
-**Last Updated:** 2026-03-03  
+**Last Updated:** 2026-04-05  
 **Version:** 0.8.0-alpha
