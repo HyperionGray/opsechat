@@ -174,3 +174,64 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_and_get_config(self):
+        """Test manager configuration API used by routes."""
+        with patch("domain_manager.PorkbunAPIClient") as mock_client_class:
+            mock_client_class.return_value = Mock(spec=DomainAPIClient)
+            manager = DomainRotationManager()
+
+            config = manager.configure(
+                api_key="pk_test",
+                secret_key="sk_test",
+                monthly_budget=25.0
+            )
+
+            assert config["configured"] is True
+            assert config["active_provider"] == "porkbun"
+            assert "porkbun" in config["providers"]
+            assert config["monthly_budget"] == 25.0
+
+    def test_find_cheap_available_domain_provider_fallback(self):
+        """Test fallback to secondary provider when primary fails."""
+        primary = Mock(spec=DomainAPIClient)
+        backup = Mock(spec=DomainAPIClient)
+        primary.search_domain.side_effect = RuntimeError("provider unavailable")
+        backup.search_domain.return_value = {
+            "available": True,
+            "price": 2.49
+        }
+
+        manager = DomainRotationManager()
+        manager.add_api_client("primary", primary, set_active=True)
+        manager.add_api_client("backup", backup)
+
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["provider"] == "backup"
+        assert result["price"] == 2.49
+
+    def test_purchase_domain_if_budget_allows_provider_fallback(self):
+        """Test purchase fallback to secondary provider on failure."""
+        primary = Mock(spec=DomainAPIClient)
+        backup = Mock(spec=DomainAPIClient)
+        primary.purchase_domain.return_value = {
+            "success": False,
+            "message": "payment failed"
+        }
+        backup.purchase_domain.return_value = {
+            "success": True,
+            "order_id": "ord_123"
+        }
+
+        manager = DomainRotationManager(monthly_budget=20.0)
+        manager.add_api_client("primary", primary, set_active=True)
+        manager.add_api_client("backup", backup)
+
+        success = manager.purchase_domain_if_budget_allows("fallback.xyz", 3.0)
+
+        assert success is True
+        assert manager.current_spending == 3.0
+        assert manager.owned_domains[0]["provider"] == "backup"
+        assert isinstance(manager.owned_domains[0]["purchased_at"], str)

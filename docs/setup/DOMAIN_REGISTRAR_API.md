@@ -82,6 +82,17 @@ The opsechat domain manager is designed to be extensible. Future registrar suppo
 - At-cost pricing (no markup)
 - Limited TLD support
 
+### Current Multi-Provider Runtime Behavior
+
+The domain manager now supports registering multiple providers at runtime and
+uses provider fallback automatically:
+
+- Searches try the active provider first, then other registered providers.
+- Purchases also fail over to another provider when the first one fails.
+- The provider that succeeds becomes the active provider for future calls.
+
+This allows staged rollout of additional registrars without changing caller code.
+
 ## Configuration in Opsechat
 
 ### Via Web Interface
