@@ -3,6 +3,7 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime, timedelta
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -155,6 +156,92 @@ class TestDomainRotationManager:
         assert status["current_spending"] == 10.0
         assert status["remaining"] == 40.0
         assert status["domains_owned"] == 1
+
+    def test_configure_and_get_config(self):
+        """Test configure/get_config behavior"""
+        manager = DomainRotationManager()
+        config = manager.configure("pk_test_key", "sk_test_secret", monthly_budget=25.0)
+
+        assert config["configured"] is True
+        assert config["provider"] == "porkbun"
+        assert config["monthly_budget"] == 25.0
+        assert config["has_api_key"] is True
+        assert config["has_secret_key"] is True
+        assert config["api_key_suffix"] == "key"
+
+        config_with_secrets = manager.get_config(include_secrets=True)
+        assert config_with_secrets["api_key"] == "pk_test_key"
+        assert config_with_secrets["secret_key"] == "sk_test_secret"
+
+    def test_set_monthly_budget_validation(self):
+        """Test monthly budget validation"""
+        manager = DomainRotationManager(monthly_budget=10.0)
+        with pytest.raises(ValueError):
+            manager.set_monthly_budget(0)
+        with pytest.raises(ValueError):
+            manager.set_monthly_budget(-5)
+
+        manager.set_monthly_budget(42.5)
+        assert manager.monthly_budget == 42.5
+
+    def test_search_cheap_domains_returns_limited_results(self):
+        """Test multi-search respects limit and price"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": "1.99"
+        }
+        manager = DomainRotationManager(api_client=mock_client)
+        results = manager.search_cheap_domains(tlds=["xyz"], max_price=2.0, limit=3)
+
+        assert len(results) == 3
+        for item in results:
+            assert item["domain"].endswith(".xyz")
+            assert item["price"] == 1.99
+            assert item["tld"] == "xyz"
+
+    def test_rotate_to_new_domain_success(self):
+        """Test structured rotate_to_new_domain response"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": 1.5
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "abc123.xyz"
+        }
+        manager = DomainRotationManager(mock_client, monthly_budget=20.0)
+        result = manager.rotate_to_new_domain(max_price=2.0)
+
+        assert result["success"] is True
+        assert result["domain"] is not None
+        assert result["cost"] == 1.5
+        assert manager.active_domain == result["domain"]
+
+    def test_export_and_load_state_roundtrip(self):
+        """Test state serialization/deserialization helpers"""
+        manager = DomainRotationManager(monthly_budget=15.0)
+        manager.current_spending = 3.5
+        manager.active_domain = "active.xyz"
+        manager.owned_domains = [{
+            "domain": "active.xyz",
+            "price": 3.5,
+            "purchased_at": datetime.now(),
+            "expires_at": datetime.now() + timedelta(days=365)
+        }]
+
+        state = manager.export_state()
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(state["owned_domains"][0]["expires_at"], str)
+
+        new_manager = DomainRotationManager()
+        new_manager.load_state(state)
+        assert new_manager.monthly_budget == 15.0
+        assert new_manager.current_spending == 3.5
+        assert new_manager.active_domain == "active.xyz"
+        assert len(new_manager.owned_domains) == 1
+        assert isinstance(new_manager.owned_domains[0]["purchased_at"], datetime)
     
     def test_rotate_domain(self):
         """Test domain rotation"""

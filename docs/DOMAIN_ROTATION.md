@@ -363,27 +363,34 @@ domain = domain_rotation_manager.generate_domain_from_pattern(pattern, tld='xyz'
 
 All domain rotation commands:
 
+Set credentials via environment variables before using the module CLI:
+
+```bash
+export PORKBUN_API_KEY="pk1_..."
+export PORKBUN_SECRET_KEY="sk1_..."
+export DOMAIN_BUDGET="20.00"
+```
+
+Then run:
+
 ```bash
 # Check available domains
-python -m domain_manager search --tld xyz --max-price 2.00
+python -m domain_manager search --tld xyz --max-price 2.00 --limit 5
 
-# Purchase specific domain
-python -m domain_manager purchase --domain example.xyz
+# Purchase specific domain (optional price cap)
+python -m domain_manager purchase --domain example.xyz --max-price 2.50
 
 # Rotate to new random domain
-python -m domain_manager rotate
+python -m domain_manager rotate --max-price 2.50
 
 # Check budget status
 python -m domain_manager budget status
 
-# Set monthly budget
+# Set monthly budget for current CLI run
 python -m domain_manager budget set --amount 20.00
 
-# List all active domains
+# List domains in registrar account
 python -m domain_manager list
-
-# Configure DNS
-python -m domain_manager dns --domain example.xyz --mx "mail.example.xyz"
 ```
 
 ## Summary
