@@ -97,6 +97,27 @@ GET /chat/dm/xyz789
 
 ---
 
+## 📜 Legal Policy Pages
+
+### What Changed
+opsechat now exposes first-class public policy endpoints so operators can link legal text directly from the running service:
+
+- `GET /terms` - Terms of Service
+- `GET /privacy` - Privacy Policy
+- `GET /aup` - Acceptable Use Policy
+
+### Implementation Notes
+- Source content is maintained in `docs/legal/*.md`.
+- Policy pages are rendered by `legal_routes.py`.
+- Markdown links between legal documents are rewritten to canonical app routes (`/terms`, `/privacy`, `/aup`).
+- Existing global security headers and CSP apply to these pages automatically.
+
+### Why This Matters
+- Closes a production-readiness gap from TODO planning (policy display pages were missing).
+- Gives deployment operators stable URLs for footer links, onboarding flows, and compliance checklists.
+
+---
+
 ## 🔒 Enhanced Security Features
 
 ### Message Length Caps

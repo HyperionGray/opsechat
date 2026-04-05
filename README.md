@@ -12,6 +12,7 @@
 - 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
 - ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use
 - 🚀 **Production Deployment** - Robust systemd units with auto-restart
+- 📜 **Policy Pages** - Public legal endpoints at `/terms`, `/privacy`, and `/aup`
 
 📖 **Full Details:** [New Features Guide](docs/NEW_FEATURES.md)
 
