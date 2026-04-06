@@ -52,3 +52,11 @@ class TestSecurityHeaders:
     def test_server_header_stripped(self):
         h = self._headers()
         assert h.get("Server", "") == ""
+
+    def test_policy_routes_return_security_headers(self):
+        for path in ("/terms", "/aup", "/privacy", "/policies"):
+            h = self._headers(path)
+            assert "Content-Security-Policy" in h
+            assert h.get("X-Content-Type-Options") == "nosniff"
+            assert h.get("X-Frame-Options") == "DENY"
+            assert h.get("Referrer-Policy") == "no-referrer"

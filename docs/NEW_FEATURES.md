@@ -4,6 +4,34 @@ This guide covers the new features added in the final push for OpSecHat producti
 
 ## 🔑 Automated Key Exchange
 
+## ⚖️ Legal Policy Routes and Rendering
+
+### What Changed
+OpSecChat now includes public policy pages for legal and privacy documentation:
+
+- `/terms`
+- `/aup`
+- `/privacy`
+- `/policies` (index page)
+
+These pages are rendered from markdown files in `docs/legal/` through a built-in, sanitized markdown renderer.
+
+### Why It Matters
+- Provides clear public policy documentation paths required by the production TODO roadmap.
+- Keeps policy content source-controlled in markdown while serving readable HTML pages.
+- Uses a strict renderer and link filtering to reduce XSS risk from policy content.
+
+### Implementation Notes
+- Added `policy_routes.py` and `register_policy_routes(app)` integration in `app_factory.py`
+- Added templates: `templates/policy_page.html`, `templates/policies.html`
+- Added stylesheet: `static/policies.css`
+- Added `docs/legal/PRIVACY_POLICY.md`
+- Added tests in `tests/test_policy_routes.py`
+
+---
+
+## 🔑 Automated Key Exchange
+
 ### What Changed
 Previously, users had to manually share encryption keys. Now, each chat room automatically generates and distributes a shared encryption key when users join.
 

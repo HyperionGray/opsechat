@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Policies - OpSecChat</title>
+    <link rel="stylesheet" href="/static/policies.css">
+</head>
+<body>
+    <main class="page-shell">
+        <header class="card policy-header">
+            <h1>OpSecChat Policies</h1>
+            <p class="subtitle">Public legal and privacy documentation</p>
+        </header>
+
+        <section class="policy-grid" aria-label="Policy pages">
+            {% for policy in policies %}
+            <article class="card policy-card">
+                <h2>{{ policy.title }}</h2>
+                <p>Last updated: {{ policy.last_updated }}</p>
+                <a href="{{ policy.route }}" aria-label="Open {{ policy.title }}">Open document</a>
+            </article>
+            {% endfor %}
+        </section>
+
+        <footer class="footer">
+            OpSecChat {{ version|default('0.8.0-alpha') }} |
+            <a href="/chat">Chat</a> |
+            <a href="/terms">Terms</a> |
+            <a href="/aup">AUP</a> |
+            <a href="/privacy">Privacy</a>
+        </footer>
+    </main>
+</body>
+</html>

@@ -82,8 +82,6 @@ def create_app():
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
@@ -108,6 +106,10 @@ def create_app():
     # Register HTTP mail routes (email over HTTP, no SMTP/IMAP)
     from http_mail_routes import register_http_mail_routes
     register_http_mail_routes(app)
+
+    # Register public legal policy pages
+    from policy_routes import register_policy_routes
+    register_policy_routes(app)
     
     # Health check endpoint
     from monitoring import get_health_status

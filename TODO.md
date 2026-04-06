@@ -77,7 +77,7 @@
 - [ ] Incorporate legal feedback
 - [ ] Create separate Privacy Policy document
 - [ ] Add policy acceptance checkbox to signup flow
-- [ ] Create policy display pages (`/terms`, `/privacy`, `/aup`)
+- [x] Create policy display pages (`/terms`, `/privacy`, `/aup`)
 - [ ] Add policy links to all page footers
 - [ ] Implement policy version tracking
 - [ ] Add "Last Updated" dates to all policies

@@ -1,0 +1,193 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: #000;
+    color: #0f0;
+    font-family: "Courier New", monospace;
+    line-height: 1.5;
+}
+
+a {
+    color: #8ef;
+}
+
+a:hover {
+    color: #bff;
+}
+
+.container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 18px;
+}
+
+.header {
+    border: 1px solid #0a0;
+    background: #001500;
+    padding: 14px;
+    margin-bottom: 14px;
+}
+
+.header h1 {
+    margin: 0;
+    color: #7f7;
+}
+
+.subtitle {
+    margin-top: 6px;
+    color: #7a7;
+}
+
+.meta {
+    margin-top: 6px;
+    color: #7a7;
+    font-size: 0.92rem;
+}
+
+.policy-nav a {
+    margin-right: 10px;
+}
+
+.policy-nav a.active {
+    color: #0f0;
+    font-weight: bold;
+}
+
+.layout {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: 280px 1fr;
+}
+
+.toc {
+    border: 1px solid #0a0;
+    background: #001100;
+    padding: 14px;
+    max-height: calc(100vh - 160px);
+    overflow: auto;
+}
+
+.toc h2 {
+    margin: 0 0 10px 0;
+    color: #6f6;
+    font-size: 1rem;
+}
+
+.toc ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.toc li {
+    margin: 6px 0;
+}
+
+.toc .level-2 {
+    padding-left: 10px;
+}
+
+.toc .level-3,
+.toc .level-4,
+.toc .level-5,
+.toc .level-6 {
+    padding-left: 18px;
+}
+
+.policy-content {
+    border: 1px solid #0a0;
+    background: #001100;
+    padding: 14px;
+}
+
+.policy-content h1,
+.policy-content h2,
+.policy-content h3,
+.policy-content h4,
+.policy-content h5,
+.policy-content h6 {
+    margin-top: 1.2em;
+    margin-bottom: 0.5em;
+    color: #8f8;
+}
+
+.policy-content h1:first-child {
+    margin-top: 0;
+}
+
+.policy-content p {
+    margin: 0 0 0.9em 0;
+}
+
+.policy-content ul {
+    margin: 0 0 0.9em 0;
+    padding-left: 1.2em;
+}
+
+.policy-content li {
+    margin: 0.25em 0;
+}
+
+.policy-content code {
+    background: #010;
+    border: 1px solid #063;
+    padding: 0 4px;
+}
+
+.policy-content pre {
+    background: #010;
+    border: 1px solid #063;
+    padding: 10px;
+    overflow: auto;
+}
+
+.policy-content hr {
+    border: none;
+    border-top: 1px solid #063;
+    margin: 1.1em 0;
+}
+
+.cards {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.card {
+    border: 1px solid #0a0;
+    background: #001100;
+    padding: 14px;
+}
+
+.card h2 {
+    margin-top: 0;
+}
+
+.card p {
+    color: #9b9;
+}
+
+.footer {
+    margin-top: 16px;
+    border-top: 1px solid #063;
+    padding-top: 10px;
+    color: #7a7;
+    font-size: 0.88rem;
+}
+
+.footer a {
+    margin-right: 10px;
+}
+
+@media (max-width: 900px) {
+    .layout {
+        grid-template-columns: 1fr;
+    }
+
+    .toc {
+        max-height: none;
+    }
+}
