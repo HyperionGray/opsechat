@@ -445,33 +445,20 @@ The following 4 groups contain tasks that can be executed in parallel. Each grou
     - [ ] Address feedback
     - [ ] Finalize versions
     - [ ] Sign off for production use
-- [ ] Create policy display pages
-  - [ ] `templates/terms.html`
-    - [ ] Render TERMS_OF_SERVICE.md as HTML
-    - [ ] Clean, readable typography
-    - [ ] Table of contents with anchor links
-    - [ ] Print-friendly CSS
-    - [ ] "Last updated" timestamp
-    - [ ] Contact information footer
-  - [ ] `templates/aup.html`
-    - [ ] Render ACCEPTABLE_USE_POLICY.md as HTML
-    - [ ] Highlight prohibited activities
-    - [ ] Contact for abuse reports
-    - [ ] Law enforcement cooperation notice
-  - [ ] `templates/privacy.html`
-    - [ ] Render PRIVACY_POLICY.md as HTML
-    - [ ] Clear data collection section
-    - [ ] FAQ-style format
-    - [ ] Icon indicators (✅ we do / ❌ we don't)
-  - [ ] Implement markdown-to-HTML rendering
-    - [ ] Use Python-Markdown or similar
-    - [ ] Sanitize output (XSS protection)
-    - [ ] Cache rendered HTML (in-memory)
-- [ ] Add policy routes to `runserver.py`
-  - [ ] `/terms` route (public, no auth required)
-  - [ ] `/aup` route (public)
-  - [ ] `/privacy` route (public)
-  - [ ] `/policies` route (shows all three with tabs)
+- [x] Create policy display pages
+  - [x] Added shared template `templates/policy_page.html` for Terms/AUP/Privacy
+  - [x] Added index template `templates/policies.html`
+  - [x] Added clean readable typography and table of contents support
+  - [x] Added "Last updated" timestamp display
+  - [x] Added policy footer navigation links
+  - [x] Implement markdown-to-HTML rendering
+    - [x] Built-in sanitized renderer in `policy_routes.py`
+    - [x] Safe link handling and in-memory mtime cache
+- [x] Add policy routes
+  - [x] `/terms` route (public, no auth required)
+  - [x] `/aup` route (public)
+  - [x] `/privacy` route (public)
+  - [x] `/policies` route (shows all three with tabs)
 - [ ] Integrate policy acceptance into signup flow
   - [ ] Modify `templates/signup.html`
     - [ ] Add checkboxes:
@@ -912,10 +899,10 @@ The following sections contain the original detailed implementation plans for re
   - [ ] Legal counsel review (if possible)
   - [ ] Update contact information
   - [ ] Set effective dates
-- [ ] Create policy display pages:
-  - [ ] `/terms` route → TERMS_OF_SERVICE.md
-  - [ ] `/aup` route → ACCEPTABLE_USE_POLICY.md
-  - [ ] `/privacy` route → PRIVACY_POLICY.md (needs creation)
+- [x] Create policy display pages:
+  - [x] `/terms` route → TERMS_OF_SERVICE.md
+  - [x] `/aup` route → ACCEPTABLE_USE_POLICY.md
+  - [x] `/privacy` route → PRIVACY_POLICY.md
 - [ ] Add policy acceptance to signup flow:
   - [ ] Checkbox "I accept the Terms of Service"
   - [ ] Checkbox "I accept the Acceptable Use Policy"
@@ -933,12 +920,13 @@ The following sections contain the original detailed implementation plans for re
 - [ ] Store acceptance timestamp (in-memory)
 
 **Files to Create/Modify:**
-- New: `templates/terms.html` - Terms display
-- New: `templates/aup.html` - AUP display
-- New: `templates/privacy.html` - Privacy policy display
-- Modify: `templates/signup.html` - Add acceptance checkboxes
-- Modify: `runserver.py` - Add policy routes
-- New: `tests/test_policy_acceptance.py` - Policy tests
+- New: `policy_routes.py` - Policy route registration and markdown rendering
+- New: `templates/policy_page.html` - Shared policy display template
+- New: `templates/policies.html` - Policies index page
+- New: `static/policies.css` - Policy page styles
+- New: `docs/legal/PRIVACY_POLICY.md` - Privacy policy draft
+- Modify: `templates/signup.html` - Add acceptance checkboxes (pending)
+- New: `tests/test_policy_routes.py` - Policy route tests
 
 ---
 
