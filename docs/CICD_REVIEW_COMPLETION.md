@@ -41,7 +41,6 @@ src/amazon_q/
 ```
 tests/
 ├── e2e.spec.js (25 lines) - Deprecation notice
-├── e2e.spec.js.deprecated - Original preserved
 ├── landing-page.e2e.spec.js (88 lines)
 ├── chat-interface.e2e.spec.js (165 lines)
 ├── email-burner.e2e.spec.js (78 lines)
@@ -105,6 +104,7 @@ Following the custom instructions and TODO.md requirements:
 - [x] Review and address code cleanliness issues
 - [x] Refactor amazon_q_integration.py into modular components
 - [x] Refactor tests/e2e.spec.js into focused test files
+- [x] Remove stale preserved artifact `tests/e2e.spec.js.deprecated` during hygiene cleanup
 - [x] Verify imports and basic functionality
 - [x] Run code review and address feedback
 - [x] Run security scan (CodeQL)
