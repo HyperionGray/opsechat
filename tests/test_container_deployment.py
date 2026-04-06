@@ -289,7 +289,7 @@ class TestDocumentation:
         assert os.path.exists(path)
     
     def test_domain_registrar_api_md_exists(self):
-        path = os.path.join(REPO_DIR, 'DOMAIN_REGISTRAR_API.md')
+        path = os.path.join(REPO_DIR, 'docs', 'setup', 'DOMAIN_REGISTRAR_API.md')
         assert os.path.exists(path)
     
     def test_readme_mentions_docker(self):

@@ -329,25 +329,45 @@ dig @8.8.8.8 yourdomain.xyz MX
 
 ### Multiple Registrars
 
-Add support for additional registrars:
+`DomainRotationManager` now supports multiple provider clients and can track
+which registrar purchased each domain.
 
 ```python
-from domain_manager import DomainAPIClient
+from domain_manager import (
+    DomainRotationManager,
+    PorkbunAPIClient,
+    NamecheapAPIClient,
+)
 
-class NamecheapAPIClient(DomainAPIClient):
-    def __init__(self, api_key: str):
-        super().__init__(api_key)
-    
-    def search_domain(self, domain: str):
-        # Implementation here
-        pass
-    
-    def purchase_domain(self, domain: str, years: int = 1):
-        # Implementation here
-        pass
+manager = DomainRotationManager(
+    api_client=PorkbunAPIClient("pk_api_key", "pk_api_secret")
+)
+manager.add_api_client(
+    "namecheap",
+    NamecheapAPIClient(
+        api_user="nc_api_user",
+        api_key="nc_api_key",
+        username="nc_username",
+        client_ip="203.0.113.10",
+        contact_details={
+            "FirstName": "Ops",
+            "LastName": "Admin",
+            "Address1": "123 Privacy St",
+            "City": "Austin",
+            "StateProvince": "TX",
+            "PostalCode": "78701",
+            "Country": "US",
+            "Phone": "+1.5555555555",
+            "EmailAddress": "ops@example.com",
+        },
+    ),
+)
 
-# Register new client
-domain_rotation_manager.add_api_client('namecheap', NamecheapAPIClient(api_key))
+# Optional: prefer one provider first, fallback to others if needed
+domain_info = manager.find_cheap_available_domain(
+    preferred_provider="namecheap",
+    max_price=5.0,
+)
 ```
 
 ### Custom Domain Patterns
