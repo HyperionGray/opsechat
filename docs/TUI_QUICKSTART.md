@@ -143,6 +143,13 @@ The client automatically detects `.onion` and uses Tor SOCKS proxy.
 - **Secure Deletion** - Overwrite before delete
 - **No Configuration Files** - Ephemeral by design
 - **No Logs** - Zero persistence
+- **Rate Limiting** - Per-user spam control (20 messages / 30 seconds)
+
+### ✅ Inline Commands
+- `/help` - Show available commands
+- `/status` - Show server burn/rate-limit status and counts
+- `/users` - Show connected user count
+- `/quit` - Disconnect cleanly
 
 ### ⚠️ Limitations (By Design)
 - **No Message History** - Messages burn after 4 minutes

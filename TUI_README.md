@@ -15,6 +15,8 @@ This is a serious privacy and opsec tool for serious privacy and opsec people. I
 ✅ **Zero Disk** - Nothing touches disk except the application code  
 ✅ **Tor Integration** - Full support for Tor hidden services (.onion)  
 ✅ **SOCKS Proxy** - Client supports connecting via Tor SOCKS proxy  
+✅ **Inline Commands** - `/help`, `/status`, `/users`, `/quit`  
+✅ **Rate Limiting** - Per-user spam protection on the server  
 
 ## Quick Start
 
@@ -77,6 +79,10 @@ The client will automatically use Tor SOCKS proxy if:
 ### 4. Chat!
 
 - Type your message and press **Enter** to send
+- Use `/help` to list supported commands
+- Use `/status` to view server message and rate-limit settings
+- Use `/users` to view connected user count
+- Use `/quit` to disconnect cleanly
 - Press **Ctrl+C** to quit
 - Your username is randomly assigned (e.g., `PhantomRaven4523`)
 - Messages automatically disappear after 4 minutes
@@ -136,6 +142,7 @@ sudo systemctl start tor
 - **Max message length**: 1000 characters
 - **Message lifetime**: 4 minutes (240 seconds)
 - **Max chat history**: 200 messages in client (memory management)
+- **Rate limit**: 20 messages per 30 seconds, per user
 - **No images**: Text only, no exceptions
 - **No video**: Text only, no exceptions
 - **No b64 encoding**: Large base64-like strings are rejected
@@ -172,7 +179,7 @@ sudo systemctl start tor
 python -c "from src.tui.server import ChatServer; s = ChatServer(); print(s.generate_username())"
 
 # Test imports
-python -c "from src.tui import client, server; print('✓ Imports OK')"
+python -c "from src.tui import client, server; print('Imports OK')"
 ```
 
 ### Code Structure
@@ -240,6 +247,10 @@ Messages are:
 ### Can I extend the 4-minute timer?
 
 **No.** This is by design. Messages burn after 4 minutes, **no negotiation, no config**. If you need longer persistence, this tool is not for you.
+
+### Is there anti-spam protection?
+
+Yes. The server enforces a per-user rate limit of **20 messages per 30 seconds**. If you exceed it, the server rejects the message and returns a retry hint.
 
 ## Coming Soon
 

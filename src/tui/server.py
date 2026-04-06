@@ -13,25 +13,28 @@ Features:
 - Optional PGP encryption
 """
 
-import sys
 import time
 import datetime
 import secrets
 import threading
 import socket
 import json
-from typing import Dict, List, Any, Optional
+from collections import deque
+from typing import Dict, List, Any, Optional, Deque, Tuple
 
 # Message storage (in-memory only)
 class ChatServer:
     MAX_MESSAGE_LENGTH = 1000  # Prevent b64 encoded images
-    MESSAGE_LIFETIME = 180  # 3 minutes in seconds
+    MESSAGE_LIFETIME = 240  # 4 minutes in seconds
+    RATE_LIMIT_MAX_MESSAGES = 20
+    RATE_LIMIT_WINDOW_SECONDS = 30
     
     def __init__(self, host='127.0.0.1', port=5555):
         self.host = host
         self.port = port
         self.messages: List[Dict[str, Any]] = []
         self.clients: Dict[socket.socket, str] = {}
+        self.client_message_times: Dict[str, Deque[float]] = {}
         self.lock = threading.Lock()
         self.server_socket = None
         self.running = False
@@ -71,27 +74,96 @@ class ChatServer:
             
             self.messages = new_messages
     
-    def add_message(self, username: str, message: str) -> bool:
+    def _check_rate_limit_locked(self, username: str) -> Tuple[bool, int]:
+        """
+        Check per-username send rate using a sliding window.
+
+        Returns:
+            (allowed, retry_after_seconds)
+        """
+        now = time.time()
+        window_start = now - self.RATE_LIMIT_WINDOW_SECONDS
+        timestamps = self.client_message_times.setdefault(username, deque())
+
+        while timestamps and timestamps[0] <= window_start:
+            timestamps.popleft()
+
+        if len(timestamps) >= self.RATE_LIMIT_MAX_MESSAGES:
+            retry_after = max(1, int(timestamps[0] + self.RATE_LIMIT_WINDOW_SECONDS - now))
+            return False, retry_after
+
+        timestamps.append(now)
+        return True, 0
+
+    def add_message(self, username: str, message: str) -> Tuple[bool, str]:
         """Add a message to the chat (with validation)"""
         # Validate message
         if not message or len(message) > self.MAX_MESSAGE_LENGTH:
-            return False
+            return False, "Message must be between 1 and 1000 characters."
         
         # Check for potential b64 encoded data (rough heuristic)
         if len(message) > 500 and message.replace('=', '').isalnum():
-            return False  # Likely b64 encoded image/video
+            return False, "Likely encoded binary content detected; text-only messages are allowed."
         
         # Strip any HTML/special chars
         message = message.replace('<', '').replace('>', '').replace('&', '')
         
         with self.lock:
+            allowed, retry_after = self._check_rate_limit_locked(username)
+            if not allowed:
+                return False, (
+                    f"Rate limit exceeded: max {self.RATE_LIMIT_MAX_MESSAGES} messages "
+                    f"per {self.RATE_LIMIT_WINDOW_SECONDS} seconds. Retry in {retry_after}s."
+                )
             self.messages.append({
                 'username': username,
                 'message': message,
                 'timestamp': datetime.datetime.now()
             })
         
-        return True
+        return True, ""
+
+    def handle_command(self, command: str) -> Dict[str, Any]:
+        """Handle a command request from a client."""
+        normalized = (command or "").strip().lower()
+        if normalized.startswith("/"):
+            normalized = normalized[1:]
+
+        with self.lock:
+            if normalized == "status":
+                return {
+                    "type": "command_response",
+                    "command": "status",
+                    "ok": True,
+                    "message": (
+                        f"Status: users={len(self.clients)}, "
+                        f"messages={len(self.messages)}, "
+                        f"burn={self.MESSAGE_LIFETIME}s, "
+                        f"max_len={self.MAX_MESSAGE_LENGTH}, "
+                        f"rate_limit={self.RATE_LIMIT_MAX_MESSAGES}/{self.RATE_LIMIT_WINDOW_SECONDS}s"
+                    ),
+                }
+            if normalized == "users":
+                return {
+                    "type": "command_response",
+                    "command": "users",
+                    "ok": True,
+                    "message": f"Connected users: {len(self.clients)}",
+                }
+            if normalized == "help":
+                return {
+                    "type": "command_response",
+                    "command": "help",
+                    "ok": True,
+                    "message": "Commands: /help, /status, /users, /quit",
+                }
+
+        return {
+            "type": "command_response",
+            "command": normalized or "unknown",
+            "ok": False,
+            "message": "Unknown command. Use /help for supported commands.",
+        }
     
     def get_messages(self, since: datetime.datetime = None) -> List[Dict[str, Any]]:
         """Get messages (optionally since a specific time)"""
@@ -113,7 +185,7 @@ class ChatServer:
             welcome = {
                 'type': 'welcome',
                 'username': username,
-                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
+                'message': f'Welcome! You are {username}. Messages burn in 4 minutes.'
             }
             client_socket.send((json.dumps(welcome) + '\n').encode())
             
@@ -144,9 +216,21 @@ class ChatServer:
                                 msg_obj = json.loads(line)
                                 if msg_obj.get('type') == 'message':
                                     message = msg_obj.get('message', '')
-                                    if self.add_message(username, message):
+                                    added, error_message = self.add_message(username, message)
+                                    if added:
                                         # Broadcast to all clients
                                         self.broadcast_message(username, message)
+                                    else:
+                                        error_payload = {
+                                            'type': 'error',
+                                            'code': 'message_rejected',
+                                            'message': error_message,
+                                        }
+                                        client_socket.send((json.dumps(error_payload) + '\n').encode())
+                                elif msg_obj.get('type') == 'command':
+                                    command = msg_obj.get('command', '')
+                                    command_response = self.handle_command(command)
+                                    client_socket.send((json.dumps(command_response) + '\n').encode())
                             except json.JSONDecodeError:
                                 pass
                 
@@ -156,7 +240,9 @@ class ChatServer:
         finally:
             with self.lock:
                 if client_socket in self.clients:
-                    del self.clients[client_socket]
+                    departing_username = self.clients.pop(client_socket)
+                    if departing_username in self.client_message_times:
+                        del self.client_message_times[departing_username]
             try:
                 client_socket.close()
             except (OSError, socket.error):
@@ -245,6 +331,7 @@ class ChatServer:
                 msg['message'] = 'X' * len(msg['message'])
                 msg['username'] = 'X' * len(msg['username'])
             self.messages.clear()
+            self.client_message_times.clear()
         
         print("\n[*] Server stopped. All messages overwritten and cleared.")
 
@@ -317,8 +404,8 @@ def main():
     
     print("\n" + "="*60)
     if tor_info:
-        print(f"🧅 Tor Hidden Service: {tor_info[0]}")
-    print(f"📡 Local Server: {args.host}:{args.port}")
+        print(f"Tor Hidden Service: {tor_info[0]}")
+    print(f"Local Server: {args.host}:{args.port}")
     print("="*60 + "\n")
     
     try:

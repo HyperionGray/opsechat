@@ -85,6 +85,8 @@ class ChatClient:
         footer_text = [
             ('info', 'Enter'),
             ': Send | ',
+            ('info', '/help /status /users /quit'),
+            ' | ',
             ('info', 'Ctrl+C'),
             ': Quit | ',
             ('warn', 'Your username: '),
@@ -217,12 +219,20 @@ class ChatClient:
             username = msg.get('username', 'Unknown')
             message = msg.get('message', '')
             self.add_message(username, message)
+
+        elif msg_type == 'error':
+            self.add_message("System", msg.get('message', 'Request rejected by server.'), is_system=True)
+
+        elif msg_type == 'command_response':
+            self.add_message("System", msg.get('message', 'Command completed.'), is_system=True)
     
     def update_footer(self):
         """Update the footer with current username"""
         footer_text = [
             ('info', 'Enter'),
             ': Send | ',
+            ('info', '/help /status /users /quit'),
+            ' | ',
             ('info', 'Ctrl+C'),
             ': Quit | ',
             ('warn', 'Your username: '),
@@ -249,13 +259,51 @@ class ChatClient:
             self.socket.send((json.dumps(msg_obj) + '\n').encode())
         except Exception as e:
             self.add_message("System", f"Failed to send: {e}", is_system=True)
+
+    def send_command(self, command):
+        """Send a command request to the server"""
+        if not command or not self.socket:
+            return
+
+        try:
+            msg_obj = {
+                'type': 'command',
+                'command': command
+            }
+            self.socket.send((json.dumps(msg_obj) + '\n').encode())
+        except Exception as e:
+            self.add_message("System", f"Failed to send command: {e}", is_system=True)
+
+    def handle_slash_command(self, command_text):
+        """Handle slash-style commands entered in the input box."""
+        normalized = command_text.strip().lower()
+        if not normalized:
+            return
+
+        if normalized == '/quit':
+            self.add_message("System", "Disconnecting...", is_system=True)
+            raise urwid.ExitMainLoop()
+
+        if normalized in ('/help', '/status', '/users'):
+            self.send_command(normalized[1:])
+            return
+
+        self.add_message(
+            "System",
+            "Unknown command. Available: /help, /status, /users, /quit",
+            is_system=True
+        )
     
     def handle_input(self, key):
         """Handle keyboard input"""
         if key == 'enter':
             message = self.input_box.get_edit_text()
-            if message.strip():
-                self.send_message(message.strip())
+            cleaned = message.strip()
+            if cleaned:
+                if cleaned.startswith('/'):
+                    self.handle_slash_command(cleaned)
+                else:
+                    self.send_message(cleaned)
                 self.input_box.set_edit_text("")
             return
         
