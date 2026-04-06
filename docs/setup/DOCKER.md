@@ -9,6 +9,7 @@ The containerized setup includes:
 - **Opsechat application container**: Runs the Flask application with chat, email, and burner email features
 
 The compose file is `container-compose.yml` (a `docker-compose.yml` symlink exists for backward compatibility).
+Helper scripts live in `scripts/` and are mirrored at the repo root via symlinks.
 
 ## Prerequisites
 
@@ -37,7 +38,14 @@ This script will:
 2. Build the opsechat container image
 3. Start the Tor daemon
 4. Start the opsechat application
-5. Display status and instructions
+5. Wait for both containers to become healthy (or fail fast with logs)
+6. Display status and instructions
+
+You can tune startup behavior:
+
+```bash
+COMPOSE_STARTUP_TIMEOUT=180 COMPOSE_STARTUP_POLL_INTERVAL=5 ./compose-up.sh
+```
 
 ### Viewing the Onion Address
 
@@ -69,6 +77,19 @@ This will check:
 - Tor service health
 - Network connectivity
 - Hidden service address
+
+### Checking Current Status
+
+Use the status helper for a quick health snapshot:
+
+```bash
+./compose-status.sh
+```
+
+It reports:
+- `compose ps` output
+- running/health status for `opsechat-tor` and `opsechat-app`
+- first detected hidden service address from logs (if available)
 
 ### Viewing Logs
 
@@ -119,6 +140,14 @@ docker-compose -f container-compose.yml logs -f
 podman-compose -f container-compose.yml down
 # or
 docker-compose -f container-compose.yml down
+```
+
+Script equivalents:
+
+```bash
+./compose-up.sh
+./compose-status.sh
+./compose-down.sh
 ```
 
 ## Architecture
@@ -282,5 +311,6 @@ For issues specific to containerization, check:
 1. Container logs: `podman-compose -f container-compose.yml logs` or `docker-compose -f container-compose.yml logs`
 2. Container status: `podman-compose -f container-compose.yml ps` or `docker-compose -f container-compose.yml ps`
 3. Network connectivity: `podman network inspect opsechat-network`
+4. Scripted status output: `./compose-status.sh`
 
 For general opsechat issues, see the main [README.md](README.md).

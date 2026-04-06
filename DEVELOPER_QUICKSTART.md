@@ -68,10 +68,12 @@ The server prints the generated `.onion` URL and secret path at startup.
 ```bash
 cd /path/to/opsechat
 ./compose-up.sh
+./compose-status.sh
 ./compose-down.sh
 ```
 
-The application container now includes a `/health` healthcheck, and the compose configuration also probes the same endpoint.
+`compose-up.sh` now waits for Tor and application healthchecks before returning.
+Use `compose-status.sh` for a quick readiness and onion-address check.
 
 ## Full test commands already in the repo
 
@@ -89,6 +91,7 @@ python3 pf-tasks/test.py --skip-e2e
 - `app_factory.py` - Flask app creation and route registration
 - `monitoring.py` - `/health` payload generation
 - `docker-compose.yml` - local container deployment
+- `container-compose.yml` - canonical compose file (docker-compose is a symlink)
 - `Dockerfile` - container build and app healthcheck
 - `tests/test_rate_limit_and_health.py` - health endpoint and security header coverage
 - `tests/test_container_deployment.py` - deployment safety checks

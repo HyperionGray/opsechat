@@ -1,64 +1,87 @@
 #!/bin/bash
-# Script to start opsechat services with podman-compose or docker-compose
+# Start opsechat services and wait for readiness.
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -f "$SCRIPT_DIR/../container-compose.yml" ]; then
-    REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-else
-    REPO_ROOT="$SCRIPT_DIR"
-fi
-COMPOSE_FILE="$REPO_ROOT/container-compose.yml"
+source "$SCRIPT_DIR/compose-common.sh"
 
-# Determine which compose tool is available
-if command -v podman-compose &> /dev/null; then
-    COMPOSE_CMD="podman-compose"
-    echo "[*] Using podman-compose"
-elif command -v docker-compose &> /dev/null; then
-    COMPOSE_CMD="docker-compose"
-    echo "[*] Using docker-compose"
-elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
-    COMPOSE_CMD="docker compose"
-    echo "[*] Using docker compose (plugin)"
-else
-    echo "[!] Error: Neither podman-compose nor docker-compose found."
-    echo "[!] Please install one of them:"
-    echo "    - Podman: https://podman.io/getting-started/installation"
-    echo "    - Docker: https://docs.docker.com/get-docker/"
-    exit 1
-fi
+init_compose_context "$SCRIPT_DIR"
+require_compose_file
+show_compose_selection
+
+STARTUP_TIMEOUT="${COMPOSE_STARTUP_TIMEOUT:-120}"
+POLL_INTERVAL="${COMPOSE_STARTUP_POLL_INTERVAL:-3}"
 
 echo "[*] Starting opsechat services..."
-$COMPOSE_CMD -f "$COMPOSE_FILE" up -d
+compose up -d --build
 
 echo ""
-echo "[*] Services starting..."
-echo "[*] Waiting for services to be ready..."
-sleep 5
+echo "[*] Waiting for services to become ready..."
 
-# Check if services are running
-if $COMPOSE_CMD -f "$COMPOSE_FILE" ps | grep -q "opsechat-tor"; then
-    echo "[✓] Tor daemon is running"
-else
-    echo "[!] Tor daemon failed to start"
-fi
+elapsed=0
+while [ "$elapsed" -lt "$STARTUP_TIMEOUT" ]; do
+    tor_running=false
+    app_running=false
+    tor_health="unknown"
+    app_health="unknown"
 
-if $COMPOSE_CMD -f "$COMPOSE_FILE" ps | grep -q "opsechat-app"; then
-    echo "[✓] Opsechat application is running"
-else
-    echo "[!] Opsechat application failed to start"
+    if container_running "opsechat-tor"; then
+        tor_running=true
+        tor_health="$(container_health "opsechat-tor")"
+    fi
+
+    if container_running "opsechat-app"; then
+        app_running=true
+        app_health="$(container_health "opsechat-app")"
+    fi
+
+    if [ "$tor_running" = true ] && [ "$app_running" = true ]; then
+        tor_ok=false
+        app_ok=false
+
+        [ "$tor_health" = "healthy" ] || [ "$tor_health" = "none" ] && tor_ok=true
+        [ "$app_health" = "healthy" ] || [ "$app_health" = "none" ] && app_ok=true
+
+        if [ "$tor_ok" = true ] && [ "$app_ok" = true ]; then
+            echo "[✓] Tor daemon is running (health: $tor_health)"
+            echo "[✓] Opsechat application is running (health: $app_health)"
+            break
+        fi
+    fi
+
+    if [ "$tor_health" = "unhealthy" ] || [ "$app_health" = "unhealthy" ]; then
+        echo "[!] Service reported unhealthy state (tor: $tor_health, opsechat: $app_health)"
+        compose ps
+        exit 1
+    fi
+
+    echo "[*] Current status after ${elapsed}s: tor running=$tor_running health=$tor_health; opsechat running=$app_running health=$app_health"
+    sleep "$POLL_INTERVAL"
+    elapsed=$((elapsed + POLL_INTERVAL))
+done
+
+if [ "$elapsed" -ge "$STARTUP_TIMEOUT" ]; then
+    echo "[!] Timed out waiting for services to become ready (${STARTUP_TIMEOUT}s)"
+    compose ps
+    echo ""
+    echo "[*] Recent logs (tor/opsechat):"
+    compose logs --no-color --tail 40 tor opsechat || true
+    exit 1
 fi
 
 echo ""
 echo "[*] To view the onion address, run:"
-echo "    $COMPOSE_CMD -f $COMPOSE_FILE logs opsechat"
+echo "    ${COMPOSE_CMD[*]} -f $COMPOSE_FILE logs opsechat"
+echo ""
+echo "[*] To inspect current status, run:"
+echo "    ./compose-status.sh"
 echo ""
 echo "[*] To verify the setup is working, run:"
 echo "    ./verify-setup.sh"
 echo ""
 echo "[*] To view all logs in real-time, run:"
-echo "    $COMPOSE_CMD logs -f"
+echo "    ${COMPOSE_CMD[*]} -f $COMPOSE_FILE logs -f"
 echo ""
 echo "[*] To stop services, run:"
 echo "    ./compose-down.sh"
