@@ -195,7 +195,11 @@ class ChatClient:
                             msg = json.loads(line)
                             self.handle_server_message(msg)
                         except json.JSONDecodeError:
-                            pass
+                            self.add_message(
+                                "System",
+                                "Received malformed server payload (ignored).",
+                                is_system=True
+                            )
             
             except Exception as e:
                 if self.running:
@@ -217,6 +221,15 @@ class ChatClient:
             username = msg.get('username', 'Unknown')
             message = msg.get('message', '')
             self.add_message(username, message)
+
+        elif msg_type == 'system':
+            message = msg.get('message', '')
+            if message:
+                self.add_message("System", message, is_system=True)
+
+        elif msg_type == 'pong':
+            # Keepalive acknowledgment - no UI noise needed.
+            return
     
     def update_footer(self):
         """Update the footer with current username"""
@@ -277,7 +290,7 @@ class ChatClient:
         try:
             loop.run()
         except KeyboardInterrupt:
-            pass
+            self.add_message("System", "Interrupted, shutting down...", is_system=True)
         finally:
             self.cleanup()
     

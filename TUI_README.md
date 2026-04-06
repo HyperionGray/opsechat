@@ -15,6 +15,7 @@ This is a serious privacy and opsec tool for serious privacy and opsec people. I
 ✅ **Zero Disk** - Nothing touches disk except the application code  
 ✅ **Tor Integration** - Full support for Tor hidden services (.onion)  
 ✅ **SOCKS Proxy** - Client supports connecting via Tor SOCKS proxy  
+✅ **Slash Commands** - `/help`, `/users`, `/uptime`, `/stats` for quick server info
 
 ## Quick Start
 
@@ -77,6 +78,11 @@ The client will automatically use Tor SOCKS proxy if:
 ### 4. Chat!
 
 - Type your message and press **Enter** to send
+- Run slash commands for local server information:
+  - `/help` - list available commands
+  - `/users` - show connected user count
+  - `/uptime` - show server uptime
+  - `/stats` - show users, buffered messages, uptime, and burn policy
 - Press **Ctrl+C** to quit
 - Your username is randomly assigned (e.g., `PhantomRaven4523`)
 - Messages automatically disappear after 4 minutes

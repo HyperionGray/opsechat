@@ -35,10 +35,89 @@ class ChatServer:
         self.lock = threading.Lock()
         self.server_socket = None
         self.running = False
+        self.start_time = time.time()
         
         # Start cleanup thread
         self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
         self.cleanup_thread.start()
+
+    @staticmethod
+    def _safe_close_socket(sock: socket.socket):
+        """Close a socket while ignoring disconnect races."""
+        try:
+            sock.close()
+        except (OSError, socket.error):
+            return
+
+    def _send_json(self, client_socket: socket.socket, payload: Dict[str, Any]) -> bool:
+        """Best-effort JSON send; returns False when socket is no longer writable."""
+        try:
+            client_socket.send((json.dumps(payload) + '\n').encode())
+            return True
+        except (OSError, socket.error):
+            return False
+
+    def send_system_message(self, client_socket: socket.socket, message: str) -> bool:
+        """Send a server-side informational message to one client."""
+        return self._send_json(client_socket, {
+            'type': 'system',
+            'message': message,
+            'timestamp': datetime.datetime.now().isoformat(),
+        })
+
+    def _format_uptime(self) -> str:
+        elapsed = int(max(0, time.time() - self.start_time))
+        hours, remainder = divmod(elapsed, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        if hours:
+            return f"{hours}h {minutes}m {seconds}s"
+        if minutes:
+            return f"{minutes}m {seconds}s"
+        return f"{seconds}s"
+
+    def handle_command(self, username: str, message: str, client_socket: socket.socket) -> bool:
+        """
+        Handle slash commands from a client.
+        Returns True if the message was treated as a command.
+        """
+        if not message.startswith('/'):
+            return False
+
+        command = message.strip().split()[0].lower()
+
+        if command == '/help':
+            return self.send_system_message(
+                client_socket,
+                "Available commands: /help, /users, /uptime, /stats",
+            )
+
+        if command == '/users':
+            with self.lock:
+                active_users = len(self.clients)
+            return self.send_system_message(client_socket, f"Connected users: {active_users}")
+
+        if command == '/uptime':
+            return self.send_system_message(client_socket, f"Server uptime: {self._format_uptime()}")
+
+        if command == '/stats':
+            with self.lock:
+                active_users = len(self.clients)
+                buffered_messages = len(self.messages)
+            return self.send_system_message(
+                client_socket,
+                (
+                    "Server stats: "
+                    f"users={active_users}, "
+                    f"buffered_messages={buffered_messages}, "
+                    f"uptime={self._format_uptime()}, "
+                    f"burn_after={self.MESSAGE_LIFETIME}s"
+                ),
+            )
+
+        return self.send_system_message(
+            client_socket,
+            f"Unknown command '{command}'. Type /help for available commands.",
+        )
     
     def generate_username(self) -> str:
         """Generate a random username - no user choice allowed"""
@@ -115,7 +194,8 @@ class ChatServer:
                 'username': username,
                 'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
             }
-            client_socket.send((json.dumps(welcome) + '\n').encode())
+            if not self._send_json(client_socket, welcome):
+                return
             
             # Send existing messages
             messages = self.get_messages()
@@ -126,7 +206,8 @@ class ChatServer:
                     'message': msg['message'],
                     'timestamp': msg['timestamp'].isoformat()
                 }
-                client_socket.send((json.dumps(msg_data) + '\n').encode())
+                if not self._send_json(client_socket, msg_data):
+                    return
             
             # Handle incoming messages
             buffer = ""
@@ -142,13 +223,35 @@ class ChatServer:
                         if line:
                             try:
                                 msg_obj = json.loads(line)
-                                if msg_obj.get('type') == 'message':
-                                    message = msg_obj.get('message', '')
-                                    if self.add_message(username, message):
-                                        # Broadcast to all clients
-                                        self.broadcast_message(username, message)
                             except json.JSONDecodeError:
-                                pass
+                                self.send_system_message(client_socket, "Invalid JSON payload ignored.")
+                                continue
+
+                            msg_type = msg_obj.get('type')
+                            if msg_type == 'message':
+                                message = msg_obj.get('message', '')
+                                if self.handle_command(username, message, client_socket):
+                                    continue
+
+                                if self.add_message(username, message):
+                                    # Broadcast to all clients
+                                    self.broadcast_message(username, message)
+                                else:
+                                    self.send_system_message(
+                                        client_socket,
+                                        (
+                                            "Message rejected. Keep messages non-empty, "
+                                            f"under {self.MAX_MESSAGE_LENGTH} characters, "
+                                            "and avoid base64-style payloads."
+                                        ),
+                                    )
+                            elif msg_type == 'ping':
+                                self._send_json(client_socket, {'type': 'pong'})
+                            else:
+                                self.send_system_message(
+                                    client_socket,
+                                    f"Unsupported message type: {msg_type}",
+                                )
                 
                 except (OSError, socket.error) as e:
                     break
@@ -157,10 +260,7 @@ class ChatServer:
             with self.lock:
                 if client_socket in self.clients:
                     del self.clients[client_socket]
-            try:
-                client_socket.close()
-            except (OSError, socket.error):
-                pass
+            self._safe_close_socket(client_socket)
     
     def broadcast_message(self, username: str, message: str):
         """Broadcast a message to all connected clients"""
@@ -184,10 +284,7 @@ class ChatServer:
             for client in dead_clients:
                 if client in self.clients:
                     del self.clients[client]
-                try:
-                    client.close()
-                except (OSError, socket.error):
-                    pass
+                self._safe_close_socket(client)
     
     def start(self):
         """Start the chat server"""
@@ -226,18 +323,12 @@ class ChatServer:
         # Close all client connections
         with self.lock:
             for client in list(self.clients.keys()):
-                try:
-                    client.close()
-                except (OSError, socket.error):
-                    pass
+                self._safe_close_socket(client)
             self.clients.clear()
         
         # Close server socket
         if self.server_socket:
-            try:
-                self.server_socket.close()
-            except (OSError, socket.error):
-                pass
+            self._safe_close_socket(self.server_socket)
         
         # Overwrite and clear messages (security)
         with self.lock:

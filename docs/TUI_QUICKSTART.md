@@ -83,6 +83,18 @@ You'll see the TUI interface:
 
 **Try opening multiple clients** to test multi-user chat!
 
+### Built-in Slash Commands
+
+The TUI server now supports lightweight built-in commands:
+
+- `/help` - show available commands
+- `/users` - show current connected user count
+- `/uptime` - show server uptime
+- `/stats` - show basic server stats (users/messages/burn policy)
+
+These commands run server-side and return informational `system` messages only
+to the requesting client.
+
 ## Production Use (With Tor)
 
 For anonymous, encrypted communication over Tor:
