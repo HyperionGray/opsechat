@@ -3,6 +3,7 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -174,3 +175,65 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_export_state_serializes_datetimes(self):
+        """Exported state should be JSON-serializable and preserve timestamps."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 2.99
+        manager.active_domain = "example.xyz"
+        manager.owned_domains = [{
+            "domain": "example.xyz",
+            "price": 2.99,
+            "purchased_at": datetime(2026, 1, 1, 12, 0, 0),
+            "expires_at": datetime(2027, 1, 1, 12, 0, 0),
+        }]
+
+        exported = manager.export_state()
+
+        assert exported["active_domain"] == "example.xyz"
+        assert exported["current_spending"] == 2.99
+        assert exported["owned_domains"][0]["purchased_at"] == "2026-01-01T12:00:00"
+        assert exported["owned_domains"][0]["expires_at"] == "2027-01-01T12:00:00"
+
+    def test_import_state_parses_iso_datetimes(self):
+        """Imported state should parse ISO timestamps back to datetime objects."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        state = {
+            "current_spending": "4.5",
+            "active_domain": "imported.xyz",
+            "owned_domains": [{
+                "domain": "imported.xyz",
+                "price": 1.23,
+                "purchased_at": "2026-02-03T04:05:06",
+                "expires_at": "2027-02-03T04:05:06",
+            }],
+        }
+
+        manager.import_state(state)
+
+        assert manager.current_spending == 4.5
+        assert manager.active_domain == "imported.xyz"
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["purchased_at"] == datetime(2026, 2, 3, 4, 5, 6)
+        assert manager.owned_domains[0]["expires_at"] == datetime(2027, 2, 3, 4, 5, 6)
+
+    def test_import_state_handles_invalid_values(self):
+        """Invalid state values should fall back safely."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        state = {
+            "current_spending": "not-a-number",
+            "active_domain": 123,
+            "owned_domains": [{
+                "domain": "broken.xyz",
+                "price": 1.0,
+                "purchased_at": "not-a-date",
+                "expires_at": None,
+            }],
+        }
+
+        manager.import_state(state)
+
+        assert manager.current_spending == 0.0
+        assert manager.active_domain is None
+        assert manager.owned_domains[0]["purchased_at"] is None
+        assert manager.owned_domains[0]["expires_at"] is None

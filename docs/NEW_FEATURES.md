@@ -286,6 +286,14 @@ After rotating domains, update your email configuration:
 - Prevents purchases that would exceed budget
 - Resets monthly (manual reset required)
 
+### Persistent CLI State (New in maintenance update)
+- `domain_rotation_cli.py` now persists domain state in a JSON-safe format.
+- Saved entries in `~/.opsechat/domain_config.json` include:
+  - `current_spending`
+  - `active_domain`
+  - `owned_domains` with ISO-8601 timestamps (`purchased_at`, `expires_at`)
+- The `list` command now handles both ISO timestamp strings and datetime values safely.
+
 ---
 
 ## 🚀 Production Deployment

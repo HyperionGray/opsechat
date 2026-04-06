@@ -134,6 +134,32 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+
+    @staticmethod
+    def _parse_datetime(value):
+        """Parse datetime values from persisted state."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                logger.warning("Invalid datetime format in domain state: %s", value)
+        return None
+
+    @staticmethod
+    def _serialize_datetime(value):
+        """Convert datetime values to ISO strings for persistence."""
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+
+    def _normalize_owned_domain(self, domain_entry: Dict) -> Dict:
+        """Normalize a domain entry loaded from persisted state."""
+        normalized = dict(domain_entry)
+        normalized["purchased_at"] = self._parse_datetime(normalized.get("purchased_at"))
+        normalized["expires_at"] = self._parse_datetime(normalized.get("expires_at"))
+        return normalized
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
@@ -169,10 +195,18 @@ class DomainRotationManager:
             
             if result.get("available"):
                 price = result.get("price", 999)
-                
                 if isinstance(price, str):
                     # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
+                    try:
+                        price = float(price.replace("$", "").replace("€", "").strip())
+                    except ValueError:
+                        logger.warning("Could not parse domain price value: %s", price)
+                        continue
+                elif isinstance(price, (int, float)):
+                    price = float(price)
+                else:
+                    logger.warning("Unsupported domain price type: %s", type(price).__name__)
+                    continue
                 
                 if price <= max_price:
                     return {
@@ -202,12 +236,13 @@ class DomainRotationManager:
         result = self.api_client.purchase_domain(domain, years=1)
         
         if result.get("success"):
+            now = datetime.now()
             self.current_spending += price
             self.owned_domains.append({
                 "domain": domain,
                 "price": price,
-                "purchased_at": datetime.now(),
-                "expires_at": datetime.now() + timedelta(days=365)
+                "purchased_at": now,
+                "expires_at": now + timedelta(days=365)
             })
             
             # Set as active if no active domain
@@ -258,6 +293,67 @@ class DomainRotationManager:
             "monthly_budget": self.monthly_budget,
             "current_spending": self.current_spending,
             "remaining": self.monthly_budget - self.current_spending,
+            "domains_owned": len(self.owned_domains)
+        }
+
+    def export_state(self) -> Dict:
+        """Export manager state in a JSON-serializable structure."""
+        return {
+            "current_spending": self.current_spending,
+            "active_domain": self.active_domain,
+            "owned_domains": [
+                {
+                    "domain": domain.get("domain"),
+                    "price": domain.get("price"),
+                    "purchased_at": self._serialize_datetime(domain.get("purchased_at")),
+                    "expires_at": self._serialize_datetime(domain.get("expires_at"))
+                }
+                for domain in self.owned_domains
+                if isinstance(domain, dict)
+            ]
+        }
+
+    def import_state(self, state: Optional[Dict]) -> None:
+        """Import manager state from persisted configuration."""
+        if not isinstance(state, dict):
+            return
+
+        current_spending = state.get("current_spending", 0.0)
+        try:
+            self.current_spending = float(current_spending)
+        except (TypeError, ValueError):
+            logger.warning("Invalid current_spending in domain state: %s", current_spending)
+            self.current_spending = 0.0
+
+        active_domain = state.get("active_domain")
+        self.active_domain = active_domain if isinstance(active_domain, str) else None
+
+        owned_domains = state.get("owned_domains", [])
+        if isinstance(owned_domains, list):
+            self.owned_domains = [
+                self._normalize_owned_domain(entry)
+                for entry in owned_domains
+                if isinstance(entry, dict)
+            ]
+        else:
+            self.owned_domains = []
+
+    def configure(self, api_key: str, secret_key: str, monthly_budget: float = 50.0) -> Dict:
+        """Configure API credentials and budget."""
+        if not api_key or not secret_key:
+            raise ValueError("Both api_key and secret_key are required")
+
+        self.api_client = PorkbunAPIClient(api_key, secret_key)
+        self.monthly_budget = float(monthly_budget)
+        return self.get_config()
+
+    def get_config(self) -> Dict:
+        """Return non-secret configuration summary for UI and diagnostics."""
+        return {
+            "api_configured": self.api_client is not None,
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "active_domain": self.active_domain,
             "domains_owned": len(self.owned_domains)
         }
 

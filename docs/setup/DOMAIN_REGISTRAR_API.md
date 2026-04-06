@@ -133,11 +133,19 @@ http://yourservice.onion/{path}/email/config
 
 ## Security Considerations
 
-### API Key Storage
+### API Key and State Storage
 
-⚠️ **Important**: API keys are stored in-memory only. They are NOT persisted to disk. After restart, you must reconfigure.
+⚠️ **Important**:
+- The **web app** keeps API credentials in-memory only for privacy.
+- The standalone **`domain_rotation_cli.py`** stores credentials and domain rotation state in:
+  - `~/.opsechat/domain_config.json` (permissions `0600`)
 
-For persistent configuration:
+CLI state now includes:
+- `current_spending`
+- `active_domain`
+- `owned_domains` (with ISO-8601 timestamps for `purchased_at` and `expires_at`)
+
+For persistent configuration in server deployments:
 - Use environment variables in your deployment
 - Store encrypted credentials separately
 - Never commit API keys to version control
