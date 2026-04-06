@@ -34,6 +34,11 @@ Installation and deployment guides for different environments.
 - [Domain API Setup](setup/DOMAIN_API_SETUP.md) - Domain registrar API configuration
 - [Domain Registrar API](setup/DOMAIN_REGISTRAR_API.md) - Registrar API documentation
 
+### 🔐 Security
+Security hardening references and runtime policy details.
+
+- [Security Header Profiles](security/SECURITY_HEADERS.md) - CSP and response header behavior by content type
+
 ### 📖 User Guide
 Documentation for end users and operators.
 
@@ -57,6 +62,11 @@ Legal documents and policies.
 
 - [Acceptable Use Policy](legal/ACCEPTABLE_USE_POLICY.md) - AUP (requires legal review)
 - [Terms of Service](legal/TERMS_OF_SERVICE.md) - ToS (requires legal review)
+
+### 🔐 Security
+Security controls, policies, and hardening notes.
+
+- [Security Headers Policy](security/SECURITY_HEADERS.md) - CSP profiles, nonce strategy, and rollout plan
 
 ### 🔧 Implementation
 Implementation details and summaries of major features.

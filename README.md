@@ -332,6 +332,8 @@ Security
 ========
 
 For security best practices and recommendations, please see [SECURITY.md](SECURITY.md) and [Security Assessment](docs/assessment/SECURITY_ASSESSMENT.md).
+Response hardening details (CSP and related headers) are documented in
+[docs/security/SECURITY_HEADERS.md](docs/security/SECURITY_HEADERS.md).
 
 **Note on jQuery**: ✅ **RESOLVED** - The bundled jQuery has been updated to v3.7.1 to patch the previously known XSS vulnerabilities (CVE-2020-11023 and CVE-2020-11022). The security vulnerabilities have been addressed.
 
