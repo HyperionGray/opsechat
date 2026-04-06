@@ -2,6 +2,7 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +175,76 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_export_state_serializes_datetimes(self):
+        """State export should produce JSON-safe datetime strings"""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 2.99
+        manager.active_domain = "test123.xyz"
+        manager.owned_domains = [{
+            "domain": "test123.xyz",
+            "price": 2.99,
+            "purchased_at": datetime(2026, 1, 1, 12, 0, 0),
+            "expires_at": datetime(2027, 1, 1, 12, 0, 0)
+        }]
+
+        state = manager.export_state()
+
+        assert state["current_spending"] == 2.99
+        assert state["active_domain"] == "test123.xyz"
+        assert len(state["owned_domains"]) == 1
+        assert state["owned_domains"][0]["purchased_at"] == "2026-01-01T12:00:00"
+        assert state["owned_domains"][0]["expires_at"] == "2027-01-01T12:00:00"
+
+    def test_import_state_restores_datetime_objects(self):
+        """State import should restore datetime objects for CLI usage"""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.import_state({
+            "current_spending": "3.5",
+            "active_domain": "restored.xyz",
+            "owned_domains": [{
+                "domain": "restored.xyz",
+                "price": "3.50",
+                "purchased_at": "2026-01-01T12:00:00",
+                "expires_at": "2027-01-01T12:00:00"
+            }]
+        })
+
+        assert manager.current_spending == 3.5
+        assert manager.active_domain == "restored.xyz"
+        assert len(manager.owned_domains) == 1
+        assert isinstance(manager.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(manager.owned_domains[0]["expires_at"], datetime)
+
+    def test_import_state_skips_invalid_entries(self):
+        """Invalid persisted entries should not crash restoration"""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.import_state({
+            "current_spending": "bad-number",
+            "active_domain": "missing.xyz",
+            "owned_domains": [
+                "not-a-dict",
+                {"price": "2.0"},
+                {"domain": "valid.xyz", "price": "$2.25"}
+            ]
+        })
+
+        assert manager.current_spending == 0.0
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["domain"] == "valid.xyz"
+        # active_domain is invalid because it's not in owned domains; fallback to first loaded domain
+        assert manager.active_domain == "valid.xyz"
+
+    def test_find_cheap_available_domain_ignores_unparsable_price(self):
+        """Unparsable prices should be ignored rather than raising errors"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test123.xyz",
+            "price": "N/A"
+        }
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is None
