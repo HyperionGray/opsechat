@@ -7,6 +7,7 @@ Compatible with pf-web-poly-compile-helper-runner patterns
 import subprocess
 import sys
 from pathlib import Path
+import argparse
 
 def run_command(cmd, cwd=None, check=True):
     """Run command with proper error handling"""
@@ -32,9 +33,7 @@ def detect_container_tool():
             return tool
         except (subprocess.CalledProcessError, FileNotFoundError):
             continue
-    
-    print("[!] No container tool (podman/docker) found")
-    sys.exit(1)
+    return None
 
 def build_image(container_tool, tag="localhost/opsechat:latest"):
     """Build the opsechat container image"""
@@ -70,14 +69,26 @@ def build_image(container_tool, tag="localhost/opsechat:latest"):
 
 def main():
     """Main build task"""
+    parser = argparse.ArgumentParser(description='Build opsechat container image')
+    parser.add_argument(
+        '--tag',
+        default='localhost/opsechat:latest',
+        help='Container image tag (default: localhost/opsechat:latest)',
+    )
+    args = parser.parse_args()
+
     print("=== PF Task: Build ===")
     
     # Detect container tool
     container_tool = detect_container_tool()
+    if not container_tool:
+        print("[!] No container tool (podman/docker) found")
+        sys.exit(1)
+
     print(f"[*] Using container tool: {container_tool}")
     
     # Build image
-    success = build_image(container_tool)
+    success = build_image(container_tool, tag=args.tag)
     
     if success:
         print("[✓] Build task completed successfully")

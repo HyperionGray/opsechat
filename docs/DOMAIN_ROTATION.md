@@ -364,6 +364,16 @@ domain = domain_rotation_manager.generate_domain_from_pattern(pattern, tld='xyz'
 All domain rotation commands:
 
 ```bash
+# Flag-based CLI (release-tooling friendly)
+python rotate-domain.py --search example.xyz
+python rotate-domain.py --buy example.xyz --years 1
+python rotate-domain.py --list-owned
+python rotate-domain.py --get-pricing xyz
+
+# Use --api-key/--api-secret flags, env vars, or domain_rotation_cli.py config.
+# Optional budget persistence for buy checks:
+python rotate-domain.py --monthly-budget 20 --search example.xyz
+
 # Check available domains
 python -m domain_manager search --tld xyz --max-price 2.00
 
