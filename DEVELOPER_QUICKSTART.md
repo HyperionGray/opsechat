@@ -68,10 +68,11 @@ The server prints the generated `.onion` URL and secret path at startup.
 ```bash
 cd /path/to/opsechat
 ./compose-up.sh
+./compose-doctor.sh
 ./compose-down.sh
 ```
 
-The application container now includes a `/health` healthcheck, and the compose configuration also probes the same endpoint.
+`compose-doctor.sh` provides a single command to validate compose configuration, runtime status, Tor control-port reachability, and the app `/health` endpoint.
 
 ## Full test commands already in the repo
 

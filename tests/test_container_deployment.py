@@ -258,6 +258,9 @@ class TestScripts:
     
     def test_verify_setup_script_exists(self):
         self.assert_script_location('verify-setup.sh')
+
+    def test_compose_doctor_script_exists(self):
+        self.assert_script_location('compose-doctor.sh')
     
     def test_install_quadlets_script_exists(self):
         self.assert_script_location('install-quadlets.sh')

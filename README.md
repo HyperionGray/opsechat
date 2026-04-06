@@ -126,9 +126,10 @@ For the easiest setup with full isolation, use containers:
 $ git clone git@github.com:HyperionGray/opsechat.git
 $ cd opsechat
 $ ./compose-up.sh
+$ ./compose-doctor.sh
 ```
 
-That's it! The script will handle everything. See [Docker Guide](docs/setup/DOCKER.md) for full documentation.
+That's it! `compose-up.sh` starts services and `compose-doctor.sh` validates compose/runtime health in one command. `verify-setup.sh` remains as a compatibility alias. See [Docker Guide](docs/setup/DOCKER.md) for full documentation.
 
 ### Podman Quadlets (systemd integration)
 

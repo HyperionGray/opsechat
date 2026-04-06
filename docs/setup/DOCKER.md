@@ -58,17 +58,20 @@ Look for a line like:
 
 ### Verifying the Setup
 
-Run the verification script to check that everything is working:
+Run the unified doctor command:
 
 ```bash
-./verify-setup.sh
+./compose-doctor.sh
 ```
 
-This will check:
-- Container status
-- Tor service health
-- Network connectivity
-- Hidden service address
+This validates:
+- Compose command discovery (podman-first)
+- Compose file parsing
+- Running service detection
+- Tor control-port readiness
+- Application `/health` endpoint readiness
+
+`./verify-setup.sh` remains available as a legacy alias and forwards to `compose-doctor.sh`.
 
 ### Viewing Logs
 
