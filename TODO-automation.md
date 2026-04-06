@@ -37,8 +37,8 @@
 
 ### 4. Documentation Updates
 - [ ] Update repository README or contributing guide to mention the new CI workflow
-- [ ] Document the label-based triggering system for team members
-- [ ] Add instructions on how to manually trigger scheduled workflows if needed
+- [x] Document the label-based triggering system for team members
+- [x] Add instructions on how to manually trigger scheduled workflows if needed
 
 ### 5. Monitoring
 - [ ] Monitor CI run times over the next week to ensure they're faster

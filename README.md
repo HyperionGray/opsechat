@@ -190,6 +190,38 @@ Tests cover:
 
 For full testing documentation, see [Testing Guide](docs/user-guide/TESTING.md).
 
+Automation and CI Workflows
+===========================
+
+This repository uses a mix of scheduled, label-triggered, and manually dispatchable workflows.
+
+### Core CI workflow
+
+- **Consolidated CI**: `.github/workflows/ci.yml`
+  - Runs Python tests, Playwright E2E tests, and baseline security checks
+  - Intended as the primary required CI check on pull requests
+
+### Label-triggered workflows
+
+- **PR review by label**: `.github/workflows/auto-llm-pr-review.yml`
+  - Trigger: add a review/model label on a pull request
+- **Issue review by label**: `.github/workflows/auto-llm-issue-review.yml`
+  - Trigger: add a model label on an issue
+- **Copilot assignment by label**: `.github/workflows/auto-assign-copilot.yml`
+  - Trigger: add the `copilot` label to an issue
+
+### Manual workflow runs
+
+Many scheduled workflows also support `workflow_dispatch` for manual runs.
+
+To run one manually:
+1. Open GitHub **Actions**
+2. Select the workflow
+3. Click **Run workflow**
+4. Choose branch and optional inputs
+
+This is useful for ad-hoc validation instead of waiting for the next schedule window.
+
 
 How it works
 ============
