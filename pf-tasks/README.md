@@ -89,6 +89,12 @@ python pf-tasks/clean.py --images --force
 
 # Clean build artifacts
 python pf-tasks/clean.py --artifacts
+
+# Preview cleanup without making changes
+python pf-tasks/clean.py --dry-run --method all --images --artifacts
+
+# Write machine-readable cleanup summary for CI/automation
+python pf-tasks/clean.py --dry-run --report-file /tmp/opsechat-clean.json
 ```
 
 **Features:**
@@ -98,6 +104,8 @@ python pf-tasks/clean.py --artifacts
 - Removes networks and volumes
 - Optionally removes container images
 - Cleans build artifacts and cache
+- Supports dry-run mode to preview all cleanup actions
+- Can write JSON report files for automation/auditing
 
 ## Usage Patterns
 
