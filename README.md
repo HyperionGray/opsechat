@@ -170,6 +170,9 @@ Quick start:
 npm install
 npx playwright install
 
+# Optional: run repository hygiene audit
+python3 pf-tasks/audit_repo.py --strict
+
 # Run headless tests (no browser window)
 npm run test:headless
 

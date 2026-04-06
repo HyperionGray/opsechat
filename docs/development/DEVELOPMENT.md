@@ -77,8 +77,7 @@ These are development and testing utilities that help during development:
 - **`comprehensive_functionality_test.py`** - Full functional test suite
 
 ### Main Application Files
-- **`runserver.py`** - Main entry point (legacy monolithic)
-- **`runserver_refactored.py`** - Refactored version (blueprint-based)
+- **`runserver.py`** - Main entry point (app-factory based)
 - **`app_factory.py`** - Flask app factory pattern
 - **`chat-room.py`** - Standalone chat room creator
 - **`tui-server.py`** - Terminal UI server
@@ -119,10 +118,22 @@ npm run test:headless
 npm run test:headed
 
 # Run Python unit tests (requires pytest)
-python -m pytest
+python3 -m pytest
 
 # Run specific test file
 npx playwright test tests/basic.spec.js
+```
+
+### Repository Hygiene Audit
+
+Run the repository audit task before handoff to catch stale artifacts and layout drift:
+
+```bash
+# Fail if hygiene issues are found
+python3 pf-tasks/audit_repo.py --strict
+
+# Optionally auto-remove only low-risk backup artifacts
+python3 pf-tasks/audit_repo.py --apply-safe-fixes
 ```
 
 ### Test Organization

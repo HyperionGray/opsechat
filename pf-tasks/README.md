@@ -99,6 +99,28 @@ python pf-tasks/clean.py --artifacts
 - Optionally removes container images
 - Cleans build artifacts and cache
 
+### audit_repo.py
+Audits repository hygiene and reports stale/stray files.
+
+```bash
+# Run audit and fail on findings
+python3 pf-tasks/audit_repo.py --strict
+
+# Auto-remove only low-risk stale backup files
+python3 pf-tasks/audit_repo.py --apply-safe-fixes
+
+# Machine-readable output for CI or tooling
+python3 pf-tasks/audit_repo.py --json
+```
+
+**Features:**
+- Detects stale backup artifacts (`*~HEAD`, `*.orig`, `*.rej`)
+- Detects broken symlinks
+- Detects duplicate `*_refactored.py` files with identical content
+- Flags stale variant files (e.g., `*_old.html`, `*.deprecated`)
+- Detects repeated nested directory names (`foo/foo/...`)
+- Supports safe autofix mode for backup artifact cleanup
+
 ## Usage Patterns
 
 ### Complete Deployment Workflow
@@ -113,7 +135,10 @@ python pf-tasks/deploy.py
 # 3. Test the deployment
 python pf-tasks/test.py
 
-# 4. View the onion address
+# 4. Audit repository hygiene before handoff
+python3 pf-tasks/audit_repo.py --strict
+
+# 5. View the onion address
 systemctl --user status opsechat-app.service
 # or
 docker-compose logs opsechat
