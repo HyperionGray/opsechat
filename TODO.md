@@ -1,6 +1,6 @@
 # Production TODO List
 
-**Last Updated:** March 18, 2026  
+**Last Updated:** April 6, 2026  
 **Priority Order:** Critical → High → Medium → Low
 
 ---
@@ -116,7 +116,7 @@
   - [ ] Appeal process
 **Estimated:** 10-12 days
 
-### 7. Repository Organization (Violates Merge Rules!)
+### 7. Repository Organization
 - [ ] Create `docs/` directory with subdirectories:
   - [ ] `docs/assessment/` - Move all assessment/review/summary files
   - [ ] `docs/setup/` - Move INSTALL, DOCKER, QUADLETS, AWS_DEPLOYMENT
@@ -135,6 +135,8 @@
 - [ ] Update all documentation cross-references
 - [ ] Update import statements after moving files
 - [ ] Test that everything still works after reorganization
+- [x] Remove stale merge artifacts (`Dockerfile~HEAD`, `docker-compose.yml~HEAD`)
+- [x] Remove obsolete CI debug scripts from repo root (`test-ci-fix.js`, `test-server.js`)
 **Estimated:** 2-3 days
 
 ### 8. Comprehensive Testing
