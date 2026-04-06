@@ -19,10 +19,30 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _to_datetime(value):
+    """Convert ISO timestamp strings from config to datetime objects."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str) and value:
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return value
+    return value
+
+
+def _to_iso(value):
+    """Convert datetime values to ISO strings for JSON storage."""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
 
 
 def load_config():
@@ -112,7 +132,13 @@ def get_manager():
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        hydrated_domains = []
+        for domain_entry in config['owned_domains']:
+            hydrated = dict(domain_entry)
+            hydrated['purchased_at'] = _to_datetime(hydrated.get('purchased_at'))
+            hydrated['expires_at'] = _to_datetime(hydrated.get('expires_at'))
+            hydrated_domains.append(hydrated)
+        manager.owned_domains = hydrated_domains
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,14 +148,20 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    serialized_domains = []
+    for domain_entry in manager.owned_domains:
+        serialized = dict(domain_entry)
+        serialized['purchased_at'] = _to_iso(serialized.get('purchased_at'))
+        serialized['expires_at'] = _to_iso(serialized.get('expires_at'))
+        serialized_domains.append(serialized)
+    config['owned_domains'] = serialized_domains
     config['active_domain'] = manager.active_domain
     save_config(config)
 
 
 def list_domains():
     """List owned domains"""
-    manager, config = get_manager()
+    manager, _config = get_manager()
     
     print("\n=== Owned Domains ===\n")
     
@@ -144,14 +176,18 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        purchased_at = _to_datetime(domain.get('purchased_at'))
+        expires_at = _to_datetime(domain.get('expires_at'))
+        purchased_display = purchased_at.strftime('%Y-%m-%d %H:%M') if isinstance(purchased_at, datetime) else str(domain.get('purchased_at', 'unknown'))
+        expires_display = expires_at.strftime('%Y-%m-%d') if isinstance(expires_at, datetime) else str(domain.get('expires_at', 'unknown'))
+        print(f"   Purchased: {purchased_display}")
+        print(f"   Expires: {expires_display}")
         print()
 
 
 def search_domains():
     """Search for available cheap domains"""
-    manager, config = get_manager()
+    manager, _config = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
     print("Searching for domains under $5...\n")
@@ -215,7 +251,7 @@ def rotate_domain():
 
 def show_status():
     """Show current status"""
-    manager, config = get_manager()
+    manager, _config = get_manager()
     
     print("\n=== Domain Rotation Status ===\n")
     

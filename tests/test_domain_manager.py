@@ -174,3 +174,33 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_sets_provider_and_redacts_config(self):
+        """Test manager configure and status snapshot"""
+        manager = DomainRotationManager()
+
+        manager.configure(
+            api_key="pk1_example_key",
+            secret_key="sk1_example_secret",
+            monthly_budget=25.0,
+            provider="porkbun",
+        )
+        config = manager.get_config()
+
+        assert config["configured"] is True
+        assert config["provider"] == "porkbun"
+        assert config["api_key_last4"] == "e_key"[-4:]
+        assert config["secret_key_last4"] == "cret"[-4:]
+        assert config["monthly_budget"] == 25.0
+
+    def test_configure_rejects_invalid_budget(self):
+        """Test manager configure rejects non-positive budget"""
+        manager = DomainRotationManager()
+
+        with pytest.raises(ValueError):
+            manager.configure(
+                api_key="pk1_example_key",
+                secret_key="sk1_example_secret",
+                monthly_budget=0,
+                provider="porkbun",
+            )

@@ -8,7 +8,7 @@ OpSecChat supports automated domain rotation for burner email systems. This allo
 
 Currently supported:
 - **Porkbun** (Recommended - cheap .xyz, .club domains)
-- Additional registrars can be added by extending `DomainAPIClient`
+- Additional registrars can be added by extending `DomainAPIClient` and registering a provider factory.
 
 ## Setup
 
@@ -329,25 +329,44 @@ dig @8.8.8.8 yourdomain.xyz MX
 
 ### Multiple Registrars
 
-Add support for additional registrars:
+The domain manager supports provider registration at runtime.
 
 ```python
-from domain_manager import DomainAPIClient
+from domain_manager import DomainAPIClient, DomainRotationManager
 
 class NamecheapAPIClient(DomainAPIClient):
-    def __init__(self, api_key: str):
-        super().__init__(api_key)
-    
+    def __init__(self, api_key: str, api_secret: str | None = None):
+        super().__init__(api_key, api_secret)
+
     def search_domain(self, domain: str):
         # Implementation here
-        pass
-    
+        return {"domain": domain, "available": False, "price": None}
+
     def purchase_domain(self, domain: str, years: int = 1):
         # Implementation here
-        pass
+        return {"success": False, "domain": domain}
 
-# Register new client
-domain_rotation_manager.add_api_client('namecheap', NamecheapAPIClient(api_key))
+    def get_pricing(self, tld: str):
+        return {}
+
+manager = DomainRotationManager()
+manager.register_api_client(
+    "namecheap",
+    lambda api_key, api_secret: NamecheapAPIClient(api_key, api_secret),
+)
+manager.set_api_client_by_name("namecheap", "api-key", "api-secret")
+```
+
+You can also configure a provider with credentials in one call:
+
+```python
+manager.configure(
+    api_key="pk1_example",
+    secret_key="sk1_example",
+    monthly_budget=25.0,
+    provider="porkbun",
+)
+print(manager.get_config())  # safe status snapshot for UI
 ```
 
 ### Custom Domain Patterns
@@ -361,7 +380,7 @@ domain = domain_rotation_manager.generate_domain_from_pattern(pattern, tld='xyz'
 
 ## CLI Reference
 
-All domain rotation commands:
+All domain rotation CLI commands:
 
 ```bash
 # Check available domains
