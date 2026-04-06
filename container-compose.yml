@@ -34,6 +34,12 @@ services:
       - TOR_CONTROL_PORT=9051
       - TOR_CONTROL_HOST=tor
       - FLASK_DEBUG=0
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     # No ports exposed to host - access only via Tor hidden service
     # Uncomment for debugging/development only:
     # ports:
