@@ -40,5 +40,9 @@ EXPOSE 5000
 ENV PYTHONUNBUFFERED=1
 ENV TOR_CONTROL_PORT=9051
 
+# Verify app health from inside the container.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl --fail --silent http://127.0.0.1:5000/health || exit 1
+
 # Run the application
 CMD ["python", "runserver.py"]

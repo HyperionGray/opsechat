@@ -40,6 +40,12 @@ services:
     #   - "5000:5000"
     networks:
       - opsechat-network
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     restart: on-failure
     stdin_open: true
     tty: true

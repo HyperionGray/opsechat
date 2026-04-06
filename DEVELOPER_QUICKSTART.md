@@ -68,10 +68,11 @@ The server prints the generated `.onion` URL and secret path at startup.
 ```bash
 cd /path/to/opsechat
 ./compose-up.sh
+./compose-status.sh
 ./compose-down.sh
 ```
 
-The application container now includes a `/health` healthcheck, and the compose configuration also probes the same endpoint.
+The application container includes a `/health` healthcheck, and `compose-up.sh` now waits for both Tor control-port readiness and app health by default.
 
 ## Full test commands already in the repo
 

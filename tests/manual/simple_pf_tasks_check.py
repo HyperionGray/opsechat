@@ -66,7 +66,7 @@ def test_file_structure():
             print(f"[!] {filename} missing")
     
     # Check integration files
-    integration_files = ['container-compose.yml', 'compose-up.sh', 'compose-down.sh']
+    integration_files = ['container-compose.yml', 'compose-up.sh', 'compose-down.sh', 'compose-status.sh']
     for filename in integration_files:
         file_path = project_root / filename
         if file_path.exists():

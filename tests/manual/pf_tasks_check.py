@@ -282,6 +282,7 @@ class PFTaskTester:
             'container-compose.yml',
             'compose-up.sh',
             'compose-down.sh',
+            'compose-status.sh',
             'package.json',
             'playwright.config.js'
         ]

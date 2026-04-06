@@ -1,53 +1,61 @@
 #!/bin/bash
-# Script to start opsechat services with podman-compose or docker-compose
+# Script to start opsechat services with podman-compose or docker-compose.
 
-set -e
+set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -f "$SCRIPT_DIR/../container-compose.yml" ]; then
-    REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-else
-    REPO_ROOT="$SCRIPT_DIR"
-fi
-COMPOSE_FILE="$REPO_ROOT/container-compose.yml"
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+source "$SCRIPT_DIR/compose-common.sh"
 
-# Determine which compose tool is available
-if command -v podman-compose &> /dev/null; then
-    COMPOSE_CMD="podman-compose"
-    echo "[*] Using podman-compose"
-elif command -v docker-compose &> /dev/null; then
-    COMPOSE_CMD="docker-compose"
-    echo "[*] Using docker-compose"
-elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
-    COMPOSE_CMD="docker compose"
-    echo "[*] Using docker compose (plugin)"
-else
-    echo "[!] Error: Neither podman-compose nor docker-compose found."
-    echo "[!] Please install one of them:"
-    echo "    - Podman: https://podman.io/getting-started/installation"
-    echo "    - Docker: https://docs.docker.com/get-docker/"
-    exit 1
-fi
+WAIT_TIMEOUT=60
+SKIP_WAIT=0
 
+is_positive_integer() {
+    [[ "$1" =~ ^[0-9]+$ ]] && [[ "$1" -gt 0 ]]
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            echo "Usage: ./compose-up.sh [--wait-timeout <seconds>] [--no-wait]"
+            exit 0
+            ;;
+        --wait-timeout)
+            if [[ $# -lt 2 ]]; then
+                echo "[!] Error: --wait-timeout requires a value in seconds."
+                exit 1
+            fi
+            WAIT_TIMEOUT="$2"
+            if ! is_positive_integer "$WAIT_TIMEOUT"; then
+                echo "[!] Error: --wait-timeout must be a positive integer."
+                exit 1
+            fi
+            shift 2
+            ;;
+        --no-wait)
+            SKIP_WAIT=1
+            shift
+            ;;
+        *)
+            echo "[!] Unknown option: $1"
+            echo "Usage: ./compose-up.sh [--wait-timeout <seconds>] [--no-wait]"
+            exit 1
+            ;;
+    esac
+done
+
+detect_compose
+echo "[*] Using $COMPOSE_NAME"
 echo "[*] Starting opsechat services..."
-$COMPOSE_CMD -f "$COMPOSE_FILE" up -d
+run_compose up -d
 
 echo ""
-echo "[*] Services starting..."
-echo "[*] Waiting for services to be ready..."
-sleep 5
-
-# Check if services are running
-if $COMPOSE_CMD -f "$COMPOSE_FILE" ps | grep -q "opsechat-tor"; then
-    echo "[✓] Tor daemon is running"
+if [[ "$SKIP_WAIT" -eq 0 ]]; then
+    echo "[*] Waiting up to ${WAIT_TIMEOUT}s for service health..."
+    "$SCRIPT_DIR/compose-status.sh" --wait --timeout "$WAIT_TIMEOUT"
 else
-    echo "[!] Tor daemon failed to start"
-fi
-
-if $COMPOSE_CMD -f "$COMPOSE_FILE" ps | grep -q "opsechat-app"; then
-    echo "[✓] Opsechat application is running"
-else
-    echo "[!] Opsechat application failed to start"
+    echo "[*] Skipping health wait (--no-wait)."
+    "$SCRIPT_DIR/compose-status.sh"
 fi
 
 echo ""
@@ -56,9 +64,6 @@ echo "    $COMPOSE_CMD -f $COMPOSE_FILE logs opsechat"
 echo ""
 echo "[*] To verify the setup is working, run:"
 echo "    ./verify-setup.sh"
-echo ""
-echo "[*] To view all logs in real-time, run:"
-echo "    $COMPOSE_CMD logs -f"
 echo ""
 echo "[*] To stop services, run:"
 echo "    ./compose-down.sh"

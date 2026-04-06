@@ -37,7 +37,18 @@ This script will:
 2. Build the opsechat container image
 3. Start the Tor daemon
 4. Start the opsechat application
-5. Display status and instructions
+5. Wait for Tor control and `/health` readiness (default timeout: 60s)
+6. Display status and instructions
+
+You can customize startup behavior:
+
+```bash
+# Skip readiness wait and return immediately after compose up
+./compose-up.sh --no-wait
+
+# Wait longer for slower hosts
+./compose-up.sh --wait-timeout 120
+```
 
 ### Viewing the Onion Address
 
@@ -62,6 +73,16 @@ Run the verification script to check that everything is working:
 
 ```bash
 ./verify-setup.sh
+```
+
+For a quick status snapshot (or readiness wait without full verification), use:
+
+```bash
+# Show compose status for tor + opsechat
+./compose-status.sh
+
+# Block until Tor control and /health are reachable
+./compose-status.sh --wait --timeout 60
 ```
 
 This will check:
