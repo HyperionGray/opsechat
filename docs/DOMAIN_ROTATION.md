@@ -7,8 +7,11 @@ OpSecChat supports automated domain rotation for burner email systems. This allo
 ## Supported Registrars
 
 Currently supported:
-- **Porkbun** (Recommended - cheap .xyz, .club domains)
-- Additional registrars can be added by extending `DomainAPIClient`
+- **Porkbun** (Recommended default for low-cost domains)
+- **Namecheap** (integrated, supports sandbox and production API endpoints)
+
+The rotation manager can use a specific provider (`porkbun` or `namecheap`) or
+automatically pick from configured providers (`auto` mode).
 
 ## Setup
 
@@ -329,25 +332,29 @@ dig @8.8.8.8 yourdomain.xyz MX
 
 ### Multiple Registrars
 
-Add support for additional registrars:
+Use integrated multi-provider support:
 
 ```python
-from domain_manager import DomainAPIClient
+from domain_manager import DomainRotationManager, PorkbunAPIClient, NamecheapAPIClient
 
-class NamecheapAPIClient(DomainAPIClient):
-    def __init__(self, api_key: str):
-        super().__init__(api_key)
-    
-    def search_domain(self, domain: str):
-        # Implementation here
-        pass
-    
-    def purchase_domain(self, domain: str, years: int = 1):
-        # Implementation here
-        pass
+manager = DomainRotationManager(monthly_budget=50.0)
+manager.add_api_client("porkbun", PorkbunAPIClient("pk", "sk"))
+manager.add_api_client(
+    "namecheap",
+    NamecheapAPIClient(
+        api_user="api-user",
+        api_key="api-key",
+        username="username",
+        client_ip="1.2.3.4",
+        use_sandbox=True,
+    ),
+)
 
-# Register new client
-domain_rotation_manager.add_api_client('namecheap', NamecheapAPIClient(api_key))
+# Provider-specific search
+result = manager.find_cheap_available_domain(provider_name="namecheap")
+
+# Automatic provider selection
+result = manager.find_cheap_available_domain(provider_name="auto")
 ```
 
 ### Custom Domain Patterns

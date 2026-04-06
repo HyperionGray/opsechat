@@ -4,7 +4,7 @@ This guide explains how to set up domain registrar API access for automated burn
 
 ## Supported Registrars
 
-### Porkbun (Recommended)
+### Porkbun
 
 Porkbun offers cheap domains and a simple API, making it ideal for burner email rotation.
 
@@ -77,21 +77,46 @@ Porkbun offers cheap domains and a simple API, making it ideal for burner email 
 - Budget: $100+/month
 - Covers: 100+ .xyz domains or 20+ .com domains
 
-## Alternative Registrars
-
 ### Namecheap
 
-While not directly integrated, Namecheap offers competitive pricing and API access.
+Namecheap is now supported in `domain_rotation_cli.py` and can be used as a primary provider or alongside Porkbun in `auto` mode.
 
 #### Getting Started
 - Website: [namecheap.com](https://namecheap.com)
 - API Documentation: [namecheap.com/support/api](https://www.namecheap.com/support/api/)
 - Pricing: .com domains ~$8.88/year, .xyz ~$1.98/year
 
-#### Integration Notes
-- Requires custom API client implementation
-- More complex API than Porkbun
-- Good for high-volume usage
+#### Required Namecheap API fields
+- `ApiUser`
+- `ApiKey`
+- `UserName`
+- `ClientIp` (must be whitelisted in your Namecheap API settings)
+
+#### CLI configuration
+Run:
+
+```bash
+python domain_rotation_cli.py config
+```
+
+Then:
+1. Set preferred provider to `namecheap` or `auto`
+2. Enter Namecheap credentials when prompted
+3. Optionally enable sandbox mode for testing
+
+Use provider-specific operations:
+
+```bash
+python domain_rotation_cli.py search --provider namecheap
+python domain_rotation_cli.py rotate --provider namecheap
+```
+
+Or allow automatic provider selection:
+
+```bash
+python domain_rotation_cli.py search --provider auto
+python domain_rotation_cli.py rotate --provider auto
+```
 
 ### GoDaddy
 
