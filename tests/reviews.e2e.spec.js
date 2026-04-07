@@ -81,6 +81,21 @@ test.describe('Reviews Functionality', () => {
     expect(insertedReview).toBeDefined();
     expect(insertedReview.rating).toBe(5);
     expect(insertedReview.user_id).toMatch(ANONYMIZED_USER_ID_PATTERN);
+    expect(reviewData.my_review_count).toBeGreaterThanOrEqual(1);
+    expect(reviewData.stats.my_review_count).toBe(reviewData.my_review_count);
+  });
+
+  test('should expose per-session review activity endpoint', async ({ page }) => {
+    await page.goto(`${TEST_CONFIG.testPath}/reviews`);
+    await page.check('#rating-5');
+    await page.fill('#review_text', uniqueReviewMessage('Session review activity'));
+    await page.getByRole('button', { name: /Submit Review/i }).click();
+
+    const meResponse = await page.request.get(`${TEST_CONFIG.testPath}/reviews/me`);
+    expect(meResponse.status()).toBe(200);
+    const payload = await meResponse.json();
+    expect(payload.success).toBe(true);
+    expect(payload.my_review_count).toBeGreaterThanOrEqual(1);
   });
 
   test('should reject invalid AJAX submissions without a rating', async ({ page }) => {

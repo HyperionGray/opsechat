@@ -151,7 +151,15 @@ def main():
             
             return {"total": total, "average_rating": average_rating, "rating_distribution": rating_distribution}
         
-        register_review_routes(app, id_generator, get_random_color, add_review, get_reviews, get_review_stats)
+        register_review_routes(
+            app,
+            id_generator,
+            get_random_color,
+            add_review,
+            get_reviews,
+            get_review_stats,
+            lambda user_id: sum(1 for review in reviews if review.get("user_id") == user_id),
+        )
     except ImportError as e:
         print(f"Warning: Could not import review_routes: {e}")
     

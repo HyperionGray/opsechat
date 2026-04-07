@@ -8,6 +8,7 @@ extracted from runserver.py to improve code organization.
 import os
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
+from review_performance import get_cached_review_stats, get_user_review_count
 try:
     from rate_limiter import init_limiter
 except ModuleNotFoundError:
@@ -43,26 +44,10 @@ def create_app():
         return reviews
     
     def get_review_stats():
-        if not reviews:
-            return {
-                "total": 0,
-                "average_rating": 0,
-                "rating_distribution": {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
-            }
-        
-        total = len(reviews)
-        total_rating = sum(review["rating"] for review in reviews)
-        average_rating = round(total_rating / total, 1)
-        
-        rating_distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
-        for review in reviews:
-            rating_distribution[review["rating"]] += 1
-        
-        return {
-            "total": total,
-            "average_rating": average_rating,
-            "rating_distribution": rating_distribution
-        }
+        return get_cached_review_stats(reviews)
+
+    def get_user_review_count_for_session(user_id):
+        return get_user_review_count(user_id, reviews)
     
     def add_review_wrapper(user_id, rating, review_text):
         return add_review(reviews, user_id, rating, review_text)
@@ -103,7 +88,7 @@ def create_app():
     
     # Register review routes (existing function-based registration)
     register_review_routes(app, id_generator, get_random_color, 
-                          add_review_wrapper, get_reviews, get_review_stats)
+                          add_review_wrapper, get_reviews, get_review_stats, get_user_review_count_for_session)
 
     # Register HTTP mail routes (email over HTTP, no SMTP/IMAP)
     from http_mail_routes import register_http_mail_routes

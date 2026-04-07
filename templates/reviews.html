@@ -71,6 +71,11 @@
   .stat-item {
     text-align: center;
   }
+
+  .stat-item.session-stat {
+    border: 1px dashed #0ff;
+    padding: 8px;
+  }
   
   .stat-value {
     font-size: 24px;
@@ -270,6 +275,10 @@
         <div class="stat-value">{{ stats.average_rating }}</div>
         <div class="stat-label">Average Rating</div>
       </div>
+      <div class="stat-item session-stat">
+        <div class="stat-value" id="my-review-count">{{ my_review_count }}</div>
+        <div class="stat-label">Your Reviews This Session</div>
+      </div>
     </div>
     
     {% if stats.total > 0 %}
@@ -404,17 +413,18 @@ $(document).ready(function() {
 function refreshReviews() {
   $.get('/{{ path }}/reviews/list')
     .done(function(data) {
-      updateReviewsDisplay(data.reviews, data.stats);
+      updateReviewsDisplay(data.reviews, data.stats, data.my_review_count);
     })
     .fail(function() {
       console.log('Failed to refresh reviews');
     });
 }
 
-function updateReviewsDisplay(reviews, stats) {
+function updateReviewsDisplay(reviews, stats, myReviewCount) {
   // Update stats
   $('.stat-value').eq(0).text(stats.total);
   $('.stat-value').eq(1).text(stats.average_rating);
+  $('#my-review-count').text(myReviewCount || 0);
   
   // Update rating distribution
   if (stats.total > 0) {

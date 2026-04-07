@@ -76,11 +76,15 @@ def cleanup_old_reviews(reviews):
 
 def add_review(reviews, user_id, rating, review_text):
     """Add a new review to the reviews list"""
+    normalized_rating = int(rating)
+    normalized_text = (review_text or "").strip()
     review = {
         'id': id_generator(size=16),
         'user_id': user_id,
-        'rating': rating,
-        'review_text': review_text,
+        'rating': normalized_rating,
+        # Keep both keys for compatibility with older callers.
+        'text': normalized_text,
+        'review_text': normalized_text,
         'timestamp': datetime.datetime.now()
     }
     

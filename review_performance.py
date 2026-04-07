@@ -6,6 +6,7 @@ Implements caching as recommended by Amazon Q Code Review
 import datetime
 from functools import lru_cache
 import time
+from typing import Iterable, Tuple
 
 # Cache for review statistics
 _review_stats_cache = None
@@ -40,14 +41,23 @@ def get_cached_review_stats(reviews):
             "rating_distribution": {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
         }
     else:
-        total = len(reviews)
-        total_rating = sum(review["rating"] for review in reviews)
-        average_rating = round(total_rating / total, 1)
-        
         rating_distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+        total_rating = 0
+        valid_ratings = 0
         for review in reviews:
-            rating_distribution[review["rating"]] += 1
-        
+            try:
+                rating = int(review.get("rating", 0))
+            except (TypeError, ValueError):
+                continue
+            if rating < 1 or rating > 5:
+                continue
+            rating_distribution[rating] += 1
+            total_rating += rating
+            valid_ratings += 1
+
+        total = valid_ratings
+        average_rating = round(total_rating / total, 1) if total > 0 else 0
+
         stats = {
             "total": total,
             "average_rating": average_rating,
@@ -81,15 +91,27 @@ def optimized_cleanup_old_reviews(reviews, secs_to_live=86400):
     
     return cleaned_reviews
 
-@lru_cache(maxsize=32)
-def get_user_review_count(user_id, reviews_hash):
+@lru_cache(maxsize=256)
+def _get_user_review_count_cached(
+    user_id: str, reviews_hash: int, review_user_ids: Tuple[str, ...]
+) -> int:
     """
-    Get review count for a specific user (cached)
-    reviews_hash is used to invalidate cache when reviews change
+    Count user-authored reviews using an LRU cache.
     """
-    # This would need to be implemented with actual review data
-    # For now, return 0 as placeholder
-    return 0
+    # reviews_hash is part of the cache key by design, even though this
+    # function can derive counts from review_user_ids alone.
+    _ = reviews_hash
+    return sum(1 for candidate in review_user_ids if candidate == user_id)
+
+
+def get_user_review_count(user_id: str, reviews: Iterable[dict]) -> int:
+    """
+    Get review count for a specific user with cache invalidation.
+    """
+    reviews = list(reviews)
+    reviews_hash = create_reviews_hash(reviews)
+    review_user_ids = tuple(str(review.get("user_id", "")) for review in reviews)
+    return _get_user_review_count_cached(user_id, reviews_hash, review_user_ids)
 
 def create_reviews_hash(reviews):
     """
@@ -97,10 +119,25 @@ def create_reviews_hash(reviews):
     """
     if not reviews:
         return hash(())
-    
-    # Create hash based on review count and latest timestamp
-    latest_timestamp = max(review["timestamp"] for review in reviews)
-    return hash((len(reviews), latest_timestamp.isoformat()))
+
+    # Include stable fields so cache invalidates whenever review content changes.
+    fingerprint = []
+    for review in reviews:
+        timestamp = review.get("timestamp")
+        if hasattr(timestamp, "isoformat"):
+            timestamp_value = timestamp.isoformat()
+        else:
+            timestamp_value = str(timestamp)
+        fingerprint.append(
+            (
+                str(review.get("id", "")),
+                str(review.get("user_id", "")),
+                str(review.get("rating", "")),
+                str(review.get("text", "")),
+                timestamp_value,
+            )
+        )
+    return hash(tuple(fingerprint))
 
 # Performance monitoring for review operations
 class ReviewPerformanceMonitor:

@@ -1,5 +1,13 @@
 # Review System Routes
-def register_review_routes(app, id_generator, get_random_color, add_review, get_reviews, get_review_stats):
+def register_review_routes(
+    app,
+    id_generator,
+    get_random_color,
+    add_review,
+    get_reviews,
+    get_review_stats,
+    get_user_review_count_for_session,
+):
     """Register review routes with the Flask app"""
     from flask import render_template, jsonify, request, session
     
@@ -31,15 +39,17 @@ def register_review_routes(app, id_generator, get_random_color, add_review, get_
                     'text': 'Please select a valid rating (1-5 stars).'
                 }
         
-        # Get reviews and stats
+        # Get reviews, stats, and session-specific activity
         all_reviews = get_reviews()
         stats = get_review_stats()
+        my_review_count = get_user_review_count_for_session(session["_id"])
         
         return render_template("reviews.html",
                               hostname=app.config["hostname"],
                               path=app.config["path"],
                               reviews=all_reviews,
                               stats=stats,
+                              my_review_count=my_review_count,
                               message=message,
                               script_enabled=False)
 
@@ -56,12 +66,14 @@ def register_review_routes(app, id_generator, get_random_color, add_review, get_
         
         all_reviews = get_reviews()
         stats = get_review_stats()
+        my_review_count = get_user_review_count_for_session(session["_id"])
         
         return render_template("reviews.html",
                               hostname=app.config["hostname"],
                               path=app.config["path"],
                               reviews=all_reviews,
                               stats=stats,
+                              my_review_count=my_review_count,
                               message=None,
                               script_enabled=True)
 
@@ -104,15 +116,44 @@ def register_review_routes(app, id_generator, get_random_color, add_review, get_
         # Format reviews for JSON response
         formatted_reviews = []
         for review in all_reviews:
+            review_text = review.get("text", review.get("review_text", ""))
+            try:
+                rating = int(review.get("rating", 0))
+            except (TypeError, ValueError):
+                rating = 0
             formatted_reviews.append({
                 "id": review["id"],
-                "rating": review["rating"],
-                "text": review["text"],
+                "rating": rating,
+                "text": review_text,
                 "timestamp": review["timestamp"].strftime("%Y-%m-%d %H:%M"),
                 "user_id": review["user_id"][:8] + "..."  # Show partial user ID for anonymity
             })
         
+        my_review_count = get_user_review_count_for_session(session["_id"]) if "_id" in session else 0
+        stats_with_session = dict(stats)
+        stats_with_session["my_review_count"] = my_review_count
+
         return jsonify({
             "reviews": formatted_reviews,
-            "stats": stats
+            "stats": stats_with_session,
+            "my_review_count": my_review_count
+        })
+
+
+    @app.route('/<string:url_addition>/reviews/me', methods=["GET"])
+    def reviews_my_activity(url_addition):
+        """Get current session's review activity."""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        if "_id" not in session:
+            return jsonify({
+                "success": False,
+                "message": "Session not initialized"
+            }), 400
+
+        my_review_count = get_user_review_count_for_session(session["_id"])
+        return jsonify({
+            "success": True,
+            "my_review_count": my_review_count
         })
