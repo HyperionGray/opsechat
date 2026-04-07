@@ -261,6 +261,74 @@ class DomainRotationManager:
             "domains_owned": len(self.owned_domains)
         }
 
+    @staticmethod
+    def _parse_datetime(value):
+        """Parse datetime values from persisted state safely."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                logger.warning("Invalid datetime format in persisted state: %s", value)
+        return None
+
+    def export_state(self) -> Dict:
+        """
+        Export JSON-safe state for persistence.
+        Datetime values are converted to ISO-8601 strings.
+        """
+        serialized_domains: List[Dict] = []
+        for entry in self.owned_domains:
+            if not isinstance(entry, dict):
+                continue
+
+            purchased_at = self._parse_datetime(entry.get("purchased_at"))
+            expires_at = self._parse_datetime(entry.get("expires_at"))
+
+            serialized_domains.append({
+                "domain": entry.get("domain"),
+                "price": entry.get("price"),
+                "purchased_at": purchased_at.isoformat() if purchased_at else None,
+                "expires_at": expires_at.isoformat() if expires_at else None,
+            })
+
+        return {
+            "current_spending": self.current_spending,
+            "owned_domains": serialized_domains,
+            "active_domain": self.active_domain,
+        }
+
+    def import_state(self, state: Dict):
+        """
+        Import persisted state from config data.
+        Supports old and new config shapes with graceful fallbacks.
+        """
+        if not isinstance(state, dict):
+            logger.warning("Domain rotation state is not a dictionary; ignoring")
+            return
+
+        try:
+            self.current_spending = float(state.get("current_spending", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            logger.warning("Invalid current_spending value in persisted state; resetting to 0")
+            self.current_spending = 0.0
+        self.active_domain = state.get("active_domain")
+
+        raw_domains = state.get("owned_domains", [])
+        parsed_domains: List[Dict] = []
+        if isinstance(raw_domains, list):
+            for entry in raw_domains:
+                if not isinstance(entry, dict):
+                    continue
+                parsed_domains.append({
+                    "domain": entry.get("domain"),
+                    "price": entry.get("price"),
+                    "purchased_at": self._parse_datetime(entry.get("purchased_at")),
+                    "expires_at": self._parse_datetime(entry.get("expires_at")),
+                })
+        self.owned_domains = parsed_domains
+
 
 # Global domain rotation manager
 domain_rotation_manager = DomainRotationManager()

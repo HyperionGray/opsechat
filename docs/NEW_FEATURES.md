@@ -286,6 +286,18 @@ After rotating domains, update your email configuration:
 - Prevents purchases that would exceed budget
 - Resets monthly (manual reset required)
 
+### State Persistence Improvements (New)
+
+The domain rotation CLI now persists state safely and reliably between runs:
+
+- Datetime fields (`purchased_at`, `expires_at`) are stored as ISO-8601 strings
+- Saved state is reloaded with robust parsing (including legacy/malformed values)
+- `list` output gracefully handles missing/invalid timestamps instead of crashing
+- State import/export is centralized in `DomainRotationManager` for consistency
+
+This prevents JSON serialization failures during `rotate` workflows and improves
+recovery from older config formats.
+
 ---
 
 ## 🚀 Production Deployment

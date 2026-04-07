@@ -135,10 +135,10 @@ http://yourservice.onion/{path}/email/config
 
 ### API Key Storage
 
-⚠️ **Important**: API keys are stored in-memory only. They are NOT persisted to disk. After restart, you must reconfigure.
+⚠️ **Important**: API keys are persisted by the CLI in `~/.opsechat/domain_config.json` with file mode `0600`. Protect this file and user account access.
 
-For persistent configuration:
-- Use environment variables in your deployment
+For safer persistent configuration:
+- Use environment variables in your deployment when possible
 - Store encrypted credentials separately
 - Never commit API keys to version control
 

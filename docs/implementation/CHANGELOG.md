@@ -11,10 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- Domain rotation CLI persistence tests covering state round-trips and datetime formatting
 
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- Domain rotation state persistence now uses JSON-safe export/import helpers
+- CLI state loading is now backward-compatible with older config shapes and malformed values
+- Owned domain date rendering is now resilient when persisted timestamps are missing or invalid
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022
