@@ -65,8 +65,18 @@ python pf-tasks/test.py --skip-e2e
 - Tests systemd service status
 - Tests Tor connectivity and hidden service creation
 - Tests Python module imports
+- Runs repository hygiene checks (`scripts/check_repo_hygiene.py`)
 - Runs Playwright end-to-end tests (if available)
 - Comprehensive test reporting
+
+### hygiene (Pfyfile task)
+Runs repository hygiene checks directly.
+
+```bash
+pf Pfyfile.pf hygiene
+# or
+python3 scripts/check_repo_hygiene.py --strict
+```
 
 ### clean.py
 Cleans up opsechat deployment and resources.

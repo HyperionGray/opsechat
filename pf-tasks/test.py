@@ -164,6 +164,28 @@ def test_playwright_e2e():
         print("[*] npm not available, skipping Playwright tests")
         return True
 
+
+def test_repo_hygiene():
+    """Run repository hygiene checks to catch stale artifacts."""
+    print("[*] Testing repository hygiene")
+    project_root = Path(__file__).parent.parent
+    checker = project_root / "scripts" / "check_repo_hygiene.py"
+    if not checker.exists():
+        print("[!] Repository hygiene checker not found")
+        return False
+
+    result = run_command(
+        [sys.executable, str(checker), "--strict"],
+        cwd=project_root,
+        check=False,
+    )
+    if result.returncode == 0:
+        print("[✓] Repository hygiene checks passed")
+        return True
+
+    print("[!] Repository hygiene checks failed")
+    return False
+
 def main():
     """Main test task"""
     parser = argparse.ArgumentParser(description='Test opsechat deployment')
@@ -195,6 +217,10 @@ def main():
         
         total_tests += 1
         if test_python_modules():
+            tests_passed += 1
+
+        total_tests += 1
+        if test_repo_hygiene():
             tests_passed += 1
         
         if not args.skip_e2e:
