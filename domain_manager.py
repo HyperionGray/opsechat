@@ -134,14 +134,14 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
-        self.provider = "porkbun" if isinstance(api_client, PorkbunAPIClient) else None
+        self.provider = self._infer_provider(api_client)
         self._api_key: Optional[str] = None
         self._api_secret: Optional[str] = None
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
-        self.provider = "porkbun" if isinstance(api_client, PorkbunAPIClient) else "custom"
+        self.provider = self._infer_provider(api_client) or "custom"
     
     def configure(self, api_key: str, secret_key: str, monthly_budget: float = 50.0,
                   provider: str = "porkbun") -> Dict[str, Any]:
@@ -368,6 +368,21 @@ class DomainRotationManager:
         deserialized["purchased_at"] = self._parse_datetime(deserialized.get("purchased_at"))
         deserialized["expires_at"] = self._parse_datetime(deserialized.get("expires_at"))
         return deserialized
+    
+    @staticmethod
+    def _infer_provider(api_client: Optional[DomainAPIClient]) -> Optional[str]:
+        if api_client is None:
+            return None
+        
+        class_name = type(api_client).__name__.lower()
+        if "porkbun" in class_name:
+            return "porkbun"
+        
+        base_url = getattr(api_client, "BASE_URL", "")
+        if isinstance(base_url, str) and "porkbun.com" in base_url:
+            return "porkbun"
+        
+        return "custom"
 
 
 # Global domain rotation manager
