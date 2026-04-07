@@ -11,10 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- TUI live status protocol (`type: status`) with connected user count and message count
+- Pytest coverage for TUI status snapshots and client status handling (`tests/test_tui_status.py`)
 
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- TUI server now uses a 4-minute message lifetime (`MESSAGE_LIFETIME = 240`) to match TUI docs/tests
+- TUI client header/footer are dynamic and show live connection/status indicators
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022

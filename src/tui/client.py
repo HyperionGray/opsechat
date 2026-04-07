@@ -58,6 +58,10 @@ class ChatClient:
         self.username = "Unknown"
         self.running = False
         self.message_buffer = ""
+        self.connection_status = "Disconnected"
+        self.user_count = 0
+        self.message_count = 0
+        self.message_lifetime_seconds = 240
         
         # UI components
         self.messages_walker = urwid.SimpleFocusListWalker([])
@@ -70,27 +74,12 @@ class ChatClient:
     def build_ui(self):
         """Build the terminal UI"""
         # Header
-        header = urwid.AttrMap(
-            urwid.Text([
-                ('title', 'OpSecChat TUI - Privacy First'),
-                ' | ',
-                ('info', 'Messages burn in 4 min'),
-                ' | ',
-                ('warn', 'Text only - No images/video')
-            ], align='center'),
-            'header'
-        )
+        self.header_text = urwid.Text(self._build_header_text(), align='center')
+        header = urwid.AttrMap(self.header_text, 'header')
         
         # Footer with instructions
-        footer_text = [
-            ('info', 'Enter'),
-            ': Send | ',
-            ('info', 'Ctrl+C'),
-            ': Quit | ',
-            ('warn', 'Your username: '),
-            ('username', self.username)
-        ]
-        footer = urwid.AttrMap(urwid.Text(footer_text), 'footer')
+        self.footer_text = urwid.Text(self._build_footer_text())
+        footer = urwid.AttrMap(self.footer_text, 'footer')
         
         # Messages area
         messages_frame = urwid.LineBox(
@@ -130,6 +119,34 @@ class ChatClient:
             ('system_message', 'yellow', 'black'),
             ('timestamp', 'dark gray', 'black'),
         ]
+
+    def _build_header_text(self):
+        """Build dynamic header text with live status indicators."""
+        lifetime_minutes = max(1, self.message_lifetime_seconds // 60)
+        return [
+            ('title', 'OpSecChat TUI - Privacy First'),
+            ' | ',
+            ('info', f'Status: {self.connection_status}'),
+            ' | ',
+            ('info', f'Users: {self.user_count}'),
+            ' | ',
+            ('info', f'Messages: {self.message_count}'),
+            ' | ',
+            ('info', f'Burn: {lifetime_minutes} min'),
+            ' | ',
+            ('warn', 'Text only - No images/video')
+        ]
+
+    def _build_footer_text(self):
+        """Build dynamic footer text with user identity."""
+        return [
+            ('info', 'Enter'),
+            ': Send | ',
+            ('info', 'Ctrl+C'),
+            ': Quit | ',
+            ('warn', 'Your username: '),
+            ('username', self.username)
+        ]
     
     def add_message(self, username, message, is_system=False):
         """Add a message to the display"""
@@ -155,6 +172,8 @@ class ChatClient:
     def connect(self):
         """Connect to the chat server"""
         try:
+            self.connection_status = "Connecting"
+            self.update_status_header()
             if self.use_tor:
                 self.add_message("System", f"Connecting via Tor to {self.host}:{self.port}...", is_system=True)
             else:
@@ -162,6 +181,8 @@ class ChatClient:
             
             self.socket = create_socket_connection(self.host, self.port, self.use_tor, self.tor_port)
             self.running = True
+            self.connection_status = "Connected"
+            self.update_status_header()
             
             # Start receive thread
             receive_thread = threading.Thread(target=self.receive_messages, daemon=True)
@@ -169,9 +190,13 @@ class ChatClient:
             
             return True
         except ImportError as e:
+            self.connection_status = "Disconnected"
+            self.update_status_header()
             self.add_message("System", f"Missing dependency: {e}. Install with: pip install PySocks", is_system=True)
             return False
         except Exception as e:
+            self.connection_status = "Disconnected"
+            self.update_status_header()
             self.add_message("System", f"Failed to connect: {e}", is_system=True)
             return False
     
@@ -184,6 +209,8 @@ class ChatClient:
                 data = self.socket.recv(4096).decode('utf-8')
                 if not data:
                     self.add_message("System", "Disconnected from server", is_system=True)
+                    self.connection_status = "Disconnected"
+                    self.update_status_header()
                     self.running = False
                     break
                 
@@ -200,6 +227,8 @@ class ChatClient:
             except Exception as e:
                 if self.running:
                     self.add_message("System", f"Connection error: {e}", is_system=True)
+                self.connection_status = "Disconnected"
+                self.update_status_header()
                 self.running = False
                 break
     
@@ -217,19 +246,22 @@ class ChatClient:
             username = msg.get('username', 'Unknown')
             message = msg.get('message', '')
             self.add_message(username, message)
+
+        elif msg_type == 'status':
+            self.user_count = msg.get('user_count', self.user_count)
+            self.message_count = msg.get('message_count', self.message_count)
+            self.message_lifetime_seconds = msg.get(
+                'message_lifetime_seconds', self.message_lifetime_seconds
+            )
+            self.update_status_header()
     
     def update_footer(self):
         """Update the footer with current username"""
-        footer_text = [
-            ('info', 'Enter'),
-            ': Send | ',
-            ('info', 'Ctrl+C'),
-            ': Quit | ',
-            ('warn', 'Your username: '),
-            ('username', self.username)
-        ]
-        footer = urwid.AttrMap(urwid.Text(footer_text), 'footer')
-        self.frame.footer = footer
+        self.footer_text.set_text(self._build_footer_text())
+
+    def update_status_header(self):
+        """Update header with live status indicators."""
+        self.header_text.set_text(self._build_header_text())
     
     def send_message(self, message):
         """Send a message to the server"""
@@ -283,6 +315,8 @@ class ChatClient:
     
     def cleanup(self):
         """Clean up resources"""
+        self.connection_status = "Disconnected"
+        self.update_status_header()
         self.running = False
         if self.socket:
             try:

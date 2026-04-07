@@ -25,7 +25,7 @@ from typing import Dict, List, Any, Optional
 # Message storage (in-memory only)
 class ChatServer:
     MAX_MESSAGE_LENGTH = 1000  # Prevent b64 encoded images
-    MESSAGE_LIFETIME = 180  # 3 minutes in seconds
+    MESSAGE_LIFETIME = 240  # 4 minutes in seconds
     
     def __init__(self, host='127.0.0.1', port=5555):
         self.host = host
@@ -92,6 +92,16 @@ class ChatServer:
             })
         
         return True
+
+    def get_status_snapshot(self) -> Dict[str, Any]:
+        """Build a status snapshot for connected clients."""
+        with self.lock:
+            return {
+                "type": "status",
+                "user_count": len(self.clients),
+                "message_count": len(self.messages),
+                "message_lifetime_seconds": self.MESSAGE_LIFETIME,
+            }
     
     def get_messages(self, since: datetime.datetime = None) -> List[Dict[str, Any]]:
         """Get messages (optionally since a specific time)"""
@@ -113,7 +123,7 @@ class ChatServer:
             welcome = {
                 'type': 'welcome',
                 'username': username,
-                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
+                'message': f'Welcome! You are {username}. Messages burn in {self.MESSAGE_LIFETIME // 60} minutes.'
             }
             client_socket.send((json.dumps(welcome) + '\n').encode())
             
@@ -127,6 +137,9 @@ class ChatServer:
                     'timestamp': msg['timestamp'].isoformat()
                 }
                 client_socket.send((json.dumps(msg_data) + '\n').encode())
+
+            # Share an initial status snapshot with all connected clients.
+            self.broadcast_status()
             
             # Handle incoming messages
             buffer = ""
@@ -147,10 +160,11 @@ class ChatServer:
                                     if self.add_message(username, message):
                                         # Broadcast to all clients
                                         self.broadcast_message(username, message)
+                                        self.broadcast_status()
                             except json.JSONDecodeError:
                                 pass
                 
-                except (OSError, socket.error) as e:
+                except (OSError, socket.error):
                     break
         
         finally:
@@ -161,6 +175,7 @@ class ChatServer:
                 client_socket.close()
             except (OSError, socket.error):
                 pass
+            self.broadcast_status()
     
     def broadcast_message(self, username: str, message: str):
         """Broadcast a message to all connected clients"""
@@ -181,6 +196,27 @@ class ChatServer:
                     dead_clients.append(client_socket)
             
             # Remove dead clients
+            for client in dead_clients:
+                if client in self.clients:
+                    del self.clients[client]
+                try:
+                    client.close()
+                except (OSError, socket.error):
+                    pass
+
+    def broadcast_status(self):
+        """Broadcast live connection and message status to clients."""
+        status_data = self.get_status_snapshot()
+        status_json = json.dumps(status_data) + '\n'
+
+        with self.lock:
+            dead_clients = []
+            for client_socket in list(self.clients.keys()):
+                try:
+                    client_socket.send(status_json.encode())
+                except (OSError, socket.error):
+                    dead_clients.append(client_socket)
+
             for client in dead_clients:
                 if client in self.clients:
                     del self.clients[client]

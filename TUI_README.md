@@ -15,6 +15,7 @@ This is a serious privacy and opsec tool for serious privacy and opsec people. I
 ✅ **Zero Disk** - Nothing touches disk except the application code  
 ✅ **Tor Integration** - Full support for Tor hidden services (.onion)  
 ✅ **SOCKS Proxy** - Client supports connecting via Tor SOCKS proxy  
+✅ **Live Status Indicators** - Header shows connection state, user count, and message count  
 
 ## Quick Start
 
@@ -80,6 +81,21 @@ The client will automatically use Tor SOCKS proxy if:
 - Press **Ctrl+C** to quit
 - Your username is randomly assigned (e.g., `PhantomRaven4523`)
 - Messages automatically disappear after 4 minutes
+
+### Live Status Header
+
+The TUI header now updates in real time with:
+
+- Connection status (`Connected` / `Disconnected`)
+- Connected user count
+- Current message count
+- Burn window in minutes
+
+Example:
+
+```text
+OpSecChat TUI - Privacy First | Status: Connected | Users: 3 | Messages: 12 | Burn: 4 min | Text only - No images/video
+```
 
 ## Privacy & Security Features
 
@@ -156,12 +172,14 @@ sudo systemctl start tor
 - Background cleanup thread (runs every 10s)
 - Broadcasts messages to all connected clients
 - JSON protocol for client/server communication
+- Broadcasts `status` events whenever users connect/disconnect or messages are sent
 
 ### Client
 - urwid-based TUI (terminal UI framework)
 - Separate thread for receiving messages
 - Real-time message display
 - Color-coded messages (your messages vs others)
+- Real-time status updates from server-side `status` events
 
 ## Development
 
