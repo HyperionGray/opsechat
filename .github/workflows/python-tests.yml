@@ -1,0 +1,39 @@
+name: Python Tests
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: Python version to use
+        required: false
+        default: "3.11"
+        type: string
+  workflow_dispatch:
+    inputs:
+      python-version:
+        description: Python version to use
+        required: false
+        default: "3.11"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  python-tests:
+    runs-on: [self-hosted, linux, x64, big]
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.3.1
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: ${{ inputs.python-version || github.event.inputs.python-version || '3.11' }}
+
+      - name: Run pytest suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          pytest -q

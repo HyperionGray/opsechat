@@ -1,0 +1,50 @@
+name: Playwright E2E
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Node.js version to use
+        required: false
+        default: "20"
+        type: string
+  workflow_dispatch:
+    inputs:
+      node-version:
+        description: Node.js version to use
+        required: false
+        default: "20"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  playwright-e2e:
+    runs-on: [self-hosted, linux, x64, big]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.3.1
+
+      - name: Setup Node and Playwright
+        uses: ./.github/actions/setup-node-playwright
+        with:
+          node-version: ${{ inputs.node-version || github.event.inputs.node-version || '20' }}
+
+      - name: Run headless Playwright tests
+        shell: bash
+        env:
+          CI: "true"
+        run: |
+          set -euo pipefail
+          npx playwright test --project=chromium-headless
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: playwright-report
+          path: playwright-report
+          if-no-files-found: ignore
+          retention-days: 14

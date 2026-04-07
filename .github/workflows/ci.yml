@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-tests:
+    name: python-tests
+    uses: ./.github/workflows/python-tests.yml
+    permissions:
+      contents: read
+    with:
+      python-version: "3.11"
+
+  playwright-e2e:
+    name: playwright-e2e
+    uses: ./.github/workflows/playwright-tests.yml
+    permissions:
+      contents: read
+    with:
+      node-version: "20"
+
+  security-baseline:
+    name: security-baseline
+    runs-on: [self-hosted, linux, x64, big]
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.3.1
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: "3.11"
+
+      - name: Setup Node dependencies
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Node dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+
+      - name: Install pip-audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install pip-audit
+
+      - name: Python dependency audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          pip-audit -r requirements.txt
+
+      - name: Node dependency audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm audit --audit-level=high
