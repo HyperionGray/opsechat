@@ -4,7 +4,7 @@ This guide explains how to set up domain registrar API access for automated burn
 
 ## Supported Registrars
 
-### Porkbun (Recommended)
+### Porkbun (Recommended for simple setup)
 
 Porkbun offers cheap domains and a simple API, making it ideal for burner email rotation.
 
@@ -77,21 +77,46 @@ Porkbun offers cheap domains and a simple API, making it ideal for burner email 
 - Budget: $100+/month
 - Covers: 100+ .xyz domains or 20+ .com domains
 
-## Alternative Registrars
+### Namecheap (Integrated)
 
-### Namecheap
-
-While not directly integrated, Namecheap offers competitive pricing and API access.
+Namecheap is now supported in `domain_manager.py` via `NamecheapAPIClient`.
+It can be configured in `domain_rotation_cli.py` and used as either primary
+or fallback provider.
 
 #### Getting Started
 - Website: [namecheap.com](https://namecheap.com)
 - API Documentation: [namecheap.com/support/api](https://www.namecheap.com/support/api/)
 - Pricing: .com domains ~$8.88/year, .xyz ~$1.98/year
 
-#### Integration Notes
-- Requires custom API client implementation
-- More complex API than Porkbun
-- Good for high-volume usage
+#### Configuration in CLI
+
+```bash
+# Configure Porkbun
+python domain_rotation_cli.py config --registrar porkbun
+
+# Configure Namecheap (supports sandbox + contact profile)
+python domain_rotation_cli.py config --registrar namecheap
+
+# Search using all providers (primary first)
+python domain_rotation_cli.py search
+
+# Restrict search/rotation to one provider
+python domain_rotation_cli.py search --provider namecheap
+python domain_rotation_cli.py rotate --provider porkbun
+```
+
+#### Namecheap purchase requirements
+
+Namecheap registration requires contact profile fields. The CLI prompts for:
+- first/last name
+- address/city/state/postal/country
+- phone number
+- email address
+
+If these fields are missing, domain search still works but purchase requests
+will fail with a clear validation message.
+
+### Other Registrar Ideas (Not Yet Integrated)
 
 ### GoDaddy
 

@@ -59,14 +59,20 @@ Key endpoints used by opsechat:
 - `pricing/get` - Get TLD pricing
 - `domain/listAll` - List owned domains
 
-## Other Registrars (Future Support)
+## Other Registrars
 
-The opsechat domain manager is designed to be extensible. Future registrar support may include:
+The opsechat domain manager supports multiple providers and can fall back across configured registrars.
 
-### Namecheap
+### Namecheap (Integrated)
 - API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
+- Requires Namecheap API allowlisted client IP
 - Cheap TLDs: .xyz, .club, .online
+- Supports domain availability checks, pricing lookup, and purchase (with contact profile)
+- CLI configuration:
+  - `python domain_rotation_cli.py config --registrar namecheap`
+  - Optional provider pinning for searches/purchases:
+    - `python domain_rotation_cli.py search --provider namecheap`
+    - `python domain_rotation_cli.py rotate --provider namecheap`
 
 ### Namesilo
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)
@@ -138,7 +144,7 @@ http://yourservice.onion/{path}/email/config
 ⚠️ **Important**: API keys are stored in-memory only. They are NOT persisted to disk. After restart, you must reconfigure.
 
 For persistent configuration:
-- Use environment variables in your deployment
+- Use environment variables in your deployment, or the CLI config file with `0600` permissions
 - Store encrypted credentials separately
 - Never commit API keys to version control
 

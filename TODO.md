@@ -99,11 +99,11 @@
   - [x] Add per-endpoint throttling (`/chat/create`, `/chat/*/messages`, `/chat/dm/send`)
   - [ ] Configure reasonable thresholds (review after load testing)
   - [ ] Add backoff/retry logic
-- [ ] Integrate second domain registrar API
-  - [ ] Choose registrar (Namecheap recommended)
-  - [ ] Implement API client
-  - [ ] Update domain rotation logic
-  - [ ] Test automated purchasing
+- [x] Integrate second domain registrar API
+  - [x] Chose registrar (Namecheap) with XML API support
+  - [x] Implemented `NamecheapAPIClient` in `domain_manager.py`
+  - [x] Updated domain rotation logic for provider fallback and selection
+  - [x] Added unit tests in `tests/test_domain_manager.py`
 - [ ] Add abuse detection
   - [ ] Keyword filtering
   - [ ] Pattern detection

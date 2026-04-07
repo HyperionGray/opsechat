@@ -1,10 +1,15 @@
 """
 Tests for domain management module
 """
-import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
+
+import pytest
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient,
+    DomainRotationManager,
+    NamecheapAPIClient,
+    PorkbunAPIClient,
 )
 
 
@@ -76,6 +81,71 @@ class TestPorkbunAPIClient:
         assert result["registration"] == "9.99"
 
 
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch("domain_manager.requests.Session")
+    def test_search_domain_available(self, mock_session_class):
+        """Namecheap search parses available domain response"""
+        xml_payload = """<?xml version="1.0" encoding="utf-8"?>
+<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+  <CommandResponse Type="namecheap.domains.check">
+    <DomainCheckResult Domain="test123.xyz" Available="true" IsPremiumName="false" />
+  </CommandResponse>
+</ApiResponse>"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = xml_payload
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient("api_key", "username")
+        with patch.object(client, "get_pricing", return_value={"registration": "2.49"}):
+            result = client.search_domain("test123.xyz")
+
+        assert result["domain"] == "test123.xyz"
+        assert result["available"] is True
+        assert result["price"] == "2.49"
+
+    @patch("domain_manager.requests.Session")
+    def test_get_pricing(self, mock_session_class):
+        """Namecheap pricing parser extracts registration price"""
+        xml_payload = """<?xml version="1.0" encoding="utf-8"?>
+<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+  <CommandResponse Type="namecheap.users.getPricing">
+    <UserGetPricingResult>
+      <ProductType Name="DOMAIN">
+        <ProductCategory Name="register">
+          <Product Name="xyz" Price="2.88" />
+        </ProductCategory>
+      </ProductType>
+    </UserGetPricingResult>
+  </CommandResponse>
+</ApiResponse>"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = xml_payload
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient("api_key", "username")
+        result = client.get_pricing("xyz")
+
+        assert result["tld"] == "xyz"
+        assert result["registration"] == "2.88"
+
+    @patch("domain_manager.requests.Session")
+    def test_purchase_domain_requires_contact_fields(self, mock_session_class):
+        """Namecheap purchase fails clearly when contact profile is incomplete"""
+        mock_session_class.return_value = Mock()
+        client = NamecheapAPIClient("api_key", "username", contact_profile={})
+
+        result = client.purchase_domain("test123.xyz", years=1)
+
+        assert result["success"] is False
+        assert "Missing Namecheap contact fields" in result["message"]
+
+
 class TestDomainRotationManager:
     """Test domain rotation manager"""
     
@@ -112,6 +182,7 @@ class TestDomainRotationManager:
         assert result is not None
         assert result["domain"].endswith((".xyz", ".club", ".online", ".site", ".website"))
         assert result["price"] <= 5.0
+        assert result["provider"] == "default"
     
     def test_purchase_domain_if_budget_allows_success(self):
         """Test domain purchase within budget"""
@@ -129,6 +200,7 @@ class TestDomainRotationManager:
         assert manager.current_spending == 2.99
         assert len(manager.owned_domains) == 1
         assert manager.active_domain == "test123.xyz"
+        assert manager.owned_domains[0]["provider"] == "default"
     
     def test_purchase_domain_if_budget_allows_exceeds_budget(self):
         """Test domain purchase exceeds budget"""
@@ -174,3 +246,54 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_find_domain_falls_back_to_secondary_provider(self):
+        """Find flow tries secondary provider when primary misses"""
+        primary = Mock(spec=DomainAPIClient)
+        primary.search_domain.return_value = {"available": False}
+
+        secondary = Mock(spec=DomainAPIClient)
+        secondary.search_domain.return_value = {
+            "available": True,
+            "price": "2.49",
+        }
+
+        manager = DomainRotationManager(monthly_budget=20.0)
+        manager.add_api_client("porkbun", primary, set_primary=True)
+        manager.add_api_client("namecheap", secondary, set_primary=False)
+
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["provider"] == "namecheap"
+        primary.search_domain.assert_called_once()
+        secondary.search_domain.assert_called_once()
+
+    def test_export_and_import_state_roundtrip(self):
+        """State export/import keeps datetime fields usable for CLI rendering"""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 4.5
+        manager.active_domain = "example.xyz"
+        manager.owned_domains = [
+            {
+                "domain": "example.xyz",
+                "price": 2.25,
+                "provider": "porkbun",
+                "purchased_at": datetime.now(),
+                "expires_at": datetime.now(),
+            }
+        ]
+
+        exported = manager.export_state()
+
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(exported["owned_domains"][0]["expires_at"], str)
+
+        restored = DomainRotationManager(monthly_budget=50.0)
+        restored.import_state(exported)
+
+        assert restored.current_spending == 4.5
+        assert restored.active_domain == "example.xyz"
+        assert len(restored.owned_domains) == 1
+        assert restored.owned_domains[0]["domain"] == "example.xyz"
+        assert hasattr(restored.owned_domains[0]["purchased_at"], "isoformat")
