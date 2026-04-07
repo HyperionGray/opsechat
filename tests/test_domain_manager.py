@@ -1,6 +1,7 @@
 """
 Tests for domain management module
 """
+import datetime
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
@@ -174,3 +175,75 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    @patch("domain_manager.PorkbunAPIClient")
+    def test_configure_sets_budget_and_client(self, mock_porkbun_client):
+        """Configuring manager should set client and metadata"""
+        fake_client = Mock(spec=DomainAPIClient)
+        fake_client.api_key = "pk1_testabcd"
+        mock_porkbun_client.return_value = fake_client
+        manager = DomainRotationManager()
+
+        config = manager.configure(
+            api_key="pk1_testabcd",
+            secret_key="sk1_testefgh",
+            monthly_budget=22.5,
+        )
+
+        assert manager.api_client is fake_client
+        assert manager.monthly_budget == 22.5
+        assert config["configured"] is True
+        assert config["provider"] == "porkbun"
+        assert config["api_key_masked"].endswith("abcd")
+
+    def test_configure_rejects_missing_credentials(self):
+        """Configuring manager without credentials should fail"""
+        manager = DomainRotationManager()
+
+        with pytest.raises(ValueError):
+            manager.configure(api_key="", secret_key="secret", monthly_budget=10)
+
+        with pytest.raises(ValueError):
+            manager.configure(api_key="apikey", secret_key="", monthly_budget=10)
+
+    def test_configure_rejects_invalid_budget(self):
+        """Configuring manager with non-positive budget should fail"""
+        manager = DomainRotationManager()
+
+        with pytest.raises(ValueError):
+            manager.configure(api_key="apikey", secret_key="secret", monthly_budget=0)
+
+    def test_get_config_masks_api_key_from_client(self):
+        """Config should include masked key even for externally set client"""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.api_key = "abcdef123456"
+        manager = DomainRotationManager(api_client=mock_client)
+
+        config = manager.get_config()
+
+        assert config["configured"] is True
+        assert config["api_key_masked"] == "********3456"
+
+    def test_export_and_load_state_preserve_domain_dates(self):
+        """Exported state should round-trip datetime fields correctly"""
+        manager = DomainRotationManager(monthly_budget=20.0)
+        manager.current_spending = 2.5
+        manager.active_domain = "demo.xyz"
+        manager.owned_domains = [
+            {
+                "domain": "demo.xyz",
+                "price": 2.5,
+                "purchased_at": datetime.datetime(2026, 1, 2, 3, 4, 5),
+                "expires_at": datetime.datetime(2027, 1, 2, 3, 4, 5),
+            }
+        ]
+
+        exported = manager.export_state()
+        restored = DomainRotationManager(monthly_budget=20.0)
+        restored.load_state(exported)
+
+        assert restored.current_spending == 2.5
+        assert restored.active_domain == "demo.xyz"
+        assert len(restored.owned_domains) == 1
+        assert restored.owned_domains[0]["purchased_at"].year == 2026
+        assert restored.owned_domains[0]["expires_at"].year == 2027

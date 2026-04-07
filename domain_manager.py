@@ -6,7 +6,7 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -134,10 +134,56 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+        self.provider = "porkbun" if isinstance(api_client, PorkbunAPIClient) else None
+        self._api_key: Optional[str] = None
+        self._api_secret: Optional[str] = None
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+        self.provider = "porkbun" if isinstance(api_client, PorkbunAPIClient) else "custom"
+    
+    def configure(self, api_key: str, secret_key: str, monthly_budget: float = 50.0,
+                  provider: str = "porkbun") -> Dict[str, Any]:
+        """
+        Configure domain rotation credentials and budget.
+        """
+        api_key = (api_key or "").strip()
+        secret_key = (secret_key or "").strip()
+        provider = (provider or "porkbun").strip().lower()
+        
+        if not api_key or not secret_key:
+            raise ValueError("Both api_key and secret_key are required")
+        if monthly_budget <= 0:
+            raise ValueError("monthly_budget must be greater than zero")
+        if provider != "porkbun":
+            raise ValueError(f"Unsupported provider: {provider}")
+        
+        self.monthly_budget = float(monthly_budget)
+        self.provider = provider
+        self._api_key = api_key
+        self._api_secret = secret_key
+        self.api_client = PorkbunAPIClient(api_key, secret_key)
+        
+        return self.get_config()
+    
+    def get_config(self) -> Dict[str, Any]:
+        """Return current manager configuration without leaking secrets."""
+        api_key = self._api_key
+        
+        if not api_key and self.api_client and getattr(self.api_client, "api_key", None):
+            api_key = self.api_client.api_key
+        
+        return {
+            "provider": self.provider or "porkbun",
+            "configured": self.api_client is not None,
+            "api_key_masked": self._mask_secret(api_key),
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "remaining_budget": self.monthly_budget - self.current_spending,
+            "domains_owned": len(self.owned_domains),
+            "active_domain": self.active_domain
+        }
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -172,7 +218,10 @@ class DomainRotationManager:
                 
                 if isinstance(price, str):
                     # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
+                    try:
+                        price = float(price.replace("$", "").replace("€", "").strip())
+                    except ValueError:
+                        continue
                 
                 if price <= max_price:
                     return {
@@ -250,7 +299,7 @@ class DomainRotationManager:
     
     def get_owned_domains(self) -> List[Dict]:
         """Get list of owned domains"""
-        return self.owned_domains
+        return list(self.owned_domains)
     
     def get_budget_status(self) -> Dict:
         """Get budget information"""
@@ -260,6 +309,65 @@ class DomainRotationManager:
             "remaining": self.monthly_budget - self.current_spending,
             "domains_owned": len(self.owned_domains)
         }
+    
+    def export_state(self) -> Dict[str, Any]:
+        """Export JSON-safe manager state for persistence."""
+        return {
+            "current_spending": self.current_spending,
+            "owned_domains": [self._serialize_domain_record(d) for d in self.owned_domains],
+            "active_domain": self.active_domain
+        }
+    
+    def load_state(self, state: Optional[Dict[str, Any]]) -> None:
+        """Load manager state from a dict created by export_state()."""
+        if not state:
+            return
+        
+        self.current_spending = float(state.get("current_spending", 0.0) or 0.0)
+        
+        loaded_domains = []
+        for raw_domain in state.get("owned_domains", []) or []:
+            if isinstance(raw_domain, dict):
+                loaded_domains.append(self._deserialize_domain_record(raw_domain))
+        self.owned_domains = loaded_domains
+        
+        active_domain = state.get("active_domain")
+        self.active_domain = active_domain if isinstance(active_domain, str) else None
+    
+    @staticmethod
+    def _mask_secret(secret: Optional[str]) -> Optional[str]:
+        if not secret:
+            return None
+        if len(secret) <= 4:
+            return "*" * len(secret)
+        return f"{'*' * (len(secret) - 4)}{secret[-4:]}"
+    
+    @staticmethod
+    def _serialize_datetime(value: Any) -> Any:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+    
+    @staticmethod
+    def _parse_datetime(value: Any) -> Any:
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return value
+        return value
+    
+    def _serialize_domain_record(self, domain_record: Dict[str, Any]) -> Dict[str, Any]:
+        serialized = dict(domain_record)
+        serialized["purchased_at"] = self._serialize_datetime(serialized.get("purchased_at"))
+        serialized["expires_at"] = self._serialize_datetime(serialized.get("expires_at"))
+        return serialized
+    
+    def _deserialize_domain_record(self, domain_record: Dict[str, Any]) -> Dict[str, Any]:
+        deserialized = dict(domain_record)
+        deserialized["purchased_at"] = self._parse_datetime(deserialized.get("purchased_at"))
+        deserialized["expires_at"] = self._parse_datetime(deserialized.get("expires_at"))
+        return deserialized
 
 
 # Global domain rotation manager

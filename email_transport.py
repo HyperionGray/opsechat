@@ -339,6 +339,28 @@ class EmailTransportManager:
             'smtp': self.smtp_transport is not None,
             'imap': self.imap_transport is not None
         }
+    
+    def get_config(self) -> Dict:
+        """Return sanitized transport configuration for UI use."""
+        smtp_username = self.smtp_transport.username if self.smtp_transport else None
+        imap_username = self.imap_transport.username if self.imap_transport else None
+        
+        return {
+            "smtp": {
+                "configured": self.smtp_transport is not None,
+                "server": self.smtp_transport.smtp_server if self.smtp_transport else None,
+                "port": self.smtp_transport.smtp_port if self.smtp_transport else None,
+                "username": smtp_username,
+                "use_tls": self.smtp_transport.use_tls if self.smtp_transport else None,
+            },
+            "imap": {
+                "configured": self.imap_transport is not None,
+                "server": self.imap_transport.imap_server if self.imap_transport else None,
+                "port": self.imap_transport.imap_port if self.imap_transport else None,
+                "username": imap_username,
+                "use_ssl": self.imap_transport.use_ssl if self.imap_transport else None,
+            },
+        }
 
 
 # Global transport manager
