@@ -3,9 +3,16 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
+
+
+def test_domain_api_client_is_abstract():
+    """Base client cannot be instantiated directly."""
+    with pytest.raises(TypeError):
+        DomainAPIClient("api-key")
 
 
 class TestPorkbunAPIClient:
@@ -174,3 +181,70 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_parse_price_formats(self):
+        """Test price parsing for registrar response formats."""
+        manager = DomainRotationManager()
+        assert manager._parse_price("$2.99 USD") == 2.99
+        assert manager._parse_price("1,234.56") == 1234.56
+        assert manager._parse_price("not-a-price") is None
+
+    def test_find_cheap_available_domain_skips_invalid_price(self):
+        """Skip available domains when registrar price is invalid."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.side_effect = [
+            {"available": True, "price": "N/A"},
+            {"available": True, "price": "$3.25"},
+        ]
+        manager = DomainRotationManager(mock_client)
+
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=2)
+
+        assert result is not None
+        assert result["price"] == 3.25
+
+    def test_purchase_domain_rejects_invalid_price(self):
+        """Invalid purchase price should fail early."""
+        mock_client = Mock(spec=DomainAPIClient)
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+
+        result = manager.purchase_domain_if_budget_allows("test123.xyz", "n/a")
+
+        assert result is False
+        mock_client.purchase_domain.assert_not_called()
+
+    def test_configure_and_get_config(self):
+        """Manager exposes config metadata for UI/CLI integrations."""
+        manager = DomainRotationManager()
+        config = manager.configure("pk_test", secret_key="sk_test", monthly_budget=12.5)
+
+        assert config["configured"] is True
+        assert config["api_key_configured"] is True
+        assert config["api_secret_configured"] is True
+        assert config["monthly_budget"] == 12.5
+
+        with_secrets = manager.get_config(include_secrets=True)
+        assert with_secrets["api_key"] == "pk_test"
+        assert with_secrets["api_secret"] == "sk_test"
+
+    def test_export_and_load_state_roundtrip(self):
+        """Persisted state should roundtrip through JSON-safe payload."""
+        manager = DomainRotationManager(monthly_budget=20.0)
+        manager.current_spending = 4.2
+        manager.active_domain = "abc123.xyz"
+        manager.owned_domains = [{
+            "domain": "abc123.xyz",
+            "price": 2.1,
+            "purchased_at": datetime(2026, 1, 2, 3, 4, 5),
+            "expires_at": datetime(2027, 1, 2, 3, 4, 5),
+        }]
+
+        state = manager.export_state()
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+
+        restored = DomainRotationManager(monthly_budget=20.0)
+        restored.load_state(state)
+        assert restored.current_spending == 4.2
+        assert restored.active_domain == "abc123.xyz"
+        assert restored.owned_domains[0]["domain"] == "abc123.xyz"
+        assert isinstance(restored.owned_domains[0]["purchased_at"], datetime)
