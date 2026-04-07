@@ -8,6 +8,15 @@
 - Removed push/PR triggers from scheduled workflows
 - Added concurrency controls to prevent duplicate runs
 - Created comprehensive documentation
+- Added named CI jobs for branch protection compatibility:
+  - `python-tests`
+  - `playwright-e2e`
+  - `security-baseline`
+- Cleaned stale repository artifacts:
+  - Removed `Dockerfile~HEAD` and `docker-compose.yml~HEAD` backups
+  - Removed tracked `.bish-index` files
+  - Removed obsolete ad-hoc scripts `test-ci-fix.js` and `test-server.js`
+  - Removed stray placeholder files under `.github/.github/workflows/`
 
 ## Still To Do
 
