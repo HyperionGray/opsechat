@@ -1,8 +1,8 @@
 """
 Tests for domain management module
 """
-import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime, timedelta
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -174,3 +174,96 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_serialize_and_load_state_with_datetimes(self):
+        """State serialization should preserve datetime metadata safely."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 8.5
+        manager.owned_domains = [
+            {
+                "domain": "alpha.xyz",
+                "price": 2.99,
+                "purchased_at": datetime(2026, 1, 1, 10, 0, 0),
+                "expires_at": datetime(2027, 1, 1, 10, 0, 0),
+                "active": True,
+            }
+        ]
+        manager.active_domain = "alpha.xyz"
+
+        state = manager.serialize_state()
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(state["owned_domains"][0]["expires_at"], str)
+
+        restored = DomainRotationManager(monthly_budget=50.0)
+        restored.load_state(state)
+        assert restored.current_spending == 8.5
+        assert restored.active_domain == "alpha.xyz"
+        assert isinstance(restored.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(restored.owned_domains[0]["expires_at"], datetime)
+
+    def test_activate_domain_rejects_expired_domain(self):
+        """Expired domains should not be activated."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.owned_domains = [
+            {
+                "domain": "expired.xyz",
+                "price": 1.99,
+                "purchased_at": datetime.now() - timedelta(days=400),
+                "expires_at": datetime.now() - timedelta(days=1),
+                "active": False,
+            }
+        ]
+
+        assert manager.activate_domain("expired.xyz") is False
+        assert manager.active_domain is None
+
+    def test_deactivate_domain_promotes_latest_non_expired(self):
+        """Deactivating active domain should promote a valid fallback."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.owned_domains = [
+            {
+                "domain": "old.xyz",
+                "price": 2.0,
+                "purchased_at": datetime.now() - timedelta(days=10),
+                "expires_at": datetime.now() + timedelta(days=20),
+                "active": True,
+            },
+            {
+                "domain": "new.xyz",
+                "price": 2.0,
+                "purchased_at": datetime.now() - timedelta(days=1),
+                "expires_at": datetime.now() + timedelta(days=30),
+                "active": False,
+            },
+        ]
+        manager.active_domain = "old.xyz"
+
+        assert manager.deactivate_domain("old.xyz") is True
+        assert manager.active_domain == "new.xyz"
+
+    def test_cleanup_expired_domains_removes_expired_and_clears_active(self):
+        """Expired domains should be removed and active pointer corrected."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.owned_domains = [
+            {
+                "domain": "expired.xyz",
+                "price": 2.0,
+                "purchased_at": datetime.now() - timedelta(days=500),
+                "expires_at": datetime.now() - timedelta(days=2),
+                "active": True,
+            },
+            {
+                "domain": "valid.xyz",
+                "price": 2.0,
+                "purchased_at": datetime.now() - timedelta(days=5),
+                "expires_at": datetime.now() + timedelta(days=30),
+                "active": False,
+            },
+        ]
+        manager.active_domain = "expired.xyz"
+
+        removed = manager.cleanup_expired_domains()
+        assert removed == ["expired.xyz"]
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["domain"] == "valid.xyz"
+        assert manager.active_domain is None

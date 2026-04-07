@@ -10,6 +10,9 @@ Usage:
     python domain_rotation_cli.py search        # Search for available cheap domains
     python domain_rotation_cli.py rotate        # Rotate to a new domain
     python domain_rotation_cli.py status        # Show budget status
+    python domain_rotation_cli.py activate      # Mark an owned domain as active
+    python domain_rotation_cli.py deactivate    # Disable a domain from active use
+    python domain_rotation_cli.py cleanup       # Remove expired domains from state
     python domain_rotation_cli.py config        # Configure API credentials
 """
 
@@ -23,6 +26,14 @@ from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _format_datetime_for_display(value, fmt: str, fallback: str = "unknown") -> str:
+    """Render datetime-like values safely for CLI display."""
+    dt_value = DomainRotationManager._coerce_datetime(value)
+    if dt_value is None:
+        return fallback
+    return dt_value.strftime(fmt)
 
 
 def load_config():
@@ -107,29 +118,22 @@ def get_manager():
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
-    
+
+    # Load persisted manager state in a backward-compatible way.
+    manager.load_state(config)
+
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    config.update(manager.serialize_state())
     save_config(config)
 
 
 def list_domains():
     """List owned domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Owned Domains ===\n")
     
@@ -141,17 +145,29 @@ def list_domains():
         return
     
     for i, domain in enumerate(domains, 1):
-        active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
-        print(f"{i}. {domain['domain']}{active}")
-        print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        status_tokens = []
+        if domain.get("domain") == manager.active_domain:
+            status_tokens.append("ACTIVE")
+        if manager._is_domain_expired(domain):
+            status_tokens.append("EXPIRED")
+        suffix = f" [{' '.join(status_tokens)}]" if status_tokens else ""
+
+        print(f"{i}. {domain.get('domain', 'unknown')}{suffix}")
+        print(f"   Price: ${domain.get('price', 'unknown')}")
+        print(
+            "   Purchased: "
+            + _format_datetime_for_display(domain.get("purchased_at"), "%Y-%m-%d %H:%M")
+        )
+        print(
+            "   Expires: "
+            + _format_datetime_for_display(domain.get("expires_at"), "%Y-%m-%d")
+        )
         print()
 
 
 def search_domains():
     """Search for available cheap domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
     print("Searching for domains under $5...\n")
@@ -207,15 +223,61 @@ def rotate_domain():
     )
     
     if success:
-        print(f"\n✅ Successfully purchased and activated: {domain_info['domain']}")
+        print(f"\nSuccessfully purchased and activated: {domain_info['domain']}")
         save_manager_state(manager, config)
     else:
-        print("\n❌ Failed to purchase domain. Check API credentials and budget.")
+        print("\nFailed to purchase domain. Check API credentials and budget.")
+
+
+def activate_domain_cli(domain_name: str):
+    """Set an existing owned domain as active."""
+    manager, config = get_manager()
+
+    if manager.activate_domain(domain_name):
+        save_manager_state(manager, config)
+        print(f"\nActive domain set to: {domain_name}")
+    else:
+        print(f"\nCould not activate domain: {domain_name}")
+        print("Run 'python domain_rotation_cli.py list' to see available non-expired domains.")
+        sys.exit(1)
+
+
+def deactivate_domain_cli(domain_name: str):
+    """Deactivate a domain and promote a fallback active domain when possible."""
+    manager, config = get_manager()
+
+    if manager.deactivate_domain(domain_name):
+        save_manager_state(manager, config)
+        if manager.active_domain:
+            print(f"\nDomain deactivated: {domain_name}")
+            print(f"New active domain: {manager.active_domain}")
+        else:
+            print(f"\nDomain deactivated: {domain_name}")
+            print("No active domain is currently set.")
+    else:
+        print(f"\nCould not deactivate domain: {domain_name}")
+        print("Run 'python domain_rotation_cli.py list' to see available domains.")
+        sys.exit(1)
+
+
+def cleanup_domains_cli():
+    """Remove expired domains from local persisted state."""
+    manager, config = get_manager()
+    removed = manager.cleanup_expired_domains()
+    save_manager_state(manager, config)
+
+    if not removed:
+        print("\nNo expired domains were found.")
+        return
+
+    print("\nRemoved expired domains:")
+    for domain in removed:
+        print(f"  - {domain}")
 
 
 def show_status():
     """Show current status"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Domain Rotation Status ===\n")
     
@@ -229,29 +291,37 @@ def show_status():
     print(f"\nDomains Owned: {budget_status['domains_owned']}")
     
     if manager.active_domain:
-        print(f"\n✅ Current burner email domain: {manager.active_domain}")
+        print(f"\nCurrent burner email domain: {manager.active_domain}")
         print(f"   Configure your email system to use: user@{manager.active_domain}")
 
 
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
-        description='OpSecHat Domain Rotation CLI',
+        description='OpSecChat Domain Rotation CLI',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python domain_rotation_cli.py config     # Configure API credentials
-  python domain_rotation_cli.py status     # Show current status
-  python domain_rotation_cli.py search     # Search for available domains
-  python domain_rotation_cli.py rotate     # Rotate to a new domain
-  python domain_rotation_cli.py list       # List owned domains
+  python domain_rotation_cli.py config
+  python domain_rotation_cli.py status
+  python domain_rotation_cli.py search
+  python domain_rotation_cli.py rotate
+  python domain_rotation_cli.py list
+  python domain_rotation_cli.py activate <domain>
+  python domain_rotation_cli.py deactivate <domain>
+  python domain_rotation_cli.py cleanup
         """
     )
     
     parser.add_argument(
         'command',
-        choices=['config', 'status', 'search', 'rotate', 'list'],
+        choices=['config', 'status', 'search', 'rotate', 'list', 'activate', 'deactivate', 'cleanup'],
         help='Command to execute'
+    )
+    parser.add_argument(
+        'domain',
+        nargs='?',
+        help='Domain name used by activate/deactivate commands'
     )
     
     args = parser.parse_args()
@@ -266,6 +336,18 @@ Examples:
         rotate_domain()
     elif args.command == 'list':
         list_domains()
+    elif args.command == 'activate':
+        if not args.domain:
+            print("Domain is required: python domain_rotation_cli.py activate <domain>")
+            sys.exit(1)
+        activate_domain_cli(args.domain)
+    elif args.command == 'deactivate':
+        if not args.domain:
+            print("Domain is required: python domain_rotation_cli.py deactivate <domain>")
+            sys.exit(1)
+        deactivate_domain_cli(args.domain)
+    elif args.command == 'cleanup':
+        cleanup_domains_cli()
 
 
 if __name__ == '__main__':

@@ -134,10 +134,131 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+
+    @staticmethod
+    def _coerce_datetime(value: Optional[object]) -> Optional[datetime]:
+        """Convert persisted datetime values to datetime objects."""
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                logger.warning("Invalid datetime string in domain state: %s", value)
+                return None
+        return None
+
+    @staticmethod
+    def _datetime_to_iso(value: Optional[datetime]) -> Optional[str]:
+        """Convert datetime to ISO8601 string for JSON persistence."""
+        if value is None:
+            return None
+        return value.isoformat()
+
+    def _mark_active_domain(self, domain: Optional[str]) -> None:
+        """Synchronize per-domain active flags with active_domain pointer."""
+        self.active_domain = domain
+        for entry in self.owned_domains:
+            entry["active"] = bool(domain and entry.get("domain") == domain)
+
+    def _is_domain_expired(self, domain_entry: Dict, now: Optional[datetime] = None) -> bool:
+        """Return True when a domain record is expired."""
+        expires_at = self._coerce_datetime(domain_entry.get("expires_at"))
+        if expires_at is None:
+            return False
+        current_time = now or datetime.now()
+        return expires_at <= current_time
+
+    def serialize_state(self) -> Dict:
+        """
+        Export a JSON-serializable manager state dictionary.
+        """
+        serialized_domains: List[Dict] = []
+        for domain in self.owned_domains:
+            serialized_domains.append({
+                "domain": domain.get("domain"),
+                "price": domain.get("price"),
+                "purchased_at": self._datetime_to_iso(
+                    self._coerce_datetime(domain.get("purchased_at"))
+                ),
+                "expires_at": self._datetime_to_iso(
+                    self._coerce_datetime(domain.get("expires_at"))
+                ),
+                "active": bool(domain.get("active", False)),
+            })
+
+        return {
+            "current_spending": float(self.current_spending),
+            "owned_domains": serialized_domains,
+            "active_domain": self.active_domain,
+        }
+
+    def load_state(self, state: Optional[Dict]) -> None:
+        """
+        Load manager state from a persisted dictionary.
+        """
+        state = state or {}
+
+        try:
+            self.current_spending = float(state.get("current_spending", 0.0))
+        except (TypeError, ValueError):
+            logger.warning("Invalid current_spending in domain state, defaulting to 0")
+            self.current_spending = 0.0
+
+        loaded_domains: List[Dict] = []
+        for raw in state.get("owned_domains", []) or []:
+            if not isinstance(raw, dict):
+                continue
+            domain_name = raw.get("domain")
+            if not domain_name:
+                continue
+            loaded_domains.append({
+                "domain": domain_name,
+                "price": raw.get("price", 0.0),
+                "purchased_at": self._coerce_datetime(raw.get("purchased_at")),
+                "expires_at": self._coerce_datetime(raw.get("expires_at")),
+                "active": bool(raw.get("active", False)),
+            })
+
+        self.owned_domains = loaded_domains
+
+        persisted_active = state.get("active_domain")
+        if persisted_active and any(d.get("domain") == persisted_active for d in self.owned_domains):
+            self._mark_active_domain(persisted_active)
+        else:
+            active_from_record = next(
+                (d.get("domain") for d in self.owned_domains if d.get("active")),
+                None,
+            )
+            self._mark_active_domain(active_from_record)
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+
+    def configure(self, api_key: str, secret_key: str, monthly_budget: float = 50.0) -> None:
+        """
+        Configure manager with Porkbun credentials and monthly budget.
+        """
+        self.set_api_client(PorkbunAPIClient(api_key, secret_key))
+        self.monthly_budget = float(monthly_budget)
+
+    def get_config(self) -> Dict:
+        """
+        Return non-sensitive configuration details for UI display.
+        """
+        api_key_suffix = ""
+        if self.api_client and getattr(self.api_client, "api_key", ""):
+            api_key_suffix = str(self.api_client.api_key)[-4:]
+        return {
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "active_domain": self.active_domain,
+            "api_key_suffix": api_key_suffix,
+            "configured": self.api_client is not None,
+        }
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -207,18 +328,84 @@ class DomainRotationManager:
                 "domain": domain,
                 "price": price,
                 "purchased_at": datetime.now(),
-                "expires_at": datetime.now() + timedelta(days=365)
+                "expires_at": datetime.now() + timedelta(days=365),
+                "active": False,
             })
             
             # Set as active if no active domain
             if not self.active_domain:
-                self.active_domain = domain
+                self._mark_active_domain(domain)
             
             logger.info(f"Successfully purchased domain: {domain} for ${price}")
             return True
         else:
             logger.error(f"Failed to purchase domain: {result.get('message')}")
             return False
+
+    def activate_domain(self, domain: str) -> bool:
+        """Set an owned domain as active if it exists and is not expired."""
+        exists = False
+        for owned_domain in self.owned_domains:
+            if owned_domain.get("domain") == domain:
+                exists = True
+                if self._is_domain_expired(owned_domain):
+                    logger.warning("Cannot activate expired domain: %s", domain)
+                    return False
+                self._mark_active_domain(domain)
+                return True
+
+        if not exists:
+            logger.warning("Cannot activate unknown domain: %s", domain)
+        return False
+
+    def deactivate_domain(self, domain: str) -> bool:
+        """
+        Deactivate a domain.
+
+        If the domain is currently active, this will promote the newest non-expired
+        remaining domain if one exists, or clear active_domain otherwise.
+        """
+        if not any(item.get("domain") == domain for item in self.owned_domains):
+            logger.warning("Cannot deactivate unknown domain: %s", domain)
+            return False
+
+        for item in self.owned_domains:
+            if item.get("domain") == domain:
+                item["active"] = False
+
+        if self.active_domain != domain:
+            return True
+
+        candidate_domains = [
+            d.get("domain")
+            for d in self.owned_domains
+            if d.get("domain") != domain and not self._is_domain_expired(d)
+        ]
+        self._mark_active_domain(candidate_domains[-1] if candidate_domains else None)
+        return True
+
+    def cleanup_expired_domains(self) -> List[str]:
+        """
+        Remove expired domains from owned list and return removed domain names.
+        """
+        now = datetime.now()
+        removed: List[str] = []
+        remaining: List[Dict] = []
+
+        for domain_entry in self.owned_domains:
+            if self._is_domain_expired(domain_entry, now=now):
+                removed.append(domain_entry.get("domain", ""))
+            else:
+                remaining.append(domain_entry)
+
+        self.owned_domains = remaining
+
+        if self.active_domain and not any(d.get("domain") == self.active_domain for d in remaining):
+            self._mark_active_domain(None)
+        elif self.active_domain:
+            self._mark_active_domain(self.active_domain)
+
+        return [domain for domain in removed if domain]
     
     def rotate_domain(self) -> Optional[str]:
         """
@@ -239,7 +426,7 @@ class DomainRotationManager:
         )
         
         if success:
-            self.active_domain = domain_info["domain"]
+            self._mark_active_domain(domain_info["domain"])
             return self.active_domain
         
         return None
