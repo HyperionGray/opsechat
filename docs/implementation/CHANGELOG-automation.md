@@ -39,7 +39,9 @@ Major cleanup and consolidation of GitHub Actions workflows to reduce automation
    - `workflows-sync.yml` - Restored proper sync configuration
 
 ### Removed (moved to bak/workflows-removed/)
-13 workflows that created excessive noise by auto-triggering on every push/PR:
+13 workflows were originally moved to `bak/workflows-removed/`, and one duplicate
+legacy file (`auto-sec-scan.yml`) has since been deleted from active workflows.
+The original consolidation set was:
 1. `amazon-q-review.yml`
 2. `amazon-q-security-scan.yml`
 3. `auto-amazonq-review.yml`
@@ -54,7 +56,7 @@ Major cleanup and consolidation of GitHub Actions workflows to reduce automation
 12. `auto-sec-scan.yml` (duplicate)
 13. `test.yml` (duplicate)
 
-### Remaining Workflows (22)
+### Remaining Workflows
 
 #### Core CI/Testing (5)
 - `ci.yml` ⭐ NEW - Required CI workflow
@@ -83,6 +85,16 @@ Major cleanup and consolidation of GitHub Actions workflows to reduce automation
 - `standardize-labels.yml` - Manual
 - `trigger-all-repos.yml` - Manual
 - `workflows-sync-template-backup.yml` - Daily
+
+### Cleanup (2026-04-07)
+- Deleted duplicate legacy workflow from active set:
+  - `.github/workflows/auto-sec-scan.yml`
+- Deleted stale nested placeholders:
+  - `.github/.github/workflows/workflows-sync.yml`
+  - `.github/.github/workflows/auto-copilot-org-playwright-loopv2.yml`
+- Deleted stale root backup artifacts:
+  - `Dockerfile~HEAD`
+  - `docker-compose.yml~HEAD`
 
 ### Benefits
 1. **Faster CI**: Concurrency controls prevent duplicate workflow runs

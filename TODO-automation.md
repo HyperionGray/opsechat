@@ -8,6 +8,11 @@
 - Removed push/PR triggers from scheduled workflows
 - Added concurrency controls to prevent duplicate runs
 - Created comprehensive documentation
+- Restored missing reusable workflows: `python-tests.yml`, `playwright-tests.yml`, `security-scan.yml`
+- Restored `workflows-sync.yml` in `.github/workflows/`
+- Removed stale duplicate workflow `auto-sec-scan.yml`
+- Removed stale placeholder workflow files under `.github/.github/workflows/`
+- Removed stale root backup artifacts (`Dockerfile~HEAD`, `docker-compose.yml~HEAD`)
 
 ## Still To Do
 
@@ -36,7 +41,7 @@
 - [ ] Consider adding more comprehensive security checks to the CI baseline if needed
 
 ### 4. Documentation Updates
-- [ ] Update repository README or contributing guide to mention the new CI workflow
+- [x] Update repository README or contributing guide to mention the new CI workflow
 - [ ] Document the label-based triggering system for team members
 - [ ] Add instructions on how to manually trigger scheduled workflows if needed
 

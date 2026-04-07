@@ -19,7 +19,7 @@ This document summarizes the automation consolidation changes made to reduce noi
   - Includes concurrency controls to cancel redundant runs
   - Timeout limits to prevent runaway jobs
 
-### 2. Updated Workflows
+### 2. Updated / Restored Workflows
 
 #### Made Reusable
 - **`playwright-tests.yml`**: Now callable via `workflow_call` and uses composite actions
@@ -29,6 +29,13 @@ This document summarizes the automation consolidation changes made to reduce noi
 - **`security-scan.yml`**: Changed from weekly to bi-weekly, removed push/PR triggers
 - **`auto-complete-cicd-review.yml`**: Removed push/PR triggers, kept scheduled runs
 - **`workflows-sync.yml`**: Fixed with proper content
+
+#### Restored During Cleanup (2026-04-07)
+- **`ci.yml`**: Re-added consolidated workflow to orchestrate required checks
+- **`python-tests.yml`**: Reusable workflow restored (`workflow_call`)
+- **`playwright-tests.yml`**: Reusable workflow restored (`workflow_call`)
+- **`security-scan.yml`**: Reusable + scheduled workflow restored (`workflow_call` + bi-weekly cron)
+- **`workflows-sync.yml`**: Restored to `.github/workflows/` (the active workflow location)
 
 ### 3. Removed Workflows (moved to bak/workflows-removed/)
 
@@ -48,7 +55,7 @@ The following 13 workflows were removed as they created noise by running on ever
 12. `auto-sec-scan.yml` - Duplicate of security-scan.yml
 13. `test.yml` - Duplicate test workflow
 
-### 4. Workflows Kept (22 remaining)
+### 4. Workflows Kept
 
 #### Core CI/Testing (5)
 - `ci.yml` - **NEW**: Required CI workflow
@@ -88,11 +95,21 @@ The following 13 workflows were removed as they created noise by running on ever
 - Noisy PR experience with many redundant checks
 
 ### After
-- 22 total workflows (33% reduction)
-- **3 workflows** triggered on push/PR (ci.yml, auto-assign-pr.yml, auto-tag-based-review.yml on tags)
-- Single consolidated CI workflow
+- Consolidated CI stack restored (`ci.yml`, `python-tests.yml`, `playwright-tests.yml`, `security-scan.yml`)
 - Reusable composite actions for consistent setup
-- Cleaner PR experience with focused, essential checks
+- Duplicate and stale workflow artifacts removed
+- Cleaner workflow layout under `.github/workflows/`
+
+## Cleanup Actions (2026-04-07)
+
+- Removed duplicate legacy workflow:
+  - `.github/workflows/auto-sec-scan.yml`
+- Removed stale nested placeholder workflow files:
+  - `.github/.github/workflows/workflows-sync.yml`
+  - `.github/.github/workflows/auto-copilot-org-playwright-loopv2.yml`
+- Removed stale root backup artifacts:
+  - `Dockerfile~HEAD`
+  - `docker-compose.yml~HEAD`
 
 ## Benefits
 

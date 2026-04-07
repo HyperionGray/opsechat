@@ -1,0 +1,35 @@
+name: Python Tests
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-tests:
+    runs-on: [self-hosted, linux, x64, big]
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.3.1
+
+      - name: Set up Python and dependencies
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run pytest
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f "pytest.ini" ] || [ -d "tests" ]; then
+            pytest -q
+          else
+            echo "No pytest configuration or tests directory found; skipping."
+          fi

@@ -1,0 +1,29 @@
+name: Playwright Tests
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  playwright-e2e:
+    runs-on: [self-hosted, linux, x64, big]
+    timeout-minutes: 45
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.3.1
+
+      - name: Set up Node and Playwright
+        uses: ./.github/actions/setup-node-playwright
+        with:
+          node-version: "20"
+
+      - name: Run headless Playwright tests
+        shell: bash
+        env:
+          CI: "true"
+        run: |
+          set -euo pipefail
+          npm run test:headless

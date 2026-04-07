@@ -190,6 +190,21 @@ Tests cover:
 
 For full testing documentation, see [Testing Guide](docs/user-guide/TESTING.md).
 
+Continuous Integration
+======================
+
+GitHub Actions uses a consolidated CI workflow at `.github/workflows/ci.yml` with three required jobs:
+
+- `python-tests` (pytest matrix on Python 3.10/3.11/3.12)
+- `playwright-e2e` (headless browser test suite)
+- `security-baseline` (dependency audits with `pip-audit` and `npm audit`)
+
+The CI workflow delegates to reusable workflows:
+
+- `.github/workflows/python-tests.yml`
+- `.github/workflows/playwright-tests.yml`
+- `.github/workflows/security-scan.yml`
+
 
 How it works
 ============

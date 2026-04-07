@@ -1,0 +1,57 @@
+name: Security Scan
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  schedule:
+    # 1st and 3rd Sunday of each month at 03:00 UTC
+    - cron: '0 3 1-7,15-21 * 0'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  security-baseline:
+    runs-on: [self-hosted, linux, x64, big]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.3.1
+
+      - name: Set up Python and dependencies
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node and Playwright deps
+        uses: ./.github/actions/setup-node-playwright
+        with:
+          node-version: "20"
+
+      - name: Install security scanning tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install pip-audit
+
+      - name: Python dependency audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f requirements.txt ]; then
+            pip-audit -r requirements.txt
+          else
+            echo "No requirements.txt found; skipping pip-audit."
+          fi
+
+      - name: Node dependency audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f package-lock.json ] || [ -f package.json ]; then
+            npm audit --audit-level=high
+          else
+            echo "No npm project files found; skipping npm audit."
+          fi

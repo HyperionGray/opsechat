@@ -1,0 +1,27 @@
+name: Workflows Sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Sync daily at 06:00 UTC
+    - cron: '0 6 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: workflows-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: [self-hosted, linux, x64, big]
+    timeout-minutes: 20
+    steps:
+      - name: Sync workflow files from .github repository
+        uses: wow-actions/workflows-sync@v2
+        with:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          owner: P4X-ng
+          workflows: .github/workflows/
+          commit_message: "Sync workflow files from .github repo"

@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-tests:
+    uses: ./.github/workflows/python-tests.yml
+
+  playwright-e2e:
+    uses: ./.github/workflows/playwright-tests.yml
+
+  security-baseline:
+    uses: ./.github/workflows/security-scan.yml
