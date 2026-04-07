@@ -206,7 +206,7 @@ curl -X POST http://localhost:5001/chat/room/{room_id}/messages \
 
 ---
 
-### Test 6: Domain Rotation CLI
+### Test 6: Domain Rotation CLIs
 
 **Steps:**
 1. Configure (skip if no real API key):
@@ -229,8 +229,10 @@ python domain_rotation_cli.py search
 - [ ] Config saved to `~/.opsechat/domain_config.json`
 - [ ] Status shows budget and owned domains
 - [ ] Search finds available cheap domains (if configured)
+- [ ] `rotate-domain.py --search example.xyz` returns availability and price
+- [ ] `rotate-domain.py --get-pricing xyz` returns TLD pricing data
 
-**Note**: Actual rotation requires real API credentials and budget.
+**Note**: Actual purchases require real API credentials and budget.
 
 ---
 
