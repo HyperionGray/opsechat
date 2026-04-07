@@ -67,6 +67,7 @@ Run the verification script to check that everything is working:
 This will check:
 - Container status
 - Tor service health
+- App health endpoint (`/health`) from inside the app container
 - Network connectivity
 - Hidden service address
 
@@ -127,9 +128,10 @@ docker-compose -f container-compose.yml down
 
 - Both containers run in an isolated `opsechat-network` bridge network
 - The opsechat app connects to the Tor daemon via the control port (9051)
+- The opsechat app has a compose-level healthcheck against `http://127.0.0.1:5000/health`
 - **No ports are exposed to the host by default for security**
 - Access is **only through the Tor hidden service** (.onion address)
-- For debugging/development, you can uncomment the port mapping in docker-compose.yml
+- For debugging/development, you can uncomment the port mapping in `container-compose.yml`
 
 ### Security Considerations
 

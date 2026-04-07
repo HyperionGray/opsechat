@@ -72,6 +72,7 @@ cd /path/to/opsechat
 ```
 
 The application container now includes a `/health` healthcheck, and the compose configuration also probes the same endpoint.
+Use `./verify-setup.sh` to run an end-to-end readiness check (container status, Tor ports, and in-container `/health` probe).
 
 ## Full test commands already in the repo
 
