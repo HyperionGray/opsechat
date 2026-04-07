@@ -199,7 +199,7 @@ def create_email_security_blueprint(id_generator, get_random_color):
             return jsonify({"success": False, "error": "No session"})
         
         try:
-            result = domain_rotation_manager.rotate_domain()
+            result = domain_rotation_manager.rotate_domain_with_result()
             return jsonify(result)
         except Exception as e:
             logging.exception("Error in email_domain_rotate")
