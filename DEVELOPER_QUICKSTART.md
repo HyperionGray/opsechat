@@ -83,6 +83,24 @@ npx playwright test
 python3 pf-tasks/test.py --skip-e2e
 ```
 
+## Repository hygiene (scheduled/automation friendly)
+
+Use the PF clean task to detect and remove stale merge/patch artifacts that can
+accidentally stay in the repo:
+
+```bash
+cd /path/to/opsechat
+
+# Report stale backup files only
+python3 pf-tasks/clean.py --repo
+
+# Remove stale backup files (*~HEAD, *.orig, *.rej)
+python3 pf-tasks/clean.py --repo-apply
+```
+
+This runs independently of deployment cleanup and is safe to execute in routine
+maintenance jobs.
+
 ## Files to know
 
 - `runserver.py` - main runtime entrypoint

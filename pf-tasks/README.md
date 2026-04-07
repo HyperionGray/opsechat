@@ -75,6 +75,12 @@ Cleans up opsechat deployment and resources.
 # Clean everything
 python pf-tasks/clean.py
 
+# Scan repository for stale backup files (report only)
+python pf-tasks/clean.py --repo
+
+# Scan + remove stale backup files
+python pf-tasks/clean.py --repo-apply
+
 # Clean only systemd services
 python pf-tasks/clean.py --method systemd
 
@@ -98,6 +104,8 @@ python pf-tasks/clean.py --artifacts
 - Removes networks and volumes
 - Optionally removes container images
 - Cleans build artifacts and cache
+- Detects stale repository backup artifacts (`*~HEAD`, `*.orig`, `*.rej`)
+- Supports report-only or automatic repository cleanup (`--repo` / `--repo-apply`)
 
 ## Usage Patterns
 
@@ -154,6 +162,9 @@ python pf-tasks/clean.py --method all
 
 # Complete cleanup (removes everything)
 python pf-tasks/clean.py --images --artifacts
+
+# Repository hygiene scan + cleanup
+python pf-tasks/clean.py --repo-apply
 
 # Clean only build artifacts
 python pf-tasks/clean.py --artifacts

@@ -7,8 +7,38 @@ Compatible with pf-web-poly-compile-helper-runner patterns
 import subprocess
 import sys
 import shutil
+import os
+from fnmatch import fnmatch
 from pathlib import Path
 import argparse
+
+REPO_HYGIENE_RULES = [
+    {
+        "pattern": "*~HEAD",
+        "reason": "git merge backup artifact",
+        "auto_remove": True,
+    },
+    {
+        "pattern": "*.orig",
+        "reason": "patch/merge backup artifact",
+        "auto_remove": True,
+    },
+    {
+        "pattern": "*.rej",
+        "reason": "failed patch artifact",
+        "auto_remove": True,
+    },
+]
+
+REPO_HYGIENE_SKIP_DIRS = {
+    ".git",
+    ".venv",
+    "venv",
+    "env",
+    "node_modules",
+    "__pycache__",
+    ".pytest_cache",
+}
 
 def run_command(cmd, cwd=None, check=True):
     """Run command with proper error handling"""
@@ -187,21 +217,105 @@ def clean_build_artifacts():
     
     return True
 
+def is_tracked_by_git(project_root, relative_path):
+    """Check whether a path is tracked by git."""
+    result = subprocess.run(
+        ['git', '-C', str(project_root), 'ls-files', '--error-unmatch', relative_path],
+        capture_output=True,
+        text=True
+    )
+    return result.returncode == 0
+
+def find_repo_hygiene_candidates(project_root):
+    """Find stale/backup files that should not stay in the repository."""
+    candidates = []
+
+    for root, dirs, files in os.walk(project_root):
+        dirs[:] = [d for d in dirs if d not in REPO_HYGIENE_SKIP_DIRS]
+        root_path = Path(root)
+
+        for file_name in files:
+            matched_rule = None
+            for rule in REPO_HYGIENE_RULES:
+                if fnmatch(file_name, rule["pattern"]):
+                    matched_rule = rule
+                    break
+
+            if not matched_rule:
+                continue
+
+            abs_path = root_path / file_name
+            rel_path = str(abs_path.relative_to(project_root))
+            tracked = is_tracked_by_git(project_root, rel_path)
+
+            candidates.append({
+                "path": abs_path,
+                "relative_path": rel_path,
+                "reason": matched_rule["reason"],
+                "auto_remove": matched_rule["auto_remove"],
+                "tracked": tracked,
+            })
+
+    candidates.sort(key=lambda item: item["relative_path"])
+    return candidates
+
+def clean_repository_hygiene(apply=False):
+    """Report or remove stale repository files."""
+    print("[*] Scanning repository for stale/backup files")
+    project_root = Path(__file__).parent.parent
+    candidates = find_repo_hygiene_candidates(project_root)
+
+    if not candidates:
+        print("[✓] No repository hygiene issues found")
+        return True
+
+    print(f"[!] Found {len(candidates)} repository hygiene candidate(s):")
+    for item in candidates:
+        tracked_state = "tracked" if item["tracked"] else "untracked"
+        print(f"    - {item['relative_path']} [{tracked_state}] ({item['reason']})")
+
+    if not apply:
+        print("[*] Report only. Re-run with --repo-apply to remove auto-removable files.")
+        return True
+
+    removed = 0
+    failed = 0
+    for item in candidates:
+        if not item["auto_remove"]:
+            continue
+
+        try:
+            item["path"].unlink(missing_ok=True)
+            print(f"[*] Removed {item['relative_path']}")
+            removed += 1
+        except OSError as exc:
+            print(f"[!] Failed to remove {item['relative_path']}: {exc}")
+            failed += 1
+
+    print(f"[*] Repository cleanup removed {removed} file(s)")
+    if failed:
+        print(f"[!] Failed to remove {failed} file(s)")
+        return False
+
+    return True
+
 def determine_cleanup_method(args):
     """
     Determine which cleanup method to use based on arguments.
     
     Returns:
         str or None: The effective cleanup method:
-            - None: Skip deployment cleanup, only clean artifacts (--artifacts without --method or --images)
+            - None: Skip deployment cleanup and only run selective cleanup flags
+              (--artifacts and/or --repo without --method or --images)
             - 'all': Clean all deployment artifacts - systemd, compose, and containers (default behavior)
             - 'systemd', 'compose', 'containers': Clean only specific deployment type
             
-    Note: Images and build artifacts are only cleaned when their respective flags (--images, --artifacts) are set.
+    Note: Images, build artifacts, and repository hygiene checks are only cleaned when
+    their respective flags (--images, --artifacts, --repo/--repo-apply) are set.
     """
     if args.method is None:
-        if args.artifacts and not args.images:
-            # Only clean artifacts when --artifacts is specified alone
+        if (args.artifacts or args.repo or args.repo_apply) and not args.images:
+            # Selective cleanup mode when only non-deployment flags are requested
             return None
         else:
             # Default to 'all' for other cases (no args, --images alone, etc.)
@@ -218,6 +332,10 @@ def main():
     parser.add_argument('--images', action='store_true', help='Also remove container images')
     parser.add_argument('--force', action='store_true', help='Force removal of images')
     parser.add_argument('--artifacts', action='store_true', help='Clean build artifacts')
+    parser.add_argument('--repo', action='store_true',
+                       help='Scan repository for stale backup files')
+    parser.add_argument('--repo-apply', action='store_true',
+                       help='Remove stale repository files detected by --repo scan')
     
     args = parser.parse_args()
     
@@ -244,6 +362,10 @@ def main():
     # Only clean artifacts if explicitly requested via --artifacts flag
     if args.artifacts:
         success &= clean_build_artifacts()
+
+    # Repository hygiene pass (scan/report by default, remove with --repo-apply)
+    if args.repo or args.repo_apply:
+        success &= clean_repository_hygiene(apply=args.repo_apply)
     
     if success:
         print("[✓] Cleanup completed successfully")
