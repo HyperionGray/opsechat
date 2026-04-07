@@ -99,6 +99,24 @@ python pf-tasks/clean.py --artifacts
 - Optionally removes container images
 - Cleans build artifacts and cache
 
+### repo_hygiene.py
+Scans the repository for stale/stray files and optionally removes safe artifacts.
+
+```bash
+# Print hygiene report (non-destructive)
+python scripts/repo_hygiene.py --report
+
+# Remove only clearly safe stale files
+python scripts/repo_hygiene.py --fix-safe
+```
+
+**Features:**
+- Detects editor/merge backup files (`*~HEAD`, `.orig`, `.rej`)
+- Detects Python cache files/directories (`__pycache__`, `*.pyc`)
+- Detects generated BISH artifacts (`.bish-index`, `.bish.sqlite`)
+- Supports report mode for CI/scheduled checks
+- Supports safe automatic cleanup for known low-risk artifacts
+
 ## Usage Patterns
 
 ### Complete Deployment Workflow

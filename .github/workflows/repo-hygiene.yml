@@ -1,0 +1,24 @@
+name: Repo Hygiene
+
+on:
+  schedule:
+    # Every 3 hours
+    - cron: "0 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    runs-on: [self-hosted, linux, x64, big]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.3.1
+
+      - name: Run repository hygiene scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/repo_hygiene.py --strict --report --max-stale-days 30

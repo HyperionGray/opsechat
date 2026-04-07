@@ -283,6 +283,13 @@ Features
 
 For Amazon Q setup instructions, see [Amazon Q Setup Guide](docs/setup/AMAZON_Q_SETUP_GUIDE.md).
 
+### Repository Hygiene Automation
+- **Automated stale-file checks** via `repo-hygiene.yml` (scheduled + manual trigger)
+- **PF command integration**: `pf hygiene` runs `python scripts/repo_hygiene.py --report`
+- **Safe cleanup mode** available for clearly low-risk artifacts (`--fix-safe`)
+
+See [Repository Hygiene guide](docs/implementation/REPO_HYGIENE.md) for usage and policy.
+
 #### Getting Started with Email
 1. Start the server: `python runserver.py` or use deployment method above
 2. Access email configuration: `http://yourservice.onion/{path}/email/config`

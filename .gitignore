@@ -43,6 +43,9 @@ env/
 *.swp
 *.swo
 *~
+*~HEAD
+*.orig
+*.rej
 .DS_Store
 
 # Testing
@@ -62,6 +65,9 @@ __pycache__/
 # Note: bak/ currently contains moved experimental code (tools/, transfer_sdk/)
 # but is tracked in git for history. Future additions to bak/ will be ignored.
 # bak/
+*.orig
+*.rej
+*~HEAD
 
 # Container/Docker artifacts
 *.log
