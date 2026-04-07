@@ -66,6 +66,7 @@ Successfully implemented a Terminal User Interface (TUI) based chat system for O
 - **No Configuration**: Minimal attack surface
 - **No Message History**: Enforced 4-minute lifetime
 - **Clean Shutdown**: Overwrites all data on exit
+- **Per-Client Rate Limiting**: 20 messages per 60 seconds with explicit server error feedback
 - **Minimal Dependencies**: urwid, PySocks, stem
 
 ## Requirements Met
@@ -241,7 +242,7 @@ See `docs/TUI_TODO.md` for detailed roadmap:
 ### Remaining Considerations
 - No E2E encryption yet (Tor provides transport encryption)
 - No user authentication (ephemeral by design)
-- No spam prevention (future: rate limiting)
+- Rate limiting is basic and fixed; no adaptive/user-configurable policy yet
 
 ## Conclusion
 

@@ -11,6 +11,7 @@ This is a serious privacy and opsec tool for serious privacy and opsec people. I
 ✅ **Randomized Usernames** - Server-assigned, no "Jerry Here" problem  
 ✅ **Text Only** - No images, no video, no b64 encoded garbage  
 ✅ **Message Validation** - Max 1000 chars, prevents b64 image encoding  
+✅ **Server Rate Limiting** - 20 messages per 60 seconds per client  
 ✅ **Secure Deletion** - Messages overwritten before removal  
 ✅ **Zero Disk** - Nothing touches disk except the application code  
 ✅ **Tor Integration** - Full support for Tor hidden services (.onion)  
@@ -139,6 +140,7 @@ sudo systemctl start tor
 - **No images**: Text only, no exceptions
 - **No video**: Text only, no exceptions
 - **No b64 encoding**: Large base64-like strings are rejected
+- **Rate limit**: 20 messages per 60 seconds per connected client
 
 ## Architecture
 

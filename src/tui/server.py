@@ -20,18 +20,22 @@ import secrets
 import threading
 import socket
 import json
+from collections import deque
 from typing import Dict, List, Any, Optional
 
 # Message storage (in-memory only)
 class ChatServer:
     MAX_MESSAGE_LENGTH = 1000  # Prevent b64 encoded images
-    MESSAGE_LIFETIME = 180  # 3 minutes in seconds
+    MESSAGE_LIFETIME = 240  # 4 minutes in seconds
+    RATE_LIMIT_COUNT = 20
+    RATE_LIMIT_WINDOW_SECONDS = 60
     
     def __init__(self, host='127.0.0.1', port=5555):
         self.host = host
         self.port = port
         self.messages: List[Dict[str, Any]] = []
         self.clients: Dict[socket.socket, str] = {}
+        self.client_message_times: Dict[socket.socket, deque] = {}
         self.lock = threading.Lock()
         self.server_socket = None
         self.running = False
@@ -92,6 +96,37 @@ class ChatServer:
             })
         
         return True
+
+    def _is_rate_limited(self, client_socket: socket.socket) -> bool:
+        """Check whether a client exceeded send rate in the current window."""
+        now = time.time()
+
+        with self.lock:
+            if client_socket not in self.client_message_times:
+                self.client_message_times[client_socket] = deque()
+
+            timestamps = self.client_message_times[client_socket]
+            cutoff = now - self.RATE_LIMIT_WINDOW_SECONDS
+
+            while timestamps and timestamps[0] <= cutoff:
+                timestamps.popleft()
+
+            if len(timestamps) >= self.RATE_LIMIT_COUNT:
+                return True
+
+            timestamps.append(now)
+            return False
+
+    def send_system_error(self, client_socket: socket.socket, message: str):
+        """Send a structured error to one client."""
+        error_data = {
+            'type': 'error',
+            'message': message
+        }
+        try:
+            client_socket.send((json.dumps(error_data) + '\n').encode())
+        except (OSError, socket.error):
+            pass
     
     def get_messages(self, since: datetime.datetime = None) -> List[Dict[str, Any]]:
         """Get messages (optionally since a specific time)"""
@@ -107,13 +142,18 @@ class ChatServer:
         
         with self.lock:
             self.clients[client_socket] = username
+            self.client_message_times[client_socket] = deque()
         
         try:
             # Send welcome message
             welcome = {
                 'type': 'welcome',
                 'username': username,
-                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
+                'message': (
+                    f'Welcome! You are {username}. Messages burn in 4 minutes. '
+                    f'Rate limit: {self.RATE_LIMIT_COUNT} messages per '
+                    f'{self.RATE_LIMIT_WINDOW_SECONDS} seconds.'
+                )
             }
             client_socket.send((json.dumps(welcome) + '\n').encode())
             
@@ -144,19 +184,32 @@ class ChatServer:
                                 msg_obj = json.loads(line)
                                 if msg_obj.get('type') == 'message':
                                     message = msg_obj.get('message', '')
+                                    if self._is_rate_limited(client_socket):
+                                        self.send_system_error(
+                                            client_socket,
+                                            (
+                                                "Rate limit exceeded: "
+                                                f"{self.RATE_LIMIT_COUNT} messages / "
+                                                f"{self.RATE_LIMIT_WINDOW_SECONDS} seconds. "
+                                                "Please slow down."
+                                            )
+                                        )
+                                        continue
                                     if self.add_message(username, message):
                                         # Broadcast to all clients
                                         self.broadcast_message(username, message)
                             except json.JSONDecodeError:
                                 pass
                 
-                except (OSError, socket.error) as e:
+                except (OSError, socket.error):
                     break
         
         finally:
             with self.lock:
                 if client_socket in self.clients:
                     del self.clients[client_socket]
+                if client_socket in self.client_message_times:
+                    del self.client_message_times[client_socket]
             try:
                 client_socket.close()
             except (OSError, socket.error):
@@ -200,6 +253,7 @@ class ChatServer:
         print(f"[*] OpSecChat TUI Server running on {self.host}:{self.port}")
         print(f"[*] Messages burn after {self.MESSAGE_LIFETIME} seconds")
         print(f"[*] Max message length: {self.MAX_MESSAGE_LENGTH} chars")
+        print(f"[*] Rate limit: {self.RATE_LIMIT_COUNT}/{self.RATE_LIMIT_WINDOW_SECONDS}s per client")
         print(f"[*] Press Ctrl+C to stop")
         
         try:
@@ -231,6 +285,7 @@ class ChatServer:
                 except (OSError, socket.error):
                     pass
             self.clients.clear()
+            self.client_message_times.clear()
         
         # Close server socket
         if self.server_socket:
