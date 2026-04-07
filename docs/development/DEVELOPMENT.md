@@ -125,6 +125,47 @@ python -m pytest
 npx playwright test tests/basic.spec.js
 ```
 
+### CI Workflows (GitHub Actions)
+
+The repository now uses a consolidated CI workflow:
+
+- `.github/workflows/ci.yml`
+  - `python-tests`
+  - `playwright-e2e`
+  - `security-baseline`
+
+Reusable workflows:
+
+- `.github/workflows/python-tests.yml` (`workflow_call` + `workflow_dispatch`)
+- `.github/workflows/playwright-tests.yml` (`workflow_call` + `workflow_dispatch`)
+
+Local equivalents before pushing:
+
+```bash
+python -m pytest
+npx playwright test --project=chromium-headless
+npm audit --audit-level=high
+python -m pip install pip-audit && pip-audit -r requirements.txt
+```
+
+### Label-Based Automation
+
+Several automation workflows are intentionally label-triggered rather than running on every PR:
+
+- `auto-llm-pr-review.yml` (PR labels)
+- `auto-llm-issue-review.yml` (issue labels)
+- `auto-label.yml` (new issues)
+
+This keeps baseline CI deterministic while still allowing targeted automation.
+
+### Manually Triggering Scheduled Workflows
+
+Scheduled workflows can be run on demand from GitHub:
+
+1. Open **Actions** in the repository.
+2. Select the workflow (for example `security-review.yml` or `daily-continuous-progress.yml`).
+3. Click **Run workflow** and choose branch.
+
 ### Test Organization
 - **E2E Tests**: `tests/*.e2e.spec.js` - End-to-end browser tests
 - **Unit Tests**: `tests/test_*.py` - Python unit tests

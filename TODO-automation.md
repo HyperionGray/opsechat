@@ -2,7 +2,14 @@
 
 ## Completed ✅
 - Created composite actions for Python and Node/Playwright setup
-- Created consolidated CI workflow (ci.yml)
+- Created consolidated CI workflow (`.github/workflows/ci.yml`)
+- Added reusable workflow files:
+  - `.github/workflows/python-tests.yml` (`workflow_call` + manual)
+  - `.github/workflows/playwright-tests.yml` (`workflow_call` + manual)
+- Implemented required CI job names in `ci.yml`:
+  - `python-tests`
+  - `playwright-e2e`
+  - `security-baseline`
 - Removed 13 noisy workflows that triggered on every push/PR
 - Updated security scan to run bi-weekly instead of weekly
 - Removed push/PR triggers from scheduled workflows

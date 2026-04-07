@@ -108,3 +108,29 @@ See `TODO-automation.md` for:
 - Issue: "Automation: Direction"
 - Requirements: Per P4X-ng comment - keep only triggered workflows, fix continuous progress, bi-weekly security, keep sync
 - Full Documentation: `docs/AUTOMATION_CONSOLIDATION.md`
+
+## 2026-04-07 - Consolidated CI Follow-up Implemented
+
+### Added
+1. **Missing workflow files restored/implemented**:
+   - `.github/workflows/ci.yml`
+   - `.github/workflows/python-tests.yml`
+   - `.github/workflows/playwright-tests.yml`
+
+### CI Checks Implemented
+The expected required checks now exist in `ci.yml`:
+- `python-tests`
+- `playwright-e2e`
+- `security-baseline`
+
+### Documentation Updated
+1. `TODO-automation.md` updated to reflect in-repo CI completion status
+2. `docs/development/DEVELOPMENT.md` updated with:
+   - CI workflow overview
+   - label-triggered automation notes
+   - manual trigger instructions for scheduled workflows
+
+### Repository Cleanup
+Removed stale merge-backup artifacts from the repository root:
+- `Dockerfile~HEAD`
+- `docker-compose.yml~HEAD`

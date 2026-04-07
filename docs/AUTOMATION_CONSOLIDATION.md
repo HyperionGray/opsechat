@@ -3,6 +3,20 @@
 ## Overview
 This document summarizes the automation consolidation changes made to reduce noise and improve CI/CD reliability.
 
+## 2026-04-07 Follow-up
+
+The consolidated CI entrypoint and reusable test workflows are now present in-repo:
+
+- `.github/workflows/ci.yml`
+- `.github/workflows/python-tests.yml`
+- `.github/workflows/playwright-tests.yml`
+
+`ci.yml` exposes the expected required checks:
+
+- `python-tests`
+- `playwright-e2e`
+- `security-baseline`
+
 ## Changes Made
 
 ### 1. New CI Infrastructure
