@@ -21,7 +21,12 @@ if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
 from flask import Flask, session
-from mock_routes import create_mock_routes
+
+try:
+    from .mock_routes import create_mock_routes
+except ImportError:
+    # Allow running as a script: python3 tests/mock_server.py
+    from mock_routes import create_mock_routes
 
 # Create Flask app with absolute paths for better CI compatibility
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
