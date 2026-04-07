@@ -121,6 +121,9 @@ npm run test:headed
 # Run Python unit tests (requires pytest)
 python -m pytest
 
+# Run repository hygiene checks
+python pf-tasks/hygiene.py
+
 # Run specific test file
 npx playwright test tests/basic.spec.js
 ```
@@ -161,6 +164,7 @@ npm run lint
 
 3. **Test your changes**
    ```bash
+   python pf-tasks/hygiene.py
    npm test
    python -m pytest
    ```

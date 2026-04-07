@@ -36,7 +36,7 @@ class PFTaskTester:
         """Test that all pf task modules can be imported"""
         print("\n=== Testing Module Imports ===")
         
-        modules = ['build', 'deploy', 'test', 'clean']
+        modules = ['build', 'deploy', 'test', 'clean', 'hygiene']
         for module_name in modules:
             try:
                 spec = importlib.util.spec_from_file_location(
@@ -225,7 +225,7 @@ class PFTaskTester:
         try:
             # Read all pf task files
             pf_files = {}
-            for filename in ['build.py', 'deploy.py', 'test.py', 'clean.py']:
+            for filename in ['build.py', 'deploy.py', 'test.py', 'clean.py', 'hygiene.py']:
                 with open(PROJECT_ROOT / "pf-tasks" / filename, 'r') as f:
                     pf_files[filename] = f.read()
             
@@ -280,8 +280,8 @@ class PFTaskTester:
         # Check for existing scripts that pf tasks integrate with
         integration_files = [
             'container-compose.yml',
-            'compose-up.sh',
-            'compose-down.sh',
+            'scripts/compose-up.sh',
+            'scripts/compose-down.sh',
             'package.json',
             'playwright.config.js'
         ]

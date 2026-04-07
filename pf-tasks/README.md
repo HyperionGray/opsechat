@@ -99,6 +99,23 @@ python pf-tasks/clean.py --artifacts
 - Optionally removes container images
 - Cleans build artifacts and cache
 
+### hygiene.py
+Checks repository hygiene and optionally removes safe stray artifacts.
+
+```bash
+# Scan for unfinished markers and stray files
+python pf-tasks/hygiene.py
+
+# Also remove detected safe stray backup/temp files
+python pf-tasks/hygiene.py --fix
+```
+
+**Features:**
+- Scans implementation files for unfinished markers (`TODO`, `FIXME`, `STUB`, etc.)
+- Scans for likely stray backup/temp files (e.g., `*~HEAD`, `*.orig`, `*.bak`)
+- Supports `--fix` mode for safe deletion of detected stray files
+- Exits non-zero when hygiene issues are present (CI/automation friendly)
+
 ## Usage Patterns
 
 ### Complete Deployment Workflow
@@ -126,6 +143,7 @@ docker-compose logs opsechat
 python pf-tasks/build.py
 python pf-tasks/deploy.py --method compose
 python pf-tasks/test.py --method container
+python pf-tasks/hygiene.py
 
 # Make changes, rebuild, and redeploy
 python pf-tasks/clean.py --method compose
