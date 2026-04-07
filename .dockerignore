@@ -8,6 +8,7 @@
 *.swp
 *.swo
 *~
+*~HEAD
 .DS_Store
 
 # ---- Documentation (not needed in container) ----
@@ -40,8 +41,6 @@ tests/
 pytest.ini
 playwright.config.js
 playwright-release.config.js
-test-ci-fix.js
-test-server.js
 run_tests.sh
 
 # ---- Build artifacts ----
