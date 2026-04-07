@@ -12,6 +12,23 @@ from datetime import datetime, timedelta
 logger = logging.getLogger(__name__)
 
 
+def _coerce_datetime(value) -> Optional[datetime]:
+    """
+    Coerce supported datetime representations into a datetime object.
+    Accepts datetime instances and ISO-8601 strings.
+    """
+    if isinstance(value, datetime):
+        return value
+
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+
+    return None
+
+
 class DomainAPIClient:
     """
     Base class for domain registrar API clients
@@ -260,6 +277,40 @@ class DomainRotationManager:
             "remaining": self.monthly_budget - self.current_spending,
             "domains_owned": len(self.owned_domains)
         }
+
+    def prune_expired_domains(self, reference_time: Optional[datetime] = None) -> List[str]:
+        """
+        Remove expired domains from local manager state.
+        Returns a list of removed domain names.
+        """
+        now = reference_time or datetime.now()
+        removed: List[str] = []
+        kept: List[Dict] = []
+
+        for domain_record in self.owned_domains:
+            if not isinstance(domain_record, dict):
+                continue
+
+            domain_name = domain_record.get("domain")
+            expires_at = _coerce_datetime(domain_record.get("expires_at"))
+
+            # If an expiry exists and is in the past, remove it.
+            if expires_at and expires_at <= now:
+                if domain_name:
+                    removed.append(domain_name)
+                continue
+
+            normalized_record = dict(domain_record)
+            if expires_at:
+                normalized_record["expires_at"] = expires_at
+            kept.append(normalized_record)
+
+        self.owned_domains = kept
+
+        if self.active_domain and self.active_domain in removed:
+            self.active_domain = self.owned_domains[-1]["domain"] if self.owned_domains else None
+
+        return removed
 
 
 # Global domain rotation manager

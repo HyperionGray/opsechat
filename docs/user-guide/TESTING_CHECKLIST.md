@@ -225,10 +225,17 @@ python domain_rotation_cli.py status
 python domain_rotation_cli.py search
 ```
 
+4. Prune expired local records:
+```bash
+python domain_rotation_cli.py prune
+```
+
 **Expected Results:**
 - [ ] Config saved to `~/.opsechat/domain_config.json`
 - [ ] Status shows budget and owned domains
 - [ ] Search finds available cheap domains (if configured)
+- [ ] Prune command completes successfully
+- [ ] Datetime fields in config are stored as ISO-8601 strings
 
 **Note**: Actual rotation requires real API credentials and budget.
 

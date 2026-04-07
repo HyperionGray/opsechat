@@ -3,6 +3,7 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime, timedelta
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -174,3 +175,54 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_prune_expired_domains_removes_expired_and_updates_active(self):
+        """Expired domains are removed and active domain is corrected."""
+        now = datetime.now()
+        manager = DomainRotationManager()
+        manager.owned_domains = [
+            {
+                "domain": "expired-one.xyz",
+                "price": 1.0,
+                "expires_at": now - timedelta(days=1),
+            },
+            {
+                "domain": "valid-one.xyz",
+                "price": 2.0,
+                "expires_at": now + timedelta(days=1),
+            },
+            {
+                "domain": "expired-two.xyz",
+                "price": 3.0,
+                "expires_at": now - timedelta(minutes=1),
+            },
+        ]
+        manager.active_domain = "expired-two.xyz"
+
+        removed = manager.prune_expired_domains(reference_time=now)
+
+        assert removed == ["expired-one.xyz", "expired-two.xyz"]
+        assert [d["domain"] for d in manager.owned_domains] == ["valid-one.xyz"]
+        assert manager.active_domain == "valid-one.xyz"
+
+    def test_prune_expired_domains_accepts_iso_datetime_strings(self):
+        """Expiry values loaded from JSON strings are supported."""
+        now = datetime.now()
+        manager = DomainRotationManager()
+        manager.owned_domains = [
+            {
+                "domain": "string-expired.xyz",
+                "expires_at": (now - timedelta(hours=1)).isoformat(),
+            },
+            {
+                "domain": "string-valid.xyz",
+                "expires_at": (now + timedelta(hours=1)).isoformat(),
+            },
+        ]
+
+        removed = manager.prune_expired_domains(reference_time=now)
+
+        assert removed == ["string-expired.xyz"]
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["domain"] == "string-valid.xyz"
+        assert isinstance(manager.owned_domains[0]["expires_at"], datetime)

@@ -70,6 +70,7 @@ python domain_rotation_cli.py status    # Check status
 python domain_rotation_cli.py search    # Find domains
 python domain_rotation_cli.py rotate    # Buy new domain
 python domain_rotation_cli.py list      # List owned
+python domain_rotation_cli.py prune     # Remove expired local records
 ```
 
 ### 🚀 Production Deployment
