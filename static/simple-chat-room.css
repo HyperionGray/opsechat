@@ -29,6 +29,9 @@ body {
 
 .header-info {
     font-size: 0.9em;
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 .encryption-toggle {

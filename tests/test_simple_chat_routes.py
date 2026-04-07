@@ -21,6 +21,7 @@ from simple_chat_routes import (
     check_rate_limit,
     RATE_LIMITS,
     MAX_MESSAGE_LENGTH,
+    MAX_ROOM_MESSAGES,
 )
 
 
@@ -117,6 +118,16 @@ class TestChatRoom:
         room.cleanup_old_messages()
         assert room.get_messages() == []
 
+    def test_message_capacity_is_bounded(self):
+        room = ChatRoom("test-room")
+        for idx in range(MAX_ROOM_MESSAGES + 5):
+            room.add_message("u1", "Alice", [255, 0, 0], f"m{idx}")
+
+        msgs = room.get_messages()
+        assert len(msgs) == MAX_ROOM_MESSAGES
+        assert msgs[0]["message"] == "m5"
+        assert msgs[-1]["message"] == f"m{MAX_ROOM_MESSAGES + 4}"
+
 
 # ---------------------------------------------------------------------------
 # Rate-limit helper
@@ -178,6 +189,8 @@ class TestChatRoutes:
         assert response.status_code == 200
         data = response.get_json()
         assert data["messages"] == []
+        assert data["message_count"] == 0
+        assert data["max_messages"] == MAX_ROOM_MESSAGES
         assert isinstance(data["user_count"], int)
 
     def test_post_message_success(self, client):
@@ -239,6 +252,38 @@ class TestChatRoutes:
     def test_get_room_key_nonexistent_room(self, client):
         response = client.get("/chat/room/no-such-room/key")
         assert response.status_code == 404
+
+    def test_messages_endpoint_includes_capacity_fields(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        client.post(
+            f"/chat/room/{room_id}/messages",
+            json={"message": "hello"},
+            content_type="application/json",
+        )
+
+        response = client.get(f"/chat/room/{room_id}/messages")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["message_count"] == 1
+        assert data["max_messages"] == MAX_ROOM_MESSAGES
+
+    def test_messages_endpoint_keeps_recent_messages_only(self, client):
+        room_id = client.post("/chat/create").get_json()["room_id"]
+        for idx in range(MAX_ROOM_MESSAGES + 2):
+            response = client.post(
+                f"/chat/room/{room_id}/messages",
+                json={"message": f"msg {idx}"},
+                content_type="application/json",
+            )
+            assert response.status_code == 200
+
+        response = client.get(f"/chat/room/{room_id}/messages")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["message_count"] == MAX_ROOM_MESSAGES
+        assert len(data["messages"]) == MAX_ROOM_MESSAGES
+        assert data["messages"][0]["message"] == "msg 2"
+        assert data["messages"][-1]["message"] == f"msg {MAX_ROOM_MESSAGES + 1}"
 
 
 # ---------------------------------------------------------------------------

@@ -128,7 +128,7 @@ User → /chat → Create Room → Room ID Generated
 2. **POST /chat/create** - Create new room, returns room_id
 3. **GET /chat/room/{id}** - Chat room interface
 4. **POST /chat/room/{id}/messages** - Post new message
-5. **GET /chat/room/{id}/messages** - Get messages & user count
+5. **GET /chat/room/{id}/messages** - Get messages, user count, and room capacity metadata (`message_count`, `max_messages`)
 
 ### Security Features
 
@@ -153,6 +153,18 @@ for msg in messages:
         # Overwrite before deletion
         msg["message"] = "X" * len(msg["message"])
 ```
+
+#### Bounded In-Memory Room History
+```python
+MAX_ROOM_MESSAGES = 13
+...
+if len(self.messages) > MAX_ROOM_MESSAGES:
+    # Overwrite dropped entries before trimming
+    old_msg["message"] = "X" * len(old_msg["message"])
+    self.messages = self.messages[-MAX_ROOM_MESSAGES:]
+```
+
+This keeps memory usage predictable and makes room behavior explicit in the UI via `Messages X/13`.
 
 #### E2E Encryption
 ```javascript

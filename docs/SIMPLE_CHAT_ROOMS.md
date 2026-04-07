@@ -142,6 +142,14 @@ POST /chat/room/<room_id>/messages
 Body: {"message": "..."}
 ```
 
+The `GET /chat/room/<room_id>/messages` response includes capacity metadata:
+
+- `message_count`: current number of messages kept in memory for this room
+- `max_messages`: fixed room history cap (currently `13`)
+
+Clients can use this to show an explicit `Messages: X/13` indicator so users know
+the in-memory rolling window size at all times.
+
 ### Encryption Implementation
 
 The E2E encryption uses native Web Crypto API:

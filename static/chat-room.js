@@ -255,6 +255,9 @@ async function pollMessages() {
             const data = await response.json();
             await renderMessages(data.messages);
             document.getElementById('userCount').textContent = `Users: ${data.user_count}`;
+            const messageCount = Number.isInteger(data.message_count) ? data.message_count : data.messages.length;
+            const maxMessages = Number.isInteger(data.max_messages) ? data.max_messages : 13;
+            document.getElementById('messageCount').textContent = `Messages: ${messageCount}/${maxMessages}`;
         }
     } catch (error) {
         // Silently fail for polling errors

@@ -48,6 +48,10 @@ RATE_LIMITS = {
 # Maximum message length to prevent base64 encoding of images
 MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
 
+# Keep room history intentionally small and ephemeral.
+# Older messages are overwritten before removal.
+MAX_ROOM_MESSAGES = 13
+
 # Prefix for E2E-encrypted messages sent from the client.
 # The client prepends this ASCII marker before the base64 AES-GCM ciphertext.
 # The server stores the payload untouched; only the client can decrypt it.
@@ -107,6 +111,14 @@ class ChatRoom:
                 }
             else:
                 self.users[user_id]["last_seen"] = datetime.datetime.now()
+
+            # Keep only the most recent messages to limit in-memory exposure.
+            if len(self.messages) > MAX_ROOM_MESSAGES:
+                to_purge = self.messages[:-MAX_ROOM_MESSAGES]
+                for old_msg in to_purge:
+                    old_msg["message"] = "X" * len(old_msg["message"])
+                    old_msg["username"] = "X" * len(old_msg["username"])
+                self.messages = self.messages[-MAX_ROOM_MESSAGES:]
     
     def cleanup_old_messages(self):
         """Remove messages older than 3 minutes and overwrite memory"""
@@ -437,6 +449,8 @@ def register_simple_chat_routes(app):
                     }
                     for msg in messages
                 ],
+                "message_count": len(messages),
+                "max_messages": MAX_ROOM_MESSAGES,
                 "user_count": user_count,
                 "my_username": session.get("username"),
                 "my_color": session.get("color")
