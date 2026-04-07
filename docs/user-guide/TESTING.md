@@ -128,6 +128,23 @@ For tests that require a running server, use the mock server:
 
 The mock server simulates the Flask application without requiring Tor, making it suitable for automated testing.
 
+### Forced Fallback Email Backend
+
+`tests/mock_server.py` now supports forcing its in-memory fallback email backend even when
+`email_system` is importable. This is useful for deterministic CI runs and isolated local testing.
+
+Enable it with:
+
+```bash
+OPSECHAT_FORCE_MOCK_EMAIL_BACKEND=1 python3 tests/mock_server.py
+```
+
+You can also run the dedicated fallback backend tests:
+
+```bash
+python3 -m pytest tests/test_mock_server_fallback.py
+```
+
 ## Test Reports
 
 After running tests, view the HTML report:

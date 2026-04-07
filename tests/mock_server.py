@@ -13,6 +13,7 @@ import os
 import datetime
 import string
 import random
+import secrets
 
 # Add parent directory to Python path for imports
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -63,20 +64,165 @@ def get_random_color():
 
 
 # Import email system with fallback for testing
+USING_FALLBACK_EMAIL_BACKEND = False
+
 try:
+    force_mock_backend = os.getenv("OPSECHAT_FORCE_MOCK_EMAIL_BACKEND", "").lower() in {
+        "1", "true", "yes", "on"
+    }
+    if force_mock_backend:
+        raise ImportError("Forced mock email backend via OPSECHAT_FORCE_MOCK_EMAIL_BACKEND")
     from email_system import email_storage, burner_manager
 except ImportError as e:
     print(f"Warning: Could not import email_system: {e}")
+    USING_FALLBACK_EMAIL_BACKEND = True
     # Create mock objects for testing
     class MockEmailStorage:
-        def create_user_inbox(self, user_id): pass
+        def __init__(self):
+            self.emails = {}
+
+        def create_user_inbox(self, user_id):
+            if user_id not in self.emails:
+                self.emails[user_id] = []
+
+        def add_email(self, user_id, email):
+            self.create_user_inbox(user_id)
+            new_email = dict(email)
+            new_email.setdefault("id", secrets.token_urlsafe(12))
+            new_email.setdefault("timestamp", datetime.datetime.now())
+            new_email.setdefault("headers", {})
+            new_email.setdefault("from", "")
+            new_email.setdefault("to", "")
+            new_email.setdefault("subject", "")
+            new_email.setdefault("body", "")
+            self.emails[user_id].append(new_email)
+            return new_email["id"]
+
+        def get_emails(self, user_id):
+            return list(self.emails.get(user_id, []))
+
+        def get_email(self, user_id, email_id):
+            for email in self.emails.get(user_id, []):
+                if email.get("id") == email_id:
+                    return email
+            return None
+
+        def update_email(self, user_id, email_id, updated_email):
+            inbox = self.emails.get(user_id, [])
+            for index, existing in enumerate(inbox):
+                if existing.get("id") == email_id:
+                    replacement = dict(updated_email)
+                    replacement["id"] = email_id
+                    replacement["timestamp"] = existing.get("timestamp", datetime.datetime.now())
+                    inbox[index] = replacement
+                    return True
+            return False
+
+        def delete_email(self, user_id, email_id):
+            inbox = self.emails.get(user_id, [])
+            for index, email in enumerate(inbox):
+                if email.get("id") == email_id:
+                    inbox.pop(index)
+                    return True
+            return False
+
     class MockBurnerManager:
-        def cleanup_expired(self): pass
-        def generate_burner_email(self, user_id): return f"test{user_id}@example.com"
-        def rotate_burner(self, user_id, old_email): return f"test{user_id}@example.com"
-        def get_user_burners(self, user_id): return []
-        def get_user_for_burner(self, email): return None
-        def expire_burner(self, email): pass
+        def __init__(self):
+            self.burner_addresses = {}
+            self.user_burners = {}
+            self.max_sends_per_hour = 10
+            self.send_limits = {}
+
+        def cleanup_expired(self):
+            now = datetime.datetime.now()
+            expired = [
+                email for email, info in self.burner_addresses.items()
+                if info["expires_at"] <= now
+            ]
+            for email in expired:
+                self.expire_burner(email)
+
+        def generate_burner_email(self, user_id, domain="example.com", hours_valid=24):
+            self.cleanup_expired()
+            local = secrets.token_urlsafe(9).replace("-", "a").replace("_", "b").lower()[:12]
+            email = f"{local}@{domain}"
+            while email in self.burner_addresses:
+                local = secrets.token_urlsafe(9).replace("-", "a").replace("_", "b").lower()[:12]
+                email = f"{local}@{domain}"
+            info = {
+                "user_id": user_id,
+                "created_at": datetime.datetime.now(),
+                "expires_at": datetime.datetime.now() + datetime.timedelta(hours=hours_valid),
+            }
+            self.burner_addresses[email] = info
+            self.user_burners.setdefault(user_id, []).append(email)
+            return email
+
+        def rotate_burner(self, user_id, old_email=None):
+            if old_email:
+                self.expire_burner(old_email)
+            return self.generate_burner_email(user_id)
+
+        def get_user_burners(self, user_id):
+            self.cleanup_expired()
+            burners = []
+            for email in self.user_burners.get(user_id, []):
+                info = self.burner_addresses.get(email)
+                if info:
+                    burners.append({
+                        "email": email,
+                        "created_at": info["created_at"],
+                        "expires_at": info["expires_at"],
+                    })
+            return burners
+
+        def get_user_for_burner(self, email):
+            self.cleanup_expired()
+            info = self.burner_addresses.get(email)
+            return info["user_id"] if info else None
+
+        def expire_burner(self, email):
+            info = self.burner_addresses.pop(email, None)
+            if not info:
+                return False
+            user_id = info["user_id"]
+            if user_id in self.user_burners and email in self.user_burners[user_id]:
+                self.user_burners[user_id].remove(email)
+            return True
+
+        def check_send_rate_limit(self, user_id):
+            now = datetime.datetime.now()
+            limit_info = self.send_limits.get(user_id)
+            if not limit_info or now >= limit_info["reset_time"]:
+                self.send_limits[user_id] = {
+                    "count": 0,
+                    "reset_time": now + datetime.timedelta(hours=1),
+                }
+                limit_info = self.send_limits[user_id]
+
+            if limit_info["count"] >= self.max_sends_per_hour:
+                remaining = int((limit_info["reset_time"] - now).total_seconds() / 60)
+                return False, (
+                    f"Rate limit exceeded. You can send {self.max_sends_per_hour} "
+                    f"emails per hour. Try again in {remaining} minutes."
+                )
+            return True, None
+
+        def record_sent_email(self, user_id):
+            allowed, _ = self.check_send_rate_limit(user_id)
+            if allowed:
+                self.send_limits[user_id]["count"] += 1
+
+        def get_send_limit_status(self, user_id):
+            allowed, _ = self.check_send_rate_limit(user_id)
+            info = self.send_limits[user_id]
+            count = info["count"]
+            return {
+                "sends_used": count,
+                "sends_remaining": max(self.max_sends_per_hour - count, 0),
+                "max_sends_per_hour": self.max_sends_per_hour,
+                "allowed": allowed,
+            }
     
     email_storage = MockEmailStorage()
     burner_manager = MockBurnerManager()
