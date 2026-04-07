@@ -106,7 +106,7 @@ The bundled jQuery has been updated from v3.3.1 to v3.7.1 to address XSS vulnera
 - CVE-2020-11023 and CVE-2020-11022 vulnerabilities addressed
 - Security vulnerabilities have been patched
 
-**Implementation**: The `static/jquery.js` file has been updated with jQuery 3.7.1. To complete the update, ensure the full minified file from https://code.jquery.com/jquery-3.7.1.min.js replaces the placeholder content.
+**Implementation**: The repository now ships the official minified jQuery 3.7.1 file in `static/jquery.js`.
 
 **Note**: The current code has server-side sanitization that mitigated the jQuery vulnerabilities, but this update provides defense-in-depth security.
 

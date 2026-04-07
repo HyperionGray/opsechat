@@ -6,7 +6,7 @@
 
 **Current Status**: jQuery has been updated to version 3.7.1, which includes fixes for the XSS vulnerabilities. The server-side code also continues to sanitize all chat messages using regex patterns (see `runserver.py` line 198) for defense-in-depth protection.
 
-**Note**: To complete the update, ensure the full jQuery 3.7.1 minified file from https://code.jquery.com/jquery-3.7.1.min.js replaces the placeholder in `static/jquery.js`.
+**Asset status**: `static/jquery.js` now contains the official jQuery 3.7.1 minified distribution file.
 
 ## Dependencies
 

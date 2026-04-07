@@ -107,23 +107,21 @@ def get_manager():
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+
+    # Load saved state using manager helpers so datetime fields are restored.
+    manager.import_state({
+        "monthly_budget": config.get("monthly_budget", manager.monthly_budget),
+        "current_spending": config.get("current_spending", manager.current_spending),
+        "owned_domains": config.get("owned_domains", []),
+        "active_domain": config.get("active_domain"),
+    })
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    config.update(manager.export_state())
     save_config(config)
 
 
@@ -144,8 +142,18 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        purchased_at = domain.get("purchased_at")
+        expires_at = domain.get("expires_at")
+        if hasattr(purchased_at, "strftime"):
+            purchased_label = purchased_at.strftime("%Y-%m-%d %H:%M")
+        else:
+            purchased_label = "Unknown"
+        if hasattr(expires_at, "strftime"):
+            expires_label = expires_at.strftime("%Y-%m-%d")
+        else:
+            expires_label = "Unknown"
+        print(f"   Purchased: {purchased_label}")
+        print(f"   Expires: {expires_label}")
         print()
 
 

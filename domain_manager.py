@@ -6,7 +6,7 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -147,6 +147,69 @@ class DomainRotationManager:
         chars = string.ascii_lowercase + string.digits
         random_name = ''.join(random.choice(chars) for _ in range(length))
         return f"{random_name}.{tld}"
+
+    @staticmethod
+    def _coerce_datetime(value: Any) -> Optional[datetime]:
+        """Convert serialized datetime values back to datetime objects."""
+        if isinstance(value, datetime):
+            return value
+
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                logger.warning("Invalid datetime value in saved state: %s", value)
+                return None
+
+        return None
+
+    @staticmethod
+    def _serialize_datetime(value: Any) -> Optional[str]:
+        """Serialize datetime values for JSON-safe state storage."""
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return None
+
+    def export_state(self) -> Dict[str, Any]:
+        """
+        Export manager state using JSON-serializable primitives.
+        """
+        serialized_domains: List[Dict[str, Any]] = []
+        for domain in self.owned_domains:
+            serialized = dict(domain)
+            serialized["purchased_at"] = self._serialize_datetime(domain.get("purchased_at"))
+            serialized["expires_at"] = self._serialize_datetime(domain.get("expires_at"))
+            serialized_domains.append(serialized)
+
+        return {
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "active_domain": self.active_domain,
+            "owned_domains": serialized_domains,
+        }
+
+    def import_state(self, state: Optional[Dict[str, Any]]) -> None:
+        """
+        Load previously exported manager state.
+        """
+        if not state:
+            return
+
+        self.monthly_budget = float(state.get("monthly_budget", self.monthly_budget))
+        self.current_spending = float(state.get("current_spending", 0.0))
+        self.active_domain = state.get("active_domain")
+
+        loaded_domains: List[Dict[str, Any]] = []
+        for item in state.get("owned_domains", []):
+            if not isinstance(item, dict):
+                continue
+
+            domain = dict(item)
+            domain["purchased_at"] = self._coerce_datetime(item.get("purchased_at"))
+            domain["expires_at"] = self._coerce_datetime(item.get("expires_at"))
+            loaded_domains.append(domain)
+
+        self.owned_domains = loaded_domains
     
     def find_cheap_available_domain(self, max_price: float = 5.0, 
                                    max_attempts: int = 10) -> Optional[Dict]:
@@ -171,8 +234,18 @@ class DomainRotationManager:
                 price = result.get("price", 999)
                 
                 if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
+                    # Remove common currency symbols and spacing
+                    normalized_price = (
+                        price.replace("$", "")
+                        .replace("€", "")
+                        .replace(",", "")
+                        .strip()
+                    )
+                    try:
+                        price = float(normalized_price)
+                    except ValueError:
+                        logger.warning("Invalid price returned by API for %s: %s", domain, price)
+                        continue
                 
                 if price <= max_price:
                     return {

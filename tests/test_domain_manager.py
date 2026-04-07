@@ -2,6 +2,7 @@
 Tests for domain management module
 """
 import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +175,45 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_export_import_state_preserves_datetimes(self):
+        """State export/import should round-trip datetime fields safely."""
+        manager = DomainRotationManager(monthly_budget=25.0)
+        manager.current_spending = 5.5
+        manager.active_domain = "alpha.xyz"
+        manager.owned_domains = [
+            {
+                "domain": "alpha.xyz",
+                "price": 2.75,
+                "purchased_at": datetime(2026, 1, 2, 3, 4, 5),
+                "expires_at": datetime(2027, 1, 2, 3, 4, 5),
+            }
+        ]
+
+        state = manager.export_state()
+
+        assert state["owned_domains"][0]["purchased_at"] == "2026-01-02T03:04:05"
+        assert state["owned_domains"][0]["expires_at"] == "2027-01-02T03:04:05"
+
+        restored = DomainRotationManager()
+        restored.import_state(state)
+
+        assert restored.monthly_budget == 25.0
+        assert restored.current_spending == 5.5
+        assert restored.active_domain == "alpha.xyz"
+        assert restored.owned_domains[0]["purchased_at"] == datetime(2026, 1, 2, 3, 4, 5)
+        assert restored.owned_domains[0]["expires_at"] == datetime(2027, 1, 2, 3, 4, 5)
+
+    def test_find_cheap_available_domain_skips_invalid_price_strings(self):
+        """Invalid price strings should be skipped instead of crashing."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.side_effect = [
+            {"available": True, "domain": "bad.xyz", "price": "N/A"},
+            {"available": True, "domain": "good.xyz", "price": "2.50"},
+        ]
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=2)
+
+        assert result is not None
+        assert result["price"] == 2.5
