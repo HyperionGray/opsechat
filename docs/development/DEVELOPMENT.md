@@ -78,7 +78,7 @@ These are development and testing utilities that help during development:
 
 ### Main Application Files
 - **`runserver.py`** - Main entry point (legacy monolithic)
-- **`runserver_refactored.py`** - Refactored version (blueprint-based)
+- **`runserver.py`** - Refactored runtime entrypoint (app factory-based)
 - **`app_factory.py`** - Flask app factory pattern
 - **`chat-room.py`** - Standalone chat room creator
 - **`tui-server.py`** - Terminal UI server
