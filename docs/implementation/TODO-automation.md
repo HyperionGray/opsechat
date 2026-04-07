@@ -1,6 +1,6 @@
 # TODO: Automation Consolidation Follow-up
 
-## Completed ✅
+## Completed
 - Created composite actions for Python and Node/Playwright setup
 - Created consolidated CI workflow (ci.yml)
 - Removed 13 noisy workflows that triggered on every push/PR
@@ -13,7 +13,7 @@
 
 ### 1. Branch Protection Rules (IMPORTANT)
 - [ ] Update branch protection settings in GitHub to require the new `ci.yml` jobs:
-  - `python-tests` 
+  - `python-tests`
   - `playwright-e2e`
   - `security-baseline`
 - [ ] Remove old workflow requirements from branch protection if they exist

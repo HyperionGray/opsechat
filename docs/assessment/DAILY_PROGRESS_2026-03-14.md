@@ -94,7 +94,7 @@ Moved to appropriate `docs/` subdirectories.
 - `README.md`, `QUICKSTART.md` — GitHub renders from root
 - `SECURITY.md` — GitHub security policy
 - `LICENSE.md` — standard location
-- `TODO.md`, `TODO-automation.md` — project-level planning
+- `TODO.md`, `docs/implementation/TODO-automation.md` — project-level planning
 - `START_HERE.md` — developer onboarding
 - `TUI_README.md` — referenced by tests (`tests/product-release.spec.js`)
 
@@ -135,4 +135,4 @@ The following items are non-trivial and require dedicated effort:
   or the CSP needs a `nonce` strategy)
 - Consider moving remaining standalone test scripts (`test_pf_tasks.py`,
   `test_amazon_q_integration.py`) to `tests/` or `bak/` if obsolete
-- Add `TODO-automation.md` content to `docs/implementation/` for consistency
+- Add `docs/implementation/TODO-automation.md` content to `docs/implementation/` index docs for consistency

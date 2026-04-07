@@ -7,7 +7,8 @@ OpSecChat supports automated domain rotation for burner email systems. This allo
 ## Supported Registrars
 
 Currently supported:
-- **Porkbun** (Recommended - cheap .xyz, .club domains)
+- **Porkbun** (recommended for low-cost TLDs)
+- **Namecheap** (supported through API credentials + username/client IP)
 - Additional registrars can be added by extending `DomainAPIClient`
 
 ## Setup
@@ -43,6 +44,21 @@ Or via environment variables:
 export PORKBUN_API_KEY="pk1_abc123..."
 export PORKBUN_SECRET_KEY="sk1_xyz789..."
 export DOMAIN_BUDGET="10"  # Monthly budget in USD
+```
+
+For Namecheap credentials in Python code:
+
+```python
+from domain_manager import domain_rotation_manager
+
+domain_rotation_manager.configure(
+    api_key="namecheap-api-key",
+    secret_key="",  # unused for Namecheap flow
+    monthly_budget=10.0,
+    provider="namecheap",
+    username="namecheap-username",
+    client_ip="1.2.3.4",
+)
 ```
 
 ## Domain Rotation
@@ -151,10 +167,7 @@ The system can generate random domain names:
 
 ```python
 # Generate random domain
-domain = domain_rotation_manager.generate_random_domain_name(
-    length=8,
-    tld='xyz'
-)
+domain = domain_rotation_manager.generate_domain_name(length=8, tld="xyz")
 # Example: "k3s9mx2r.xyz"
 ```
 
@@ -170,17 +183,14 @@ from domain_manager import domain_rotation_manager
 # Add MX record for email
 domain_rotation_manager.configure_domain_dns(
     domain="example.xyz",
-    mx_records=[
-        {"priority": 10, "host": "mail.example.xyz"}
-    ]
+    mx_record="mail.example.xyz",
 )
 
 # Add A record
 domain_rotation_manager.configure_domain_dns(
     domain="example.xyz",
-    a_records=[
-        {"host": "@", "ip": "1.2.3.4"}
-    ]
+    mx_record="mail.example.xyz",
+    txt_record="v=spf1 mx -all",
 )
 ```
 
@@ -332,22 +342,15 @@ dig @8.8.8.8 yourdomain.xyz MX
 Add support for additional registrars:
 
 ```python
-from domain_manager import DomainAPIClient
+from domain_manager import NamecheapAPIClient, domain_rotation_manager
 
-class NamecheapAPIClient(DomainAPIClient):
-    def __init__(self, api_key: str):
-        super().__init__(api_key)
-    
-    def search_domain(self, domain: str):
-        # Implementation here
-        pass
-    
-    def purchase_domain(self, domain: str, years: int = 1):
-        # Implementation here
-        pass
-
-# Register new client
-domain_rotation_manager.add_api_client('namecheap', NamecheapAPIClient(api_key))
+namecheap = NamecheapAPIClient(
+    api_key="namecheap-api-key",
+    username="namecheap-username",
+    client_ip="1.2.3.4",
+)
+domain_rotation_manager.add_api_client("namecheap", namecheap)
+domain_rotation_manager.set_active_api_client("namecheap")
 ```
 
 ### Custom Domain Patterns
