@@ -191,9 +191,9 @@ Allow users to export chat history in encrypted format.
 Prevent spam and abuse.
 
 **Features:**
-- [ ] Per-user message rate limit
-- [ ] Configurable limits
-- [ ] Exponential backoff
+- [x] Per-user message rate limit
+- [x] Configurable limits
+- [x] Exponential backoff
 - [ ] Abuse detection
 
 **Estimated Effort:** 1-2 days

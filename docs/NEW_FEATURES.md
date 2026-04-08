@@ -133,6 +133,51 @@ First-time users see a prominent security warning:
 
 ---
 
+## 🚦 Chat API Rate Limiting (with Exponential Backoff)
+
+### Purpose
+Harden chat write endpoints against burst spam while keeping responses explicit and machine-readable for clients.
+
+### Endpoints Covered
+- `POST /chat/create`
+- `POST /chat/room/<room_id>/messages`
+- `POST /chat/dm/send`
+
+### What Was Added
+- Per-endpoint, per-session sliding-window limits
+- Exponential backoff for repeated violations in the same window
+- Standardized 429 body with `retry_after_seconds`
+- `Retry-After` response header for client retry logic
+- `Cache-Control: no-store` on 429 responses
+
+### 429 Response Shape
+```json
+{
+  "error": "Rate limit exceeded. Try again in 8 seconds.",
+  "retry_after_seconds": 8
+}
+```
+
+Headers:
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 8
+Cache-Control: no-store
+```
+
+### Backoff Model
+Each endpoint has a base backoff and cap:
+- `chat_create`: base 2s, cap 60s
+- `chat_message`: base 1s, cap 30s
+- `dm_send`: base 5s, cap 120s
+
+On repeated violations, cooldown doubles until capped:
+`base * 2^(violations - 1)`.
+
+Violation history resets after a full quiet window for that endpoint.
+
+---
+
 ## 📧 Email Rate Limiting
 
 ### Purpose

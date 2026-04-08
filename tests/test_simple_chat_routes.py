@@ -308,6 +308,19 @@ class TestDMRoutes:
         response = client.get(f"/chat/dm/{dm_id}")
         assert response.status_code == 404
 
+    def test_chat_create_rate_limit_response_includes_retry_after_header(self, client):
+        limit = RATE_LIMITS["chat_create"]["max_requests"]
+        for _ in range(limit):
+            response = client.post("/chat/create")
+            assert response.status_code == 200
+
+        blocked = client.post("/chat/create")
+        assert blocked.status_code == 429
+        assert "Retry-After" in blocked.headers
+        payload = blocked.get_json()
+        assert isinstance(payload.get("retry_after_seconds"), int)
+        assert payload["retry_after_seconds"] >= 1
+
 
 # ---------------------------------------------------------------------------
 # Bug fixes: trailing slash, VERSION path, encrypted messages, CSP

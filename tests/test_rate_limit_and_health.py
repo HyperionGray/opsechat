@@ -10,7 +10,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
-from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+from simple_chat_routes import (
+    check_rate_limit,
+    _rate_limit_store,
+    _rate_limit_lock,
+    RATE_LIMITS,
+)
 
 # Shared test Flask app (avoids importing all of runserver.py)
 _test_app = create_app()
@@ -85,6 +90,56 @@ def test_rate_limit_chat_message_limit():
     allowed, retry_after = check_rate_limit("session-msg", "chat_message")
     assert allowed is False
     assert retry_after >= 1
+
+
+def test_rate_limit_exponential_backoff_increases_on_repeat_violations():
+    _clear_store()
+    sid = "session-backoff"
+    endpoint = "dm_send"
+    limit = RATE_LIMITS[endpoint]["max_requests"]
+
+    for _ in range(limit):
+        allowed, _ = check_rate_limit(sid, endpoint)
+        assert allowed is True
+
+    # First violation should apply the base backoff for dm_send (5s)
+    allowed, retry_after_1 = check_rate_limit(sid, endpoint)
+    assert allowed is False
+    assert retry_after_1 >= RATE_LIMITS[endpoint]["base_backoff_seconds"]
+
+    # Expire cooldown manually but keep requests in window to trigger another violation
+    with _rate_limit_lock:
+        state = _rate_limit_store[sid][endpoint]
+        state["blocked_until"] = datetime.datetime.now() - datetime.timedelta(seconds=1)
+
+    allowed, retry_after_2 = check_rate_limit(sid, endpoint)
+    assert allowed is False
+    assert retry_after_2 > retry_after_1
+
+
+def test_rate_limit_backoff_resets_after_quiet_window():
+    _clear_store()
+    sid = "session-backoff-reset"
+    endpoint = "chat_message"
+    now = datetime.datetime.now()
+    window = RATE_LIMITS[endpoint]["window_seconds"]
+    limit = RATE_LIMITS[endpoint]["max_requests"]
+    base = RATE_LIMITS[endpoint]["base_backoff_seconds"]
+
+    with _rate_limit_lock:
+        _rate_limit_store[sid] = {
+            endpoint: {
+                "requests": [now - datetime.timedelta(seconds=1)] * limit,
+                "violations": 6,
+                "last_violation": now - datetime.timedelta(seconds=window + 5),
+                "blocked_until": None,
+            }
+        }
+
+    allowed, retry_after = check_rate_limit(sid, endpoint)
+    assert allowed is False
+    # After a quiet period longer than the window, violation history resets to base.
+    assert retry_after == base
 
 
 # ---------------------------------------------------------------------------
