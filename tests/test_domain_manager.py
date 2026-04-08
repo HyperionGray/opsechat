@@ -1,7 +1,7 @@
 """
 Tests for domain management module
 """
-import pytest
+from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -211,3 +211,43 @@ class TestDomainRotationManager:
         assert switched is True
         assert manager.api_client is backup
         assert manager.active_provider == "backup"
+
+    def test_maybe_reset_monthly_spending_same_cycle_no_reset(self):
+        """Budget rollover should not reset within same month."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 12.5
+        manager.budget_cycle = "2026-04"
+
+        did_reset = manager.maybe_reset_monthly_spending(
+            reference_time=datetime(2026, 4, 8, tzinfo=timezone.utc)
+        )
+
+        assert did_reset is False
+        assert manager.current_spending == 12.5
+        assert manager.budget_cycle == "2026-04"
+
+    def test_maybe_reset_monthly_spending_new_cycle_resets(self):
+        """Budget rollover should reset spending on month boundary."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 42.0
+        manager.budget_cycle = "2026-03"
+
+        did_reset = manager.maybe_reset_monthly_spending(
+            reference_time=datetime(2026, 4, 1, tzinfo=timezone.utc)
+        )
+
+        assert did_reset is True
+        assert manager.current_spending == 0.0
+        assert manager.budget_cycle == "2026-04"
+
+    def test_force_reset_monthly_spending(self):
+        """Manual reset should zero spending and set current cycle."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 19.0
+        cycle = manager.force_reset_monthly_spending(
+            reference_time=datetime(2026, 5, 15, tzinfo=timezone.utc)
+        )
+
+        assert manager.current_spending == 0.0
+        assert cycle == "2026-05"
+        assert manager.budget_cycle == "2026-05"

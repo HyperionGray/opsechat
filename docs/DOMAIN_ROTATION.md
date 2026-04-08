@@ -11,6 +11,7 @@ Current capabilities:
 - Porkbun implementation via `PorkbunAPIClient`
 - Cheap-domain discovery (`search_cheap_domains`)
 - Budget-aware purchase and rotation (`purchase_domain_if_budget_allows`, `rotate_to_new_domain`)
+- Automatic monthly budget rollover in UTC (spending resets each new month)
 - Optional multi-provider registration (`add_api_client`, `use_api_client`)
 
 ## Registrar Setup (Porkbun)
@@ -94,6 +95,7 @@ python domain_rotation_cli.py status
 python domain_rotation_cli.py search
 python domain_rotation_cli.py rotate
 python domain_rotation_cli.py list
+python domain_rotation_cli.py reset-budget
 ```
 
 Notes:
@@ -101,6 +103,8 @@ Notes:
 - `rotate` is interactive and asks for purchase confirmation.
 - CLI state is persisted in `~/.opsechat/domain_config.json`.
 - Owned domain timestamps are stored in ISO format and restored automatically.
+- Budget cycle is tracked as `YYYY-MM` in UTC and resets spending automatically on month rollover.
+- `reset-budget` allows manual spending reset within the current cycle.
 
 ## Automation
 

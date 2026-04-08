@@ -10,6 +10,7 @@ Usage:
     python domain_rotation_cli.py search        # Search for available cheap domains
     python domain_rotation_cli.py rotate        # Rotate to a new domain
     python domain_rotation_cli.py status        # Show budget status
+    python domain_rotation_cli.py reset-budget  # Manually reset monthly spending
     python domain_rotation_cli.py config        # Configure API credentials
 """
 
@@ -154,6 +155,14 @@ def get_manager():
         manager.owned_domains = _deserialize_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
+    if config.get('budget_cycle'):
+        manager.budget_cycle = config['budget_cycle']
+
+    # Keep persisted state in sync if month rollover reset was applied.
+    if manager.maybe_reset_monthly_spending():
+        config['current_spending'] = manager.current_spending
+        config['budget_cycle'] = manager.budget_cycle
+        save_config(config)
     
     return manager, config
 
@@ -163,6 +172,7 @@ def save_manager_state(manager, config):
     config['current_spending'] = manager.current_spending
     config['owned_domains'] = _serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
+    config['budget_cycle'] = manager.budget_cycle
     save_config(config)
 
 
@@ -267,11 +277,31 @@ def show_status():
     print(f"  Monthly: ${budget_status['monthly_budget']}")
     print(f"  Spent: ${budget_status['current_spending']}")
     print(f"  Remaining: ${budget_status['remaining']}")
+    print(f"  Cycle (UTC): {budget_status['budget_cycle']}")
     print(f"\nDomains Owned: {budget_status['domains_owned']}")
     
     if manager.active_domain:
         print(f"\n✅ Current burner email domain: {manager.active_domain}")
         print(f"   Configure your email system to use: user@{manager.active_domain}")
+
+
+def reset_budget():
+    """Manually reset monthly spending and keep current cycle."""
+    manager, config = get_manager()
+    status_before = manager.get_budget_status()
+    print("\n=== Reset Monthly Domain Budget ===\n")
+    print(f"Current cycle (UTC): {status_before['budget_cycle']}")
+    print(f"Current spending: ${status_before['current_spending']}")
+    print(f"Monthly budget: ${status_before['monthly_budget']}")
+
+    confirm = input("\nReset spending to $0 for this cycle? (yes/no): ").strip().lower()
+    if confirm != 'yes':
+        print("Reset cancelled.")
+        return
+
+    cycle = manager.force_reset_monthly_spending()
+    save_manager_state(manager, config)
+    print(f"\n✅ Budget spending reset. Active cycle: {cycle}")
 
 
 def main():
@@ -286,12 +316,13 @@ Examples:
   python domain_rotation_cli.py search     # Search for available domains
   python domain_rotation_cli.py rotate     # Rotate to a new domain
   python domain_rotation_cli.py list       # List owned domains
+  python domain_rotation_cli.py reset-budget # Reset monthly spending
         """
     )
     
     parser.add_argument(
         'command',
-        choices=['config', 'status', 'search', 'rotate', 'list'],
+        choices=['config', 'status', 'search', 'rotate', 'list', 'reset-budget'],
         help='Command to execute'
     )
     
@@ -307,6 +338,8 @@ Examples:
         rotate_domain()
     elif args.command == 'list':
         list_domains()
+    elif args.command == 'reset-budget':
+        reset_budget()
 
 
 if __name__ == '__main__':

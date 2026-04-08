@@ -7,7 +7,7 @@ import random
 import string
 import logging
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +143,7 @@ class DomainRotationManager:
         self.active_domain: Optional[str] = None
         self.api_key: Optional[str] = None
         self.api_secret: Optional[str] = None
+        self.budget_cycle: Optional[str] = None
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
@@ -179,6 +180,7 @@ class DomainRotationManager:
         self.api_key = api_key.strip() or None
         self.api_secret = secret_key.strip() or None
         self.set_monthly_budget(monthly_budget)
+        self.ensure_budget_cycle()
 
         if not self.api_key or not self.api_secret:
             self.api_client = None
@@ -199,10 +201,54 @@ class DomainRotationManager:
             "has_api_key": bool(self.api_key),
             "has_secret_key": bool(self.api_secret),
             "monthly_budget": self.monthly_budget,
+            "budget_cycle": self.budget_cycle,
             "active_domain": self.active_domain,
             "active_provider": self.active_provider,
             "providers": sorted(self.api_clients.keys()),
         }
+
+    @staticmethod
+    def _current_budget_cycle(reference_time: Optional[datetime] = None) -> str:
+        """Return the current budget cycle key (UTC year-month)."""
+        now = reference_time or datetime.now(timezone.utc)
+        return f"{now.year:04d}-{now.month:02d}"
+
+    def ensure_budget_cycle(self, reference_time: Optional[datetime] = None) -> str:
+        """
+        Ensure a budget cycle exists and return it.
+
+        This keeps legacy state compatible when older configs did not
+        persist a budget cycle marker.
+        """
+        if not self.budget_cycle:
+            self.budget_cycle = self._current_budget_cycle(reference_time)
+        return self.budget_cycle
+
+    def maybe_reset_monthly_spending(self, reference_time: Optional[datetime] = None) -> bool:
+        """
+        Reset monthly spending when crossing into a new UTC month.
+
+        Returns True when spending was reset due to cycle rollover.
+        """
+        current_cycle = self._current_budget_cycle(reference_time)
+        previous_cycle = self.ensure_budget_cycle(reference_time)
+        if previous_cycle == current_cycle:
+            return False
+
+        logger.info(
+            "Resetting domain budget usage for new cycle: %s -> %s",
+            previous_cycle,
+            current_cycle,
+        )
+        self.current_spending = 0.0
+        self.budget_cycle = current_cycle
+        return True
+
+    def force_reset_monthly_spending(self, reference_time: Optional[datetime] = None) -> str:
+        """Manually reset spending and align cycle to the current month."""
+        self.current_spending = 0.0
+        self.budget_cycle = self._current_budget_cycle(reference_time)
+        return self.budget_cycle
 
     @staticmethod
     def _normalize_price(price_value) -> Optional[float]:
@@ -326,7 +372,9 @@ class DomainRotationManager:
                 "domain": domain,
                 "message": "No API client configured",
             }
-        
+
+        self.maybe_reset_monthly_spending()
+
         # Check budget
         if self.current_spending + price > self.monthly_budget:
             logger.warning(f"Budget exceeded. Current: ${self.current_spending}, "
@@ -422,11 +470,14 @@ class DomainRotationManager:
     
     def get_budget_status(self) -> Dict:
         """Get budget information"""
+        rolled_over = self.maybe_reset_monthly_spending()
         return {
             "monthly_budget": self.monthly_budget,
             "current_spending": self.current_spending,
             "remaining": self.monthly_budget - self.current_spending,
-            "domains_owned": len(self.owned_domains)
+            "domains_owned": len(self.owned_domains),
+            "budget_cycle": self.ensure_budget_cycle(),
+            "rolled_over": rolled_over,
         }
 
 

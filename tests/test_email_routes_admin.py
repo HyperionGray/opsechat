@@ -32,11 +32,14 @@ class TestEmailAdminRoutes:
         burner_manager.send_limits.clear()
         burner_manager.custom_domain = None
         domain_rotation_manager.api_client = None
+        domain_rotation_manager.api_clients = {}
+        domain_rotation_manager.active_provider = None
         domain_rotation_manager.api_key = None
         domain_rotation_manager.api_secret = None
         domain_rotation_manager.active_domain = None
         domain_rotation_manager.current_spending = 0.0
         domain_rotation_manager.monthly_budget = 50.0
+        domain_rotation_manager.budget_cycle = None
         domain_rotation_manager.owned_domains = []
         transport_manager.smtp_transport = None
         transport_manager.imap_transport = None

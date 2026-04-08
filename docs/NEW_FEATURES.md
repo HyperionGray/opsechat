@@ -209,12 +209,20 @@ Budget:
   Monthly: $50.00
   Spent: $2.99
   Remaining: $47.01
+  Cycle (UTC): 2026-04
 
 Domains Owned: 1
 
 ✅ Current burner email domain: abc123xyz.club
    Configure your email system to use: user@abc123xyz.club
 ```
+
+#### Reset Monthly Spending (manual override)
+```bash
+python domain_rotation_cli.py reset-budget
+```
+
+This command resets tracked spending to `$0` for the current UTC budget cycle.
 
 #### Search for Available Domains
 ```bash
@@ -284,7 +292,8 @@ After rotating domains, update your email configuration:
 - Set monthly budget to prevent overspending
 - CLI tracks spending automatically
 - Prevents purchases that would exceed budget
-- Resets monthly (manual reset required)
+- Spending now resets automatically at UTC month rollover
+- Optional manual reset available with `reset-budget`
 
 ---
 
