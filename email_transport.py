@@ -349,6 +349,7 @@ class EmailTransportManager:
                 'port': self.smtp_transport.smtp_port if self.smtp_transport else '',
                 'username': self.smtp_transport.username if self.smtp_transport else '',
                 'use_tls': self.smtp_transport.use_tls if self.smtp_transport else True,
+                # Password intentionally omitted for security
             },
             'imap': {
                 'configured': self.imap_transport is not None,
@@ -356,6 +357,7 @@ class EmailTransportManager:
                 'port': self.imap_transport.imap_port if self.imap_transport else '',
                 'username': self.imap_transport.username if self.imap_transport else '',
                 'use_ssl': self.imap_transport.use_ssl if self.imap_transport else True,
+                # Password intentionally omitted for security
             },
         }
 
