@@ -1,7 +1,6 @@
 """
 Tests for domain management module
 """
-import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -125,7 +124,9 @@ class TestDomainRotationManager:
         manager = DomainRotationManager(mock_client, monthly_budget=50.0)
         result = manager.purchase_domain_if_budget_allows("test123.xyz", 2.99)
         
-        assert result is True
+        assert result["success"] is True
+        assert result["domain"] == "test123.xyz"
+        assert "budget_status" in result
         assert manager.current_spending == 2.99
         assert len(manager.owned_domains) == 1
         assert manager.active_domain == "test123.xyz"
@@ -139,7 +140,8 @@ class TestDomainRotationManager:
         
         result = manager.purchase_domain_if_budget_allows("test123.xyz", 2.0)
         
-        assert result is False
+        assert result["success"] is False
+        assert result["message"] == "Budget exceeded"
         assert manager.current_spending == 4.0
         assert len(manager.owned_domains) == 0
     
@@ -170,7 +172,43 @@ class TestDomainRotationManager:
         }
         
         manager = DomainRotationManager(mock_client, monthly_budget=50.0)
-        new_domain = manager.rotate_domain()
+        result = manager.rotate_domain()
         
-        assert new_domain is not None
-        assert manager.active_domain == new_domain
+        assert result["success"] is True
+        assert result["active_domain"] == "test456.xyz"
+        assert manager.active_domain == "test456.xyz"
+
+    def test_find_cheap_available_domain_with_string_price(self):
+        """Price strings with currency symbols are parsed safely."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "pricecheck.xyz",
+            "price": "$1.99",
+        }
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["price"] == 1.99
+
+    def test_export_import_state_roundtrip(self):
+        """Manager state is serializable for CLI persistence."""
+        manager = DomainRotationManager(monthly_budget=25.0)
+        manager.current_spending = 6.5
+        manager.active_domain = "active.xyz"
+        manager.owned_domains = [{
+            "domain": "active.xyz",
+            "price": 1.99,
+            "purchased_at": "2026-01-01T00:00:00",
+            "expires_at": "2027-01-01T00:00:00",
+        }]
+
+        state = manager.export_state()
+        restored = DomainRotationManager(monthly_budget=25.0)
+        restored.import_state(state)
+
+        assert restored.current_spending == 6.5
+        assert restored.active_domain == "active.xyz"
+        assert restored.owned_domains[0]["domain"] == "active.xyz"

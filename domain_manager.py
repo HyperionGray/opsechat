@@ -23,15 +23,15 @@ class DomainAPIClient:
     
     def search_domain(self, domain: str) -> Dict:
         """Search if domain is available"""
-        raise NotImplementedError
+        raise NotImplementedError()
     
     def purchase_domain(self, domain: str, years: int = 1) -> Dict:
         """Purchase domain"""
-        raise NotImplementedError
+        raise NotImplementedError()
     
     def get_pricing(self, tld: str) -> Dict:
         """Get pricing for TLD"""
-        raise NotImplementedError
+        raise NotImplementedError()
 
 
 class PorkbunAPIClient(DomainAPIClient):
@@ -145,7 +145,18 @@ class DomainRotationManager:
         """Configure registrar credentials and budget."""
         self.api_key = api_key.strip() or None
         self.api_secret = secret_key.strip() or None
-        self.monthly_budget = float(monthly_budget)
+
+        try:
+            budget = float(monthly_budget)
+        except (TypeError, ValueError):
+            self.api_client = None
+            return False
+
+        if budget <= 0:
+            self.api_client = None
+            return False
+
+        self.monthly_budget = budget
 
         if not self.api_key or not self.api_secret:
             self.api_client = None
@@ -153,6 +164,21 @@ class DomainRotationManager:
 
         self.api_client = PorkbunAPIClient(self.api_key, self.api_secret)
         return True
+
+    @staticmethod
+    def _coerce_price(raw_price) -> Optional[float]:
+        """Convert registrar price values to float, if possible."""
+        if isinstance(raw_price, (int, float)):
+            return float(raw_price)
+        if isinstance(raw_price, str):
+            cleaned = raw_price.replace("$", "").replace("€", "").strip()
+            if not cleaned:
+                return None
+            try:
+                return float(cleaned)
+            except ValueError:
+                return None
+        return None
 
     def get_config(self) -> Dict:
         """Return safe configuration details for UI/API use."""
@@ -193,13 +219,9 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
-                
-                if price <= max_price:
+                price = self._coerce_price(result.get("price", 999))
+
+                if price is not None and price <= max_price:
                     return {
                         "domain": domain,
                         "price": price,
@@ -221,10 +243,19 @@ class DomainRotationManager:
                 "message": "No API client configured",
             }
         
+        normalized_price = self._coerce_price(price)
+        if normalized_price is None or normalized_price < 0:
+            return {
+                "success": False,
+                "domain": domain,
+                "message": "Invalid price value",
+                "budget_status": self.get_budget_status(),
+            }
+
         # Check budget
-        if self.current_spending + price > self.monthly_budget:
+        if self.current_spending + normalized_price > self.monthly_budget:
             logger.warning(f"Budget exceeded. Current: ${self.current_spending}, "
-                          f"Requested: ${price}, Budget: ${self.monthly_budget}")
+                          f"Requested: ${normalized_price}, Budget: ${self.monthly_budget}")
             return {
                 "success": False,
                 "domain": domain,
@@ -236,10 +267,10 @@ class DomainRotationManager:
         result = self.api_client.purchase_domain(domain, years=1)
         
         if result.get("success"):
-            self.current_spending += price
+            self.current_spending += normalized_price
             self.owned_domains.append({
                 "domain": domain,
-                "price": price,
+                "price": normalized_price,
                 "purchased_at": datetime.now(),
                 "expires_at": datetime.now() + timedelta(days=365)
             })
@@ -252,7 +283,7 @@ class DomainRotationManager:
             return {
                 "success": True,
                 "domain": domain,
-                "price": price,
+                "price": normalized_price,
                 "message": "Domain purchased successfully",
                 "active_domain": self.active_domain,
                 "budget_status": self.get_budget_status(),
@@ -300,7 +331,7 @@ class DomainRotationManager:
     
     def get_owned_domains(self) -> List[Dict]:
         """Get list of owned domains"""
-        return self.owned_domains
+        return list(self.owned_domains)
     
     def get_budget_status(self) -> Dict:
         """Get budget information"""
@@ -310,6 +341,53 @@ class DomainRotationManager:
             "remaining": self.monthly_budget - self.current_spending,
             "domains_owned": len(self.owned_domains)
         }
+
+    @staticmethod
+    def _serialize_datetime(dt_value):
+        if isinstance(dt_value, datetime):
+            return dt_value.isoformat()
+        return dt_value
+
+    @staticmethod
+    def _deserialize_datetime(dt_value):
+        if isinstance(dt_value, str):
+            try:
+                return datetime.fromisoformat(dt_value)
+            except ValueError:
+                return dt_value
+        return dt_value
+
+    def export_state(self) -> Dict:
+        """Export serializable state for CLIs/config files."""
+        domains = []
+        for domain_info in self.owned_domains:
+            domain_copy = dict(domain_info)
+            domain_copy["purchased_at"] = self._serialize_datetime(domain_copy.get("purchased_at"))
+            domain_copy["expires_at"] = self._serialize_datetime(domain_copy.get("expires_at"))
+            domains.append(domain_copy)
+
+        return {
+            "current_spending": self.current_spending,
+            "owned_domains": domains,
+            "active_domain": self.active_domain,
+        }
+
+    def import_state(self, state: Dict):
+        """Load state exported by export_state()."""
+        try:
+            self.current_spending = float(state.get("current_spending", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            self.current_spending = 0.0
+        self.active_domain = state.get("active_domain")
+        self.owned_domains = []
+
+        for domain_info in state.get("owned_domains", []):
+            if not isinstance(domain_info, dict):
+                continue
+            domain_copy = dict(domain_info)
+            domain_copy["purchased_at"] = self._deserialize_datetime(domain_copy.get("purchased_at"))
+            domain_copy["expires_at"] = self._deserialize_datetime(domain_copy.get("expires_at"))
+            self.owned_domains.append(domain_copy)
 
 
 # Global domain rotation manager

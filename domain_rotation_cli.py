@@ -19,6 +19,7 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
@@ -31,7 +32,7 @@ def load_config():
         return {}
     
     try:
-        with open(CONFIG_FILE, 'r') as f:
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
         print(f"Error loading config: {e}")
@@ -43,7 +44,7 @@ def save_config(config):
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     
     try:
-        with open(CONFIG_FILE, 'w') as f:
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2)
         os.chmod(CONFIG_FILE, 0o600)  # Secure permissions
         print(f"Configuration saved to {CONFIG_FILE}")
@@ -107,29 +108,31 @@ def get_manager():
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+    manager.import_state(config)
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    config.update(manager.export_state())
     save_config(config)
+
+
+def _format_datetime(value, fmt):
+    if isinstance(value, datetime):
+        return value.strftime(fmt)
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value).strftime(fmt)
+        except ValueError:
+            return value
+    return "Unknown"
 
 
 def list_domains():
     """List owned domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Owned Domains ===\n")
     
@@ -141,17 +144,18 @@ def list_domains():
         return
     
     for i, domain in enumerate(domains, 1):
-        active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
-        print(f"{i}. {domain['domain']}{active}")
-        print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        name = domain.get("domain", "unknown")
+        active = " [ACTIVE]" if name == manager.active_domain else ""
+        print(f"{i}. {name}{active}")
+        print(f"   Price: ${domain.get('price', 'Unknown')}")
+        print(f"   Purchased: {_format_datetime(domain.get('purchased_at'), '%Y-%m-%d %H:%M')}")
+        print(f"   Expires: {_format_datetime(domain.get('expires_at'), '%Y-%m-%d')}")
         print()
 
 
 def search_domains():
     """Search for available cheap domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
     print("Searching for domains under $5...\n")
@@ -201,21 +205,21 @@ def rotate_domain():
         return
     
     print("\nPurchasing domain...")
-    success = manager.purchase_domain_if_budget_allows(
+    result = manager.purchase_domain_if_budget_allows(
         domain_info['domain'],
         domain_info['price']
     )
     
-    if success:
-        print(f"\n✅ Successfully purchased and activated: {domain_info['domain']}")
+    if result.get("success"):
+        print(f"\n✅ Successfully purchased and activated: {result.get('active_domain', domain_info['domain'])}")
         save_manager_state(manager, config)
     else:
-        print("\n❌ Failed to purchase domain. Check API credentials and budget.")
+        print(f"\n❌ Failed to purchase domain: {result.get('message', 'unknown error')}")
 
 
 def show_status():
     """Show current status"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Domain Rotation Status ===\n")
     

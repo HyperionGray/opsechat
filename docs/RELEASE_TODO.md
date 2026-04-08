@@ -43,29 +43,23 @@
 
 ### 2. Domain Rotation CLI Tool
 
-**Current State:** Python API only (requires programming)  
-**Desired State:** Simple CLI tool for non-programmers
+**Status:** Implemented and documented.
 
-**Create:** `rotate-domain.py`
+Available commands:
 
 ```bash
-# Usage examples:
-python rotate-domain.py --search example.xyz
-python rotate-domain.py --buy example.xyz --years 1
-python rotate-domain.py --list-owned
-python rotate-domain.py --get-pricing xyz
+python domain_rotation_cli.py config
+python domain_rotation_cli.py status
+python domain_rotation_cli.py search
+python domain_rotation_cli.py rotate
+python domain_rotation_cli.py list
 ```
 
-**Implementation:**
-- [ ] Create CLI argument parser
-- [ ] Add interactive mode
-- [ ] Display pricing before purchase
-- [ ] Confirm purchases with user
-- [ ] Add budget checking
-- [ ] Store API credentials securely
-- [ ] Add to documentation
+Backward-compatible alias:
 
-**Estimated Effort:** 1-2 days
+```bash
+python rotate-domain.py <command>
+```
 
 ---
 
