@@ -93,24 +93,48 @@ python domain_rotation_cli.py config
 python domain_rotation_cli.py status
 python domain_rotation_cli.py search
 python domain_rotation_cli.py rotate
+python domain_rotation_cli.py rotate-auto
 python domain_rotation_cli.py list
 ```
 
 Notes:
 
 - `rotate` is interactive and asks for purchase confirmation.
+- `rotate-auto` is non-interactive and returns non-zero exit codes on failure for cron/CI usage.
 - CLI state is persisted in `~/.opsechat/domain_config.json`.
 - Owned domain timestamps are stored in ISO format and restored automatically.
 
-## Automation
+### Automation-friendly rotation (`rotate-auto`)
 
-For unattended automation (cron), prefer a Python one-liner over the interactive CLI:
+Use `rotate-auto` when a scheduler or script must rotate domains without prompts:
 
 ```bash
-0 2 * * 0 cd /path/to/opsechat && python3 -c "from domain_manager import domain_rotation_manager; domain_rotation_manager.configure('pk1_x','sk1_y',20.0); print(domain_rotation_manager.rotate_to_new_domain())"
+python domain_rotation_cli.py rotate-auto --max-price 4.5 --max-attempts 20 --tlds xyz,club,online --length 10
 ```
 
-Replace credentials with secure secret loading in production environments.
+Optional JSON output for machine parsing:
+
+```bash
+python domain_rotation_cli.py rotate-auto --json
+```
+
+Options:
+
+- `--max-price`: upper bound purchase price in USD (default: `5.0`)
+- `--max-attempts`: search attempts before failing (default: `10`)
+- `--tlds`: comma-separated TLDs to search (default manager list when omitted)
+- `--length`: random domain label length (default: `8`)
+- `--json`: emit structured JSON result payload
+
+## Automation
+
+For unattended automation (cron), use `rotate-auto`:
+
+```bash
+0 2 * * 0 cd /path/to/opsechat && python3 domain_rotation_cli.py rotate-auto --json >> /var/log/opsechat-domain-rotation.log 2>&1
+```
+
+Configure credentials once with `python domain_rotation_cli.py config`, and load secrets securely in production environments.
 
 ## Multi-Provider Extension
 

@@ -372,19 +372,28 @@ class DomainRotationManager:
                 "budget_status": self.get_budget_status(),
             }
     
-    def rotate_domain(self) -> Dict:
+    def rotate_domain(self, max_price: float = 5.0, max_attempts: int = 10,
+                      tlds: Optional[List[str]] = None, length: int = 8) -> Dict:
         """
         Rotate to a new domain
         Finds and purchases a new cheap domain
         """
-        return self.rotate_to_new_domain()
+        return self.rotate_to_new_domain(
+            max_price=max_price,
+            max_attempts=max_attempts,
+            tlds=tlds,
+            length=length,
+        )
 
-    def rotate_to_new_domain(self, max_price: float = 5.0, max_attempts: int = 10) -> Dict:
+    def rotate_to_new_domain(self, max_price: float = 5.0, max_attempts: int = 10,
+                             tlds: Optional[List[str]] = None, length: int = 8) -> Dict:
         """Backward-compatible rotation entrypoint with tunable limits."""
         # Find cheap domain
         domain_info = self.find_cheap_available_domain(
             max_price=max_price,
             max_attempts=max_attempts,
+            tlds=tlds,
+            length=length,
         )
         
         if not domain_info:

@@ -9,6 +9,7 @@ Usage:
     python domain_rotation_cli.py list          # List owned domains
     python domain_rotation_cli.py search        # Search for available cheap domains
     python domain_rotation_cli.py rotate        # Rotate to a new domain
+    python domain_rotation_cli.py rotate-auto   # Non-interactive rotation for automation
     python domain_rotation_cli.py status        # Show budget status
     python domain_rotation_cli.py config        # Configure API credentials
 """
@@ -64,6 +65,23 @@ def _deserialize_owned_domains(domains):
     return deserialized
 
 
+def _parse_tlds(raw_value):
+    """Parse comma-separated TLD list from CLI input."""
+    if not raw_value:
+        return None
+    parsed = []
+    for item in raw_value.split(","):
+        cleaned = item.strip().lower().lstrip(".")
+        if cleaned:
+            parsed.append(cleaned)
+    return parsed or None
+
+
+def _emit_json(payload):
+    """Emit JSON output for automation use-cases."""
+    print(json.dumps(payload, indent=2, sort_keys=True, default=str))
+
+
 def load_config():
     """Load configuration from file"""
     if not CONFIG_FILE.exists():
@@ -77,7 +95,7 @@ def load_config():
         return {}
 
 
-def save_config(config):
+def save_config(config, quiet=False):
     """Save configuration to file"""
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     
@@ -85,7 +103,8 @@ def save_config(config):
         with open(CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=2)
         os.chmod(CONFIG_FILE, 0o600)  # Secure permissions
-        print(f"Configuration saved to {CONFIG_FILE}")
+        if not quiet:
+            print(f"Configuration saved to {CONFIG_FILE}")
     except Exception as e:
         print(f"Error saving config: {e}")
 
@@ -132,14 +151,23 @@ def configure_api():
     print("\n✅ Configuration updated successfully!")
 
 
-def get_manager():
+def get_manager(exit_on_error=True, json_output=False):
     """Get configured domain manager"""
     config = load_config()
     
     if not config.get('api_key') or not config.get('api_secret'):
-        print("❌ Error: API credentials not configured.")
-        print("Run: python domain_rotation_cli.py config")
-        sys.exit(1)
+        if exit_on_error:
+            if json_output:
+                _emit_json({
+                    "success": False,
+                    "error": "API credentials not configured",
+                    "hint": "Run: python domain_rotation_cli.py config",
+                })
+            else:
+                print("❌ Error: API credentials not configured.")
+                print("Run: python domain_rotation_cli.py config")
+            sys.exit(1)
+        return None, config
     
     client = PorkbunAPIClient(config['api_key'], config['api_secret'])
     manager = DomainRotationManager(
@@ -158,12 +186,12 @@ def get_manager():
     return manager, config
 
 
-def save_manager_state(manager, config):
+def save_manager_state(manager, config, quiet=False):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
     config['owned_domains'] = _serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
-    save_config(config)
+    save_config(config, quiet=quiet)
 
 
 def list_domains():
@@ -254,6 +282,98 @@ def rotate_domain():
         print(f"\nFailed to purchase domain: {result.get('message', 'unknown error')}")
 
 
+def rotate_domain_auto(max_price=5.0, max_attempts=10, tlds=None, length=8, json_output=False):
+    """
+    Non-interactive domain rotation.
+
+    This mode is intended for cron jobs and CI automation where no prompt/confirmation
+    can be provided.
+    """
+    manager, config = get_manager(exit_on_error=True, json_output=json_output)
+
+    if max_attempts <= 0:
+        payload = {
+            "success": False,
+            "message": "max_attempts must be greater than 0",
+            "max_attempts": max_attempts,
+        }
+        if json_output:
+            _emit_json(payload)
+        else:
+            print(payload["message"])
+        return 1
+
+    if length <= 0:
+        payload = {
+            "success": False,
+            "message": "length must be greater than 0",
+            "length": length,
+        }
+        if json_output:
+            _emit_json(payload)
+        else:
+            print(payload["message"])
+        return 1
+
+    budget_before = manager.get_budget_status()
+    remaining_budget = budget_before["remaining"]
+    effective_max_price = min(max_price, remaining_budget)
+    parsed_tlds = _parse_tlds(tlds)
+
+    if effective_max_price <= 0:
+        payload = {
+            "success": False,
+            "message": "No budget remaining for domain rotation",
+            "budget_status": budget_before,
+            "requested_max_price": max_price,
+            "effective_max_price": effective_max_price,
+            "tlds": parsed_tlds,
+            "max_attempts": max_attempts,
+            "length": length,
+        }
+        if json_output:
+            _emit_json(payload)
+        else:
+            print("Domain rotation failed: no budget remaining")
+            print(f"Budget status: {budget_before}")
+        return 1
+
+    result = manager.rotate_to_new_domain(
+        max_price=effective_max_price,
+        max_attempts=max_attempts,
+        tlds=parsed_tlds,
+        length=length,
+    )
+    budget_after = manager.get_budget_status()
+
+    payload = {
+        "success": bool(result.get("success")),
+        "requested_max_price": max_price,
+        "effective_max_price": effective_max_price,
+        "max_attempts": max_attempts,
+        "tlds": parsed_tlds,
+        "length": length,
+        "budget_before": budget_before,
+        "budget_after": budget_after,
+        "result": result,
+    }
+
+    if result.get("success"):
+        save_manager_state(manager, config, quiet=json_output)
+
+    if json_output:
+        _emit_json(payload)
+    else:
+        if payload["success"]:
+            print(f"Successfully rotated to: {result.get('active_domain', result.get('domain'))}")
+        else:
+            print(f"Domain rotation failed: {result.get('message', 'unknown error')}")
+        print(f"Budget before: {budget_before}")
+        print(f"Budget after: {budget_after}")
+
+    return 0 if payload["success"] else 1
+
+
 def show_status():
     """Show current status"""
     manager, config = get_manager()
@@ -291,23 +411,64 @@ Examples:
     
     parser.add_argument(
         'command',
-        choices=['config', 'status', 'search', 'rotate', 'list'],
+        choices=['config', 'status', 'search', 'rotate', 'rotate-auto', 'list'],
         help='Command to execute'
+    )
+    parser.add_argument(
+        '--max-price',
+        type=float,
+        default=5.0,
+        help='Maximum purchase price for rotate-auto (USD)'
+    )
+    parser.add_argument(
+        '--max-attempts',
+        type=int,
+        default=10,
+        help='Maximum search attempts for rotate-auto'
+    )
+    parser.add_argument(
+        '--tlds',
+        default=None,
+        help='Comma-separated TLDs for rotate-auto (example: xyz,club,online)'
+    )
+    parser.add_argument(
+        '--length',
+        type=int,
+        default=8,
+        help='Domain label length for rotate-auto'
+    )
+    parser.add_argument(
+        '--json',
+        action='store_true',
+        help='Emit machine-readable JSON output (rotate-auto)'
     )
     
     args = parser.parse_args()
     
     if args.command == 'config':
         configure_api()
+        return 0
     elif args.command == 'status':
         show_status()
+        return 0
     elif args.command == 'search':
         search_domains()
+        return 0
     elif args.command == 'rotate':
         rotate_domain()
+        return 0
+    elif args.command == 'rotate-auto':
+        return rotate_domain_auto(
+            max_price=args.max_price,
+            max_attempts=args.max_attempts,
+            tlds=args.tlds,
+            length=args.length,
+            json_output=args.json,
+        )
     elif args.command == 'list':
         list_domains()
+        return 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
