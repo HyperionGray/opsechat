@@ -1,7 +1,8 @@
-import json
-from pathlib import Path
-
 import importlib.util
+import json
+import subprocess
+import sys
+from pathlib import Path
 
 
 MODULE_PATH = Path(__file__).resolve().parent.parent / "pf-tasks" / "hygiene.py"
@@ -57,3 +58,13 @@ def test_build_json_payload_reports_counts(tmp_path: Path):
     assert parsed["counts"]["unfinished-markers"] == 1
     assert parsed["counts"]["backup-files"] == 1
     assert parsed["counts"]["total"] == 2
+
+
+def test_hygiene_script_passes_on_self_without_false_positives():
+    result = subprocess.run(
+        [sys.executable, str(MODULE_PATH), "--strict", "--root", str(Path(__file__).resolve().parent.parent)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

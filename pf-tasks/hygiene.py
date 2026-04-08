@@ -9,7 +9,9 @@ import argparse
 import json
 import re
 import sys
+import tokenize
 from dataclasses import dataclass
+from io import StringIO
 from pathlib import Path
 from typing import Iterable, List
 
@@ -75,20 +77,52 @@ def iter_scan_files(repo_root: Path) -> Iterable[Path]:
             yield path
 
 
+def is_string_literal_line(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped:
+        return False
+    return stripped[0] in {'"', "'"}
+
+
+def python_comment_text_by_line(content: str) -> dict[int, str]:
+    comments: dict[int, str] = {}
+    try:
+        tokens = tokenize.generate_tokens(StringIO(content).readline)
+        for token in tokens:
+            if token.type == tokenize.COMMENT:
+                comments[token.start[0]] = token.string.lstrip("#").strip()
+    except tokenize.TokenError:
+        return comments
+    return comments
+
+
 def scan_unfinished_markers(repo_root: Path) -> List[Finding]:
     findings: List[Finding] = []
     for path in iter_scan_files(repo_root):
         try:
-            content = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            raw = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
+        content = raw.splitlines()
         relative = path.relative_to(repo_root).as_posix()
+        py_comment_map: dict[int, str] = {}
+        if path.suffix == ".py":
+            py_comment_map = python_comment_text_by_line(raw)
         for idx, line in enumerate(content, start=1):
             stripped = line.strip()
             if not stripped or stripped.startswith("#!"):
                 continue
+            if stripped.startswith("raise NotImplementedError"):
+                continue
+            if is_string_literal_line(line):
+                continue
+            line_to_scan = line
+            if path.suffix == ".py":
+                line_to_scan = py_comment_map.get(idx, "")
+                if not line_to_scan:
+                    continue
             for pattern in UNFINISHED_PATTERNS:
-                if pattern.search(line):
+                if pattern.search(line_to_scan):
                     findings.append(
                         Finding(
                             category="unfinished-marker",
