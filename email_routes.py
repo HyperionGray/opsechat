@@ -183,7 +183,8 @@ def register_email_routes(app, id_generator, get_random_color):
                 monthly_budget = float(request.form.get("monthly_budget", 50))
                 if api_key and api_secret:
                     domain_rotation_manager.configure(
-                        api_client=PorkbunAPIClient(api_key, api_secret),
+                        api_key=api_key,
+                        secret_key=api_secret,
                         monthly_budget=monthly_budget,
                     )
                     message = {"type": "success", "text": "Domain API configuration saved successfully"}
