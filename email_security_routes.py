@@ -85,6 +85,8 @@ def create_email_security_blueprint(id_generator, get_random_color):
         message = None
         current_config = transport_manager.get_config()
         domain_config = domain_rotation_manager.get_config()
+        budget_status = domain_rotation_manager.get_budget_status()
+        active_domain = domain_rotation_manager.get_active_domain()
         
         if request.method == "POST":
             config_type = request.form.get("config_type")
@@ -128,6 +130,9 @@ def create_email_security_blueprint(id_generator, get_random_color):
                 
                 try:
                     domain_rotation_manager.configure(**domain_config_data)
+                    domain_config = domain_rotation_manager.get_config()
+                    budget_status = domain_rotation_manager.get_budget_status()
+                    active_domain = domain_rotation_manager.get_active_domain()
                     message = {"type": "success", "text": "Domain configuration saved successfully"}
                 except Exception as e:
                     message = {"type": "error", "text": f"Domain configuration failed: {str(e)}"}
@@ -137,7 +142,9 @@ def create_email_security_blueprint(id_generator, get_random_color):
                               path=app.config["path"],
                               message=message,
                               current_config=current_config,
-                              domain_config=domain_config)
+                              domain_config=domain_config,
+                              budget_status=budget_status,
+                              active_domain=active_domain)
 
     @email_security_bp.route('/<string:url_addition>/email/send', methods=["POST"])
     def email_send_api(url_addition):
@@ -199,7 +206,7 @@ def create_email_security_blueprint(id_generator, get_random_color):
             return jsonify({"success": False, "error": "No session"})
         
         try:
-            result = domain_rotation_manager.rotate_domain()
+            result = domain_rotation_manager.rotate_domain_result()
             return jsonify(result)
         except Exception as e:
             logging.exception("Error in email_domain_rotate")
