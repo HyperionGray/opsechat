@@ -4,6 +4,7 @@
 <title>Burner Email - OpSec</title>
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="{{ url_for('static', filename='email-burner.js') }}"></script>
 </head>
 
 <style>
@@ -239,7 +240,7 @@
   }
 </style>
 
-<body>
+<body data-path="{{ path }}" data-script-enabled="{{ 'true' if script_enabled else 'false' }}">
   <div class="header">
     <h1>🔥 Burner Email Generator</h1>
     <p>Modern rotating anonymous email addresses</p>
@@ -316,7 +317,7 @@
         </div>
         
         <div class="burner-actions">
-          <button onclick="copyToClipboard('{{ burner.email }}')">📋 Copy Email</button>
+          <button type="button" data-copy-email="{{ burner.email }}">📋 Copy Email</button>
           <a href="/{{ path }}/email" class="button">📧 View Inbox</a>
           <form method="POST" action="/{{ path }}/email/burner" style="display: inline;">
             <input type="hidden" name="action" value="rotate">
@@ -375,101 +376,5 @@
       </ul>
     </div>
   </div>
-
-  <script>
-    function copyToClipboard(text) {
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(text).then(function() {
-          alert('✅ Email address copied to clipboard!');
-        }, function(err) {
-          fallbackCopy(text);
-        });
-      } else {
-        fallbackCopy(text);
-      }
-    }
-
-    function fallbackCopy(text) {
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      textArea.style.position = 'fixed';
-      textArea.style.left = '-999999px';
-      document.body.appendChild(textArea);
-      textArea.select();
-      try {
-        document.execCommand('copy');
-        alert('✅ Email address copied to clipboard!');
-      } catch (err) {
-        alert('❌ Failed to copy. Please copy manually: ' + text);
-      }
-      document.body.removeChild(textArea);
-    }
-
-    {% if script_enabled %}
-    // Live countdown updates
-    function updateCountdowns() {
-      const countdownElements = document.querySelectorAll('.time-remaining[data-seconds]');
-      
-      countdownElements.forEach(function(element) {
-        let seconds = parseInt(element.getAttribute('data-seconds'));
-        
-        if (seconds > 0) {
-          seconds--;
-          element.setAttribute('data-seconds', seconds);
-          
-          const hours = Math.floor(seconds / 3600);
-          const minutes = Math.floor((seconds % 3600) / 60);
-          const secs = seconds % 60;
-          
-          let timeStr;
-          if (hours > 0) {
-            timeStr = hours + 'h ' + minutes + 'm';
-          } else if (minutes > 0) {
-            timeStr = minutes + 'm ' + secs + 's';
-          } else {
-            timeStr = secs + 's';
-          }
-          
-          const countdownSpan = element.querySelector('.countdown');
-          if (countdownSpan) {
-            countdownSpan.textContent = timeStr;
-          }
-          
-          // Update styling based on time remaining
-          const card = element.closest('.burner-card');
-          if (seconds < 3600) {
-            element.classList.add('expiring');
-            if (card) card.classList.add('expiring-soon');
-          }
-          if (seconds < 300) {
-            element.classList.add('expired');
-          }
-        } else {
-          element.querySelector('.countdown').textContent = 'Expired';
-          element.classList.add('expired');
-          const card = element.closest('.burner-card');
-          if (card) card.classList.add('expired');
-        }
-      });
-    }
-
-    // Update every second
-    setInterval(updateCountdowns, 1000);
-
-    // Auto-refresh burner list every 30 seconds
-    function refreshBurnerList() {
-      fetch('/{{ path }}/email/burner/list')
-        .then(response => response.json())
-        .then(burners => {
-          // Update the list (simple reload for now)
-          // In a more advanced implementation, we'd update the DOM directly
-          console.log('Burners refreshed:', burners.length);
-        })
-        .catch(err => console.error('Error refreshing burners:', err));
-    }
-
-    setInterval(refreshBurnerList, 30000);
-    {% endif %}
-  </script>
 </body>
 </html>

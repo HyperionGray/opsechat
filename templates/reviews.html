@@ -4,7 +4,7 @@
 <title>Reviews - Your Drop</title>
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 {% if script_enabled %}
-  <script src="{{ url_for('static', filename='jquery.js') }}"></script>
+  <script src="{{ url_for('static', filename='reviews.js') }}"></script>
 {% endif %}
 </head>
 
@@ -242,6 +242,7 @@
   }
 </style>
 
+<body data-path="{{ path }}" data-script-enabled="{{ 'true' if script_enabled else 'false' }}">
 <div class="container">
   <div class="header">
     <h1>📝 Service Reviews</h1>
@@ -280,7 +281,7 @@
         <span>{{ rating }}★</span>
         <div class="rating-bar-fill" style="width: {{ (stats.rating_distribution[rating] / stats.total * 100) if stats.total > 0 else 0 }}%;"></div>
         <div class="rating-bar-empty"></div>
-        <span>{{ stats.rating_distribution[rating] }}</span>
+        <span class="rating-count">{{ stats.rating_distribution[rating] }}</span>
       </div>
       {% endfor %}
     </div>
@@ -298,7 +299,9 @@
     </div>
     {% endif %}
     
-    <form method="POST" {% if script_enabled %}id="review-form"{% endif %}>
+    <form method="POST"
+          action="{% if script_enabled %}/{{ path }}/reviews/submit{% else %}#{% endif %}"
+          {% if script_enabled %}id="review-form"{% endif %}>
       <div class="form-group">
         <label class="form-label">Rating *</label>
         <div class="rating-input">
@@ -362,95 +365,5 @@
   </div>
 </div>
 
-{% if script_enabled %}
-<script>
-$(document).ready(function() {
-  // Auto-refresh reviews every 30 seconds
-  setInterval(function() {
-    refreshReviews();
-  }, 30000);
-  
-  // Handle form submission via AJAX
-  $('#review-form').on('submit', function(e) {
-    e.preventDefault();
-    
-    var formData = $(this).serialize();
-    
-    $.post('/{{ path }}/reviews/submit', formData)
-      .done(function(response) {
-        if (response.success) {
-          // Show success message
-          $('.message').remove();
-          $('#review-form').before('<div class="message success">' + response.message + '</div>');
-          
-          // Clear form
-          $('#review-form')[0].reset();
-          
-          // Refresh reviews
-          refreshReviews();
-        } else {
-          // Show error message
-          $('.message').remove();
-          $('#review-form').before('<div class="message error">' + response.message + '</div>');
-        }
-      })
-      .fail(function() {
-        $('.message').remove();
-        $('#review-form').before('<div class="message error">Error submitting review. Please try again.</div>');
-      });
-  });
-});
-
-function refreshReviews() {
-  $.get('/{{ path }}/reviews/list')
-    .done(function(data) {
-      updateReviewsDisplay(data.reviews, data.stats);
-    })
-    .fail(function() {
-      console.log('Failed to refresh reviews');
-    });
-}
-
-function updateReviewsDisplay(reviews, stats) {
-  // Update stats
-  $('.stat-value').eq(0).text(stats.total);
-  $('.stat-value').eq(1).text(stats.average_rating);
-  
-  // Update rating distribution
-  if (stats.total > 0) {
-    for (var rating = 1; rating <= 5; rating++) {
-      var percentage = (stats.rating_distribution[rating] / stats.total * 100);
-      $('.rating-bar').eq(5 - rating).find('.rating-bar-fill').css('width', percentage + '%');
-      $('.rating-bar').eq(5 - rating).find('span').last().text(stats.rating_distribution[rating]);
-    }
-  }
-  
-  // Update reviews list
-  var reviewsHtml = '<h2>💬 User Reviews (' + stats.total + ')</h2>';
-  
-  if (reviews.length > 0) {
-    reviews.forEach(function(review) {
-      var stars = '';
-      for (var i = 0; i < review.rating; i++) stars += '★';
-      for (var i = review.rating; i < 5; i++) stars += '☆';
-      
-      reviewsHtml += '<div class="review-item">';
-      reviewsHtml += '<div class="review-header">';
-      reviewsHtml += '<div class="review-rating">' + stars + '</div>';
-      reviewsHtml += '<div class="review-meta">' + review.timestamp + ' | User: ' + review.user_id + '</div>';
-      reviewsHtml += '</div>';
-      if (review.text) {
-        reviewsHtml += '<div class="review-text">' + review.text + '</div>';
-      }
-      reviewsHtml += '</div>';
-    });
-  } else {
-    reviewsHtml += '<div class="no-reviews">No reviews yet. Be the first to share your experience!</div>';
-  }
-  
-  $('#reviews-list').html(reviewsHtml);
-}
-</script>
-{% endif %}
-
+</body>
 </html>

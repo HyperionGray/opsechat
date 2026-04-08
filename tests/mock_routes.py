@@ -28,6 +28,8 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         """Check if a chat message is older than specified seconds"""
         now = datetime.datetime.now()
         timestamp = chat_dic["timestamp"]
+        if isinstance(timestamp, str):
+            timestamp = datetime.datetime.fromisoformat(timestamp)
         diff = now - timestamp
         secs = diff.total_seconds()
         return secs >= secs_to_live
@@ -85,7 +87,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             return render_template("drop.html",
                                   hostname=app.config["hostname"],
                                   path=app.config["path"],
-                                  script_enabled=True)
+                                  script_enabled=False)
         except Exception as e:
             print(f"Template rendering error: {e}")
             return f'''
@@ -113,7 +115,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             session["color"] = get_random_color()
         
         try:
-            return render_template("drop.html",
+            return render_template("drop.noscript.html",
                                   hostname=app.config["hostname"],
                                   path=app.config["path"],
                                   script_enabled=False)
@@ -273,7 +275,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         
         return '<html><body><h1>Email Configuration</h1></body></html>', 200
 
-    @app.route('/<string:url_addition>/email/burner', methods=["GET"])
+    @app.route('/<string:url_addition>/email/burner', methods=["GET", "POST"])
     def email_burner(url_addition):
         if url_addition != app.config["path"]:
             return ('', 404)
@@ -281,8 +283,54 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         if "_id" not in session:
             session["_id"] = id_generator()
             session["color"] = get_random_color()
-        
-        return '<html><body><h1>Burner Email</h1></body></html>', 200
+
+        if request.method == "POST":
+            burner_email = f"burner_{id_generator(8)}@example.com"
+            if "_burners" not in session:
+                session["_burners"] = []
+            session["_burners"].append({
+                "email": burner_email,
+                "created_at": datetime.datetime.now(),
+                "expires_at": datetime.datetime.now() + datetime.timedelta(hours=1),
+                "time_remaining_seconds": 3600,
+                "time_remaining_str": "1h 0m",
+            })
+            return redirect(f'/{app.config["path"]}/email/burner', code=302)
+
+        burners = session.get("_burners", [])
+        return render_template(
+            "email_burner.html",
+            hostname=app.config["hostname"],
+            path=app.config["path"],
+            active_burners=burners,
+            script_enabled=False,
+        ), 200
+
+    @app.route('/<string:url_addition>/email/burner/yesscript', methods=["GET"])
+    def email_burner_yesscript(url_addition):
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
+
+        burners = session.get("_burners", [])
+        return render_template(
+            "email_burner.html",
+            hostname=app.config["hostname"],
+            path=app.config["path"],
+            active_burners=burners,
+            script_enabled=True,
+        ), 200
+
+    @app.route('/<string:url_addition>/email/burner/list', methods=["GET"])
+    def email_burner_list(url_addition):
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        burners = session.get("_burners", [])
+        return jsonify(burners), 200
 
     @app.route('/<string:url_addition>/email/burner/generate', methods=["POST"])
     def email_burner_generate(url_addition):
@@ -293,6 +341,15 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             return jsonify({"error": "No session"}), 401
         
         burner_email = f"burner_{id_generator(8)}@example.com"
+        if "_burners" not in session:
+            session["_burners"] = []
+        session["_burners"].append({
+            "email": burner_email,
+            "created_at": datetime.datetime.now(),
+            "expires_at": datetime.datetime.now() + datetime.timedelta(hours=1),
+            "time_remaining_seconds": 3600,
+            "time_remaining_str": "1h 0m",
+        })
         return jsonify({
             "success": True,
             "email": burner_email

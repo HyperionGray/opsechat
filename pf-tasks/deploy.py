@@ -128,7 +128,24 @@ def deploy_compose(compose_tool):
     
     if compose_up_script.exists():
         print("[*] Using existing compose-up.sh script")
-        run_command([str(compose_up_script)], cwd=project_root)
+        result = run_command([str(compose_up_script)], cwd=project_root, check=False)
+        if result.returncode != 0:
+            return False
+
+        # Confirm both services are actually present after startup attempt.
+        if compose_tool == 'docker-compose-plugin':
+            status_cmd = ['docker', 'compose', '-f', str(project_root / 'container-compose.yml'), 'ps']
+        else:
+            status_cmd = [compose_tool, '-f', str(project_root / 'container-compose.yml'), 'ps']
+
+        status = run_command(status_cmd, cwd=project_root, check=False)
+        output = (status.stdout or "") + (status.stderr or "")
+        if status.returncode != 0:
+            print("[!] Compose status check failed after startup")
+            return False
+        if 'opsechat-tor' not in output or 'opsechat-app' not in output:
+            print("[!] Compose startup did not produce both expected services")
+            return False
     else:
         # Fallback to direct compose command
         if compose_tool == 'docker-compose-plugin':
@@ -136,7 +153,9 @@ def deploy_compose(compose_tool):
         else:
             cmd = [compose_tool, 'up', '-d']
         
-        run_command(cmd, cwd=project_root)
+        result = run_command(cmd, cwd=project_root, check=False)
+        if result.returncode != 0:
+            return False
     
     return True
 

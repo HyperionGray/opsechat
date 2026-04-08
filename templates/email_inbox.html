@@ -3,10 +3,7 @@
 <head>
 <title>OpSec Email Inbox</title>
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
-{% if script_enabled %}
-  <script src="{{ url_for('static', filename='jquery.js') }}"></script>
-  <script src="{{ url_for('static', filename='openpgp.min.js') }}"></script>
-{% endif %}
+<script src="{{ url_for('static', filename='email-inbox.js') }}"></script>
 </head>
 
 {% if script_enabled %}
@@ -136,7 +133,7 @@
   }
 </style>
 
-<body>
+<body data-script-enabled="{{ 'true' if script_enabled else 'false' }}">
   <div class="header">
     <h1>🔒 OpSec Email Inbox</h1>
     <p>Encrypted, Anonymous Email via Tor</p>
@@ -207,14 +204,7 @@
     </ul>
   </div>
 
-  {% if script_enabled %}
-  <script>
-    // Auto-refresh inbox every 30 seconds
-    setTimeout(function() {
-      location.reload();
-    }, 30000);
-  </script>
-  {% else %}
+  {% if not script_enabled %}
   <div style="margin-top: 20px;">
     <a href="/{{ path }}/email" style="color: #0f0;">[Refresh Inbox]</a>
   </div>

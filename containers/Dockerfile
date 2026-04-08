@@ -25,15 +25,26 @@ RUN pip install --no-cache-dir -r requirements.txt || \
      pip install --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt)
 
 # Copy application code
-# Key modules listed explicitly so tests can verify their presence;
-# the wildcard ensures new helpers are also included.
-COPY runserver.py app_factory.py utils.py monitoring.py rate_limiter.py ./
-COPY email_system.py email_transport.py email_routes.py email_security_tools.py email_security_routes.py ./
-COPY simple_chat_routes.py chat_routes.py review_routes.py landing_routes.py ./
-COPY http_mail_routes.py http_mail_system.py burner_routes.py ./
-COPY domain_manager.py domain_rotation_cli.py state_manager.py security_routes.py ./
-COPY performance_utils.py ./
-COPY *.py ./
+COPY app_factory.py ./
+COPY burner_routes.py ./
+COPY chat_routes.py ./
+COPY domain_manager.py ./
+COPY email_routes.py ./
+COPY email_security_routes.py ./
+COPY email_security_tools.py ./
+COPY email_system.py ./
+COPY email_transport.py ./
+COPY http_mail_routes.py ./
+COPY http_mail_system.py ./
+COPY landing_routes.py ./
+COPY monitoring.py ./
+COPY rate_limiter.py ./
+COPY review_routes.py ./
+COPY runserver.py ./
+COPY security_routes.py ./
+COPY simple_chat_routes.py ./
+COPY state_manager.py ./
+COPY utils.py ./
 COPY MANIFEST.in .
 COPY VERSION .
 
@@ -48,8 +59,7 @@ EXPOSE 5000
 ENV PYTHONUNBUFFERED=1
 ENV TOR_CONTROL_PORT=9051
 
-# Health check -- matches the /health endpoint in monitoring.py
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=10 \
   CMD curl --fail --silent http://127.0.0.1:5000/health || exit 1
 
 # Run the application

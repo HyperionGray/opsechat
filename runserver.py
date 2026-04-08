@@ -22,10 +22,18 @@ log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
 
+def _get_tor_endpoint():
+    """Return Tor control host/port from environment."""
+    host = os.environ.get("TOR_CONTROL_HOST", "127.0.0.1")
+    port = int(os.environ.get("TOR_CONTROL_PORT", "9051"))
+    return host, port
+
+
 def setup_tor_configuration():
     """Setup Tor hidden service configuration"""
+    tor_host, tor_port = _get_tor_endpoint()
     try:
-        with Controller.from_port(port=9051) as controller:
+        with Controller.from_port(address=tor_host, port=tor_port) as controller:
             controller.authenticate()
             
             # Create ephemeral hidden service
@@ -86,7 +94,8 @@ def main():
         if service_id:
             print(" * Shutting down our hidden service")
             try:
-                with Controller.from_port(port=9051) as controller:
+                tor_host, tor_port = _get_tor_endpoint()
+                with Controller.from_port(address=tor_host, port=tor_port) as controller:
                     controller.authenticate()
                     controller.remove_ephemeral_hidden_service(service_id)
             except Exception as e:
