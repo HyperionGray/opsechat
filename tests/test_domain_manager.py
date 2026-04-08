@@ -226,7 +226,12 @@ class TestDomainRotationManager:
 
         serialized = manager.serialize_state()
         restored = DomainRotationManager(monthly_budget=1.0)
-        restored.load_state(serialized)
+        with patch.object(
+            restored,
+            "_now",
+            return_value=datetime(2026, 3, 20, 12, 0, tzinfo=timezone.utc),
+        ):
+            restored.load_state(serialized)
 
         assert restored.monthly_budget == 42.0
         assert restored.current_spending == 12.5
