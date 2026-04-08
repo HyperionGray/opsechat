@@ -8,6 +8,7 @@ import json
 import time
 import sys
 import os
+import socket
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from functools import wraps
@@ -321,6 +322,21 @@ def _read_version() -> str:
         return 'unknown'
 
 
+def _readiness_flag_enabled() -> bool:
+    """Check whether readiness should enforce Tor connectivity."""
+    value = os.environ.get('OPSECHAT_READINESS_CHECK_TOR', '0').strip().lower()
+    return value in {'1', 'true', 'yes', 'on'}
+
+
+def _check_tor_control_port(host: str, port: int) -> Dict[str, str]:
+    """Try opening a TCP connection to the Tor control port."""
+    try:
+        with socket.create_connection((host, port), timeout=1.5):
+            return {'status': 'ok'}
+    except OSError as exc:
+        return {'status': 'error', 'detail': str(exc)}
+
+
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
     return {
@@ -336,6 +352,42 @@ def get_health_status() -> Dict[str, Any]:
             'memory_usage': 'ok',
             'disk_space': 'ok'
         }
+    }
+
+
+def get_readiness_status() -> Dict[str, Any]:
+    """Get container/application readiness status for orchestrators."""
+    checks: Dict[str, Dict[str, str]] = {}
+    ready = True
+    requires_tor = _readiness_flag_enabled()
+
+    if requires_tor:
+        tor_host = os.environ.get('TOR_CONTROL_HOST', '127.0.0.1')
+        raw_tor_port = os.environ.get('TOR_CONTROL_PORT', '9051')
+        try:
+            tor_port = int(raw_tor_port)
+            checks['tor_control_port'] = _check_tor_control_port(tor_host, tor_port)
+        except ValueError:
+            checks['tor_control_port'] = {
+                'status': 'error',
+                'detail': f'invalid TOR_CONTROL_PORT value: {raw_tor_port}',
+            }
+
+        if checks['tor_control_port']['status'] != 'ok':
+            ready = False
+    else:
+        checks['tor_control_port'] = {
+            'status': 'skipped',
+            'detail': 'Set OPSECHAT_READINESS_CHECK_TOR=1 to require Tor control port',
+        }
+
+    return {
+        'status': 'ready' if ready else 'not_ready',
+        'ready': ready,
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
+        'version': _read_version(),
+        'checks': checks,
     }
 
 # Security event logging

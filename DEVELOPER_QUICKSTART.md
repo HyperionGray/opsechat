@@ -34,7 +34,7 @@ npx playwright test tests/basic.spec.js
 
 These cover:
 
-- `/health` contract and security headers
+- `/health` and `/health/ready` contracts plus security headers
 - container and compose deployment configuration
 - basic endpoint smoke checks through the mock server
 
@@ -51,6 +51,7 @@ Useful checks:
 
 ```bash
 curl -i http://127.0.0.1:5000/health
+curl -i http://127.0.0.1:5000/health/ready
 curl -i http://127.0.0.1:5000/
 ```
 
@@ -71,7 +72,7 @@ cd /path/to/opsechat
 ./compose-down.sh
 ```
 
-The application container now includes a `/health` healthcheck, and the compose configuration also probes the same endpoint.
+The application container now probes `/health/ready` for readiness checks. In compose and quadlet deployments, readiness can require Tor control-port reachability via `OPSECHAT_READINESS_CHECK_TOR=1`.
 
 ## Full test commands already in the repo
 
@@ -87,7 +88,7 @@ python3 pf-tasks/test.py --skip-e2e
 
 - `runserver.py` - main runtime entrypoint
 - `app_factory.py` - Flask app creation and route registration
-- `monitoring.py` - `/health` payload generation
+- `monitoring.py` - `/health` and `/health/ready` payload generation
 - `docker-compose.yml` - local container deployment
 - `Dockerfile` - container build and app healthcheck
 - `tests/test_rate_limit_and_health.py` - health endpoint and security header coverage
@@ -96,7 +97,8 @@ python3 pf-tasks/test.py --skip-e2e
 
 ## Maintenance checklist
 
-- Keep `/health` stable and lightweight; deployment checks rely on it.
+- Keep `/health` stable and lightweight for liveness-style checks.
+- Keep `/health/ready` stable for container orchestrator readiness checks.
 - When changing runtime wiring, update `tests/basic.spec.js`.
 - When changing container behavior, update `tests/test_container_deployment.py`.
 - Re-run Python tests and the basic Playwright smoke test before pushing.

@@ -104,7 +104,7 @@ podman-compose logs opsechat
 
 ## Functionality Tests
 
-### Test 6: Access Health Endpoint
+### Test 6: Access Health Endpoints
 
 If you've exposed port 5000 for testing:
 
@@ -117,17 +117,24 @@ If you've exposed port 5000 for testing:
 ./compose-down.sh
 ./compose-up.sh
 
-# Test health endpoint
+# Test liveness endpoint
 curl http://localhost:5000/health
+
+# Test readiness endpoint (used by container health checks)
+curl -i http://localhost:5000/health/ready
 ```
 
 **Expected Result:**
 ```json
 {
-  "status": "ok",
+  "status": "healthy",
   "timestamp": "2026-03-02T..."
 }
 ```
+
+Readiness endpoint should return:
+- `200` with `"status": "ready"` when dependencies pass
+- `503` with `"status": "not_ready"` when dependency checks fail
 
 ### Test 7: Verify Chat Functionality
 

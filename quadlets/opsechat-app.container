@@ -25,6 +25,7 @@ ContainerName=opsechat-app
 # Environment variables
 Environment=TOR_CONTROL_PORT=9051
 Environment=TOR_CONTROL_HOST=opsechat-tor
+Environment=OPSECHAT_READINESS_CHECK_TOR=1
 Environment=FLASK_DEBUG=0
 Environment=PYTHONUNBUFFERED=1
 
