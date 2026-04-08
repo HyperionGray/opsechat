@@ -9,7 +9,7 @@ Use this checklist to verify all new features are working correctly.
 ### 1. Unit Tests
 ```bash
 cd /path/to/opsechat
-python3 test_new_features.py
+python3 tests/test_new_features.py
 ```
 **Expected**: All 6 tests pass
 - [ ] ✅ Secure ID generation
@@ -391,7 +391,7 @@ pip install Flask stem
 ```bash
 # Ensure you're in the correct directory
 cd /path/to/opsechat
-python3 test_new_features.py
+python3 tests/test_new_features.py
 ```
 
 **API tests fail:**
