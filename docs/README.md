@@ -58,6 +58,7 @@ Information for developers contributing to the project.
 - [Code of Conduct](development/CODE_OF_CONDUCT.md) - Community guidelines
 - [Modernization Notes](development/MODERNIZATION.md) - Upgrade notes
 - [Agent Guidelines](development/AGENTS.md) - Repository guidelines for AI agents
+- [PF Tasks](../pf-tasks/README.md) - Build/deploy/test/cleanup/hygiene task docs
 - [Release TODO](development/RELEASE_TODO.md) - Release preparation checklist
 - [Test Summary](development/TEST_SUMMARY.md) - Test coverage summary
 - [TUI TODO](development/TUI_TODO.md) - TUI development tasks

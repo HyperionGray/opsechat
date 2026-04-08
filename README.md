@@ -34,6 +34,18 @@ OpSecChat now includes both **Web-Based Chat Rooms** and **Terminal UI (TUI)** f
 - ✅ **Tor Ready** - Works seamlessly with Tor hidden services
 - ✅ **Direct Messages** - Share room IDs securely (1-minute expiry)
 
+### Repository Hygiene Checks
+
+Keep repository structure clean and docs organized with the PF hygiene task:
+
+```bash
+# Strict hygiene gate (fails when issues are found)
+python pf-tasks/hygiene.py --strict
+
+# JSON output for automation
+python pf-tasks/hygiene.py --json
+```
+
 ### Quick Start (Web Chat)
 
 ```bash

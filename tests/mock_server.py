@@ -69,14 +69,46 @@ except ImportError as e:
     print(f"Warning: Could not import email_system: {e}")
     # Create mock objects for testing
     class MockEmailStorage:
-        def create_user_inbox(self, user_id): pass
+        def __init__(self):
+            self._inboxes = {}
+
+        def create_user_inbox(self, user_id):
+            inbox = self._inboxes.setdefault(user_id, [])
+            return inbox
+
     class MockBurnerManager:
-        def cleanup_expired(self): pass
-        def generate_burner_email(self, user_id): return f"test{user_id}@example.com"
-        def rotate_burner(self, user_id, old_email): return f"test{user_id}@example.com"
-        def get_user_burners(self, user_id): return []
-        def get_user_for_burner(self, email): return None
-        def expire_burner(self, email): pass
+        def __init__(self):
+            self._user_to_burners = {}
+            self._burner_to_user = {}
+
+        def cleanup_expired(self):
+            return 0
+
+        def generate_burner_email(self, user_id):
+            burner = f"test{user_id}@example.com"
+            self._user_to_burners.setdefault(user_id, [])
+            if burner not in self._user_to_burners[user_id]:
+                self._user_to_burners[user_id].append(burner)
+                self._burner_to_user[burner] = user_id
+            return burner
+
+        def rotate_burner(self, user_id, old_email):
+            self.expire_burner(old_email)
+            return self.generate_burner_email(user_id)
+
+        def get_user_burners(self, user_id):
+            return list(self._user_to_burners.get(user_id, []))
+
+        def get_user_for_burner(self, email):
+            return self._burner_to_user.get(email)
+
+        def expire_burner(self, email):
+            user_id = self._burner_to_user.pop(email, None)
+            if user_id is None:
+                return False
+            burners = self._user_to_burners.get(user_id, [])
+            self._user_to_burners[user_id] = [item for item in burners if item != email]
+            return True
     
     email_storage = MockEmailStorage()
     burner_manager = MockBurnerManager()

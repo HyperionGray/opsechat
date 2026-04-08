@@ -99,6 +99,27 @@ python pf-tasks/clean.py --artifacts
 - Optionally removes container images
 - Cleans build artifacts and cache
 
+### hygiene.py
+Scans the repository for organization and stale-artifact hygiene issues.
+
+```bash
+# Run strict hygiene checks (non-zero on findings)
+python pf-tasks/hygiene.py --strict
+
+# Print machine-readable JSON results
+python pf-tasks/hygiene.py --json
+
+# Remove root backup artifacts before scanning
+python pf-tasks/hygiene.py --cleanup-backups --strict
+```
+
+**Features:**
+- Detects unexpected root markdown files outside approved top-level docs
+- Flags root backup artifacts (`*~HEAD`, `*.orig`, `*.rej`, `*.bak`)
+- Flags known stale helper duplicates and debug files
+- Detects suspicious duplicate nested directory layouts
+- Detects `.bish-index` / `.bish.sqlite` artifacts anywhere in tree
+
 ## Usage Patterns
 
 ### Complete Deployment Workflow
@@ -157,6 +178,9 @@ python pf-tasks/clean.py --images --artifacts
 
 # Clean only build artifacts
 python pf-tasks/clean.py --artifacts
+
+# Run repository hygiene gate
+python pf-tasks/hygiene.py --strict
 ```
 
 ## Integration with Existing Scripts
