@@ -4,7 +4,7 @@ Domain management and API integration.
 Supports automated domain purchasing for burner email rotation.
 """
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 import random
 import string
@@ -146,7 +146,7 @@ class DomainRotationManager:
         """
         Return budget period key (UTC year-month).
         """
-        current_time = now or datetime.utcnow()
+        current_time = now or datetime.now(timezone.utc)
         return current_time.strftime("%Y-%m")
 
     def reset_budget_if_new_period(self, now: Optional[datetime] = None) -> bool:
@@ -235,12 +235,13 @@ class DomainRotationManager:
         result = self.api_client.purchase_domain(domain, years=1)
         
         if result.get("success"):
+            now_utc = datetime.now(timezone.utc)
             self.current_spending += price
             self.owned_domains.append({
                 "domain": domain,
                 "price": price,
-                "purchased_at": datetime.now(),
-                "expires_at": datetime.now() + timedelta(days=365)
+                "purchased_at": now_utc,
+                "expires_at": now_utc + timedelta(days=365)
             })
             
             # Set as active if no active domain
@@ -372,7 +373,7 @@ class DomainRotationManager:
         self.monthly_budget = float(state.get("monthly_budget", self.monthly_budget))
         self.current_budget_period = state.get("budget_period") or self._current_budget_period()
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         imported_domains: List[Dict[str, Any]] = []
         for entry in state.get("owned_domains", []):
             if isinstance(entry, str):
