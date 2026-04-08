@@ -12,9 +12,23 @@ OpSechat now includes built-in PGP encryption support for enhanced message secur
 
 ## How to Use
 
+### Dedicated Key Management Page
+
+Use the built-in key management page at `/keys` to manage keys in one place.
+
+From `/keys` you can:
+- Generate a new key pair in-browser
+- Import an existing armored private key
+- Export your stored private key to a local `.asc` file
+- Add, list, and remove stored public keys
+- Delete all stored key material from local browser storage
+
+This page uses `openpgp.min.js` and browser local storage only. No private key
+material is sent to server endpoints.
+
 ### Setting Up PGP
 
-1. Click on "⚙️ PGP Settings" link in the chat interface
+1. Open `/keys` (or click "PGP Keys" from chat/email pages)
 2. The settings modal will open with two sections:
 
 #### Private Key (For Decryption)

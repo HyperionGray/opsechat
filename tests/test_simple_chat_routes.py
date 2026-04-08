@@ -240,6 +240,23 @@ class TestChatRoutes:
         response = client.get("/chat/room/no-such-room/key")
         assert response.status_code == 404
 
+    def test_key_management_page_returns_200(self, client):
+        response = client.get("/keys")
+        assert response.status_code == 200
+        body = response.data.decode()
+        assert "Key Management" in body
+        assert "key-management.js" in body
+
+    def test_key_management_trailing_slash_returns_200(self, client):
+        response = client.get("/keys/")
+        assert response.status_code == 200
+
+    def test_key_management_contains_pgp_manager_script(self, client):
+        response = client.get("/keys")
+        body = response.data.decode()
+        assert "openpgp.min.js" in body
+        assert "pgp-manager.js" in body
+
 
 # ---------------------------------------------------------------------------
 # HTTP routes – direct messages

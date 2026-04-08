@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Key Management - OpSecChat</title>
+    <link rel="stylesheet" href="/static/key-management.css">
+    <script src="/static/openpgp.min.js"></script>
+    <script src="/static/pgp-manager.js"></script>
+</head>
+<body>
+    <main class="container" role="main">
+        <h1>Key Management</h1>
+        <p class="subtitle">
+            Generate, import, export, and manage PGP keys in your browser.
+            Private keys stay client-side.
+        </p>
+
+        <nav class="nav-links" aria-label="Primary navigation">
+            <a href="/chat">Back to Chat Rooms</a>
+            {% if email_url %}
+            <a href="{{ email_url }}">Back to Email</a>
+            {% endif %}
+        </nav>
+
+        <section class="panel" aria-labelledby="statusHeading">
+            <h2 id="statusHeading">Status</h2>
+            <p id="statusMessage" role="status" aria-live="polite">Loading key status...</p>
+        </section>
+
+        <section class="panel" aria-labelledby="generateHeading">
+            <h2 id="generateHeading">Generate New Key Pair</h2>
+            <div class="form-row">
+                <label for="genName">Name</label>
+                <input id="genName" type="text" placeholder="OpSec User" maxlength="80">
+            </div>
+            <div class="form-row">
+                <label for="genEmail">Email</label>
+                <input id="genEmail" type="email" placeholder="user@local.invalid" maxlength="120">
+            </div>
+            <div class="form-row">
+                <label for="genPassphrase">Passphrase (recommended)</label>
+                <input id="genPassphrase" type="password" placeholder="Passphrase to protect private key">
+            </div>
+            <button id="generateKeyBtn" type="button">Generate Key Pair</button>
+            <p class="hint">Key generation can take a few seconds.</p>
+        </section>
+
+        <section class="panel" aria-labelledby="privateHeading">
+            <h2 id="privateHeading">Private Key</h2>
+            <div class="form-row">
+                <label for="privateKeyInput">Import armored private key</label>
+                <textarea id="privateKeyInput" rows="8" placeholder="-----BEGIN PGP PRIVATE KEY BLOCK-----"></textarea>
+            </div>
+            <div class="form-row">
+                <label for="privatePassphraseInput">Passphrase (if encrypted)</label>
+                <input id="privatePassphraseInput" type="password" placeholder="Private key passphrase">
+            </div>
+            <div class="button-row">
+                <button id="importPrivateBtn" type="button">Import Private Key</button>
+                <button id="exportPrivateBtn" type="button">Export Private Key</button>
+                <button id="removePrivateBtn" type="button">Delete Private Key</button>
+            </div>
+        </section>
+
+        <section class="panel" aria-labelledby="publicHeading">
+            <h2 id="publicHeading">Public Keys</h2>
+            <div class="form-row">
+                <label for="publicAliasInput">Alias</label>
+                <input id="publicAliasInput" type="text" placeholder="alice" maxlength="80">
+            </div>
+            <div class="form-row">
+                <label for="publicKeyInput">Public key (armored)</label>
+                <textarea id="publicKeyInput" rows="6" placeholder="-----BEGIN PGP PUBLIC KEY BLOCK-----"></textarea>
+            </div>
+            <div class="button-row">
+                <button id="addPublicBtn" type="button">Add Public Key</button>
+                <button id="clearPublicBtn" type="button">Delete All Public Keys</button>
+            </div>
+            <h3>Stored public key aliases</h3>
+            <ul id="publicKeyList" class="key-list"></ul>
+        </section>
+    </main>
+
+    <footer class="footer">OpSecChat {{ version|default('0.8.0-alpha') }}</footer>
+    <script src="/static/key-management.js"></script>
+</body>
+</html>

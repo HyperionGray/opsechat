@@ -96,6 +96,10 @@ def create_app():
     # Register simple chat routes (new simplified interface)
     from simple_chat_routes import register_simple_chat_routes
     register_simple_chat_routes(app)
+
+    # Register key management routes (client-side PGP UX)
+    from key_routes import register_key_routes
+    register_key_routes(app)
     
     # Register email routes
     from email_routes import register_email_routes
