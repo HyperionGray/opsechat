@@ -108,3 +108,39 @@ See `TODO-automation.md` for:
 - Issue: "Automation: Direction"
 - Requirements: Per P4X-ng comment - keep only triggered workflows, fix continuous progress, bi-weekly security, keep sync
 - Full Documentation: `docs/AUTOMATION_CONSOLIDATION.md`
+
+## 2026-04-08 - Repository Hygiene Automation
+
+### Summary
+Added a recurring repository hygiene audit to detect unfinished markers and repository clutter, and performed direct cleanup of stale artifacts.
+
+### Added
+1. **Hygiene audit script**:
+   - `scripts/repo_hygiene_audit.py`
+   - Scans for unfinished markers in code (`TODO`, `FIXME`, `STUB`, `TBD`, etc.)
+   - Detects common stray files (`*~HEAD`, `*.orig`, `*.rej`, OS junk files)
+   - Flags unexpected empty files
+   - Detects nested duplicate directories (for example `foo/foo`)
+   - Generates both Markdown and JSON reports
+
+2. **Scheduled workflow**:
+   - `.github/workflows/repository-hygiene-audit.yml`
+   - Runs every 3 hours and on manual dispatch
+   - Uploads report artifacts
+   - Creates or updates a single GitHub issue for active findings
+   - Auto-closes the issue when findings reach zero
+
+3. **Documentation**:
+   - `docs/implementation/REPOSITORY_HYGIENE_AUDIT.md`
+   - Added hygiene section in `docs/AUTOMATION_CONSOLIDATION.md`
+
+### Cleaned Up
+- Removed stale root artifacts:
+  - `Dockerfile~HEAD`
+  - `docker-compose.yml~HEAD`
+  - `test-ci-fix.js`
+  - `test-server.js`
+  - `tests/mock_server_refactored.py`
+- Removed nested placeholder workflow files under `.github/.github/workflows/`
+- Removed stale helper artifacts in `.github` (`setup_copilot_action.sh`, empty file `d`)
+- Updated `.dockerignore` to remove obsolete references to deleted debug scripts

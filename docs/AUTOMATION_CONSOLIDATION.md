@@ -118,3 +118,21 @@ The following 13 workflows were removed as they created noise by running on ever
 3. Consider deprecating `playwright-tests.yml` and `python-tests.yml` files if they're only used via workflow_call
 4. Add more security checks to the baseline if needed
 5. Document the label-based workflow triggering for team members
+
+## Repository Hygiene Automation (2026-04)
+
+To support scheduled repository maintenance, a dedicated hygiene audit was added:
+
+- Workflow: `.github/workflows/repository-hygiene-audit.yml`
+- Script: `scripts/repo_hygiene_audit.py`
+- Schedule: every 3 hours and manual dispatch
+
+The audit reports:
+
+1. Unfinished markers in code/config (`TODO`, `FIXME`, `STUB`, `TBD`, etc.)
+2. Stray files (for example `*~HEAD`, `*.orig`, `*.rej`)
+3. Unexpected empty files
+4. Nested duplicate directories (for example `.github/.github`)
+
+The workflow uploads artifacts and creates/updates a single issue titled
+`Repository Hygiene Audit Findings`. If findings clear, it auto-closes the issue.
