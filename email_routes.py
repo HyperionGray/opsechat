@@ -11,13 +11,18 @@ This module contains Flask routes for email functionality including:
 
 from flask import render_template, request, session, jsonify, redirect, url_for
 from email_system import email_storage, burner_manager, EmailComposer, EmailValidator
-from email_security_tools import spoofing_tester, phishing_simulator
 from email_transport import transport_manager
 from domain_manager import domain_rotation_manager
 
 
 def register_email_routes(app, id_generator, get_random_color):
     """Register all email-related routes with the Flask app"""
+
+    def _ensure_session():
+        """Ensure request has a stable user session."""
+        if "_id" not in session:
+            session["_id"] = id_generator()
+            session["color"] = get_random_color()
     
     @app.route('/<string:url_addition>/email', methods=["GET"])
     def email_inbox(url_addition):
@@ -117,49 +122,123 @@ def register_email_routes(app, id_generator, get_random_color):
         """Email configuration page"""
         if url_addition != app.config["path"]:
             return ('', 404)
-        
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
-        
+
+        _ensure_session()
+
+        message = None
+
         if request.method == "POST":
-            # Handle configuration updates
-            config_data = {
-                'smtp_server': request.form.get('smtp_server', ''),
-                'smtp_port': request.form.get('smtp_port', '587'),
-                'smtp_username': request.form.get('smtp_username', ''),
-                'smtp_password': request.form.get('smtp_password', ''),
-                'imap_server': request.form.get('imap_server', ''),
-                'imap_port': request.form.get('imap_port', '993'),
-                'imap_username': request.form.get('imap_username', ''),
-                'imap_password': request.form.get('imap_password', ''),
-                'porkbun_api_key': request.form.get('porkbun_api_key', ''),
-                'porkbun_secret_key': request.form.get('porkbun_secret_key', ''),
-                'domain_budget': request.form.get('domain_budget', '10')
-            }
-            
-            # Store configuration (in memory for this session)
-            session['email_config'] = config_data
-            
-            return redirect(url_for('email_config', url_addition=url_addition))
-        
-        # Get current configuration
-        config = session.get('email_config', {})
-        
+            action = request.form.get("action", "").strip()
+
+            if action == "configure_smtp":
+                smtp_server = request.form.get("smtp_server", "").strip()
+                smtp_username = request.form.get("smtp_username", "").strip()
+                smtp_password = request.form.get("smtp_password", "").strip()
+                smtp_port_raw = request.form.get("smtp_port", "587").strip()
+                use_tls = request.form.get("use_tls") in ("true", "on", "1")
+
+                if not smtp_server or not smtp_username or not smtp_password:
+                    message = {"type": "error", "text": "SMTP configuration requires server, username, and password."}
+                else:
+                    try:
+                        smtp_port = int(smtp_port_raw)
+                        ok = transport_manager.configure_smtp(
+                            smtp_server=smtp_server,
+                            smtp_port=smtp_port,
+                            username=smtp_username,
+                            password=smtp_password,
+                            use_tls=use_tls,
+                        )
+                        if ok:
+                            message = {"type": "success", "text": "SMTP configuration saved successfully"}
+                        else:
+                            message = {"type": "error", "text": "SMTP configuration failed (connection test did not pass)."}
+                    except ValueError:
+                        message = {"type": "error", "text": "SMTP port must be a number."}
+
+            elif action == "configure_imap":
+                imap_server = request.form.get("imap_server", "").strip()
+                imap_username = request.form.get("imap_username", "").strip()
+                imap_password = request.form.get("imap_password", "").strip()
+                imap_port_raw = request.form.get("imap_port", "993").strip()
+                use_ssl = request.form.get("use_ssl") in ("true", "on", "1")
+
+                if not imap_server or not imap_username or not imap_password:
+                    message = {"type": "error", "text": "IMAP configuration requires server, username, and password."}
+                else:
+                    try:
+                        imap_port = int(imap_port_raw)
+                        ok = transport_manager.configure_imap(
+                            imap_server=imap_server,
+                            imap_port=imap_port,
+                            username=imap_username,
+                            password=imap_password,
+                            use_ssl=use_ssl,
+                        )
+                        if ok:
+                            message = {"type": "success", "text": "IMAP configuration saved successfully"}
+                        else:
+                            message = {"type": "error", "text": "IMAP configuration failed (connection test did not pass)."}
+                    except ValueError:
+                        message = {"type": "error", "text": "IMAP port must be a number."}
+
+            elif action == "configure_domain_api":
+                api_key = request.form.get("api_key", "").strip()
+                api_secret = request.form.get("api_secret", "").strip()
+                budget_raw = request.form.get("monthly_budget", "50").strip()
+
+                if not api_key or not api_secret:
+                    message = {"type": "error", "text": "Domain API configuration requires API key and secret."}
+                else:
+                    try:
+                        monthly_budget = float(budget_raw)
+                        domain_rotation_manager.configure(
+                            api_key=api_key,
+                            secret_key=api_secret,
+                            monthly_budget=monthly_budget,
+                        )
+                        message = {"type": "success", "text": "Domain configuration saved successfully"}
+                    except ValueError:
+                        message = {"type": "error", "text": "Monthly budget must be a valid number."}
+
+            else:
+                message = {"type": "error", "text": "Unknown configuration action."}
+
+            config_status = transport_manager.is_configured()
+            budget_status = domain_rotation_manager.get_budget_status()
+            active_domain = domain_rotation_manager.get_active_domain()
+            domain_config = domain_rotation_manager.get_config()
+
+            return render_template("email_config.html",
+                                   hostname=app.config["hostname"],
+                                   path=app.config["path"],
+                                   message=message,
+                                   config_status=config_status,
+                                   budget_status=budget_status,
+                                   active_domain=active_domain,
+                                   domain_config=domain_config)
+
+        config_status = transport_manager.is_configured()
+        budget_status = domain_rotation_manager.get_budget_status()
+        active_domain = domain_rotation_manager.get_active_domain()
+        domain_config = domain_rotation_manager.get_config()
+
         return render_template("email_config.html",
-                              hostname=app.config["hostname"],
-                              path=app.config["path"],
-                              config=config)
+                               hostname=app.config["hostname"],
+                               path=app.config["path"],
+                               message=message,
+                               config_status=config_status,
+                               budget_status=budget_status,
+                               active_domain=active_domain,
+                               domain_config=domain_config)
     
     @app.route('/<string:url_addition>/email/compose', methods=["GET", "POST"])
     def email_compose(url_addition):
         """Email composition and sending with rate limiting"""
         if url_addition != app.config["path"]:
             return ('', 404)
-        
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
+
+        _ensure_session()
         
         if request.method == "POST":
             # Check rate limit before allowing send
@@ -228,10 +307,7 @@ def register_email_routes(app, id_generator, get_random_color):
         if url_addition != app.config["path"]:
             return ('', 404)
 
-        if "_id" not in session:
-            _ensure_session()
-
-        email = email_storage.get_email(session["_id"], email_id)
+        _ensure_session()
 
         email = email_storage.get_email(session["_id"], email_id)
         if email is None:
@@ -258,9 +334,7 @@ def register_email_routes(app, id_generator, get_random_color):
         if url_addition != app.config["path"]:
             return ('', 404)
 
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
+        _ensure_session()
 
         email = email_storage.get_email(session["_id"], email_id)
         if email is None:
@@ -317,9 +391,7 @@ def register_email_routes(app, id_generator, get_random_color):
         if url_addition != app.config["path"]:
             return ('', 404)
 
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
+        _ensure_session()
 
         action = request.form.get("action", "generate")
 
@@ -347,3 +419,39 @@ def register_email_routes(app, id_generator, get_random_color):
 
         burner_manager.expire_burner(burner_email)
         return redirect(url_for("email_burner", url_addition=url_addition))
+
+    @app.route('/<string:url_addition>/email/receive', methods=["POST"])
+    def email_receive(url_addition):
+        """Fetch emails via configured IMAP and store in inbox."""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        _ensure_session()
+
+        limit_raw = request.form.get("limit", "10").strip()
+        unread_only = request.form.get("unread_only", "false").lower() == "true"
+
+        try:
+            limit = max(1, min(int(limit_raw), 100))
+        except ValueError:
+            limit = 10
+
+        emails = transport_manager.receive_emails(limit=limit, unread_only=unread_only)
+        imported = 0
+        for email_data in emails:
+            email_storage.add_email(session["_id"], email_data)
+            imported += 1
+
+        return redirect(url_for("email_inbox", url_addition=url_addition))
+
+    @app.route('/<string:url_addition>/email/domain/rotate', methods=["POST"])
+    def email_domain_rotate(url_addition):
+        """Rotate domain and propagate active domain to burner manager."""
+        if url_addition != app.config["path"]:
+            return ('', 404)
+
+        _ensure_session()
+        new_domain = domain_rotation_manager.rotate_domain()
+        if new_domain:
+            burner_manager.set_custom_domain(new_domain)
+        return redirect(url_for("email_config", url_addition=url_addition))

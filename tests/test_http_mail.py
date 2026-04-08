@@ -22,7 +22,9 @@ from http_mail_system import (
     http_mail_storage,
     MAX_MAIL_MESSAGE_LENGTH,
 )
-from email_system import email_storage as _global_email_storage, EmailComposer
+from email_system import email_storage as _global_email_storage, EmailComposer, burner_manager
+from email_transport import transport_manager
+from domain_manager import domain_rotation_manager
 from app_factory import create_app
 
 
@@ -455,6 +457,10 @@ class TestEmailRoutesExtended:
         # Clean up global state
         if "testuser99" in _global_email_storage.emails:
             _global_email_storage.emails["testuser99"] = []
+        transport_manager.smtp_transport = None
+        transport_manager.imap_transport = None
+        domain_rotation_manager.api_client = None
+        domain_rotation_manager.active_domain = None
 
     def test_view_email_returns_200(self):
         r = self.client.get(f"/secpath/email/view/{self.email_id}")
@@ -494,3 +500,35 @@ class TestEmailRoutesExtended:
     def test_burner_wrong_path_404(self):
         r = self.client.post("/wrongpath/email/burner", data={"action": "generate"})
         assert r.status_code == 404
+
+    def test_email_config_page_renders(self):
+        r = self.client.get("/secpath/email/config")
+        assert r.status_code == 200
+        assert b"Email System Configuration" in r.data
+
+    def test_email_receive_fetches_and_stores_messages(self, monkeypatch):
+        def fake_receive_emails(folder='INBOX', limit=None, unread_only=False):
+            return [{
+                "from": "incoming@example.com",
+                "to": "testuser99@example.com",
+                "subject": "Fetched",
+                "body": "Fetched body",
+            }]
+
+        monkeypatch.setattr(transport_manager, "receive_emails", fake_receive_emails)
+        before = len(_global_email_storage.get_emails("testuser99"))
+        r = self.client.post("/secpath/email/receive", data={"limit": "5", "unread_only": "false"})
+        assert r.status_code == 302
+        after = len(_global_email_storage.get_emails("testuser99"))
+        assert after == before + 1
+
+    def test_email_receive_wrong_path_404(self):
+        r = self.client.post("/wrongpath/email/receive", data={"limit": "5"})
+        assert r.status_code == 404
+
+    def test_domain_rotate_updates_custom_domain(self, monkeypatch):
+        monkeypatch.setattr(domain_rotation_manager, "rotate_domain", lambda: "freshdomain.xyz")
+
+        r = self.client.post("/secpath/email/domain/rotate")
+        assert r.status_code == 302
+        assert burner_manager.custom_domain == "freshdomain.xyz"

@@ -1,6 +1,7 @@
 """
 Tests for domain management module
 """
+import datetime
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
@@ -174,3 +175,65 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_sets_client_and_budget(self):
+        manager = DomainRotationManager()
+        manager.configure("pk_test", "sk_test", monthly_budget=25.5)
+
+        assert isinstance(manager.api_client, PorkbunAPIClient)
+        assert manager.monthly_budget == 25.5
+
+    def test_get_config_returns_safe_summary(self):
+        manager = DomainRotationManager(monthly_budget=15.0)
+        config = manager.get_config()
+
+        assert config["has_api_client"] is False
+        assert config["provider"] is None
+        assert config["monthly_budget"] == 15.0
+        assert config["domains_owned"] == 0
+
+    def test_export_import_state_with_datetimes(self):
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 5.25
+        manager.active_domain = "alpha.xyz"
+        manager.owned_domains = [{
+            "domain": "alpha.xyz",
+            "price": 2.99,
+            "purchased_at": datetime.datetime(2026, 1, 1, 10, 30),
+            "expires_at": datetime.datetime(2027, 1, 1, 10, 30),
+        }]
+
+        exported = manager.export_state()
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(exported["owned_domains"][0]["expires_at"], str)
+
+        restored = DomainRotationManager()
+        restored.import_state(exported)
+
+        assert restored.current_spending == 5.25
+        assert restored.active_domain == "alpha.xyz"
+        assert len(restored.owned_domains) == 1
+        assert isinstance(restored.owned_domains[0]["purchased_at"], datetime.datetime)
+        assert isinstance(restored.owned_domains[0]["expires_at"], datetime.datetime)
+
+    def test_import_state_supports_legacy_owned_domains_list(self):
+        manager = DomainRotationManager()
+        manager.import_state({
+            "owned_domains": ["legacy.xyz"],
+            "current_spending": 0.0,
+        })
+
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["domain"] == "legacy.xyz"
+        assert manager.owned_domains[0]["price"] == 0.0
+
+    def test_budget_resets_on_new_period(self):
+        manager = DomainRotationManager(monthly_budget=20.0)
+        manager.current_spending = 12.0
+        manager.current_budget_period = "2000-01"
+
+        reset = manager.reset_budget_if_new_period(now=datetime.datetime(2000, 2, 1))
+
+        assert reset is True
+        assert manager.current_spending == 0.0
+        assert manager.current_budget_period == "2000-02"

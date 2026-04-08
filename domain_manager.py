@@ -1,18 +1,21 @@
 """
-Domain management and API integration
-Supports automated domain purchasing for burner email rotation
+Domain management and API integration.
+
+Supports automated domain purchasing for burner email rotation.
 """
-import requests
+from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
+import logging
 import random
 import string
-import logging
-from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
+import requests
 
 logger = logging.getLogger(__name__)
 
 
-class DomainAPIClient:
+class DomainAPIClient(ABC):
     """
     Base class for domain registrar API clients
     """
@@ -21,17 +24,20 @@ class DomainAPIClient:
         self.api_key = api_key
         self.api_secret = api_secret
     
+    @abstractmethod
     def search_domain(self, domain: str) -> Dict:
         """Search if domain is available"""
-        raise NotImplementedError
+        ...
     
+    @abstractmethod
     def purchase_domain(self, domain: str, years: int = 1) -> Dict:
         """Purchase domain"""
-        raise NotImplementedError
+        ...
     
+    @abstractmethod
     def get_pricing(self, tld: str) -> Dict:
         """Get pricing for TLD"""
-        raise NotImplementedError
+        ...
 
 
 class PorkbunAPIClient(DomainAPIClient):
@@ -134,6 +140,31 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+        self.current_budget_period = self._current_budget_period()
+
+    def _current_budget_period(self, now: Optional[datetime] = None) -> str:
+        """
+        Return budget period key (UTC year-month).
+        """
+        current_time = now or datetime.utcnow()
+        return current_time.strftime("%Y-%m")
+
+    def reset_budget_if_new_period(self, now: Optional[datetime] = None) -> bool:
+        """
+        Reset tracked monthly spending when a new budget period starts.
+        Returns True when a reset occurred.
+        """
+        period = self._current_budget_period(now)
+        if period != self.current_budget_period:
+            logger.info(
+                "Budget period changed from %s to %s. Resetting current spending.",
+                self.current_budget_period,
+                period,
+            )
+            self.current_budget_period = period
+            self.current_spending = 0.0
+            return True
+        return False
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
@@ -192,6 +223,8 @@ class DomainRotationManager:
             logger.error("No API client configured")
             return False
         
+        self.reset_budget_if_new_period()
+
         # Check budget
         if self.current_spending + price > self.monthly_budget:
             logger.warning(f"Budget exceeded. Current: ${self.current_spending}, "
@@ -225,6 +258,8 @@ class DomainRotationManager:
         Rotate to a new domain
         Finds and purchases a new cheap domain
         """
+        self.reset_budget_if_new_period()
+
         # Find cheap domain
         domain_info = self.find_cheap_available_domain()
         
@@ -254,12 +289,109 @@ class DomainRotationManager:
     
     def get_budget_status(self) -> Dict:
         """Get budget information"""
+        self.reset_budget_if_new_period()
         return {
             "monthly_budget": self.monthly_budget,
             "current_spending": self.current_spending,
             "remaining": self.monthly_budget - self.current_spending,
-            "domains_owned": len(self.owned_domains)
+            "domains_owned": len(self.owned_domains),
+            "budget_period": self.current_budget_period,
         }
+
+    def configure(self, api_key: str, secret_key: str, monthly_budget: float = 50.0):
+        """
+        Configure registrar API credentials and budget.
+        """
+        if not api_key or not secret_key:
+            raise ValueError("API key and secret key are required")
+
+        self.api_client = PorkbunAPIClient(api_key, secret_key)
+        self.monthly_budget = float(monthly_budget)
+
+    def get_config(self) -> Dict[str, Any]:
+        """
+        Return a non-sensitive configuration summary for UI/routes.
+        """
+        return {
+            "has_api_client": self.api_client is not None,
+            "provider": "porkbun" if isinstance(self.api_client, PorkbunAPIClient) else None,
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "active_domain": self.active_domain,
+            "domains_owned": len(self.owned_domains),
+            "budget_period": self.current_budget_period,
+        }
+
+    def _serialize_datetime(self, value: Any) -> Any:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+
+    def _parse_datetime(self, value: Any, fallback: datetime) -> datetime:
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                logger.warning("Invalid datetime string in state: %s", value)
+        return fallback
+
+    def export_state(self) -> Dict[str, Any]:
+        """
+        Export JSON-serializable manager state for CLI persistence.
+        """
+        serialized_domains = []
+        for entry in self.owned_domains:
+            serialized_domains.append(
+                {
+                    "domain": entry.get("domain"),
+                    "price": entry.get("price"),
+                    "purchased_at": self._serialize_datetime(entry.get("purchased_at")),
+                    "expires_at": self._serialize_datetime(entry.get("expires_at")),
+                }
+            )
+
+        return {
+            "current_spending": self.current_spending,
+            "owned_domains": serialized_domains,
+            "active_domain": self.active_domain,
+            "monthly_budget": self.monthly_budget,
+            "budget_period": self.current_budget_period,
+        }
+
+    def import_state(self, state: Optional[Dict[str, Any]]):
+        """
+        Import persisted state and normalize value types.
+        """
+        if not state:
+            return
+
+        self.current_spending = float(state.get("current_spending", self.current_spending))
+        self.active_domain = state.get("active_domain") or self.active_domain
+        self.monthly_budget = float(state.get("monthly_budget", self.monthly_budget))
+        self.current_budget_period = state.get("budget_period") or self._current_budget_period()
+
+        now = datetime.utcnow()
+        imported_domains: List[Dict[str, Any]] = []
+        for entry in state.get("owned_domains", []):
+            if isinstance(entry, str):
+                entry = {"domain": entry, "price": 0.0}
+            if not isinstance(entry, dict) or not entry.get("domain"):
+                continue
+            imported_domains.append(
+                {
+                    "domain": entry.get("domain"),
+                    "price": float(entry.get("price", 0.0)),
+                    "purchased_at": self._parse_datetime(entry.get("purchased_at"), now),
+                    "expires_at": self._parse_datetime(
+                        entry.get("expires_at"),
+                        now + timedelta(days=365),
+                    ),
+                }
+            )
+        self.owned_domains = imported_domains
+        self.reset_budget_if_new_period()
 
 
 # Global domain rotation manager
