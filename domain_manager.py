@@ -2,17 +2,19 @@
 Domain management and API integration
 Supports automated domain purchasing for burner email rotation
 """
-import requests
+import logging
 import random
 import string
-import logging
-from typing import Dict, List, Optional
+from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+
+import requests
 
 logger = logging.getLogger(__name__)
 
 
-class DomainAPIClient:
+class DomainAPIClient(ABC):
     """
     Base class for domain registrar API clients
     """
@@ -21,14 +23,17 @@ class DomainAPIClient:
         self.api_key = api_key
         self.api_secret = api_secret
     
+    @abstractmethod
     def search_domain(self, domain: str) -> Dict:
         """Search if domain is available"""
         raise NotImplementedError
     
+    @abstractmethod
     def purchase_domain(self, domain: str, years: int = 1) -> Dict:
         """Purchase domain"""
         raise NotImplementedError
     
+    @abstractmethod
     def get_pricing(self, tld: str) -> Dict:
         """Get pricing for TLD"""
         raise NotImplementedError

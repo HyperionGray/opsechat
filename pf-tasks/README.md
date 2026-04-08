@@ -99,6 +99,29 @@ python pf-tasks/clean.py --artifacts
 - Optionally removes container images
 - Cleans build artifacts and cache
 
+### hygiene.py
+Audits repository hygiene for unfinished markers and stale backup artifacts.
+
+```bash
+# Run hygiene audit (human-readable output)
+python pf-tasks/hygiene.py
+
+# Machine-readable JSON report
+python pf-tasks/hygiene.py --json
+
+# Enforce clean state in automation/CI
+python pf-tasks/hygiene.py --strict
+
+# Remove detected backup artifacts (*.orig, *.rej, *.bak, *~HEAD)
+python pf-tasks/hygiene.py --cleanup-backups
+```
+
+**Features:**
+- Scans source/workflow files for unfinished markers
+- Detects stale backup/conflict artifact files
+- Optional strict mode for CI gating
+- Optional auto-cleanup for backup artifacts
+
 ## Usage Patterns
 
 ### Complete Deployment Workflow

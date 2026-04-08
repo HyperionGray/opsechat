@@ -2,6 +2,20 @@
 **Documentation:** [docs/README.md](docs/README.md)  
 **License:** MIT
 
+## Repository hygiene check
+
+Run this before opening PRs or after automation cleanups:
+
+```bash
+python pf-tasks/hygiene.py --strict
+```
+
+Optional backup artifact cleanup:
+
+```bash
+python pf-tasks/hygiene.py --cleanup-backups
+```
+
 ## 🆕 NEW: Enhanced Security & Production Ready
 
 **Latest Updates (v0.8.0):**
