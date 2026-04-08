@@ -194,6 +194,10 @@ class BurnerEmailManager:
     def set_custom_domain(self, domain: str) -> None:
         """Set custom domain for burner emails"""
         self.custom_domain = domain
+
+    def get_custom_domain(self) -> Optional[str]:
+        """Return the currently configured custom burner domain."""
+        return self.custom_domain
     
     def generate_burner_email(self, user_id: str, domain: Optional[str] = None, 
                              hours_valid: int = 24) -> str:
@@ -275,7 +279,10 @@ class BurnerEmailManager:
     def expire_burner(self, email: str) -> bool:
         """Immediately expire a burner email"""
         if email in self.burner_addresses:
+            user_id = self.burner_addresses[email]['user_id']
             del self.burner_addresses[email]
+            if user_id in self.user_burners and email in self.user_burners[user_id]:
+                self.user_burners[user_id].remove(email)
             return True
         return False
     
@@ -289,12 +296,13 @@ class BurnerEmailManager:
     def cleanup_expired(self) -> None:
         """Remove expired burner addresses"""
         now = datetime.datetime.now()
-        expired = [email for email, info in self.burner_addresses.items() 
-                   if info['expires_at'] <= now]
-        for email in expired:
+        expired = [
+            (email, info['user_id']) for email, info in self.burner_addresses.items()
+            if info['expires_at'] <= now
+        ]
+        for email, user_id in expired:
             del self.burner_addresses[email]
             # Also remove from user_burners
-            user_id = self.burner_addresses.get(email, {}).get('user_id')
             if user_id and user_id in self.user_burners:
                 if email in self.user_burners[user_id]:
                     self.user_burners[user_id].remove(email)
@@ -373,6 +381,16 @@ class BurnerEmailManager:
             'sends_remaining': self.max_sends_per_hour - limit_info['count'],
             'max_sends_per_hour': self.max_sends_per_hour,
             'reset_time': limit_info['reset_time']
+        }
+
+    def get_user_stats(self, user_id: str) -> Dict:
+        """Return summary stats for a user's burner inventory and send quota."""
+        burners = self.get_user_burners(user_id)
+        limit_status = self.get_send_limit_status(user_id)
+        return {
+            'active_burners': len(burners),
+            'custom_domain': self.custom_domain,
+            'send_limit': limit_status,
         }
 
 
