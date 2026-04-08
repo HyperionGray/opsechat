@@ -87,7 +87,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             return render_template("drop.html",
                                   hostname=app.config["hostname"],
                                   path=app.config["path"],
-                                  script_enabled=False)
+                                  script_enabled=True)
         except Exception as e:
             print(f"Template rendering error: {e}")
             return f'''
