@@ -15,6 +15,27 @@
 
 📖 **Full Details:** [New Features Guide](docs/NEW_FEATURES.md)
 
+### Template Security Audit (new)
+
+The app now runs a startup template audit to flag inline script/style patterns
+that conflict with the strict CSP response headers.
+
+Configure behavior with:
+
+```bash
+# Default: audit and log findings without blocking startup
+TEMPLATE_AUDIT_MODE=warn
+
+# Enforce audit as a startup gate (raises RuntimeError if findings exist)
+TEMPLATE_AUDIT_MODE=strict
+
+# Disable auditing (not recommended for production)
+TEMPLATE_AUDIT_MODE=off
+
+# Optional comma-separated template files to exclude from audit
+TEMPLATE_AUDIT_EXCLUDE_FILES=legacy.html,old/layout.html
+```
+
 ---
 
 ## 🆕 Simple Web-Based Chat Rooms

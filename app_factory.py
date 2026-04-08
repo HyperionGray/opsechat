@@ -6,8 +6,10 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
+import logging
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
+from template_security_audit import enforce_template_security_audit
 try:
     from rate_limiter import init_limiter
 except ModuleNotFoundError:
@@ -21,6 +23,7 @@ except ModuleNotFoundError:
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
+    audit_logger = logging.getLogger("template-security-audit")
     
     # Set secret key for sessions
     app.secret_key = id_generator(size=64)
@@ -32,6 +35,22 @@ def create_app():
     chatters = []
     chatlines = []
     reviews = []
+
+    # Audit templates for CSP-unfriendly inline script/style usage.
+    # Modes:
+    #   off    -> skip audit
+    #   warn   -> log findings (default)
+    #   strict -> raise RuntimeError when findings exist
+    template_audit_mode = os.getenv("TEMPLATE_AUDIT_MODE", "warn")
+    template_audit_excludes = os.getenv("TEMPLATE_AUDIT_EXCLUDE_FILES", "")
+    exclude_files = [item.strip() for item in template_audit_excludes.split(",") if item.strip()]
+    template_dir = os.path.join(app.root_path, app.template_folder or "templates")
+    enforce_template_security_audit(
+        template_dir,
+        mode=template_audit_mode,
+        logger=audit_logger,
+        exclude_files=exclude_files,
+    )
     
     # Register function-based routes
     from chat_routes import register_chat_routes
@@ -82,8 +101,6 @@ def create_app():
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
@@ -120,15 +137,5 @@ def create_app():
     @app.route('/', methods=["GET"])
     def index():
         return ('', 200)
-    
-    # CHANGELOG (AI assistant):
-    # - Made rate_limiter import optional with a no-op fallback to prevent
-    #   ModuleNotFoundError in containerized installs that omit rate_limiter.py.
-    #
-    # Remaining checklist (non-blocking for runtime):
-    # - Update container/Podman build configuration to ensure rate_limiter.py
-    #   is included in the image (e.g., COPY list or packaging config).
-    # - Once packaging reliably includes rate_limiter.py, consider removing
-    #   the fallback or turning it into an explicit configuration option.
     
     return app
