@@ -42,8 +42,19 @@ def check_older_than(chat_dic, secs_to_live=180):
 
 
 def get_random_color():
-    """Get a random color name for user identification"""
-    colors = ["red", "blue", "green", "orange", "purple", "brown", "pink", "gray", "olive", "cyan"]
+    """Get a random RGB color tuple for user identification."""
+    colors = [
+        (255, 85, 85),    # red
+        (85, 170, 255),   # blue
+        (85, 255, 85),    # green
+        (255, 170, 85),   # orange
+        (255, 85, 255),   # purple
+        (170, 85, 0),     # brown
+        (255, 170, 255),  # pink
+        (170, 170, 170),  # gray
+        (170, 170, 0),    # olive
+        (85, 255, 255),   # cyan
+    ]
     return random.choice(colors)
 
 
@@ -75,12 +86,16 @@ def cleanup_old_reviews(reviews):
 
 
 def add_review(reviews, user_id, rating, review_text):
-    """Add a new review to the reviews list"""
+    """Add a new review to the reviews list."""
+    normalized_rating = int(rating)
+    normalized_text = review_text.strip()
     review = {
         'id': id_generator(size=16),
         'user_id': user_id,
-        'rating': rating,
-        'review_text': review_text,
+        'rating': normalized_rating,
+        # Maintain both keys for compatibility with existing templates/tests.
+        'text': normalized_text,
+        'review_text': normalized_text,
         'timestamp': datetime.datetime.now()
     }
     
