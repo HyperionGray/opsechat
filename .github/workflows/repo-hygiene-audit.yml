@@ -1,0 +1,36 @@
+name: Repo Hygiene Audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Every day at 03:20 and 15:20 UTC
+    - cron: '20 3,15 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene-audit:
+    runs-on: [self-hosted, linux, x64, big]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.3.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5.6.0
+        with:
+          python-version: '3.11'
+
+      - name: Run repository hygiene audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/repo_hygiene_audit.py --root . --json --fail-on-findings | tee repo-hygiene-report.txt
+
+      - name: Upload hygiene report artifact
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: repo-hygiene-report
+          path: repo-hygiene-report.txt

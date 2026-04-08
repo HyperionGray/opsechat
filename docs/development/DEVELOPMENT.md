@@ -147,6 +147,15 @@ npm run lint
 ./scripts/security-scan.sh
 ```
 
+### Repository Hygiene Audit
+```bash
+# Print a human-readable hygiene report
+python3 scripts/repo_hygiene_audit.py --root .
+
+# Fail if any hygiene findings are detected
+python3 scripts/repo_hygiene_audit.py --root . --json --fail-on-findings
+```
+
 ## Development Workflow
 
 1. **Create a feature branch**

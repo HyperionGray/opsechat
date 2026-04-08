@@ -11,13 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- Repository hygiene automation via `scripts/repo_hygiene_audit.py`
+- New workflow `.github/workflows/repo-hygiene-audit.yml` for scheduled/manual hygiene checks
+- `scripts/trigger_workflow_all_repos.py` to back `.github/workflows/trigger-all-repos.yml`
 
 ### Changed
 - Improved repository structure and documentation organization
 - Updated CI/CD compliance for better maintainability
+- Updated `.github/workflows/trigger-all-repos.yml` to call `scripts/trigger_workflow_all_repos.py`
 
 ### Security
 - Continued jQuery 3.7.1 usage addressing CVE-2020-11023 and CVE-2020-11022
+
+### Removed
+- Stale backup artifacts: `Dockerfile~HEAD`, `docker-compose.yml~HEAD`
+- Placeholder and stray files: `.github/.github/workflows/*`, `.github/d`
+- Obsolete debug helper scripts: `test-ci-fix.js`, `test-server.js`
 
 ## [2.0.0] - 2024-12-08
 

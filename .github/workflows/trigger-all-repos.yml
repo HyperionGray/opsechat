@@ -23,6 +23,10 @@ on:
         default: false
         type: boolean
 
+permissions:
+  actions: write
+  contents: read
+
 jobs:
   trigger-all:
     runs-on: [self-hosted, linux, x64, big]
@@ -43,7 +47,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          python3 trigger_workflow_all_repos.py \
+          python3 scripts/trigger_workflow_all_repos.py \
             P4X-ng \
             "${{ inputs.workflow_file }}" \
             --ref "${{ inputs.ref }}" \
