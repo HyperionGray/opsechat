@@ -88,8 +88,9 @@ python3 pf-tasks/test.py --skip-e2e
 - `runserver.py` - main runtime entrypoint
 - `app_factory.py` - Flask app creation and route registration
 - `monitoring.py` - `/health` payload generation
-- `docker-compose.yml` - local container deployment
-- `Dockerfile` - container build and app healthcheck
+- `container-compose.yml` - local container deployment (Podman-first)
+- `containers/Dockerfile` - container build and app healthcheck
+- `run_tests.sh` - unified test runner (pytest + Playwright basics)
 - `tests/test_rate_limit_and_health.py` - health endpoint and security header coverage
 - `tests/test_container_deployment.py` - deployment safety checks
 - `tests/basic.spec.js` - lightweight Playwright smoke tests
