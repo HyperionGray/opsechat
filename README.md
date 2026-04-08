@@ -10,6 +10,7 @@
 - 🔒 **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
 - 🌐 **Domain Rotation CLI** - Easy burner email domain management
 - 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
+- ✅ **Release Readiness Checks** - `/health` now reports template CSP readiness audit details
 - ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use
 - 🚀 **Production Deployment** - Robust systemd units with auto-restart
 

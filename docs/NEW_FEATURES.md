@@ -2,6 +2,56 @@
 
 This guide covers the new features added in the final push for OpSecHat production readiness.
 
+## ✅ Release Readiness Audit (NEW)
+
+### What Changed
+The `/health` endpoint now includes an automated template audit that checks for CSP-unfriendly inline markup patterns:
+- Inline `<script>` tags (without `src=`)
+- Inline `style=` attributes
+- Inline event handlers like `onclick=`
+
+### Why This Matters
+Recent CSP hardening disallows inline scripts. This audit makes release checks explicit by reporting whether templates are already externalized and CSP-ready.
+
+### Health API Output
+`GET /health` now includes:
+- `checks.template_csp_readiness`: `ready`, `action_required`, or `unknown`
+- `release_readiness.template_csp_audit`: summary counts and file-level issues
+
+Example:
+```json
+{
+  "checks": {
+    "template_csp_readiness": "action_required"
+  },
+  "release_readiness": {
+    "template_csp_audit": {
+      "status": "action_required",
+      "summary": {
+        "templates_scanned": 17,
+        "inline_script_tags": 3,
+        "inline_style_attributes": 42,
+        "inline_event_handlers": 4
+      },
+      "issues": [
+        {
+          "file": "drop.html",
+          "inline_script_tags": 2,
+          "inline_style_attributes": 11,
+          "inline_event_handlers": 1
+        }
+      ]
+    }
+  }
+}
+```
+
+### Implementation Notes
+- Audit results are cached briefly to avoid rescanning templates on every health check.
+- The check is non-blocking and designed for visibility during release readiness validation.
+
+---
+
 ## 🔑 Automated Key Exchange
 
 ### What Changed

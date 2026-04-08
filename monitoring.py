@@ -8,7 +8,9 @@ import json
 import time
 import sys
 import os
+import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, Any, Optional
 from functools import wraps
 import traceback
@@ -310,6 +312,11 @@ def monitor_performance(operation_name: str):
 # Global APM instance
 apm = ApplicationPerformanceMonitor()
 
+_template_audit_cache: Dict[str, Any] = {
+    "expires_at": 0.0,
+    "result": None,
+}
+
 # Health check endpoint data
 def _read_version() -> str:
     """Read version from VERSION file, falling back to 'unknown'"""
@@ -321,8 +328,100 @@ def _read_version() -> str:
         return 'unknown'
 
 
+def _scan_template_release_readiness(template_dir: Optional[Path] = None) -> Dict[str, Any]:
+    """
+    Audit templates for inline markup patterns that conflict with strict CSP.
+    """
+    root = template_dir or (Path(__file__).resolve().parent / "templates")
+    if not root.exists():
+        return {
+            "status": "unknown",
+            "summary": {
+                "templates_scanned": 0,
+                "inline_script_tags": 0,
+                "inline_style_attributes": 0,
+                "inline_event_handlers": 0,
+            },
+            "issues": [],
+            "reason": "templates_directory_missing",
+        }
+
+    summary = {
+        "templates_scanned": 0,
+        "inline_script_tags": 0,
+        "inline_style_attributes": 0,
+        "inline_event_handlers": 0,
+    }
+    issues = []
+
+    had_read_errors = False
+    for path in sorted(root.rglob("*.html")):
+        summary["templates_scanned"] += 1
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            had_read_errors = True
+            issues.append(
+                {
+                    "file": str(path.relative_to(root)),
+                    "read_error": True,
+                }
+            )
+            continue
+
+        script_tags = re.findall(r"<script\b[^>]*>", text, flags=re.IGNORECASE)
+        inline_script_count = sum(1 for tag in script_tags if "src=" not in tag.lower())
+        style_attr_count = len(re.findall(r"\sstyle\s*=", text, flags=re.IGNORECASE))
+        inline_event_count = len(
+            re.findall(r"\son[a-zA-Z0-9_-]+\s*=", text, flags=re.IGNORECASE)
+        )
+
+        summary["inline_script_tags"] += inline_script_count
+        summary["inline_style_attributes"] += style_attr_count
+        summary["inline_event_handlers"] += inline_event_count
+
+        if inline_script_count or style_attr_count or inline_event_count:
+            issues.append(
+                {
+                    "file": str(path.relative_to(root)),
+                    "inline_script_tags": inline_script_count,
+                    "inline_style_attributes": style_attr_count,
+                    "inline_event_handlers": inline_event_count,
+                }
+            )
+
+    status = "ready"
+    if had_read_errors:
+        status = "unknown"
+    elif (
+        summary["inline_script_tags"] > 0
+        or summary["inline_style_attributes"] > 0
+        or summary["inline_event_handlers"] > 0
+    ):
+        status = "action_required"
+
+    return {
+        "status": status,
+        "summary": summary,
+        "issues": issues,
+    }
+
+
+def _get_template_release_readiness(cache_ttl_seconds: int = 30) -> Dict[str, Any]:
+    now = time.time()
+    cached_result = _template_audit_cache.get("result")
+    if cached_result and now < _template_audit_cache["expires_at"]:
+        return cached_result
+
+    result = _scan_template_release_readiness()
+    _template_audit_cache["result"] = result
+    _template_audit_cache["expires_at"] = now + cache_ttl_seconds
+    return result
+
+
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
+    template_readiness = _get_template_release_readiness()
     return {
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
@@ -334,8 +433,12 @@ def get_health_status() -> Dict[str, Any]:
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
             'memory_usage': 'ok',
-            'disk_space': 'ok'
-        }
+            'disk_space': 'ok',
+            'template_csp_readiness': template_readiness['status'],
+        },
+        'release_readiness': {
+            'template_csp_audit': template_readiness,
+        },
     }
 
 # Security event logging
