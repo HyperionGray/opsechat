@@ -134,8 +134,14 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
-        self.api_key: Optional[str] = None
-        self.api_secret: Optional[str] = None
+        self.api_client = api_client
+        self.monthly_budget = monthly_budget
+        self.current_spending = 0.0
+        self.owned_domains: List[Dict] = []
+        self.active_domain: Optional[str] = None
+        # API credentials stored internally only - not exposed via get_config()
+        self._api_key: Optional[str] = None
+        self._api_secret: Optional[str] = None
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
@@ -143,25 +149,24 @@ class DomainRotationManager:
 
     def configure(self, api_key: str, secret_key: str, monthly_budget: float = 50.0) -> bool:
         """Configure registrar credentials and budget."""
-        self.api_key = api_key.strip() or None
-        self.api_secret = secret_key.strip() or None
+        self._api_key = api_key.strip() or None
+        self._api_secret = secret_key.strip() or None
         self.monthly_budget = float(monthly_budget)
 
-        if not self.api_key or not self.api_secret:
+        if not self._api_key or not self._api_secret:
             self.api_client = None
             return False
 
-        self.api_client = PorkbunAPIClient(self.api_key, self.api_secret)
+        self.api_client = PorkbunAPIClient(self._api_key, self._api_secret)
         return True
 
     def get_config(self) -> Dict:
         """Return safe configuration details for UI/API use."""
         return {
             "configured": self.api_client is not None,
-            "has_api_key": bool(self.api_key),
-            "has_secret_key": bool(self.api_secret),
             "monthly_budget": self.monthly_budget,
             "active_domain": self.active_domain,
+            # API key presence intentionally omitted for security
         }
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
