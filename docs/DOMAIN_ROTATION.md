@@ -96,9 +96,25 @@ python domain_rotation_cli.py rotate
 python domain_rotation_cli.py list
 ```
 
+Automation-oriented options:
+
+```bash
+# Non-interactive search constraints
+python domain_rotation_cli.py search --max-price 3.50 --limit 10 --max-attempts 40
+
+# Non-interactive purchase (skip prompt)
+python domain_rotation_cli.py rotate --yes --max-price 3.50 --max-attempts 20
+
+# Dry-run candidate selection (no purchase)
+python domain_rotation_cli.py rotate --dry-run --json
+```
+
 Notes:
 
-- `rotate` is interactive and asks for purchase confirmation.
+- `rotate` is interactive by default and asks for purchase confirmation.
+- Use `--yes` for unattended rotation jobs (cron/automation runners).
+- Use `--dry-run` to verify candidate discovery and budget behavior without placing an order.
+- Use `--json` with `search`/`rotate` for machine-readable output.
 - CLI state is persisted in `~/.opsechat/domain_config.json`.
 - Owned domain timestamps are stored in ISO format and restored automatically.
 

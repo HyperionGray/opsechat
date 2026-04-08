@@ -77,7 +77,7 @@ def load_config():
         return {}
 
 
-def save_config(config):
+def save_config(config, quiet=False):
     """Save configuration to file"""
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     
@@ -85,7 +85,8 @@ def save_config(config):
         with open(CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=2)
         os.chmod(CONFIG_FILE, 0o600)  # Secure permissions
-        print(f"Configuration saved to {CONFIG_FILE}")
+        if not quiet:
+            print(f"Configuration saved to {CONFIG_FILE}")
     except Exception as e:
         print(f"Error saving config: {e}")
 
@@ -158,12 +159,12 @@ def get_manager():
     return manager, config
 
 
-def save_manager_state(manager, config):
+def save_manager_state(manager, config, quiet=False):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
     config['owned_domains'] = _serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
-    save_config(config)
+    save_config(config, quiet=quiet)
 
 
 def list_domains():
@@ -192,66 +193,118 @@ def list_domains():
         print()
 
 
-def search_domains():
+def search_domains(max_price=5.0, limit=5, max_attempts=25, json_output=False):
     """Search for available cheap domains"""
     manager, config = get_manager()
     
-    print("\n=== Searching for Available Cheap Domains ===\n")
-    print("Searching for domains under $5...\n")
-    
-    matches = manager.search_cheap_domains(max_price=5.0, limit=5, max_attempts=25)
+    if not json_output:
+        print("\n=== Searching for Available Cheap Domains ===\n")
+        print(f"Searching for domains under ${max_price}...\n")
+
+    matches = manager.search_cheap_domains(max_price=max_price, limit=limit, max_attempts=max_attempts)
     if not matches:
-        print("  No cheap domains found in this search window")
-        return
+        if json_output:
+            print(json.dumps({"success": False, "matches": [], "message": "No cheap domains found"}))
+        else:
+            print("  No cheap domains found in this search window")
+        return False
+
+    if json_output:
+        print(json.dumps({"success": True, "matches": matches, "count": len(matches)}))
+        return True
+
     for domain_info in matches:
         print(f"  Found: {domain_info['domain']} - ${domain_info['price']}")
-    
+
     print("\nTo purchase a domain, run: python domain_rotation_cli.py rotate")
+    return True
 
 
-def rotate_domain():
+def rotate_domain(
+    max_price=5.0,
+    max_attempts=10,
+    auto_confirm=False,
+    dry_run=False,
+    json_output=False,
+):
     """Rotate to a new domain"""
     manager, config = get_manager()
     
-    print("\n=== Domain Rotation ===\n")
-    
+    if not json_output:
+        print("\n=== Domain Rotation ===\n")
+
     budget_status = manager.get_budget_status()
-    print(f"Monthly Budget: ${budget_status['monthly_budget']}")
-    print(f"Current Spending: ${budget_status['current_spending']}")
-    print(f"Remaining: ${budget_status['remaining']}")
-    print(f"Domains Owned: {budget_status['domains_owned']}\n")
-    
+    if not json_output:
+        print(f"Monthly Budget: ${budget_status['monthly_budget']}")
+        print(f"Current Spending: ${budget_status['current_spending']}")
+        print(f"Remaining: ${budget_status['remaining']}")
+        print(f"Domains Owned: {budget_status['domains_owned']}\n")
+
     if budget_status['remaining'] < 1:
-        print("❌ Insufficient budget remaining this month.")
-        return
-    
-    print("Searching for available cheap domain...")
-    
-    domain_info = manager.find_cheap_available_domain(max_price=min(5.0, budget_status['remaining']))
-    
+        result = {"success": False, "message": "Insufficient budget remaining this month."}
+        if json_output:
+            print(json.dumps(result))
+        else:
+            print("Insufficient budget remaining this month.")
+        return result
+
+    if not json_output:
+        print("Searching for available cheap domain...")
+
+    allowed_price = max(0.01, min(float(max_price), budget_status['remaining']))
+    domain_info = manager.find_cheap_available_domain(max_price=allowed_price, max_attempts=max_attempts)
+
     if not domain_info:
-        print("❌ Could not find an available cheap domain within budget.")
-        return
-    
-    print(f"\nFound: {domain_info['domain']} for ${domain_info['price']}")
-    
-    confirm = input("\nProceed with purchase? (yes/no): ").strip().lower()
-    
-    if confirm != 'yes':
-        print("Purchase cancelled.")
-        return
-    
-    print("\nPurchasing domain...")
-    result = manager.purchase_domain_if_budget_allows(
-        domain_info['domain'],
-        domain_info['price']
-    )
-    
+        result = {"success": False, "message": "Could not find an available cheap domain within budget."}
+        if json_output:
+            print(json.dumps(result))
+        else:
+            print("Could not find an available cheap domain within budget.")
+        return result
+
+    if dry_run:
+        result = {
+            "success": True,
+            "dry_run": True,
+            "candidate": domain_info,
+            "budget_status": budget_status,
+        }
+        if json_output:
+            print(json.dumps(result))
+        else:
+            print(f"\nCandidate domain: {domain_info['domain']} for ${domain_info['price']}")
+            print("Dry-run enabled. No purchase was made.")
+        return result
+
+    if not json_output:
+        print(f"\nFound: {domain_info['domain']} for ${domain_info['price']}")
+
+    if not auto_confirm:
+        confirm = input("\nProceed with purchase? (yes/no): ").strip().lower()
+        if confirm != 'yes':
+            result = {"success": False, "message": "Purchase cancelled."}
+            if json_output:
+                print(json.dumps(result))
+            else:
+                print("Purchase cancelled.")
+            return result
+
+    if not json_output:
+        print("\nPurchasing domain...")
+    result = manager.purchase_domain_if_budget_allows(domain_info['domain'], domain_info['price'])
+
     if result.get("success"):
-        print(f"\nSuccessfully purchased and activated: {domain_info['domain']}")
-        save_manager_state(manager, config)
+        save_manager_state(manager, config, quiet=json_output)
+        if json_output:
+            print(json.dumps(result))
+        else:
+            print(f"\nSuccessfully purchased and activated: {domain_info['domain']}")
     else:
-        print(f"\nFailed to purchase domain: {result.get('message', 'unknown error')}")
+        if json_output:
+            print(json.dumps(result))
+        else:
+            print(f"\nFailed to purchase domain: {result.get('message', 'unknown error')}")
+    return result
 
 
 def show_status():
@@ -274,40 +327,103 @@ def show_status():
         print(f"   Configure your email system to use: user@{manager.active_domain}")
 
 
-def main():
-    """Main CLI entry point"""
+def build_parser():
+    """Build command-line parser for domain rotation commands."""
     parser = argparse.ArgumentParser(
         description='OpSecHat Domain Rotation CLI',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python domain_rotation_cli.py config     # Configure API credentials
-  python domain_rotation_cli.py status     # Show current status
-  python domain_rotation_cli.py search     # Search for available domains
-  python domain_rotation_cli.py rotate     # Rotate to a new domain
-  python domain_rotation_cli.py list       # List owned domains
+  python domain_rotation_cli.py config                            # Configure API credentials
+  python domain_rotation_cli.py status                            # Show current status
+  python domain_rotation_cli.py search                            # Search for available domains
+  python domain_rotation_cli.py rotate                            # Rotate to a new domain (interactive)
+  python domain_rotation_cli.py rotate --yes --max-price 3.50     # Non-interactive purchase
+  python domain_rotation_cli.py rotate --dry-run --json           # Machine-readable candidate output
+  python domain_rotation_cli.py list                              # List owned domains
         """
     )
-    
+
     parser.add_argument(
         'command',
         choices=['config', 'status', 'search', 'rotate', 'list'],
         help='Command to execute'
     )
-    
-    args = parser.parse_args()
-    
+    parser.add_argument(
+        '--max-price',
+        type=float,
+        default=5.0,
+        help='Maximum candidate domain price (search/rotate commands)'
+    )
+    parser.add_argument(
+        '--max-attempts',
+        type=int,
+        default=25,
+        help='Maximum random domain attempts when searching'
+    )
+    parser.add_argument(
+        '--limit',
+        type=int,
+        default=5,
+        help='Maximum number of results for search'
+    )
+    parser.add_argument(
+        '--yes',
+        action='store_true',
+        help='Skip purchase confirmation prompt for rotate command'
+    )
+    parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Find a candidate domain without purchasing it (rotate command)'
+    )
+    parser.add_argument(
+        '--json',
+        action='store_true',
+        help='Emit machine-readable JSON output where supported'
+    )
+    return parser
+
+
+def main(argv=None):
+    """Main CLI entry point"""
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    if args.max_price <= 0:
+        parser.error("--max-price must be greater than 0")
+    if args.max_attempts <= 0:
+        parser.error("--max-attempts must be greater than 0")
+    if args.limit <= 0:
+        parser.error("--limit must be greater than 0")
+
     if args.command == 'config':
         configure_api()
+        return 0
     elif args.command == 'status':
         show_status()
+        return 0
     elif args.command == 'search':
-        search_domains()
+        success = search_domains(
+            max_price=args.max_price,
+            limit=args.limit,
+            max_attempts=args.max_attempts,
+            json_output=args.json,
+        )
+        return 0 if success else 1
     elif args.command == 'rotate':
-        rotate_domain()
+        result = rotate_domain(
+            max_price=args.max_price,
+            max_attempts=args.max_attempts,
+            auto_confirm=args.yes,
+            dry_run=args.dry_run,
+            json_output=args.json,
+        )
+        return 0 if result.get("success") else 1
     elif args.command == 'list':
         list_domains()
+        return 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
