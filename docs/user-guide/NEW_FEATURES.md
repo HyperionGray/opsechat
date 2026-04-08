@@ -180,13 +180,13 @@ Easy domain rotation for burner email service to avoid domain bans and maintain 
 ### Installation
 ```bash
 # The CLI is included in the main repository
-chmod +x domain_rotation_cli.py
+chmod +x bin/rotate-domain
 ```
 
 ### Configuration
 ```bash
 # Configure API credentials
-python domain_rotation_cli.py config
+bin/rotate-domain config
 
 # You'll be prompted for:
 # - Porkbun API Key
@@ -198,7 +198,7 @@ python domain_rotation_cli.py config
 
 #### Check Current Status
 ```bash
-python domain_rotation_cli.py status
+bin/rotate-domain status
 
 Output:
 === Domain Rotation Status ===
@@ -218,7 +218,7 @@ Domains Owned: 1
 
 #### Search for Available Domains
 ```bash
-python domain_rotation_cli.py search
+bin/rotate-domain search
 
 Output:
 === Searching for Available Cheap Domains ===
@@ -234,7 +234,7 @@ Attempt 2/5...
 
 #### Rotate to New Domain
 ```bash
-python domain_rotation_cli.py rotate
+bin/rotate-domain rotate
 
 Output:
 === Domain Rotation ===
@@ -257,7 +257,7 @@ Purchasing domain...
 
 #### List Owned Domains
 ```bash
-python domain_rotation_cli.py list
+bin/rotate-domain list
 
 Output:
 === Owned Domains ===
@@ -275,7 +275,7 @@ Output:
 
 ### Integration with Burner Email
 After rotating domains, update your email configuration:
-1. Run `python domain_rotation_cli.py status` to get active domain
+1. Run `bin/rotate-domain status` to get active domain
 2. Configure DNS records for the new domain
 3. Update email server settings to use new domain
 4. Old burner emails will continue working until their domain expires

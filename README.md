@@ -292,6 +292,22 @@ For Amazon Q setup instructions, see [Amazon Q Setup Guide](docs/setup/AMAZON_Q_
 6. Compose and send emails: `http://yourservice.onion/{path}/email/compose`
 7. View your inbox: `http://yourservice.onion/{path}/email`
 
+Domain rotation command-line workflow:
+
+```bash
+# Configure API credentials and monthly budget
+bin/rotate-domain config
+
+# Check active domain and budget usage
+bin/rotate-domain status
+
+# Search for low-cost available domains
+bin/rotate-domain search
+
+# Purchase and rotate to a new domain (with confirmation prompt)
+bin/rotate-domain rotate
+```
+
 For full documentation, see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md).
 
 Security & Code Quality

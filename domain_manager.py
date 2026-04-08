@@ -251,6 +251,71 @@ class DomainRotationManager:
     def get_owned_domains(self) -> List[Dict]:
         """Get list of owned domains"""
         return self.owned_domains
+
+    @staticmethod
+    def _serialize_datetime(value):
+        """Convert datetime values to JSON-safe ISO-8601 strings."""
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+
+    @staticmethod
+    def _deserialize_datetime(value):
+        """Convert ISO-8601 datetime strings back to datetime objects."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return value
+        return value
+
+    def export_state(self) -> Dict:
+        """
+        Export runtime state to a JSON-safe structure.
+        """
+        exported_domains = []
+        for domain in self.owned_domains:
+            exported_domains.append({
+                "domain": domain.get("domain"),
+                "price": domain.get("price"),
+                "purchased_at": self._serialize_datetime(domain.get("purchased_at")),
+                "expires_at": self._serialize_datetime(domain.get("expires_at")),
+            })
+
+        return {
+            "current_spending": self.current_spending,
+            "owned_domains": exported_domains,
+            "active_domain": self.active_domain,
+        }
+
+    def import_state(self, state: Optional[Dict]):
+        """
+        Import saved state while keeping backward compatibility.
+        """
+        if not state:
+            return
+
+        current_spending = state.get("current_spending", 0.0)
+        try:
+            self.current_spending = float(current_spending)
+        except (TypeError, ValueError):
+            self.current_spending = 0.0
+
+        self.active_domain = state.get("active_domain")
+
+        imported_domains = []
+        for domain in state.get("owned_domains", []):
+            if not isinstance(domain, dict):
+                continue
+            imported_domains.append({
+                "domain": domain.get("domain"),
+                "price": domain.get("price"),
+                "purchased_at": self._deserialize_datetime(domain.get("purchased_at")),
+                "expires_at": self._deserialize_datetime(domain.get("expires_at")),
+            })
+        self.owned_domains = imported_domains
     
     def get_budget_status(self) -> Dict:
         """Get budget information"""

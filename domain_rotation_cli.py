@@ -19,10 +19,43 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def command_example(command: str) -> str:
+    """
+    Build command examples that work for both direct and wrapper invocation.
+    """
+    override = os.environ.get("OPSECHAT_DOMAIN_CLI_CMD")
+    if override:
+        return f"{override} {command}"
+    alias = os.getenv("OPSECHAT_DOMAIN_CLI_ALIAS")
+    if alias:
+        return f"{alias} {command}"
+
+    executable = Path(sys.argv[0]).name
+    if executable == "rotate-domain":
+        return f"rotate-domain {command}"
+    return f"python domain_rotation_cli.py {command}"
+
+
+def format_timestamp(value: object, output_format: str) -> str:
+    """
+    Format a timestamp value for CLI output.
+    Supports datetime objects and ISO-8601 strings.
+    """
+    if isinstance(value, datetime):
+        return value.strftime(output_format)
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value).strftime(output_format)
+        except ValueError:
+            return value
+    return "unknown"
 
 
 def load_config():
@@ -99,7 +132,7 @@ def get_manager():
     
     if not config.get('api_key') or not config.get('api_secret'):
         print("❌ Error: API credentials not configured.")
-        print("Run: python domain_rotation_cli.py config")
+        print(f"Run: {command_example('config')}")
         sys.exit(1)
     
     client = PorkbunAPIClient(config['api_key'], config['api_secret'])
@@ -107,29 +140,21 @@ def get_manager():
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+
+    manager.import_state(config)
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    config.update(manager.export_state())
     save_config(config)
 
 
 def list_domains():
     """List owned domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Owned Domains ===\n")
     
@@ -137,21 +162,21 @@ def list_domains():
     
     if not domains:
         print("No domains owned yet.")
-        print("Run: python domain_rotation_cli.py rotate")
+        print(f"Run: {command_example('rotate')}")
         return
     
     for i, domain in enumerate(domains, 1):
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {format_timestamp(domain.get('purchased_at'), '%Y-%m-%d %H:%M')}")
+        print(f"   Expires: {format_timestamp(domain.get('expires_at'), '%Y-%m-%d')}")
         print()
 
 
 def search_domains():
     """Search for available cheap domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
     print("Searching for domains under $5...\n")
@@ -165,7 +190,7 @@ def search_domains():
         else:
             print(f"  ❌ No cheap domain found in this attempt")
     
-    print("\nTo purchase a domain, run: python domain_rotation_cli.py rotate")
+    print(f"\nTo purchase a domain, run: {command_example('rotate')}")
 
 
 def rotate_domain():
@@ -215,7 +240,7 @@ def rotate_domain():
 
 def show_status():
     """Show current status"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Domain Rotation Status ===\n")
     
@@ -235,16 +260,18 @@ def show_status():
 
 def main():
     """Main CLI entry point"""
+    prog_name = os.getenv("OPSECHAT_DOMAIN_CLI_PROG")
     parser = argparse.ArgumentParser(
+        prog=prog_name,
         description='OpSecHat Domain Rotation CLI',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=f"""
 Examples:
-  python domain_rotation_cli.py config     # Configure API credentials
-  python domain_rotation_cli.py status     # Show current status
-  python domain_rotation_cli.py search     # Search for available domains
-  python domain_rotation_cli.py rotate     # Rotate to a new domain
-  python domain_rotation_cli.py list       # List owned domains
+  {command_example('config')}     # Configure API credentials
+  {command_example('status')}     # Show current status
+  {command_example('search')}     # Search for available domains
+  {command_example('rotate')}     # Rotate to a new domain
+  {command_example('list')}       # List owned domains
         """
     )
     
