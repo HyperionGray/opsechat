@@ -1,8 +1,8 @@
 """
 Tests for domain management module
 """
-import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -34,7 +34,7 @@ class TestPorkbunAPIClient:
         
         assert result["available"] is True
         assert result["domain"] == "test123.xyz"
-        assert result["price"] == "2.99"
+        assert result["price"] == 2.99
     
     @patch('domain_manager.requests.Session')
     def test_search_domain_unavailable(self, mock_session_class):
@@ -174,3 +174,50 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_export_state_serializes_datetimes(self):
+        """State export should convert datetime fields to JSON-safe strings."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.owned_domains = [{
+            "domain": "example.xyz",
+            "price": 1.99,
+            "purchased_at": datetime(2026, 4, 1, 10, 15, 0),
+            "expires_at": datetime(2027, 4, 1, 10, 15, 0),
+        }]
+        manager.active_domain = "example.xyz"
+        manager.current_spending = 1.99
+
+        state = manager.export_state()
+        domain = state["owned_domains"][0]
+
+        assert isinstance(domain["purchased_at"], str)
+        assert isinstance(domain["expires_at"], str)
+        assert domain["purchased_at"].endswith("Z")
+        assert domain["expires_at"].endswith("Z")
+
+    def test_load_state_normalizes_budget_period(self):
+        """Loading stale period should trigger monthly budget rollover."""
+        manager = DomainRotationManager(monthly_budget=20.0)
+        manager.load_state({
+            "monthly_budget": 20.0,
+            "current_spending": 12.5,
+            "owned_domains": [],
+            "active_domain": None,
+            "spending_period": "2000-01",
+        })
+        status = manager.get_budget_status()
+        assert status["current_spending"] == 0.0
+        assert status["remaining"] == 20.0
+
+    def test_configure_sets_api_client_and_budget(self):
+        """configure should set API client and budget."""
+        manager = DomainRotationManager()
+        config = manager.configure(
+            api_key="pk_test",
+            secret_key="sk_test",
+            monthly_budget=33.5,
+        )
+
+        assert config["configured"] is True
+        assert manager.monthly_budget == 33.5
+        assert manager.api_client is not None

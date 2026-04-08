@@ -141,7 +141,7 @@ def register_email_routes(app, id_generator, get_random_color):
             # Store configuration (in memory for this session)
             session['email_config'] = config_data
             
-            return redirect(url_for('email_config', url_addition=url_addition))
+            return redirect(url_for('email_security.email_config', url_addition=url_addition))
         
         # Get current configuration
         config = session.get('email_config', {})

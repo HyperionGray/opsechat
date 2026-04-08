@@ -101,6 +101,11 @@ def create_app():
     from email_routes import register_email_routes
     register_email_routes(app, id_generator, get_random_color)
     
+    # Register email security/config blueprint (domain rotation, spoofing tests, transport config)
+    from email_security_routes import create_email_security_blueprint
+    email_security_bp = create_email_security_blueprint(id_generator, get_random_color)
+    app.register_blueprint(email_security_bp)
+    
     # Register review routes (existing function-based registration)
     register_review_routes(app, id_generator, get_random_color, 
                           add_review_wrapper, get_reviews, get_review_stats)

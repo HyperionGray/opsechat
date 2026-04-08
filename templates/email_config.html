@@ -250,7 +250,8 @@
             <br>Domains Owned: {{ budget_status.domains_owned }}
             
             <div class="budget-bar">
-                <div class="budget-bar-fill" style="width: {{ (budget_status.current_spending / budget_status.monthly_budget * 100)|round|int }}%"></div>
+                {% set budget_pct = ((budget_status.current_spending / budget_status.monthly_budget * 100)|round|int) if budget_status.monthly_budget > 0 else 0 %}
+                <div class="budget-bar-fill" style="width: {{ [budget_pct, 100]|min }}%"></div>
             </div>
         </div>
 
