@@ -110,11 +110,16 @@ def create_app():
     register_http_mail_routes(app)
     
     # Health check endpoint
-    from monitoring import get_health_status
+    from monitoring import get_health_status, get_chat_stats
 
     @app.route('/health', methods=["GET"])
     def health():
         return jsonify(get_health_status())
+
+    # Operational stats endpoint for monitoring dashboards
+    @app.route('/chat/stats', methods=["GET"])
+    def chat_stats():
+        return jsonify(get_chat_stats())
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
