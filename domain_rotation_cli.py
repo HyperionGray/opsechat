@@ -253,7 +253,7 @@ def get_manager():
         sys.exit(1)
     
     # Load saved state
-    if config.get('current_spending'):
+    if config.get('current_spending') is not None:
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
         manager.owned_domains = _deserialize_owned_domains(config['owned_domains'])
@@ -279,6 +279,8 @@ def list_domains(registrar=None):
     print("\n=== Owned Domains ===\n")
     
     domains = manager.get_owned_domains()
+    if registrar:
+        domains = [d for d in domains if d.get("registrar") == registrar]
     
     if not domains:
         print("No domains owned yet.")

@@ -63,10 +63,14 @@ Key endpoints used by opsechat:
 
 The opsechat domain manager is designed to be extensible. Future registrar support may include:
 
-### Namecheap
+### Namecheap (Implemented)
 - API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
-- Cheap TLDs: .xyz, .club, .online
+- Requires: API-enabled account and whitelisted client IP
+- Current support:
+  - Domain availability checks
+  - Pricing lookups
+  - Domain purchase support (requires contact profile fields in code/API client setup)
+- Cheap TLDs often include: .xyz, .club, .online
 
 ### Namesilo
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)
@@ -83,6 +87,25 @@ The opsechat domain manager is designed to be extensible. Future registrar suppo
 - Limited TLD support
 
 ## Configuration in Opsechat
+
+### Via CLI (Current Path)
+
+The shipped CLI supports registrar selection and multi-registrar fallback:
+
+```bash
+python domain_rotation_cli.py config
+python domain_rotation_cli.py status
+python domain_rotation_cli.py search --registrar namecheap
+python domain_rotation_cli.py rotate
+```
+
+Configuration is stored at:
+
+```text
+~/.opsechat/domain_config.json
+```
+
+Legacy single-registrar config keys are auto-migrated.
 
 ### Via Web Interface
 
@@ -109,7 +132,7 @@ Environment=PORKBUN_API_SECRET=sk1_xxxxx
 Environment=DOMAIN_MONTHLY_BUDGET=50.0
 ```
 
-Then modify the runserver.py to read these on startup.
+Then modify startup/app initialization to read these on startup.
 
 ## Budget Management
 
@@ -184,29 +207,20 @@ Possible causes:
 
 Solution: Verify credentials in registrar dashboard
 
-## Example: Complete Setup
+## Example: CLI Setup
 
 ```bash
-# 1. Start opsechat
-./compose-up.sh
+# 1) Configure one or more registrars
+python domain_rotation_cli.py config
 
-# 2. Get the onion address from logs
-podman-compose logs opsechat | grep "Your service is available"
+# 2) Check status
+python domain_rotation_cli.py status
 
-# 3. Open in Tor Browser
-# Navigate to: http://xxxxx.onion/randompath/email/config
+# 3) Search for cheap domains (preferred registrar + fallback)
+python domain_rotation_cli.py search
 
-# 4. Configure Porkbun API
-# - API Key: pk1_your_api_key_here
-# - API Secret: sk1_your_secret_here
-# - Monthly Budget: 20.00
-
-# 5. Generate burner email
-# Navigate to: http://xxxxx.onion/randompath/email/burner
-# Click "Generate Burner Email"
-
-# 6. Rotate to new domain (if needed)
-# Click "Rotate Domain" in email config
+# 4) Rotate (purchase + activate)
+python domain_rotation_cli.py rotate
 ```
 
 ## Cost Optimization Tips
