@@ -210,7 +210,7 @@ self.api_secret = secret_key.strip() if secret_key.strip() else None
         if isinstance(price_value, (int, float)):
             return float(price_value)
         if isinstance(price_value, str):
-            cleaned = price_value.replace("$", "").replace("€", "").strip()
+            cleaned = "".join(c for c in price_value if c.isdigit() or c == ".")
             if not cleaned:
                 return None
             try:
