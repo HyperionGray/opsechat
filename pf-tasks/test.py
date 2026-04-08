@@ -198,8 +198,30 @@ def test_playwright_e2e():
         print("[*] npm not available, skipping Playwright tests")
         return True
 
+
+def test_release_readiness():
+    """Run repository release-readiness checks."""
+    print("[*] Running release readiness checks")
+    project_root = Path(__file__).parent.parent
+    check_script = project_root / "scripts" / "release_readiness_check.py"
+
+    if not check_script.exists():
+        print("[!] Release readiness checker is missing")
+        return False
+
+    result = run_command([sys.executable, str(check_script)], cwd=project_root, check=False)
+    if result.returncode == 0:
+        print("[✓] Release readiness checks passed")
+        return True
+
+    print("[!] Release readiness checks failed")
+    return False
+
 def validate_environment(args):
     """Check whether the requested test mode is possible in this environment."""
+    if args.release_readiness_only:
+        return True
+
     errors = []
 
     if args.method in ['container', 'all'] and not _has_container_runtime():
@@ -221,6 +243,16 @@ def main():
     parser.add_argument('--method', choices=['container', 'systemd', 'all'], 
                        default='all', help='Test method')
     parser.add_argument('--skip-e2e', action='store_true', help='Skip end-to-end tests')
+    parser.add_argument(
+        '--skip-release-readiness',
+        action='store_true',
+        help='Skip repository release-readiness checks',
+    )
+    parser.add_argument(
+        '--release-readiness-only',
+        action='store_true',
+        help='Run only release-readiness checks',
+    )
     
     args = parser.parse_args()
     
@@ -231,30 +263,40 @@ def main():
     
     tests_passed = 0
     total_tests = 0
-    
-    if args.method in ['container', 'all']:
+
+    if args.release_readiness_only:
         total_tests += 1
-        if test_container_health():
+        if test_release_readiness():
             tests_passed += 1
-    
-    if args.method in ['systemd', 'all']:
-        total_tests += 1
-        if test_systemd_services():
-            tests_passed += 1
-    
-    if args.method in ['all']:
-        total_tests += 1
-        if test_tor_connectivity():
-            tests_passed += 1
-        
-        total_tests += 1
-        if test_python_modules():
-            tests_passed += 1
-        
-        if not args.skip_e2e:
+    else:
+        if not args.skip_release_readiness:
             total_tests += 1
-            if test_playwright_e2e():
+            if test_release_readiness():
                 tests_passed += 1
+    
+        if args.method in ['container', 'all']:
+            total_tests += 1
+            if test_container_health():
+                tests_passed += 1
+
+        if args.method in ['systemd', 'all']:
+            total_tests += 1
+            if test_systemd_services():
+                tests_passed += 1
+
+        if args.method in ['all']:
+            total_tests += 1
+            if test_tor_connectivity():
+                tests_passed += 1
+
+            total_tests += 1
+            if test_python_modules():
+                tests_passed += 1
+
+            if not args.skip_e2e:
+                total_tests += 1
+                if test_playwright_e2e():
+                    tests_passed += 1
     
     print(f"\n=== Test Results ===")
     print(f"Tests passed: {tests_passed}/{total_tests}")

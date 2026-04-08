@@ -58,9 +58,13 @@ python pf-tasks/test.py --method systemd
 
 # Skip end-to-end tests
 python pf-tasks/test.py --skip-e2e
+
+# Run only repository release-readiness checks
+python pf-tasks/test.py --release-readiness-only
 ```
 
 **Features:**
+- Runs repository release-readiness checks (required files, source TODO/STUB markers, stale backup artifacts)
 - Tests container health and status
 - Tests systemd service status
 - Tests Tor connectivity and hidden service creation

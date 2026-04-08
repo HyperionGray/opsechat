@@ -36,12 +36,18 @@ class PFTaskTester:
         """Test that all pf task modules can be imported"""
         print("\n=== Testing Module Imports ===")
         
-        modules = ['build', 'deploy', 'test', 'clean']
-        for module_name in modules:
+        modules = [
+            ("build", PROJECT_ROOT / "pf-tasks" / "build.py"),
+            ("deploy", PROJECT_ROOT / "pf-tasks" / "deploy.py"),
+            ("test", PROJECT_ROOT / "pf-tasks" / "test.py"),
+            ("clean", PROJECT_ROOT / "pf-tasks" / "clean.py"),
+            ("release_readiness_check", PROJECT_ROOT / "scripts" / "release_readiness_check.py"),
+        ]
+        for module_name, module_path in modules:
             try:
                 spec = importlib.util.spec_from_file_location(
                     module_name, 
-                    PROJECT_ROOT / "pf-tasks" / f"{module_name}.py"
+                    module_path
                 )
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
@@ -290,6 +296,9 @@ class PFTaskTester:
             file_path = project_root / filename
             exists = file_path.exists()
             self.log_test(f"Integration file exists: {filename}", exists)
+
+        release_check_path = project_root / "scripts" / "release_readiness_check.py"
+        self.log_test("Release readiness script exists", release_check_path.exists())
     
     def run_all_tests(self):
         """Run all tests"""

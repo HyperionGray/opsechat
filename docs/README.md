@@ -5,7 +5,7 @@ Welcome to the OpSecChat documentation. All documentation has been organized int
 ## Quick Links
 
 - **[Main README](../README.md)** - Start here for project overview
-- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes (TODO)
+- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes
 - **[Security](../SECURITY.md)** - Security information and best practices
 - **[License](../LICENSE.md)** - MIT License
 
@@ -69,6 +69,7 @@ Implementation details and summaries of major features.
 - [jQuery Security Update](implementation/JQUERY_SECURITY_UPDATE.md) - jQuery 3.7.1 update
 - [Changelog](implementation/CHANGELOG.md) - Version history
 - [PR Summaries](implementation/PR_SUMMARY.md) - Pull request summaries
+- [Release Readiness Checks](implementation/RELEASE_READINESS_CHECKS.md) - Repository release gates and usage
 
 ### 🏗️ Architecture
 Architectural decisions and design documents.
