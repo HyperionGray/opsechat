@@ -284,7 +284,7 @@ After rotating domains, update your email configuration:
 - Set monthly budget to prevent overspending
 - CLI tracks spending automatically
 - Prevents purchases that would exceed budget
-- Resets monthly (manual reset required)
+- Resets automatically each UTC month
 
 ---
 
