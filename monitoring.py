@@ -8,6 +8,7 @@ import json
 import time
 import sys
 import os
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from functools import wraps
@@ -311,6 +312,37 @@ def monitor_performance(operation_name: str):
 apm = ApplicationPerformanceMonitor()
 
 # Health check endpoint data
+REQUIRED_TEMPLATE_FILES = (
+    "templates/simple_chat_index.html",
+    "templates/simple_chat_room.html",
+    "templates/http_mail.html",
+    "templates/reviews.html",
+)
+
+REQUIRED_STATIC_FILES = (
+    "static/chat-index.js",
+    "static/chat-room.js",
+    "static/http-mail.js",
+    "static/reviews.js",
+    "static/styles.css",
+)
+
+REQUIRED_ROUTE_RULES = (
+    "/health",
+    "/ready",
+    "/chat",
+    "/chat/create",
+    "/chat/room/<string:room_id>",
+    "/<string:url_addition>/mail",
+    "/<string:url_addition>/email",
+)
+
+
+def _project_root() -> Path:
+    """Return repository root path."""
+    return Path(__file__).resolve().parent
+
+
 def _read_version() -> str:
     """Read version from VERSION file, falling back to 'unknown'"""
     version_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'VERSION')
@@ -319,6 +351,32 @@ def _read_version() -> str:
             return f.read().strip()
     except OSError:
         return 'unknown'
+
+
+def _check_required_files(relative_paths) -> Dict[str, Any]:
+    """Validate required files are present for release readiness."""
+    root = _project_root()
+    missing = [path for path in relative_paths if not (root / path).exists()]
+    return {
+        "ok": len(missing) == 0,
+        "missing": missing,
+    }
+
+
+def _check_required_routes(app=None) -> Dict[str, Any]:
+    """Validate key routes were registered."""
+    if app is None:
+        return {
+            "ok": False,
+            "missing": list(REQUIRED_ROUTE_RULES),
+        }
+
+    route_rules = {rule.rule for rule in app.url_map.iter_rules()}
+    missing = [rule for rule in REQUIRED_ROUTE_RULES if rule not in route_rules]
+    return {
+        "ok": len(missing) == 0,
+        "missing": missing,
+    }
 
 
 def get_health_status() -> Dict[str, Any]:
@@ -336,6 +394,82 @@ def get_health_status() -> Dict[str, Any]:
             'memory_usage': 'ok',
             'disk_space': 'ok'
         }
+    }
+
+
+def get_readiness_status(app=None) -> Dict[str, Any]:
+    """
+    Return release-readiness status.
+
+    Readiness is stricter than health:
+    - Health: process is running and can answer requests.
+    - Readiness: required routes and front-end assets exist and are wired.
+    """
+    version = _read_version()
+    template_check = _check_required_files(REQUIRED_TEMPLATE_FILES)
+    static_check = _check_required_files(REQUIRED_STATIC_FILES)
+    route_check = _check_required_routes(app)
+
+    tor_port_raw = os.environ.get("TOR_CONTROL_PORT", "9051")
+    tor_port_ok = False
+    try:
+        tor_port_value = int(tor_port_raw)
+        tor_port_ok = 1 <= tor_port_value <= 65535
+    except (TypeError, ValueError):
+        tor_port_value = None
+
+    checks = {
+        "version_file": {
+            "ok": version != "unknown",
+            "required": True,
+            "details": "VERSION file is readable",
+        },
+        "required_templates": {
+            "ok": template_check["ok"],
+            "required": True,
+            "details": "Missing: " + ", ".join(template_check["missing"])
+            if template_check["missing"] else "All required templates are present",
+        },
+        "required_static_assets": {
+            "ok": static_check["ok"],
+            "required": True,
+            "details": "Missing: " + ", ".join(static_check["missing"])
+            if static_check["missing"] else "All required static assets are present",
+        },
+        "required_routes": {
+            "ok": route_check["ok"],
+            "required": True,
+            "details": "Missing: " + ", ".join(route_check["missing"])
+            if route_check["missing"] else "All required routes are registered",
+        },
+        "tor_control_port_env": {
+            "ok": tor_port_ok,
+            "required": False,
+            "details": (
+                f"TOR_CONTROL_PORT={tor_port_value}"
+                if tor_port_ok else f"Invalid TOR_CONTROL_PORT value: {tor_port_raw}"
+            ),
+        },
+    }
+
+    required_total = sum(1 for check in checks.values() if check["required"])
+    required_passed = sum(
+        1 for check in checks.values() if check["required"] and check["ok"]
+    )
+    warning_failures = sum(
+        1 for check in checks.values() if not check["required"] and not check["ok"]
+    )
+
+    return {
+        "status": "ready" if required_passed == required_total else "not_ready",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": version,
+        "summary": {
+            "required_passed": required_passed,
+            "required_total": required_total,
+            "warning_failures": warning_failures,
+        },
+        "checks": checks,
     }
 
 # Security event logging

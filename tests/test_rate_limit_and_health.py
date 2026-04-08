@@ -1,5 +1,5 @@
 """
-Tests for rate limiting (simple_chat_routes) and the /health endpoint (app_factory).
+Tests for rate limiting (simple_chat_routes), /health, and /ready endpoints.
 """
 
 import datetime
@@ -166,3 +166,68 @@ def test_health_endpoint_date_header_is_blank():
     response = client.get("/health")
 
     assert response.headers["Date"] == ""
+
+
+# ---------------------------------------------------------------------------
+# Readiness endpoint integration tests
+# ---------------------------------------------------------------------------
+
+def test_ready_endpoint_returns_200_when_required_checks_pass():
+    client = _test_app.test_client()
+    response = client.get("/ready")
+    assert response.status_code == 200
+
+
+def test_ready_endpoint_returns_expected_top_level_fields():
+    client = _test_app.test_client()
+    response = client.get("/ready")
+    data = response.get_json()
+    assert data is not None
+    assert data.get("status") == "ready"
+    assert "timestamp" in data
+    assert "version" in data
+    assert "summary" in data
+    assert "checks" in data
+
+
+def test_ready_endpoint_summary_counts_required_checks():
+    client = _test_app.test_client()
+    response = client.get("/ready")
+    data = response.get_json()
+
+    assert data["summary"]["required_total"] >= 1
+    assert data["summary"]["required_passed"] == data["summary"]["required_total"]
+
+
+def test_ready_endpoint_includes_required_check_sections():
+    client = _test_app.test_client()
+    response = client.get("/ready")
+    checks = response.get_json()["checks"]
+
+    assert "version_file" in checks
+    assert "required_templates" in checks
+    assert "required_static_assets" in checks
+    assert "required_routes" in checks
+    assert "tor_control_port_env" in checks
+
+
+def test_ready_endpoint_required_checks_report_success():
+    client = _test_app.test_client()
+    response = client.get("/ready")
+    checks = response.get_json()["checks"]
+
+    for name in ("version_file", "required_templates", "required_static_assets", "required_routes"):
+        assert checks[name]["required"] is True
+        assert checks[name]["ok"] is True
+
+
+def test_ready_endpoint_sets_json_and_security_headers():
+    client = _test_app.test_client()
+    response = client.get("/ready")
+
+    assert response.content_type == "application/json"
+    assert response.headers["Content-Security-Policy"].startswith("default-src 'self';")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
+    assert response.headers["Server"] == ""

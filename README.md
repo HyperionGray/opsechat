@@ -2,6 +2,31 @@
 **Documentation:** [docs/README.md](docs/README.md)  
 **License:** MIT
 
+## Release Readiness Checks
+
+The server now exposes two operational endpoints:
+
+- `GET /health` - lightweight liveness check (process is up and responding)
+- `GET /ready` - stricter release-readiness check
+
+`/ready` validates core deployment prerequisites and returns:
+
+- HTTP `200` with `"status": "ready"` when required checks pass
+- HTTP `503` with `"status": "not_ready"` when required checks fail
+
+Current readiness checks include:
+
+- VERSION file is readable
+- required templates and static assets exist
+- required routes are registered
+- optional warning check for `TOR_CONTROL_PORT` environment validity
+
+Example:
+
+```bash
+curl -s http://127.0.0.1:5001/ready | python3 -m json.tool
+```
+
 ## 🆕 NEW: Enhanced Security & Production Ready
 
 **Latest Updates (v0.8.0):**

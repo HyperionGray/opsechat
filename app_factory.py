@@ -82,8 +82,8 @@ def create_app():
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
+        # Inline styles are currently allowed for legacy templates while scripts
+        # remain restricted to same-origin external files.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
@@ -109,12 +109,18 @@ def create_app():
     from http_mail_routes import register_http_mail_routes
     register_http_mail_routes(app)
     
-    # Health check endpoint
-    from monitoring import get_health_status
+    # Health and readiness endpoints
+    from monitoring import get_health_status, get_readiness_status
 
     @app.route('/health', methods=["GET"])
     def health():
         return jsonify(get_health_status())
+
+    @app.route('/ready', methods=["GET"])
+    def ready():
+        readiness = get_readiness_status(app)
+        status_code = 200 if readiness.get("status") == "ready" else 503
+        return jsonify(readiness), status_code
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])
