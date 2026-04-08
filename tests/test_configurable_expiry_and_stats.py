@@ -90,6 +90,10 @@ def test_chat_stats_required_fields():
     assert "total_messages" in data
     assert "active_users" in data
     assert "pending_dms" in data
+    assert "unread_dms" in data
+    assert "generated_at" in data
+    assert "uptime_seconds" in data
+    assert "rate_limit" in data
     assert "config" in data
 
 
@@ -101,6 +105,7 @@ def test_chat_stats_config_includes_expiry_settings():
     assert config["message_expiry_seconds"] == 180
     assert config["dm_expiry_seconds"] == 60
     assert config["room_inactive_seconds"] == 3600
+    assert "rate_limits" in config
 
 
 def test_chat_stats_counts_rooms_and_messages():
@@ -141,3 +146,71 @@ def test_chat_stats_security_headers():
     assert resp.headers["X-Frame-Options"] == "DENY"
     assert resp.headers["Referrer-Policy"] == "no-referrer"
     assert resp.headers["Server"] == ""
+
+
+def test_chat_stats_includes_rate_limit_summary_shape():
+    client = _test_app.test_client()
+    data = client.get("/chat/stats").get_json()
+    rate_limit = data["rate_limit"]
+    assert "active_sessions" in rate_limit
+    assert "tracked_endpoints" in rate_limit
+    assert "active_entries" in rate_limit
+    assert isinstance(rate_limit["active_sessions"], int)
+    assert isinstance(rate_limit["tracked_endpoints"], int)
+    assert isinstance(rate_limit["active_entries"], int)
+
+
+def test_chat_stats_include_rooms_opt_in():
+    from simple_chat_routes import chat_rooms, rooms_lock, ChatRoom
+
+    client = _test_app.test_client()
+    with rooms_lock:
+        saved = dict(chat_rooms)
+        chat_rooms.clear()
+
+    try:
+        room = ChatRoom("room-stats-opt-in")
+        room.add_message("u1", "Alpha", [255, 85, 85], "m1")
+        room.add_message("u2", "Beta", [85, 170, 255], "m2")
+        with rooms_lock:
+            chat_rooms["room-stats-opt-in"] = room
+
+        data = client.get("/chat/stats?include_rooms=true&room_limit=5").get_json()
+        assert "room_summaries" in data
+        assert "room_summaries_truncated" in data
+        assert data["room_summaries_truncated"] is False
+        assert len(data["room_summaries"]) == 1
+        summary = data["room_summaries"][0]
+        assert summary["room_id"] == "room-stats-opt-in"
+        assert summary["message_count"] == 2
+        assert "created_age_seconds" in summary
+        assert "oldest_message_age_seconds" in summary
+        assert "newest_message_age_seconds" in summary
+    finally:
+        with rooms_lock:
+            chat_rooms.clear()
+            chat_rooms.update(saved)
+
+
+def test_chat_stats_room_limit_truncates():
+    from simple_chat_routes import chat_rooms, rooms_lock, ChatRoom
+
+    client = _test_app.test_client()
+    with rooms_lock:
+        saved = dict(chat_rooms)
+        chat_rooms.clear()
+
+    try:
+        with rooms_lock:
+            for i in range(3):
+                room = ChatRoom(f"room-limit-{i}")
+                room.add_message(f"u{i}", "User", [255, 85, 85], f"m{i}")
+                chat_rooms[f"room-limit-{i}"] = room
+
+        data = client.get("/chat/stats?include_rooms=true&room_limit=2").get_json()
+        assert len(data["room_summaries"]) == 2
+        assert data["room_summaries_truncated"] is True
+    finally:
+        with rooms_lock:
+            chat_rooms.clear()
+            chat_rooms.update(saved)

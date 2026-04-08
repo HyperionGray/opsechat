@@ -351,15 +351,21 @@ def _get_active_room_count() -> int:
         return 0
 
 
-def get_chat_stats() -> Dict[str, Any]:
+def get_chat_stats(include_rooms: bool = False, room_limit: int = 25) -> Dict[str, Any]:
     """Return lightweight operational stats about chat rooms.
 
     Useful for monitoring dashboards and alerting.
+
+    Args:
+        include_rooms: Whether to include per-room summaries.
+        room_limit: Maximum number of room summaries to return.
     """
+    room_limit = max(0, min(room_limit, 100))
     try:
         from simple_chat_routes import (
             chat_rooms, rooms_lock, direct_messages, dm_lock,
             MESSAGE_EXPIRY_SECONDS, DM_EXPIRY_SECONDS, ROOM_INACTIVE_SECONDS,
+            RATE_LIMITS, _rate_limit_store, _rate_limit_lock,
         )
     except ImportError:
         return {
@@ -367,28 +373,82 @@ def get_chat_stats() -> Dict[str, Any]:
             'total_messages': 0,
             'active_users': 0,
             'pending_dms': 0,
+            'unread_dms': 0,
+            'generated_at': datetime.now(timezone.utc).isoformat(),
+            'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
+            'rate_limit': {
+                'active_sessions': 0,
+                'tracked_endpoints': 0,
+                'active_entries': 0,
+            },
             'config': {},
         }
 
+    now = datetime.now()
     with rooms_lock:
         active_rooms = len(chat_rooms)
         total_messages = sum(len(r.messages) for r in chat_rooms.values())
         active_users = sum(r.get_user_count() for r in chat_rooms.values())
+        room_summaries = []
+        if include_rooms:
+            for room_id, room in chat_rooms.items():
+                message_count = len(room.messages)
+                oldest_age_seconds = None
+                newest_age_seconds = None
+                if room.messages:
+                    timestamps = [msg["timestamp"] for msg in room.messages]
+                    oldest_age_seconds = max(int((now - min(timestamps)).total_seconds()), 0)
+                    newest_age_seconds = max(int((now - max(timestamps)).total_seconds()), 0)
+
+                room_summaries.append({
+                    'room_id': room_id,
+                    'message_count': message_count,
+                    'active_users': room.get_user_count(),
+                    'created_age_seconds': max(int((now - room.created_at).total_seconds()), 0),
+                    'oldest_message_age_seconds': oldest_age_seconds,
+                    'newest_message_age_seconds': newest_age_seconds,
+                })
+            room_summaries.sort(key=lambda r: r['message_count'], reverse=True)
 
     with dm_lock:
         pending_dms = len(direct_messages)
+        unread_dms = sum(1 for dm in direct_messages.values() if not dm.get('read', False))
 
-    return {
+    with _rate_limit_lock:
+        rate_limit_sessions = len(_rate_limit_store)
+        tracked_endpoints = sum(len(endpoint_map) for endpoint_map in _rate_limit_store.values())
+        active_entries = sum(
+            len(timestamps)
+            for endpoint_map in _rate_limit_store.values()
+            for timestamps in endpoint_map.values()
+        )
+
+    result = {
         'active_rooms': active_rooms,
         'total_messages': total_messages,
         'active_users': active_users,
         'pending_dms': pending_dms,
+        'unread_dms': unread_dms,
+        'generated_at': datetime.now(timezone.utc).isoformat(),
+        'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
+        'rate_limit': {
+            'active_sessions': rate_limit_sessions,
+            'tracked_endpoints': tracked_endpoints,
+            'active_entries': active_entries,
+        },
         'config': {
             'message_expiry_seconds': MESSAGE_EXPIRY_SECONDS,
             'dm_expiry_seconds': DM_EXPIRY_SECONDS,
             'room_inactive_seconds': ROOM_INACTIVE_SECONDS,
+            'rate_limits': RATE_LIMITS,
         },
     }
+
+    if include_rooms:
+        result['room_summaries'] = room_summaries[:room_limit]
+        result['room_summaries_truncated'] = len(room_summaries) > room_limit
+
+    return result
 
 # Security event logging
 class SecurityEventLogger:
