@@ -176,8 +176,8 @@ class DomainRotationManager:
 
     def configure(self, api_key: str, secret_key: str, monthly_budget: float = 50.0) -> bool:
         """Configure registrar credentials and budget."""
-        self.api_key = api_key.strip() or None
-        self.api_secret = secret_key.strip() or None
+self.api_key = api_key.strip() if api_key.strip() else None
+self.api_secret = secret_key.strip() if secret_key.strip() else None
         self.set_monthly_budget(monthly_budget)
 
         if not self.api_key or not self.api_secret:
