@@ -54,6 +54,39 @@ Major cleanup and consolidation of GitHub Actions workflows to reduce automation
 12. `auto-sec-scan.yml` (duplicate)
 13. `test.yml` (duplicate)
 
+## 2026-04-08 - Domain Rotation Reliability + Repository Cleanup
+
+### Added
+1. **Domain rotation manager API completion**:
+   - Implemented `DomainRotationManager.configure(...)` and `get_config()`
+   - Added JSON-safe state methods: `export_state()` and `load_state(...)`
+   - Added `rotate_domain_result()` for structured web/API responses
+
+2. **Test coverage**:
+   - Extended `tests/test_domain_manager.py` for new configuration and state behavior
+   - Added `tests/test_domain_rotation_cli.py` for CLI date formatting and persistence
+
+### Fixed
+1. **CLI persistence bug**:
+   - Domain state now round-trips datetimes safely between memory and JSON
+   - `list` output now handles both datetime objects and persisted ISO strings robustly
+
+2. **Email security route integration**:
+   - Domain configuration page now receives `budget_status` and `active_domain`
+   - Domain rotate endpoint now returns structured success/error data
+
+### Removed (cleanup)
+1. Stray root-level backup artifacts:
+   - `Dockerfile~HEAD`
+   - `docker-compose.yml~HEAD`
+2. Obsolete ad-hoc debugging scripts:
+   - `test-ci-fix.js`
+   - `test-server.js`
+
+### Validation
+- `python3 -m pytest tests/test_domain_manager.py tests/test_domain_rotation_cli.py -q`
+- Result: `16 passed`
+
 ### Remaining Workflows (22)
 
 #### Core CI/Testing (5)

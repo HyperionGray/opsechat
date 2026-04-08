@@ -2,6 +2,16 @@
 
 This guide explains how to set up domain registrar API access for automated burner email domain rotation in opsechat.
 
+## April 2026 Reliability Update
+
+Domain rotation internals were hardened for safer long-lived usage:
+
+- **State persistence is now robust**: owned domain metadata is exported in JSON-safe form and loaded with datetime parsing.
+- **Configuration API is complete**: `DomainRotationManager.configure()` and `get_config()` are implemented and now used by the web configuration page.
+- **Structured rotation responses**: API callers can use `rotate_domain_result()` for explicit `success/error` payloads and budget status.
+
+This improves both CLI behavior (`status`/`list` after restarts) and `/email/domain/rotate` API consistency.
+
 ## Supported Registrars
 
 ### Porkbun (Recommended)
