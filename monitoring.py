@@ -351,34 +351,89 @@ def _get_active_room_count() -> int:
         return 0
 
 
-def get_chat_stats() -> Dict[str, Any]:
-    """Return lightweight operational stats about chat rooms.
+def get_chat_stats(
+    include_rooms: bool = False,
+    include_rate_limits: bool = False,
+    refresh: bool = False,
+) -> Dict[str, Any]:
+    """Return operational stats about chat rooms.
 
-    Useful for monitoring dashboards and alerting.
+    Args:
+        include_rooms: Include per-room telemetry (message/user counts and activity).
+        include_rate_limits: Include in-memory rate-limit store telemetry.
+        refresh: Run ephemeral cleanup before taking the stats snapshot.
     """
     try:
         from simple_chat_routes import (
             chat_rooms, rooms_lock, direct_messages, dm_lock,
             MESSAGE_EXPIRY_SECONDS, DM_EXPIRY_SECONDS, ROOM_INACTIVE_SECONDS,
+            cleanup_old_rooms, cleanup_old_dms, cleanup_rate_limits,
         )
     except ImportError:
-        return {
+        payload = {
             'active_rooms': 0,
             'total_messages': 0,
             'active_users': 0,
             'pending_dms': 0,
             'config': {},
+            'snapshot': {
+                'refreshed': refresh,
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+            },
         }
+        if include_rooms:
+            payload['rooms'] = []
+        if include_rate_limits:
+            payload['rate_limits'] = {}
+        return payload
+
+    if refresh:
+        cleanup_old_rooms()
+        cleanup_old_dms()
+        cleanup_rate_limits()
+        with rooms_lock:
+            for room in chat_rooms.values():
+                room.cleanup_old_messages()
 
     with rooms_lock:
         active_rooms = len(chat_rooms)
         total_messages = sum(len(r.messages) for r in chat_rooms.values())
         active_users = sum(r.get_user_count() for r in chat_rooms.values())
+        room_details = []
+        if include_rooms:
+            now = datetime.now(timezone.utc)
+            for room_id, room in chat_rooms.items():
+                with room.lock:
+                    message_count = len(room.messages)
+                    last_message_at = (
+                        max(msg["timestamp"] for msg in room.messages)
+                        if room.messages else None
+                    )
+                    active_room_users = sum(
+                        1
+                        for user in room.users.values()
+                        if (datetime.now() - user["last_seen"]).total_seconds() < 300
+                    )
+
+                    room_details.append({
+                        'room_id': room_id,
+                        'created_at': room.created_at.replace(tzinfo=timezone.utc).isoformat(),
+                        'message_count': message_count,
+                        'active_users': active_room_users,
+                        'last_message_at': (
+                            last_message_at.replace(tzinfo=timezone.utc).isoformat()
+                            if last_message_at else None
+                        ),
+                        'last_message_age_seconds': (
+                            max(0, int((now - last_message_at.replace(tzinfo=timezone.utc)).total_seconds()))
+                            if last_message_at else None
+                        ),
+                    })
 
     with dm_lock:
         pending_dms = len(direct_messages)
 
-    return {
+    payload = {
         'active_rooms': active_rooms,
         'total_messages': total_messages,
         'active_users': active_users,
@@ -388,7 +443,47 @@ def get_chat_stats() -> Dict[str, Any]:
             'dm_expiry_seconds': DM_EXPIRY_SECONDS,
             'room_inactive_seconds': ROOM_INACTIVE_SECONDS,
         },
+        'snapshot': {
+            'refreshed': refresh,
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+        },
     }
+
+    if include_rooms:
+        payload['rooms'] = room_details
+
+    if include_rate_limits:
+        try:
+            from simple_chat_routes import _rate_limit_store, _rate_limit_lock, RATE_LIMITS
+        except ImportError:
+            payload['rate_limits'] = {}
+        else:
+            with _rate_limit_lock:
+                by_endpoint = {}
+                for endpoint, endpoint_config in RATE_LIMITS.items():
+                    sessions_for_endpoint = 0
+                    tracked_requests = 0
+                    for session_data in _rate_limit_store.values():
+                        endpoint_entries = session_data.get(endpoint, [])
+                        if endpoint_entries:
+                            sessions_for_endpoint += 1
+                            tracked_requests += len(endpoint_entries)
+                    by_endpoint[endpoint] = {
+                        'sessions': sessions_for_endpoint,
+                        'tracked_requests': tracked_requests,
+                        'max_requests': endpoint_config['max_requests'],
+                        'window_seconds': endpoint_config['window_seconds'],
+                    }
+
+                payload['rate_limits'] = {
+                    'active_sessions': len(_rate_limit_store),
+                    'tracked_windows': sum(
+                        len(session_data) for session_data in _rate_limit_store.values()
+                    ),
+                    'by_endpoint': by_endpoint,
+                }
+
+    return payload
 
 # Security event logging
 class SecurityEventLogger:

@@ -6,7 +6,7 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -119,7 +119,15 @@ def create_app():
     # Operational stats endpoint for monitoring dashboards
     @app.route('/chat/stats', methods=["GET"])
     def chat_stats():
-        return jsonify(get_chat_stats())
+        def _query_flag(name: str) -> bool:
+            value = request.args.get(name, "")
+            return value.lower() in {"1", "true", "yes", "on"}
+
+        return jsonify(get_chat_stats(
+            include_rooms=_query_flag("include_rooms"),
+            include_rate_limits=_query_flag("include_rate_limits"),
+            refresh=_query_flag("refresh"),
+        ))
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])

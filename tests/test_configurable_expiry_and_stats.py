@@ -141,3 +141,117 @@ def test_chat_stats_security_headers():
     assert resp.headers["X-Frame-Options"] == "DENY"
     assert resp.headers["Referrer-Policy"] == "no-referrer"
     assert resp.headers["Server"] == ""
+
+
+def test_chat_stats_excludes_optional_sections_by_default():
+    client = _test_app.test_client()
+    data = client.get("/chat/stats").get_json()
+    assert "rooms" not in data
+    assert "rate_limits" not in data
+    assert data["snapshot"]["refreshed"] is False
+
+
+def test_chat_stats_include_rooms_query_flag():
+    from simple_chat_routes import chat_rooms, rooms_lock, ChatRoom
+
+    client = _test_app.test_client()
+
+    with rooms_lock:
+        saved = dict(chat_rooms)
+        chat_rooms.clear()
+
+    try:
+        room = ChatRoom("telemetry-room")
+        room.add_message("u1", "Alpha", [255, 85, 85], "hello")
+        with rooms_lock:
+            chat_rooms["telemetry-room"] = room
+
+        data = client.get("/chat/stats?include_rooms=1").get_json()
+        assert "rooms" in data
+        assert len(data["rooms"]) == 1
+        detail = data["rooms"][0]
+        assert detail["room_id"] == "telemetry-room"
+        assert detail["message_count"] == 1
+        assert detail["active_users"] >= 1
+        assert detail["created_at"] is not None
+    finally:
+        with rooms_lock:
+            chat_rooms.clear()
+            chat_rooms.update(saved)
+
+
+def test_chat_stats_include_rate_limits_query_flag():
+    from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
+
+    client = _test_app.test_client()
+    with _rate_limit_lock:
+        _rate_limit_store.clear()
+
+    # Populate in-memory windows for two endpoints.
+    check_rate_limit("stats-session", "dm_send")
+    check_rate_limit("stats-session", "chat_message")
+
+    data = client.get("/chat/stats?include_rate_limits=true").get_json()
+    assert "rate_limits" in data
+    assert data["rate_limits"]["active_sessions"] >= 1
+    assert "dm_send" in data["rate_limits"]["by_endpoint"]
+    assert "chat_message" in data["rate_limits"]["by_endpoint"]
+    assert data["rate_limits"]["by_endpoint"]["dm_send"]["tracked_requests"] >= 1
+    assert data["rate_limits"]["by_endpoint"]["chat_message"]["tracked_requests"] >= 1
+
+
+def test_chat_stats_refresh_flag_cleans_expired_data():
+    from simple_chat_routes import (
+        chat_rooms, rooms_lock, ChatRoom, MESSAGE_EXPIRY_SECONDS,
+        direct_messages, dm_lock, DM_EXPIRY_SECONDS,
+    )
+
+    client = _test_app.test_client()
+
+    with rooms_lock:
+        saved_rooms = dict(chat_rooms)
+        chat_rooms.clear()
+    with dm_lock:
+        saved_dms = dict(direct_messages)
+        direct_messages.clear()
+
+    try:
+        # Add room with expired message; refresh should clear old message.
+        room = ChatRoom("cleanup-room")
+        room.add_message("u1", "Cleaner", [255, 85, 85], "old message")
+        with room.lock:
+            room.messages[0]["timestamp"] = datetime.datetime.now() - datetime.timedelta(
+                seconds=MESSAGE_EXPIRY_SECONDS + 1
+            )
+        with rooms_lock:
+            chat_rooms["cleanup-room"] = room
+
+        # Add expired DM; refresh should remove it.
+        with dm_lock:
+            direct_messages["expired-dm"] = {
+                "dm_id": "expired-dm",
+                "sender_id": "u1",
+                "sender_name": "Cleaner",
+                "room_id": "cleanup-room",
+                "message": "stale",
+                "timestamp": datetime.datetime.now() - datetime.timedelta(
+                    seconds=DM_EXPIRY_SECONDS + 1
+                ),
+                "read": False,
+            }
+
+        before = client.get("/chat/stats").get_json()
+        assert before["total_messages"] == 1
+        assert before["pending_dms"] == 1
+
+        after = client.get("/chat/stats?refresh=on").get_json()
+        assert after["snapshot"]["refreshed"] is True
+        assert after["total_messages"] == 0
+        assert after["pending_dms"] == 0
+    finally:
+        with rooms_lock:
+            chat_rooms.clear()
+            chat_rooms.update(saved_rooms)
+        with dm_lock:
+            direct_messages.clear()
+            direct_messages.update(saved_dms)

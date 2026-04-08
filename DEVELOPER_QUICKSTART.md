@@ -35,6 +35,7 @@ npx playwright test tests/basic.spec.js
 These cover:
 
 - `/health` contract and security headers
+- `/chat/stats` operational telemetry and query flags
 - container and compose deployment configuration
 - basic endpoint smoke checks through the mock server
 
@@ -83,11 +84,22 @@ npx playwright test
 python3 pf-tasks/test.py --skip-e2e
 ```
 
+### Chat observability endpoint
+
+`GET /chat/stats` returns lightweight room/message counts by default.
+
+Optional query flags:
+
+- `include_rooms=1` - include per-room telemetry (`room_id`, message count, user count, activity timestamps)
+- `include_rate_limits=1` - include in-memory rate-limit window summary by endpoint
+- `refresh=1` - run cleanup of expired messages/DMs/rate-limit windows before snapshot
+
 ## Files to know
 
 - `runserver.py` - main runtime entrypoint
 - `app_factory.py` - Flask app creation and route registration
 - `monitoring.py` - `/health` payload generation
+- `tests/test_configurable_expiry_and_stats.py` - `/chat/stats` contract and telemetry flags
 - `docker-compose.yml` - local container deployment
 - `Dockerfile` - container build and app healthcheck
 - `tests/test_rate_limit_and_health.py` - health endpoint and security header coverage
