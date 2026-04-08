@@ -20,6 +20,8 @@ class DomainAPIClient:
     def __init__(self, api_key: str, api_secret: Optional[str] = None):
         self.api_key = api_key
         self.api_secret = api_secret
+        # Backward-compatible alias used by some tooling/tests.
+        self.secret_key = api_secret
     
     def search_domain(self, domain: str) -> Dict:
         """Search if domain is available"""
@@ -138,6 +140,52 @@ class DomainRotationManager:
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+
+    def set_monthly_budget(self, monthly_budget: float):
+        """Set monthly spending budget for domain purchases"""
+        if monthly_budget <= 0:
+            raise ValueError("Monthly budget must be greater than 0")
+        self.monthly_budget = monthly_budget
+
+    def configure(self, api_key: str, secret_key: str, monthly_budget: float = 50.0) -> bool:
+        """
+        Configure domain rotation with Porkbun credentials and budget.
+        This keeps credentials in-memory only.
+        """
+        api_key = (api_key or "").strip()
+        secret_key = (secret_key or "").strip()
+        if not api_key or not secret_key:
+            logger.error("Domain API credentials are required")
+            return False
+
+        if monthly_budget <= 0:
+            logger.error("Monthly budget must be greater than 0")
+            return False
+
+        self.api_client = PorkbunAPIClient(api_key, secret_key)
+        self.monthly_budget = monthly_budget
+        logger.info("Domain rotation manager configured")
+        return True
+
+    def get_config(self) -> Dict:
+        """Return non-sensitive configuration and status data."""
+        api_key_masked = ""
+        if self.api_client and self.api_client.api_key:
+            key = self.api_client.api_key
+            api_key_masked = f"{key[:4]}...{key[-4:]}" if len(key) > 8 else "***"
+
+        return {
+            "configured": self.api_client is not None,
+            "api_key_masked": api_key_masked,
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "active_domain": self.active_domain,
+            "domains_owned": len(self.owned_domains),
+        }
+
+    def generate_domain_name(self, tld: str = "xyz", length: int = 8) -> str:
+        """Backward-compatible alias for random domain generation."""
+        return self.generate_random_domain(tld=tld, length=length)
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """

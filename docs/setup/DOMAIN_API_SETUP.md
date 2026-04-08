@@ -47,8 +47,13 @@ Porkbun offers cheap domains and a simple API, making it ideal for burner email 
 
 3. **Test Configuration**
    - Click "Configure Domain API"
-   - System will validate credentials
+   - Credentials are validated for presence and loaded into in-memory runtime config
    - Check budget status display
+
+4. **Important runtime behavior**
+   - Domain API credentials are kept in memory only for the active process
+   - Restarting the server clears domain API credentials and transport settings
+   - Re-enter credentials after restart when using the web config page
 
 #### Recommended Domain Extensions
 
@@ -202,6 +207,7 @@ Enterprise-focused with comprehensive API.
 - Verify API key and secret are correct
 - Check registrar account has sufficient funds
 - Ensure API access is enabled in registrar account
+- Ensure both key and secret are non-empty (the app now validates this before configuring)
 
 **"Domain purchase failed"**
 - Check account balance in registrar
@@ -236,6 +242,15 @@ Enterprise-focused with comprehensive API.
 - Budget resets monthly, not rolling
 - Check registrar account for actual spending
 - Consider API rate limits affecting purchases
+
+### App Integration Notes
+
+- Domain API credentials are configured in-memory through `DomainRotationManager.configure(...)`.
+- The web configuration page now supports the expected form actions:
+  - `configure_smtp`
+  - `configure_imap`
+  - `configure_domain_api`
+- `DomainRotationManager.get_config()` intentionally returns masked key data only (no raw secrets).
 
 ## Best Practices
 

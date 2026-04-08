@@ -494,3 +494,13 @@ class TestEmailRoutesExtended:
     def test_burner_wrong_path_404(self):
         r = self.client.post("/wrongpath/email/burner", data={"action": "generate"})
         assert r.status_code == 404
+
+    def test_email_config_get_renders_successfully(self):
+        r = self.client.get("/secpath/email/config")
+        assert r.status_code == 200
+        assert b"Email System Configuration" in r.data
+
+    def test_email_config_post_unknown_action_shows_error(self):
+        r = self.client.post("/secpath/email/config", data={"action": "unknown_action"})
+        assert r.status_code == 200
+        assert b"Unknown configuration action" in r.data

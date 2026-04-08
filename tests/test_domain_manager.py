@@ -174,3 +174,55 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_set_monthly_budget(self):
+        """Test updating monthly budget"""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.set_monthly_budget(75.0)
+        assert manager.monthly_budget == 75.0
+
+    def test_set_monthly_budget_invalid(self):
+        """Test monthly budget validation"""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        with pytest.raises(ValueError):
+            manager.set_monthly_budget(0)
+
+    @patch('domain_manager.PorkbunAPIClient')
+    def test_configure_success(self, mock_client_class):
+        """Test manager configuration with API credentials"""
+        manager = DomainRotationManager()
+        assert manager.configure("pk_test_1234", "sk_test_1234", 42.0) is True
+        mock_client_class.assert_called_once_with("pk_test_1234", "sk_test_1234")
+        assert manager.monthly_budget == 42.0
+        assert manager.api_client is not None
+
+    def test_configure_requires_credentials(self):
+        """Test configure rejects missing credentials"""
+        manager = DomainRotationManager()
+        assert manager.configure("", "secret", 50.0) is False
+        assert manager.configure("key", "", 50.0) is False
+
+    def test_get_config_unconfigured(self):
+        """Test config output when manager is not configured"""
+        manager = DomainRotationManager()
+        cfg = manager.get_config()
+        assert cfg["configured"] is False
+        assert cfg["api_key_masked"] == ""
+        assert cfg["monthly_budget"] == 50.0
+        assert cfg["domains_owned"] == 0
+
+    def test_get_config_masks_api_key(self):
+        """Test config output masks API key details"""
+        manager = DomainRotationManager()
+        manager.api_client = DomainAPIClient("pk_abcdefghijklmnopqrstuvwxyz", "secret")
+        cfg = manager.get_config()
+        assert cfg["configured"] is True
+        assert cfg["api_key_masked"].startswith("pk_a")
+        assert cfg["api_key_masked"].endswith("wxyz")
+
+    def test_generate_domain_name_alias(self):
+        """Test backward-compatible domain generation alias"""
+        manager = DomainRotationManager()
+        domain = manager.generate_domain_name("club", 6)
+        assert domain.endswith(".club")
+        assert len(domain.split(".")[0]) == 6

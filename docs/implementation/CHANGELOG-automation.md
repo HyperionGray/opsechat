@@ -108,3 +108,47 @@ See `TODO-automation.md` for:
 - Issue: "Automation: Direction"
 - Requirements: Per P4X-ng comment - keep only triggered workflows, fix continuous progress, bi-weekly security, keep sync
 - Full Documentation: `docs/AUTOMATION_CONSOLIDATION.md`
+
+## 2026-04-08 - Email Configuration and Domain Rotation Integration
+
+### Summary
+Completed unfinished email/domain configuration wiring in active runtime code and added cleanup for stale route logic.
+
+### Added
+1. **Domain rotation configuration API (in-memory)**
+   - `domain_manager.DomainRotationManager.configure(api_key, secret_key, monthly_budget)`
+   - `domain_manager.DomainRotationManager.get_config()`
+   - `domain_manager.DomainRotationManager.set_monthly_budget()`
+   - `domain_manager.DomainRotationManager.generate_domain_name()` alias for compatibility
+
+2. **Compatibility improvements**
+   - Added `secret_key` alias on `DomainAPIClient` to preserve compatibility with existing scripts/tests expecting that attribute.
+
+3. **Tests**
+   - New tests in `tests/test_domain_manager.py` for:
+     - configuration success/failure
+     - budget setter validation
+     - config masking behavior
+     - compatibility alias for domain generation
+   - New route tests in `tests/test_http_mail.py` validating `/email/config` renders and handles unknown actions safely.
+
+### Fixed
+1. **Email config route/template contract**
+   - `email_routes.py:/email/config` now serves all template-required variables:
+     - `config_status`
+     - `budget_status`
+     - `active_domain`
+     - `domain_config`
+   - Route now handles form actions expected by `templates/email_config.html`:
+     - `configure_smtp`
+     - `configure_imap`
+     - `configure_domain_api`
+   - Added explicit user feedback on success/failure.
+
+2. **Route robustness**
+   - Added a shared `_ensure_session()` helper in `email_routes.py`.
+   - Removed latent `NameError` risk where `email_view` referenced `_ensure_session()` before definition in the original route set.
+
+### Cleanup
+- Removed duplicate email lookup call in `email_view`.
+- Standardized session initialization across email routes.
