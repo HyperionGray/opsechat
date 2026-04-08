@@ -349,7 +349,11 @@ class DomainRotationManager:
 
     def set_api_client(self, api_client: DomainAPIClient) -> None:
         """Set a single API client and mark it active."""
-        registrar = getattr(api_client, "registrar_name", "custom")
+        registrar = getattr(api_client, "registrar_name", None)
+        if not isinstance(registrar, str) or not registrar:
+            registrar = getattr(type(api_client), "registrar_name", "generic")
+        if not isinstance(registrar, str) or not registrar:
+            registrar = "generic"
         self.add_api_client(registrar, api_client, set_active=True)
 
     def set_active_registrar(self, registrar: str) -> bool:

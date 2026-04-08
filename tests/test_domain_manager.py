@@ -247,3 +247,16 @@ class TestNamecheapAPIClient:
         assert result["available"] is True
         assert result["domain"] == "example123.xyz"
         assert result["price"] == "2.88"
+
+
+class TestDomainRotationManagerMultiRegistrar:
+    """Additional manager tests for multiple registrar behavior."""
+
+    def test_set_api_client_uses_generic_fallback_for_mocks(self):
+        """set_api_client should register mocked clients under generic registrar."""
+        manager = DomainRotationManager()
+        mock_client = Mock(spec=DomainAPIClient)
+        manager.set_api_client(mock_client)
+
+        assert manager.active_registrar == "generic"
+        assert "generic" in manager.get_available_registrars()
