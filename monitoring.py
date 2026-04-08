@@ -8,6 +8,7 @@ import json
 import time
 import sys
 import os
+import hashlib
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from functools import wraps
@@ -351,7 +352,12 @@ def _get_active_room_count() -> int:
         return 0
 
 
-def get_chat_stats() -> Dict[str, Any]:
+def _safe_float(value: float, digits: int = 2) -> float:
+    """Round float values consistently for API responses."""
+    return round(float(value), digits)
+
+
+def get_chat_stats(include_room_details: bool = False, room_limit: int = 10) -> Dict[str, Any]:
     """Return lightweight operational stats about chat rooms.
 
     Useful for monitoring dashboards and alerting.
@@ -367,28 +373,109 @@ def get_chat_stats() -> Dict[str, Any]:
             'total_messages': 0,
             'active_users': 0,
             'pending_dms': 0,
+            'activity': {
+                'rooms_with_messages': 0,
+                'empty_rooms': 0,
+                'avg_messages_per_room': 0.0,
+                'avg_active_users_per_room': 0.0,
+                'oldest_message_age_seconds': None,
+                'newest_message_age_seconds': None,
+                'oldest_pending_dm_age_seconds': None,
+            },
             'config': {},
         }
 
+    room_limit = max(1, min(room_limit, 50))
+    now = datetime.now()
+
+    room_details = []
+    oldest_message_age_seconds = None
+    newest_message_age_seconds = None
+
     with rooms_lock:
         active_rooms = len(chat_rooms)
-        total_messages = sum(len(r.messages) for r in chat_rooms.values())
-        active_users = sum(r.get_user_count() for r in chat_rooms.values())
+        total_messages = 0
+        active_users = 0
+        rooms_with_messages = 0
 
+        for room_id, room in chat_rooms.items():
+            msg_count = len(room.messages)
+            room_active_users = room.get_user_count()
+            total_messages += msg_count
+            active_users += room_active_users
+
+            if msg_count > 0:
+                rooms_with_messages += 1
+                # room.messages is append-only, so first/last reflect oldest/newest.
+                oldest_age = (now - room.messages[0]["timestamp"]).total_seconds()
+                newest_age = (now - room.messages[-1]["timestamp"]).total_seconds()
+                if oldest_message_age_seconds is None or oldest_age > oldest_message_age_seconds:
+                    oldest_message_age_seconds = oldest_age
+                if newest_message_age_seconds is None or newest_age < newest_message_age_seconds:
+                    newest_message_age_seconds = newest_age
+
+            if include_room_details:
+                room_ref = hashlib.sha256(room_id.encode("utf-8")).hexdigest()[:12]
+                room_age_seconds = (now - room.created_at).total_seconds()
+                room_details.append({
+                    'room_ref': room_ref,
+                    'message_count': msg_count,
+                    'active_users': room_active_users,
+                    'room_age_seconds': _safe_float(room_age_seconds),
+                    'has_messages': msg_count > 0,
+                })
+
+    empty_rooms = active_rooms - rooms_with_messages
+    avg_messages_per_room = _safe_float(total_messages / active_rooms) if active_rooms else 0.0
+    avg_active_users_per_room = _safe_float(active_users / active_rooms) if active_rooms else 0.0
+
+    oldest_pending_dm_age_seconds = None
     with dm_lock:
         pending_dms = len(direct_messages)
+        if direct_messages:
+            oldest_pending_dm_age_seconds = max(
+                (now - dm_data["timestamp"]).total_seconds()
+                for dm_data in direct_messages.values()
+            )
 
-    return {
+    if include_room_details:
+        room_details.sort(
+            key=lambda item: (item["message_count"], item["active_users"], -item["room_age_seconds"]),
+            reverse=True,
+        )
+        room_details = room_details[:room_limit]
+
+    stats = {
         'active_rooms': active_rooms,
         'total_messages': total_messages,
         'active_users': active_users,
         'pending_dms': pending_dms,
+        'activity': {
+            'rooms_with_messages': rooms_with_messages,
+            'empty_rooms': empty_rooms,
+            'avg_messages_per_room': avg_messages_per_room,
+            'avg_active_users_per_room': avg_active_users_per_room,
+            'oldest_message_age_seconds': (
+                _safe_float(oldest_message_age_seconds) if oldest_message_age_seconds is not None else None
+            ),
+            'newest_message_age_seconds': (
+                _safe_float(newest_message_age_seconds) if newest_message_age_seconds is not None else None
+            ),
+            'oldest_pending_dm_age_seconds': (
+                _safe_float(oldest_pending_dm_age_seconds) if oldest_pending_dm_age_seconds is not None else None
+            ),
+        },
         'config': {
             'message_expiry_seconds': MESSAGE_EXPIRY_SECONDS,
             'dm_expiry_seconds': DM_EXPIRY_SECONDS,
             'room_inactive_seconds': ROOM_INACTIVE_SECONDS,
         },
     }
+
+    if include_room_details:
+        stats['room_details'] = room_details
+
+    return stats
 
 # Security event logging
 class SecurityEventLogger:

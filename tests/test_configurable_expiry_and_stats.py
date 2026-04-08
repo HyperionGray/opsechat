@@ -90,6 +90,7 @@ def test_chat_stats_required_fields():
     assert "total_messages" in data
     assert "active_users" in data
     assert "pending_dms" in data
+    assert "activity" in data
     assert "config" in data
 
 
@@ -141,3 +142,59 @@ def test_chat_stats_security_headers():
     assert resp.headers["X-Frame-Options"] == "DENY"
     assert resp.headers["Referrer-Policy"] == "no-referrer"
     assert resp.headers["Server"] == ""
+
+
+def test_chat_stats_activity_fields_present():
+    client = _test_app.test_client()
+    data = client.get("/chat/stats").get_json()
+    activity = data["activity"]
+    assert "rooms_with_messages" in activity
+    assert "empty_rooms" in activity
+    assert "avg_messages_per_room" in activity
+    assert "avg_active_users_per_room" in activity
+    assert "oldest_message_age_seconds" in activity
+    assert "newest_message_age_seconds" in activity
+    assert "oldest_pending_dm_age_seconds" in activity
+
+
+def test_chat_stats_details_parameter_includes_room_details_and_respects_limit():
+    from simple_chat_routes import chat_rooms, rooms_lock, ChatRoom
+
+    client = _test_app.test_client()
+    with rooms_lock:
+        saved = dict(chat_rooms)
+        chat_rooms.clear()
+
+    try:
+        room_a = ChatRoom("room-a")
+        room_a.add_message("u1", "TestA", [255, 85, 85], "m1")
+        room_a.add_message("u1", "TestA", [255, 85, 85], "m2")
+
+        room_b = ChatRoom("room-b")
+        room_b.add_message("u2", "TestB", [85, 170, 255], "m1")
+
+        room_c = ChatRoom("room-c")
+
+        with rooms_lock:
+            chat_rooms["room-a"] = room_a
+            chat_rooms["room-b"] = room_b
+            chat_rooms["room-c"] = room_c
+
+        # details should be omitted by default
+        base = client.get("/chat/stats").get_json()
+        assert "room_details" not in base
+
+        detailed = client.get("/chat/stats?details=1&limit=2").get_json()
+        assert "room_details" in detailed
+        assert len(detailed["room_details"]) == 2
+
+        top = detailed["room_details"][0]
+        assert set(top.keys()) == {
+            "room_ref", "message_count", "active_users", "room_age_seconds", "has_messages"
+        }
+        assert len(top["room_ref"]) == 12
+        assert top["message_count"] >= detailed["room_details"][1]["message_count"]
+    finally:
+        with rooms_lock:
+            chat_rooms.clear()
+            chat_rooms.update(saved)

@@ -378,6 +378,47 @@ self.room_key = base64.b64encode(secrets.token_bytes(32)).decode('utf-8')
 
 ---
 
+## 📊 Chat Runtime Telemetry (`/chat/stats`)
+
+### Purpose
+Expose low-overhead operational telemetry for dashboards and health automation while keeping room identifiers private.
+
+### Default Response (`GET /chat/stats`)
+The endpoint now returns:
+
+- Core counts: `active_rooms`, `total_messages`, `active_users`, `pending_dms`
+- Expiry config: `message_expiry_seconds`, `dm_expiry_seconds`, `room_inactive_seconds`
+- Activity aggregates:
+  - `rooms_with_messages`
+  - `empty_rooms`
+  - `avg_messages_per_room`
+  - `avg_active_users_per_room`
+  - `oldest_message_age_seconds`
+  - `newest_message_age_seconds`
+  - `oldest_pending_dm_age_seconds`
+
+### Optional Detailed Room View
+Use query parameters for additional room-level telemetry:
+
+```bash
+GET /chat/stats?details=1&limit=10
+```
+
+- `details`: enables room detail output (`1`, `true`, `yes`, `on`)
+- `limit`: max number of rooms returned (bounded to 1-50)
+
+When enabled, response includes `room_details` sorted by activity, with:
+
+- `room_ref`: hashed room reference (first 12 hex chars of SHA-256)
+- `message_count`
+- `active_users`
+- `room_age_seconds`
+- `has_messages`
+
+This allows operational visibility without exposing raw room IDs.
+
+---
+
 ## 📋 Migration Guide
 
 ### For Existing Users
