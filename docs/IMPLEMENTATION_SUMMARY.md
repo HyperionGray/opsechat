@@ -47,6 +47,7 @@ docs/NEW_FEATURES.md        - NEW: Complete documentation
 ### 💬 Direct Messages
 - Purpose: Share room IDs securely
 - Expiry: 1 minute
+- Read behavior: read-once (first successful read burns the DM)
 - Max length: 200 characters
 - API: `POST /chat/dm/send`, `GET /chat/dm/{dm_id}`
 
@@ -274,7 +275,8 @@ systemctl --user restart opsechat-app
 3. User A gets dm_id: `xyz789`
 4. User A shares DM URL with User B (out-of-band)
 5. User B: `GET /chat/dm/xyz789` (within 60 seconds)
-6. User B gets room_id and joins chat
+6. DM is burned immediately after this first successful read
+7. User B gets room_id and joins chat
 
 ### Rotating Burner Email Domain
 1. Admin: `python domain_rotation_cli.py search`
@@ -317,7 +319,7 @@ systemctl --user restart opsechat-app
 - Check for typos in room_id
 
 **DM expired**
-- DMs only last 60 seconds
+- DMs only last 60 seconds and are read-once
 - Screenshot important room IDs quickly
 - Use out-of-band sharing for backup
 

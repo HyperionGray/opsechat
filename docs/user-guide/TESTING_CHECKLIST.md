@@ -92,6 +92,7 @@ curl -X POST http://localhost:5001/chat/dm/send \
 **Expected Results:**
 - [ ] DM created with unique dm_id
 - [ ] Immediate viewing succeeds (within 60s)
+- [ ] Second view attempt returns "DM not found or expired" (read-once behavior)
 - [ ] Viewing after 60s returns "DM expired" error
 - [ ] DM disappears from storage
 
