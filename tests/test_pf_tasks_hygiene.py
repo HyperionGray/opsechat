@@ -9,6 +9,7 @@ MODULE_PATH = Path(__file__).resolve().parent.parent / "pf-tasks" / "hygiene.py"
 SPEC = importlib.util.spec_from_file_location("pf_tasks_hygiene", MODULE_PATH)
 HYGIENE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
+sys.modules[SPEC.name] = HYGIENE
 SPEC.loader.exec_module(HYGIENE)
 
 
