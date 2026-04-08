@@ -32,6 +32,11 @@ By participating in this project, you agree to maintain a respectful and inclusi
 - Update documentation to reflect changes
 - Ensure all tests pass before submitting
 - Follow the existing code style
+- Ensure GitHub Actions `ci.yml` passes required checks:
+  - `python-tests`
+  - `playwright-e2e`
+  - `security-baseline`
+- For optional AI review automation, add the `ai-review` label (or provider/model labels like `gpt-5.4`, `gemini-1.5-pro`, `claude-3-5-sonnet-latest`) to a pull request
 
 ## Development Setup
 

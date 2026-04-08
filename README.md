@@ -190,6 +190,28 @@ Tests cover:
 
 For full testing documentation, see [Testing Guide](docs/user-guide/TESTING.md).
 
+Continuous Integration
+======================
+
+The repository now uses a single consolidated GitHub Actions workflow:
+
+- `.github/workflows/ci.yml`
+- Required checks:
+  - `python-tests`
+  - `playwright-e2e`
+  - `security-baseline`
+
+The CI workflow runs on pull requests and pushes to `master`/`main`, and includes:
+
+- Python test matrix (3.10, 3.11, 3.12)
+- Playwright browser-based smoke tests
+- Baseline dependency security scanning (`pip-audit`, `npm audit`)
+
+Label-triggered review workflows are also supported:
+
+- Add the `ai-review` label (or a model label such as `gpt-5.4`, `gemini-1.5-pro`, `claude-3-5-sonnet-latest`) to a PR to trigger `.github/workflows/auto-llm-pr-review.yml`.
+- Add a model label to an issue to trigger `.github/workflows/auto-llm-issue-review.yml`.
+
 
 How it works
 ============

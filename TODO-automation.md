@@ -3,6 +3,8 @@
 ## Completed ✅
 - Created composite actions for Python and Node/Playwright setup
 - Created consolidated CI workflow (ci.yml)
+- Re-added `.github/workflows/ci.yml` and aligned required checks (`python-tests`, `playwright-e2e`, `security-baseline`)
+- Removed stale tracked artifacts and duplicate nested workflow placeholders (`.github/.github/workflows/*`, `Dockerfile~HEAD`, `docker-compose.yml~HEAD`, `test-ci-fix.js`, `test-server.js`, `.github/d`, `.github/README.md`)
 - Removed 13 noisy workflows that triggered on every push/PR
 - Updated security scan to run bi-weekly instead of weekly
 - Removed push/PR triggers from scheduled workflows
@@ -20,7 +22,7 @@
 - [ ] This must be done via GitHub UI or API (cannot be done via workflow files)
 
 ### 2. Testing and Verification
-- [ ] Create a test PR to verify the CI workflow runs successfully
+- [ ] Create a test PR to verify the re-added CI workflow runs successfully
 - [ ] Verify that only ONE Playwright run occurs per PR (not multiple)
 - [ ] Check that caches are being hit (look for cache hit messages in Actions logs)
 - [ ] Confirm no redundant workflow runs are happening on PRs
@@ -36,8 +38,8 @@
 - [ ] Consider adding more comprehensive security checks to the CI baseline if needed
 
 ### 4. Documentation Updates
-- [ ] Update repository README or contributing guide to mention the new CI workflow
-- [ ] Document the label-based triggering system for team members
+- [x] Update repository README or contributing guide to mention the new CI workflow
+- [x] Document the label-based triggering system for team members
 - [ ] Add instructions on how to manually trigger scheduled workflows if needed
 
 ### 5. Monitoring

@@ -5,7 +5,7 @@ Welcome to the OpSecChat documentation. All documentation has been organized int
 ## Quick Links
 
 - **[Main README](../README.md)** - Start here for project overview
-- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes (TODO)
+- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes
 - **[Security](../SECURITY.md)** - Security information and best practices
 - **[License](../LICENSE.md)** - MIT License
 
@@ -85,6 +85,23 @@ When adding new documentation:
 4. Follow markdown best practices
 5. Add cross-references where helpful
 
+## CI and Automation Workflows
+
+This repository uses a consolidated CI workflow at:
+
+- `.github/workflows/ci.yml`
+
+The expected required checks are:
+
+- `python-tests`
+- `playwright-e2e`
+- `security-baseline`
+
+Additional review workflows are label-triggered:
+
+- PR reviews: `.github/workflows/auto-llm-pr-review.yml` (trigger with `ai-review` or a model label)
+- Issue reviews: `.github/workflows/auto-llm-issue-review.yml` (trigger with a model label)
+
 ## Documentation Standards
 
 - Use markdown format (`.md`)
@@ -97,5 +114,5 @@ When adding new documentation:
 
 ---
 
-**Last Updated:** February 23, 2026  
+**Last Updated:** April 8, 2026  
 **Maintained by:** OpSecChat Team
