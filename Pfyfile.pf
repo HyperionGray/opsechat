@@ -2,3 +2,5 @@ task build python3 pf-tasks/build.py
 task deploy python3 pf-tasks/deploy.py
 task test python3 pf-tasks/test.py
 task clean python3 pf-tasks/clean.py
+task hygiene-check python3 pf-tasks/repo_hygiene_audit.py --check
+task hygiene-fix python3 pf-tasks/repo_hygiene_audit.py --fix

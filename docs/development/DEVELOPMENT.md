@@ -199,6 +199,18 @@ npm run lint
 
 ## Common Development Tasks
 
+### Repository Hygiene Audit
+Use the pf tasks to detect and clean known stale artifacts (placeholder workflows,
+tracked backup files, and tracked `.bish-index` files):
+
+```bash
+pf Pfyfile.pf hygiene-check
+pf Pfyfile.pf hygiene-fix
+```
+
+`hygiene-check` returns a non-zero exit code when issues are found, so it can be
+used in local pre-flight checks and CI guardrails.
+
 ### Adding a New Route
 1. Create or modify route in appropriate `*_routes.py` file
 2. Register in `app_factory.py` if needed

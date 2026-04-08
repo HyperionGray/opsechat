@@ -51,6 +51,7 @@ Information for developers contributing to the project.
 - [Code of Conduct](development/CODE_OF_CONDUCT.md) - Community guidelines
 - [Modernization Notes](development/MODERNIZATION.md) - Upgrade notes
 - [Agent Guidelines](development/AGENTS.md) - Repository guidelines for AI agents
+- [Development Guide](development/DEVELOPMENT.md#repository-hygiene-audit) - Includes repo hygiene audit commands
 
 ### ⚖️ Legal
 Legal documents and policies.
