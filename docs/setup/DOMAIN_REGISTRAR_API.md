@@ -59,25 +59,33 @@ Key endpoints used by opsechat:
 - `pricing/get` - Get TLD pricing
 - `domain/listAll` - List owned domains
 
-## Other Registrars (Future Support)
+## Other Registrars
 
-The opsechat domain manager is designed to be extensible. Future registrar support may include:
+The opsechat domain manager supports multiple registrars via `DomainAPIClient`.
 
-### Namecheap
+### Namecheap (Implemented)
 - API key from: [Namecheap API Access](https://www.namecheap.com/support/api/intro/)
-- Requires: Account with $50+ spent or $50+ balance
+- Requires: account API access + approved client IP
+- Supports: availability checks, pricing, and purchase flow (with contact profile)
 - Cheap TLDs: .xyz, .club, .online
 
-### Namesilo
+Namecheap CLI config fields:
+- `namecheap_username`
+- `namecheap_api_user` (optional)
+- `namecheap_client_ip`
+- `namecheap_use_sandbox`
+- `namecheap_default_contact` (required for purchases)
+
+### Namesilo (Future)
 - API key from: [Namesilo API](https://www.namesilo.com/api-reference)
 - No spending requirement
 - Very competitive bulk pricing
 
-### Dynadot
+### Dynadot (Future)
 - API key from: [Dynadot API](https://www.dynadot.com/domain/api.html)
 - Good for bulk operations
 
-### Cloudflare Registrar
+### Cloudflare Registrar (Future)
 - API key from: [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens)
 - At-cost pricing (no markup)
 - Limited TLD support

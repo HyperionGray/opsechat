@@ -1,10 +1,14 @@
 """
-Tests for domain management module
+Tests for domain management module.
 """
-import pytest
 from unittest.mock import Mock, patch
+import xml.etree.ElementTree as ET
+
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient,
+    PorkbunAPIClient,
+    NamecheapAPIClient,
+    DomainRotationManager,
 )
 
 
@@ -174,3 +178,82 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client behavior"""
+
+    def test_search_domain_available(self):
+        """Domain check handles available domains with premium pricing fields."""
+        client = NamecheapAPIClient("api_key", "user", use_sandbox=True)
+        xml = (
+            '<ApiResponse Status="OK">'
+            '<CommandResponse Type="namecheap.domains.check">'
+            '<DomainCheckResult Domain="testdomain.xyz" Available="true" '
+            'IsPremiumName="false" PremiumRegistrationPrice="1.98" />'
+            "</CommandResponse>"
+            "</ApiResponse>"
+        )
+        with patch.object(client, "session") as mock_session:
+            mock_response = Mock()
+            mock_response.text = xml
+            mock_session.get.return_value = mock_response
+            result = client.search_domain("testdomain.xyz")
+
+        assert result["domain"] == "testdomain.xyz"
+        assert result["available"] is True
+        assert result["price"] == 1.98
+        assert result["is_premium"] is False
+
+    def test_search_domain_unavailable(self):
+        """Unavailable domain returns False from XML response."""
+        client = NamecheapAPIClient("api_key", "user", use_sandbox=True)
+        xml = (
+            '<ApiResponse Status="OK">'
+            '<CommandResponse Type="namecheap.domains.check">'
+            '<DomainCheckResult Domain="taken.com" Available="false" IsPremiumName="true" />'
+            "</CommandResponse>"
+            "</ApiResponse>"
+        )
+        with patch.object(client, "session") as mock_session:
+            mock_response = Mock()
+            mock_response.text = xml
+            mock_session.get.return_value = mock_response
+            result = client.search_domain("taken.com")
+
+        assert result["available"] is False
+        assert result["is_premium"] is True
+
+    def test_purchase_domain_requires_contact_profile(self):
+        """Purchase fails gracefully without required Namecheap contact data."""
+        client = NamecheapAPIClient("api_key", "user", use_sandbox=True)
+        result = client.purchase_domain("example.xyz")
+        assert result["success"] is False
+        assert "contact profile" in result["message"]
+
+    def test_get_pricing_from_users_getpricing(self):
+        """Pricing reader maps REGISTER/RENEW/TRANSFER values."""
+        client = NamecheapAPIClient("api_key", "user", use_sandbox=True)
+        pricing_xml = (
+            '<ApiResponse Status="OK">'
+            '<CommandResponse Type="namecheap.users.getPricing">'
+            '<UserGetPricingResult>'
+            '<ProductType Name="DOMAIN">'
+            '<ProductCategory Name="DOMAINS">'
+            '<Product Name="XYZ">'
+            '<Price Duration="1" YourPrice="2.19" />'
+            "</Product>"
+            "</ProductCategory>"
+            "</ProductType>"
+            "</UserGetPricingResult>"
+            "</CommandResponse>"
+            "</ApiResponse>"
+        )
+        with patch.object(client, "_make_request") as mock_make_request:
+            mock_make_request.return_value = {"status": "OK", "xml": ET.fromstring(pricing_xml)}
+            pricing = client.get_pricing("xyz")
+
+        assert pricing["tld"] == "xyz"
+        assert pricing["registration"] == "2.19"
+        assert pricing["renewal"] == "2.19"
+        assert pricing["transfer"] == "2.19"
