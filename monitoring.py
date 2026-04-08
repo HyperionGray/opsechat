@@ -351,7 +351,7 @@ def _get_active_room_count() -> int:
         return 0
 
 
-def get_chat_stats() -> Dict[str, Any]:
+def get_chat_stats(include_rooms: bool = False, room_limit: int = 25) -> Dict[str, Any]:
     """Return lightweight operational stats about chat rooms.
 
     Useful for monitoring dashboards and alerting.
@@ -370,15 +370,23 @@ def get_chat_stats() -> Dict[str, Any]:
             'config': {},
         }
 
+    room_limit = max(1, min(int(room_limit), 200))
+    room_summaries = []
+
     with rooms_lock:
         active_rooms = len(chat_rooms)
         total_messages = sum(len(r.messages) for r in chat_rooms.values())
         active_users = sum(r.get_user_count() for r in chat_rooms.values())
+        if include_rooms:
+            for room_id, room in chat_rooms.items():
+                room_summary = room.get_stats()
+                room_summary["room_id"] = room_id
+                room_summaries.append(room_summary)
 
     with dm_lock:
         pending_dms = len(direct_messages)
 
-    return {
+    stats = {
         'active_rooms': active_rooms,
         'total_messages': total_messages,
         'active_users': active_users,
@@ -389,6 +397,18 @@ def get_chat_stats() -> Dict[str, Any]:
             'room_inactive_seconds': ROOM_INACTIVE_SECONDS,
         },
     }
+
+    if include_rooms:
+        # Sort most recently active rooms first for quick operational triage.
+        room_summaries.sort(
+            key=lambda room: room["last_activity_at"],
+            reverse=True,
+        )
+        stats["rooms"] = room_summaries[:room_limit]
+        stats["rooms_returned"] = len(stats["rooms"])
+        stats["rooms_truncated"] = len(room_summaries) > room_limit
+
+    return stats
 
 # Security event logging
 class SecurityEventLogger:

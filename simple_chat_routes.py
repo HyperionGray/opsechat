@@ -144,6 +144,32 @@ class ChatRoom:
                              if (now - u["last_seen"]).total_seconds() < 300)
             return active_users
 
+    def get_stats(self):
+        """Return a lightweight monitoring snapshot for this room."""
+        with self.lock:
+            now = datetime.datetime.now()
+            message_count = len(self.messages)
+            active_users = sum(
+                1 for u in self.users.values()
+                if (now - u["last_seen"]).total_seconds() < 300
+            )
+
+            if self.messages:
+                last_activity = max(msg["timestamp"] for msg in self.messages)
+            else:
+                last_activity = self.created_at
+
+            return {
+                "message_count": message_count,
+                "active_users": active_users,
+                "created_at": self.created_at.isoformat(),
+                "last_activity_at": last_activity.isoformat(),
+                "room_age_seconds": max(0.0, round((now - self.created_at).total_seconds(), 3)),
+                "seconds_since_last_activity": max(
+                    0.0, round((now - last_activity).total_seconds(), 3)
+                ),
+            }
+
 
 def cleanup_old_rooms():
     """Remove rooms inactive for more than 1 hour"""

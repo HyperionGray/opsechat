@@ -133,6 +133,98 @@ def test_chat_stats_counts_rooms_and_messages():
             chat_rooms.update(saved)
 
 
+def test_chat_stats_include_rooms_default_off():
+    client = _test_app.test_client()
+    data = client.get("/chat/stats").get_json()
+    assert "rooms" not in data
+    assert "rooms_returned" not in data
+    assert "rooms_truncated" not in data
+
+
+def test_chat_stats_include_rooms_returns_room_diagnostics():
+    from simple_chat_routes import chat_rooms, rooms_lock, ChatRoom
+
+    client = _test_app.test_client()
+
+    with rooms_lock:
+        saved = dict(chat_rooms)
+        chat_rooms.clear()
+
+    try:
+        older = ChatRoom("older-room")
+        newer = ChatRoom("newer-room")
+
+        older.add_message("u1", "OldUser", [255, 85, 85], "first")
+        newer.add_message("u2", "NewUser", [85, 170, 255], "second")
+
+        # Ensure deterministic order for "most recently active first"
+        with older.lock:
+            older.messages[-1]["timestamp"] = datetime.datetime.now() - datetime.timedelta(seconds=30)
+        with newer.lock:
+            newer.messages[-1]["timestamp"] = datetime.datetime.now()
+
+        with rooms_lock:
+            chat_rooms["older-room"] = older
+            chat_rooms["newer-room"] = newer
+
+        data = client.get("/chat/stats?include_rooms=1").get_json()
+
+        assert "rooms" in data
+        assert data["rooms_returned"] == 2
+        assert data["rooms_truncated"] is False
+        assert isinstance(data["rooms"], list)
+        assert data["rooms"][0]["room_id"] == "newer-room"
+
+        sample = data["rooms"][0]
+        assert "message_count" in sample
+        assert "active_users" in sample
+        assert "created_at" in sample
+        assert "last_activity_at" in sample
+        assert "room_age_seconds" in sample
+        assert "seconds_since_last_activity" in sample
+    finally:
+        with rooms_lock:
+            chat_rooms.clear()
+            chat_rooms.update(saved)
+
+
+def test_chat_stats_include_rooms_respects_room_limit():
+    from simple_chat_routes import chat_rooms, rooms_lock, ChatRoom
+
+    client = _test_app.test_client()
+
+    with rooms_lock:
+        saved = dict(chat_rooms)
+        chat_rooms.clear()
+
+    try:
+        with rooms_lock:
+            for idx in range(3):
+                room = ChatRoom(f"room-{idx}")
+                room.add_message(f"u{idx}", f"User{idx}", [255, 85, 85], f"msg-{idx}")
+                chat_rooms[f"room-{idx}"] = room
+
+        data = client.get("/chat/stats?include_rooms=true&room_limit=2").get_json()
+        assert data["rooms_returned"] == 2
+        assert data["rooms_truncated"] is True
+        assert len(data["rooms"]) == 2
+    finally:
+        with rooms_lock:
+            chat_rooms.clear()
+            chat_rooms.update(saved)
+
+
+def test_chat_stats_invalid_room_limit_returns_400():
+    client = _test_app.test_client()
+
+    bad_values = ["0", "201", "abc"]
+    for value in bad_values:
+        resp = client.get(f"/chat/stats?include_rooms=1&room_limit={value}")
+        assert resp.status_code == 400
+        data = resp.get_json()
+        assert "error" in data
+
+
 def test_chat_stats_security_headers():
     """Stats endpoint should have the same security headers as other endpoints."""
     client = _test_app.test_client()

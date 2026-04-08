@@ -133,6 +133,61 @@ First-time users see a prominent security warning:
 
 ---
 
+## Chat Stats Diagnostics Endpoint
+
+### What Changed
+The existing operational endpoint `GET /chat/stats` now supports optional room-level diagnostics for operators.
+
+### Default Behavior (unchanged)
+```bash
+GET /chat/stats
+```
+
+Returns aggregate metrics only:
+- `active_rooms`
+- `total_messages`
+- `active_users`
+- `pending_dms`
+- `config`
+
+### New Optional Query Parameters
+
+#### `include_rooms`
+- Type: boolean-like string (`1`, `true`, `yes`, `on`)
+- Default: `false`
+- When enabled, response includes per-room diagnostics in a `rooms` array.
+
+#### `room_limit`
+- Type: integer
+- Allowed range: `1` to `200`
+- Default: `25`
+- Controls maximum number of room diagnostics returned when `include_rooms` is enabled.
+
+### Example: Detailed Room Diagnostics
+```bash
+GET /chat/stats?include_rooms=1&room_limit=10
+```
+
+Additional fields:
+- `rooms`: most recently active rooms first
+- `rooms_returned`: number of room entries included
+- `rooms_truncated`: whether total rooms exceeded the requested limit
+
+Each room entry includes:
+- `room_id`
+- `message_count`
+- `active_users`
+- `created_at`
+- `last_activity_at`
+- `room_age_seconds`
+- `seconds_since_last_activity`
+
+### Validation
+- Invalid `room_limit` values return `400` with an error message.
+- This keeps monitoring consumers deterministic and prevents accidental oversized payloads.
+
+---
+
 ## 📧 Email Rate Limiting
 
 ### Purpose
