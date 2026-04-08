@@ -63,7 +63,7 @@ def register_chat_routes(app, chatlines, chatters, id_generator, get_random_colo
 
         # Preserve armored PGP payloads exactly; sanitize everything else.
         if "-----BEGIN PGP MESSAGE-----" not in message_text:
-            message_text = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', message_text)
+            message_text = re.sub(r'([^\s\w\.\?\!\:\)\(\*])+', '', message_text)
 
         return message_text.strip()
 
