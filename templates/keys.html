@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpSecChat Key Management</title>
+    <link rel="stylesheet" href="/static/keys.css">
+</head>
+<body>
+    <main class="container" role="main">
+        <header>
+            <h1>OpSecChat Key Management</h1>
+            <p class="subtitle">
+                Manage OpenPGP keys locally in your browser. Keys are never uploaded to the server.
+            </p>
+            <p class="links">
+                <a href="/chat">Back to chat</a>
+            </p>
+        </header>
+
+        <section class="panel" aria-labelledby="generateTitle">
+            <h2 id="generateTitle">Generate a New Key Pair</h2>
+            <form id="generateForm">
+                <label for="nameInput">Name</label>
+                <input id="nameInput" type="text" maxlength="100" required>
+
+                <label for="emailInput">Email</label>
+                <input id="emailInput" type="email" maxlength="200" required>
+
+                <label for="generatePassphraseInput">Passphrase (recommended)</label>
+                <input id="generatePassphraseInput" type="password" maxlength="200">
+
+                <button id="generateBtn" type="submit">Generate Key Pair</button>
+            </form>
+        </section>
+
+        <section class="panel" aria-labelledby="privateTitle">
+            <h2 id="privateTitle">Private Key</h2>
+            <p id="privateStatus" class="status" aria-live="polite">No private key imported.</p>
+
+            <label for="privateKeyInput">Import private key (armored)</label>
+            <textarea id="privateKeyInput" rows="8" placeholder="-----BEGIN PGP PRIVATE KEY BLOCK-----"></textarea>
+
+            <label for="privatePassphraseInput">Private key passphrase</label>
+            <input id="privatePassphraseInput" type="password" maxlength="200">
+
+            <div class="row">
+                <button id="importPrivateBtn" type="button">Import Private Key</button>
+                <button id="exportPrivateBtn" type="button">Export Private Key</button>
+                <button id="clearPrivateBtn" type="button" class="danger">Delete Private Key</button>
+            </div>
+        </section>
+
+        <section class="panel" aria-labelledby="publicTitle">
+            <h2 id="publicTitle">Public Keys</h2>
+            <p id="publicStatus" class="status" aria-live="polite">No public keys imported.</p>
+
+            <label for="publicLabelInput">Label (username/email)</label>
+            <input id="publicLabelInput" type="text" maxlength="200" placeholder="alice@example.com">
+
+            <label for="publicKeyInput">Import public key (armored)</label>
+            <textarea id="publicKeyInput" rows="8" placeholder="-----BEGIN PGP PUBLIC KEY BLOCK-----"></textarea>
+
+            <div class="row">
+                <button id="importPublicBtn" type="button">Add Public Key</button>
+                <button id="exportPublicBtn" type="button">Export Public Keys</button>
+                <button id="clearPublicBtn" type="button" class="danger">Delete All Public Keys</button>
+            </div>
+
+            <div id="publicKeyList" class="key-list" aria-live="polite"></div>
+        </section>
+
+        <section class="panel" aria-labelledby="outputTitle">
+            <h2 id="outputTitle">Last Generated Keys</h2>
+            <label for="generatedPublicKey">Generated public key</label>
+            <textarea id="generatedPublicKey" rows="8" readonly></textarea>
+            <label for="generatedPrivateKey">Generated private key</label>
+            <textarea id="generatedPrivateKey" rows="8" readonly></textarea>
+        </section>
+
+        <p id="globalStatus" class="status" role="status" aria-live="polite"></p>
+    </main>
+
+    <footer class="footer">
+        OpSecChat {{ version|default('0.8.0-alpha') }}
+    </footer>
+
+    <script src="/static/openpgp.min.js"></script>
+    <script src="/static/pgp-manager.js"></script>
+    <script src="/static/keys.js"></script>
+</body>
+</html>

@@ -14,8 +14,9 @@ OpSechat now includes built-in PGP encryption support for enhanced message secur
 
 ### Setting Up PGP
 
-1. Click on "⚙️ PGP Settings" link in the chat interface
-2. The settings modal will open with two sections:
+1. Open the dedicated key-management page at `/keys`
+2. Optionally, you can still use "PGP Settings" inside the legacy chat interface
+3. Configure keys using the sections below:
 
 #### Private Key (For Decryption)
 - Import your PGP private key to decrypt messages from others
@@ -28,6 +29,15 @@ OpSechat now includes built-in PGP encryption support for enhanced message secur
 - Optionally provide a username identifier
 - Click "Add Public Key"
 - Messages will be automatically encrypted for all users with stored public keys
+
+### Generate New Keys In-Browser
+
+The `/keys` page supports generating a fresh ECC key pair (Curve25519) directly in-browser:
+
+1. Enter your name/email
+2. (Recommended) set a passphrase
+3. Click "Generate Key Pair"
+4. Save exported key files in your own secure storage
 
 ### Sending Encrypted Messages
 

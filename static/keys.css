@@ -1,0 +1,145 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: #000;
+    color: #0f0;
+    font-family: "Courier New", monospace;
+    line-height: 1.5;
+    padding: 20px;
+}
+
+.container {
+    margin: 0 auto;
+    max-width: 980px;
+}
+
+header {
+    margin-bottom: 20px;
+}
+
+h1 {
+    margin-bottom: 8px;
+}
+
+h2 {
+    margin-bottom: 8px;
+}
+
+.subtitle {
+    color: #9f9;
+}
+
+.links {
+    margin-top: 8px;
+}
+
+.panel {
+    background: #001100;
+    border: 1px solid #0f0;
+    margin-bottom: 16px;
+    padding: 14px;
+}
+
+label {
+    display: block;
+    margin: 10px 0 4px;
+}
+
+input,
+textarea,
+button {
+    font-family: inherit;
+}
+
+input,
+textarea {
+    background: #000;
+    border: 1px solid #0f0;
+    color: #0f0;
+    padding: 8px;
+    width: 100%;
+}
+
+textarea {
+    min-height: 130px;
+    resize: vertical;
+}
+
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+button {
+    background: #0f0;
+    border: none;
+    color: #000;
+    cursor: pointer;
+    font-weight: bold;
+    padding: 8px 12px;
+}
+
+button:hover {
+    background: #0c0;
+}
+
+button.danger {
+    background: #f44;
+}
+
+button.danger:hover {
+    background: #d33;
+}
+
+.status {
+    margin-top: 8px;
+    min-height: 1.2em;
+}
+
+.status-ok {
+    color: #0f0;
+}
+
+.status-error {
+    color: #f66;
+}
+
+.key-list {
+    margin-top: 10px;
+}
+
+.key-list table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.key-list th,
+.key-list td {
+    border: 1px solid #0a0;
+    padding: 8px;
+    text-align: left;
+}
+
+.key-list th {
+    background: #002000;
+}
+
+.footer {
+    color: #8c8;
+    margin-top: 10px;
+    text-align: center;
+}
+
+a {
+    color: #0ff;
+}
+
+a:hover {
+    color: #8ff;
+}

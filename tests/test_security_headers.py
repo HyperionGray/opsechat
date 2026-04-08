@@ -52,3 +52,12 @@ class TestSecurityHeaders:
     def test_server_header_stripped(self):
         h = self._headers()
         assert h.get("Server", "") == ""
+
+    def test_keys_page_csp_allows_external_assets_only(self):
+        resp = self.client.get("/keys")
+        assert resp.status_code == 200
+        body = resp.data.decode()
+        assert "/static/keys.js" in body
+        assert "/static/keys.css" in body
+        assert "<script>" not in body
+        assert "<style>" not in body

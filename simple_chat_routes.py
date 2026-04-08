@@ -292,6 +292,17 @@ def register_simple_chat_routes(app):
             version = '0.8.0-alpha'  # fallback
         
         return render_template("simple_chat_index.html", version=version)
+
+    @app.route('/keys', methods=['GET'])
+    def key_management():
+        """Client-side PGP key management interface."""
+        try:
+            with open(os.path.join(_BASE_DIR, 'VERSION'), 'r') as f:
+                version = f.read().strip()
+        except (FileNotFoundError, OSError):
+            version = '0.8.0-alpha'
+
+        return render_template("keys.html", version=version)
     
     @app.route('/chat/create', methods=['POST'])
     @limiter.limit("10 per hour; 3 per minute")

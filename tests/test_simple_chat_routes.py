@@ -150,6 +150,20 @@ class TestChatRoutes:
         response = client.get("/chat")
         assert response.status_code == 200
 
+    def test_keys_page_returns_200(self, client):
+        response = client.get("/keys")
+        assert response.status_code == 200
+
+    def test_keys_page_uses_external_assets_only(self, client):
+        response = client.get("/keys")
+        body = response.data.decode()
+        assert "/static/keys.css" in body
+        assert "/static/openpgp.min.js" in body
+        assert "/static/pgp-manager.js" in body
+        assert "/static/keys.js" in body
+        assert "<style>" not in body
+        assert "<script>" not in body
+
     def test_create_room_returns_success(self, client):
         response = client.post("/chat/create")
         assert response.status_code == 200

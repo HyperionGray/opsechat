@@ -33,6 +33,7 @@ OpSecChat now includes both **Web-Based Chat Rooms** and **Terminal UI (TUI)** f
 - ✅ **In-Memory Only** - Zero disk writes
 - ✅ **Tor Ready** - Works seamlessly with Tor hidden services
 - ✅ **Direct Messages** - Share room IDs securely (1-minute expiry)
+- ✅ **Dedicated Key Management Page** - Generate/import/export/remove PGP keys at `/keys`
 
 ### Quick Start (Web Chat)
 
@@ -45,6 +46,7 @@ python chat-room.py --tor
 ```
 
 Access the chat at `/chat` to create rooms and share with your contacts.
+Manage OpenPGP keys at `/keys` (all key material stays in browser localStorage).
 
 ### Terminal UI (TUI)
 - ✅ **TUI Only** - No web browser required
