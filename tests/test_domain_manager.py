@@ -4,7 +4,10 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient,
+    PorkbunAPIClient,
+    NamecheapAPIClient,
+    DomainRotationManager,
 )
 
 
@@ -112,6 +115,7 @@ class TestDomainRotationManager:
         assert result is not None
         assert result["domain"].endswith((".xyz", ".club", ".online", ".site", ".website"))
         assert result["price"] <= 5.0
+        assert result["registrar"] == "generic"
     
     def test_purchase_domain_if_budget_allows_success(self):
         """Test domain purchase within budget"""
@@ -174,3 +178,72 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_porkbun(self):
+        """Test configure() for Porkbun and safe config output."""
+        manager = DomainRotationManager()
+        config = manager.configure(
+            registrar="porkbun",
+            api_key="pk_test",
+            secret_key="sk_test",
+            monthly_budget=20.0,
+        )
+
+        assert manager.active_registrar == "porkbun"
+        assert "porkbun" in manager.get_available_registrars()
+        assert config["configured"] is True
+        assert config["monthly_budget"] == 20.0
+
+    def test_configure_namecheap(self):
+        """Test configure() for Namecheap."""
+        manager = DomainRotationManager()
+        manager.configure(
+            registrar="namecheap",
+            api_key="api_user",
+            secret_key="api_key",
+            monthly_budget=15.0,
+            client_ip="127.0.0.1",
+            username="api_user",
+            sandbox=True,
+        )
+
+        assert manager.active_registrar == "namecheap"
+        assert "namecheap" in manager.get_available_registrars()
+
+    def test_set_active_registrar_unknown(self):
+        """Setting unknown registrar should fail."""
+        manager = DomainRotationManager()
+        assert manager.set_active_registrar("missing") is False
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client behavior."""
+
+    @patch("domain_manager.requests.Session")
+    def test_search_domain_available(self, mock_session_class):
+        """Namecheap domain search parses XML availability."""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = (
+            '<ApiResponse Status="OK">'
+            '<CommandResponse>'
+            '<DomainCheckResult Domain="example123.xyz" Available="true"/>'
+            "</CommandResponse>"
+            "</ApiResponse>"
+        )
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_user="api_user",
+            api_key="api_key",
+            client_ip="127.0.0.1",
+            sandbox=True,
+        )
+
+        # Avoid separate pricing call in this test.
+        client.get_pricing = Mock(return_value={"registration": "2.88"})
+        result = client.search_domain("example123.xyz")
+        assert result["available"] is True
+        assert result["domain"] == "example123.xyz"
+        assert result["price"] == "2.88"
