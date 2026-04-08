@@ -25,26 +25,19 @@ RUN pip install --no-cache-dir -r requirements.txt || \
      pip install --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt)
 
 # Copy application code
-COPY app_factory.py ./
-COPY burner_routes.py ./
-COPY chat_routes.py ./
-COPY domain_manager.py ./
-COPY email_routes.py ./
-COPY email_security_routes.py ./
-COPY email_security_tools.py ./
-COPY email_system.py ./
-COPY email_transport.py ./
-COPY http_mail_routes.py ./
-COPY http_mail_system.py ./
-COPY landing_routes.py ./
-COPY monitoring.py ./
-COPY rate_limiter.py ./
-COPY review_routes.py ./
-COPY runserver.py ./
-COPY security_routes.py ./
-COPY simple_chat_routes.py ./
-COPY state_manager.py ./
-COPY utils.py ./
+# Key modules are listed explicitly so the build fails fast if one is missing;
+# the trailing wildcard picks up any new helpers added later.
+COPY runserver.py app_factory.py utils.py rate_limiter.py monitoring.py \
+     email_system.py email_transport.py email_routes.py email_security_tools.py \
+     email_security_routes.py http_mail_routes.py http_mail_system.py \
+     simple_chat_routes.py chat_routes.py review_routes.py \
+     burner_routes.py security_routes.py landing_routes.py \
+     domain_manager.py domain_rotation_cli.py state_manager.py \
+     performance_utils.py review_performance.py \
+     amazon_q_integration.py aws_integration.py \
+     ./
+# Catch any remaining .py helpers not listed above
+COPY *.py ./
 COPY MANIFEST.in .
 COPY VERSION .
 
@@ -59,8 +52,9 @@ EXPOSE 5000
 ENV PYTHONUNBUFFERED=1
 ENV TOR_CONTROL_PORT=9051
 
-HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=10 \
-  CMD curl --fail --silent http://127.0.0.1:5000/health || exit 1
+# Healthcheck: verify the Flask /health endpoint is responding
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl --fail --silent http://127.0.0.1:5000/health || exit 1
 
 # Run the application
 CMD ["python", "runserver.py"]
