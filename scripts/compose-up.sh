@@ -30,7 +30,7 @@ else
 fi
 
 echo "[*] Starting opsechat services..."
-$COMPOSE_CMD -f "$COMPOSE_FILE" up -d
+$COMPOSE_CMD -f "$COMPOSE_FILE" up -d --build
 
 echo ""
 echo "[*] Services starting..."

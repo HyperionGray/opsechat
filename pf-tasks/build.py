@@ -4,6 +4,7 @@ PF Task: Build opsechat container images
 Compatible with pf-web-poly-compile-helper-runner patterns
 """
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -35,6 +36,18 @@ def detect_container_tool():
     
     print("[!] No container tool (podman/docker) found")
     sys.exit(1)
+
+
+def validate_runtime_requirements(container_tool):
+    """Return (ok, message) for runtime prerequisites."""
+    if container_tool == 'podman':
+        if shutil.which('runc') is None:
+            return False, "Missing OCI runtime 'runc' required by PF build task"
+
+        if not Path('/dev/net/tun').exists():
+            return False, "Missing /dev/net/tun; rootless podman networking is unavailable in this VM"
+
+    return True, ""
 
 def build_image(container_tool, tag="localhost/opsechat:latest"):
     """Build the opsechat container image"""
@@ -75,6 +88,11 @@ def main():
     # Detect container tool
     container_tool = detect_container_tool()
     print(f"[*] Using container tool: {container_tool}")
+
+    ok, reason = validate_runtime_requirements(container_tool)
+    if not ok:
+        print(f"[!] Environment does not satisfy build prerequisites: {reason}")
+        sys.exit(1)
     
     # Build image
     success = build_image(container_tool)

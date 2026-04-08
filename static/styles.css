@@ -1,0 +1,41 @@
+body {
+  background-color: #000;
+  color: #0f0;
+  font-family: "Courier New", monospace;
+  margin: 0;
+  padding: 16px;
+}
+
+a {
+  color: #0ff;
+}
+
+a:hover {
+  color: #fff;
+}
+
+#welcome {
+  margin-bottom: 16px;
+}
+
+.msg {
+  vertical-align: top;
+  padding: 4px 6px;
+}
+
+.name {
+  white-space: nowrap;
+}
+
+.text {
+  word-break: break-word;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+iframe {
+  border: 0;
+}

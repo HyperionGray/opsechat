@@ -8,6 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 import argparse
+import shutil
 
 def run_command(cmd, cwd=None, check=True):
     """Run command with proper error handling"""
@@ -25,9 +26,31 @@ def run_command(cmd, cwd=None, check=True):
             sys.exit(1)
         return e
 
+def command_exists(command_name):
+    """Return True when a command is available on PATH."""
+    return shutil.which(command_name) is not None
+
+def _has_container_runtime():
+    """Return the first available container runtime, if any."""
+    for tool in ['podman', 'docker']:
+        if command_exists(tool):
+            return tool
+    return None
+
+def _user_systemd_available():
+    """Return True if a user systemd bus is available."""
+    if not command_exists('systemctl'):
+        return False
+    result = run_command(['systemctl', '--user', 'is-active', 'default.target'], check=False)
+    return result.returncode == 0
+
 def test_container_health():
     """Test container health and status"""
     print("[*] Testing container health")
+    runtime = _has_container_runtime()
+    if not runtime:
+        print("[!] No container runtime available (podman/docker)")
+        return False
     
     # Check if containers are running
     containers = ['opsechat-tor', 'opsechat-app']
@@ -53,6 +76,9 @@ def test_container_health():
 def test_systemd_services():
     """Test systemd service status"""
     print("[*] Testing systemd services")
+    if not _user_systemd_available():
+        print("[!] systemd user bus is unavailable in this environment")
+        return False
     
     services = ['opsechat.network', 'opsechat-tor.service', 'opsechat-app.service']
     
@@ -73,6 +99,10 @@ def test_systemd_services():
 def test_tor_connectivity():
     """Test Tor connectivity and hidden service"""
     print("[*] Testing Tor connectivity")
+    runtime = _has_container_runtime()
+    if not runtime:
+        print("[!] No container runtime available (podman/docker)")
+        return False
     
     # Check if we can get the onion address from logs
     onion_address = None
@@ -103,6 +133,10 @@ def test_tor_connectivity():
 def test_python_modules():
     """Test Python module imports"""
     print("[*] Testing Python module imports")
+    runtime = _has_container_runtime()
+    if not runtime:
+        print("[!] No container runtime available (podman/docker)")
+        return False
     
     project_root = Path(__file__).parent.parent
     
@@ -164,6 +198,23 @@ def test_playwright_e2e():
         print("[*] npm not available, skipping Playwright tests")
         return True
 
+def validate_environment(args):
+    """Check whether the requested test mode is possible in this environment."""
+    errors = []
+
+    if args.method in ['container', 'all'] and not _has_container_runtime():
+        errors.append("container runtime missing (need podman or docker)")
+
+    if args.method in ['systemd', 'all'] and not _user_systemd_available():
+        errors.append("systemd user bus unavailable")
+
+    if errors:
+        print("[!] Environment preflight failed:")
+        for error in errors:
+            print(f"    - {error}")
+        return False
+    return True
+
 def main():
     """Main test task"""
     parser = argparse.ArgumentParser(description='Test opsechat deployment')
@@ -174,6 +225,9 @@ def main():
     args = parser.parse_args()
     
     print("=== PF Task: Test ===")
+
+    if not validate_environment(args):
+        sys.exit(2)
     
     tests_passed = 0
     total_tests = 0

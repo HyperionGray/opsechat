@@ -3,6 +3,7 @@
 <head>
 <title>Compose Email - OpSec</title>
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+<script src="{{ url_for('static', filename='email-compose.js') }}"></script>
 </head>
 
 <style>
@@ -153,11 +154,11 @@
 
   <div class="mode-toggle">
     <label>
-      <input type="radio" name="compose-mode" value="standard" checked onchange="toggleMode()"> 
+      <input type="radio" name="compose-mode" value="standard" checked> 
       Standard Compose
     </label>
     <label>
-      <input type="radio" name="compose-mode" value="raw" onchange="toggleMode()"> 
+      <input type="radio" name="compose-mode" value="raw"> 
       Raw Mode (Edit Headers)
     </label>
   </div>
@@ -252,21 +253,5 @@ Email body goes here..."></textarea>
       <li>Supports PGP encrypted message bodies</li>
     </ul>
   </div>
-
-  <script>
-    function toggleMode() {
-      const mode = document.querySelector('input[name="compose-mode"]:checked').value;
-      const standardForm = document.getElementById('standard-form');
-      const rawForm = document.getElementById('raw-mode-form');
-      
-      if (mode === 'raw') {
-        standardForm.classList.remove('active');
-        rawForm.classList.add('active');
-      } else {
-        rawForm.classList.remove('active');
-        standardForm.classList.add('active');
-      }
-    }
-  </script>
 </body>
 </html>

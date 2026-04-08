@@ -25,11 +25,16 @@ from rate_limiter import limiter
 # Absolute path to this file's directory (used for reliable VERSION lookup)
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Configurable expiry times (seconds) via environment variables
+MESSAGE_EXPIRY_SECONDS = int(os.environ.get('MESSAGE_EXPIRY_SECONDS', 180))  # default 3 min
+DM_EXPIRY_SECONDS = int(os.environ.get('DM_EXPIRY_SECONDS', 60))  # default 1 min
+ROOM_INACTIVE_SECONDS = int(os.environ.get('ROOM_INACTIVE_SECONDS', 3600))  # default 1 hour
+
 # Global room storage (in-memory only)
 chat_rooms = {}
 rooms_lock = threading.Lock()
 
-# Direct message storage (ephemeral, 1-minute expiry)
+# Direct message storage (ephemeral)
 direct_messages = {}
 dm_lock = threading.Lock()
 
@@ -116,7 +121,7 @@ class ChatRoom:
             
             for msg in self.messages:
                 age = (now - msg["timestamp"]).total_seconds()
-                if age < 180:  # 3 minutes
+                if age < MESSAGE_EXPIRY_SECONDS:
                     new_messages.append(msg)
                 else:
                     # Overwrite message data before deletion (security)
@@ -147,12 +152,12 @@ def cleanup_old_rooms():
         rooms_to_delete = []
         
         for room_id, room in chat_rooms.items():
-            # Check if room has been inactive for > 1 hour
+            # Check if room has been inactive beyond the configured threshold
             if room.messages:
                 last_msg_time = max(msg["timestamp"] for msg in room.messages)
-                if (now - last_msg_time).total_seconds() > 3600:
+                if (now - last_msg_time).total_seconds() > ROOM_INACTIVE_SECONDS:
                     rooms_to_delete.append(room_id)
-            elif (now - room.created_at).total_seconds() > 3600:
+            elif (now - room.created_at).total_seconds() > ROOM_INACTIVE_SECONDS:
                 rooms_to_delete.append(room_id)
         
         for room_id in rooms_to_delete:
@@ -170,7 +175,7 @@ def cleanup_old_dms():
         
         for dm_id, dm_data in direct_messages.items():
             age = (now - dm_data["timestamp"]).total_seconds()
-            if age > 60:  # 1 minute expiry
+            if age > DM_EXPIRY_SECONDS:
                 expired_dms.append(dm_id)
         
         for dm_id in expired_dms:
@@ -494,7 +499,7 @@ def register_simple_chat_routes(app):
             "success": True,
             "dm_id": dm_id,
             "dm_url": f"/chat/dm/{dm_id}",
-            "expires_in": 60
+            "expires_in": DM_EXPIRY_SECONDS
         })
     
     @app.route('/chat/dm/<string:dm_id>')
@@ -508,7 +513,7 @@ def register_simple_chat_routes(app):
             
             # Check if expired
             age = (datetime.datetime.now() - dm["timestamp"]).total_seconds()
-            if age > 60:
+            if age > DM_EXPIRY_SECONDS:
                 return jsonify({"error": "DM expired"}), 404
             
             # Mark as read
@@ -519,7 +524,7 @@ def register_simple_chat_routes(app):
                 "sender_name": dm["sender_name"],
                 "room_id": dm["room_id"],
                 "message": dm["message"],
-                "expires_in": max(0, 60 - int(age))
+                "expires_in": max(0, DM_EXPIRY_SECONDS - int(age))
             })
     
     @app.route('/chat/room/<string:room_id>/key', methods=['GET'])

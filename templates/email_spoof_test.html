@@ -3,6 +3,7 @@
 <head>
 <title>Email Spoofing Test - OpSec</title>
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+<script src="{{ url_for('static', filename='email-spoof-test.js') }}"></script>
 </head>
 
 <style>
@@ -216,8 +217,8 @@
   </div>
 
   <div class="tabs">
-    <button class="tab-button active" onclick="showTab('detect')">Spoofing Detection</button>
-    <button class="tab-button" onclick="showTab('generate')">Generate Variants</button>
+    <button class="tab-button active" data-tab-target="detect">Spoofing Detection</button>
+    <button class="tab-button" data-tab-target="generate">Generate Variants</button>
   </div>
 
   <!-- Spoofing Detection Tab -->
@@ -353,21 +354,5 @@
       <li>Report discovered vulnerabilities responsibly</li>
     </ul>
   </div>
-
-  <script>
-    function showTab(tabName) {
-      // Hide all tabs
-      document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.classList.remove('active');
-      });
-      document.querySelectorAll('.tab-button').forEach(btn => {
-        btn.classList.remove('active');
-      });
-      
-      // Show selected tab
-      document.getElementById(tabName + '-tab').classList.add('active');
-      event.target.classList.add('active');
-    }
-  </script>
 </body>
 </html>

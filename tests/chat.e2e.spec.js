@@ -26,7 +26,7 @@ test.describe('Chat Interface - Script Mode', () => {
     
     // Verify content is HTML
     const content = await page.content();
-    expect(content).toContain('<html>');
+    expect(content).toContain('<html');
     expect(content.length).toBeGreaterThan(100);
   });
 
