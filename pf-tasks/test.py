@@ -164,12 +164,35 @@ def test_playwright_e2e():
         print("[*] npm not available, skipping Playwright tests")
         return True
 
+
+def test_repo_hygiene(strict=False):
+    """Run repository hygiene checks for docs and stale artifacts"""
+    print("[*] Running repository hygiene checks")
+
+    project_root = Path(__file__).parent.parent
+    cmd = ['python3', 'scripts/repo_hygiene_check.py']
+    if strict:
+        cmd.append('--strict')
+
+    result = run_command(cmd, cwd=project_root, check=False)
+    if result.returncode == 0:
+        print("[✓] Repository hygiene checks passed")
+        return True
+
+    print("[!] Repository hygiene checks failed")
+    return False
+
 def main():
     """Main test task"""
     parser = argparse.ArgumentParser(description='Test opsechat deployment')
     parser.add_argument('--method', choices=['container', 'systemd', 'all'], 
                        default='all', help='Test method')
     parser.add_argument('--skip-e2e', action='store_true', help='Skip end-to-end tests')
+    parser.add_argument(
+        '--strict-hygiene',
+        action='store_true',
+        help='Fail on markdown link warnings in hygiene checks',
+    )
     
     args = parser.parse_args()
     
@@ -201,6 +224,11 @@ def main():
             total_tests += 1
             if test_playwright_e2e():
                 tests_passed += 1
+
+    # Keep repo organization checks independent from deployment method.
+    total_tests += 1
+    if test_repo_hygiene(strict=args.strict_hygiene):
+        tests_passed += 1
     
     print(f"\n=== Test Results ===")
     print(f"Tests passed: {tests_passed}/{total_tests}")

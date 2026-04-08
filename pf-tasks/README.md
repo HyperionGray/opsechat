@@ -58,6 +58,9 @@ python pf-tasks/test.py --method systemd
 
 # Skip end-to-end tests
 python pf-tasks/test.py --skip-e2e
+
+# Treat broken markdown links as failures
+python pf-tasks/test.py --strict-hygiene
 ```
 
 **Features:**
@@ -66,6 +69,7 @@ python pf-tasks/test.py --skip-e2e
 - Tests Tor connectivity and hidden service creation
 - Tests Python module imports
 - Runs Playwright end-to-end tests (if available)
+- Runs repository hygiene checks (docs links, stale artifacts, root layout, symlink integrity)
 - Comprehensive test reporting
 
 ### clean.py

@@ -123,6 +123,12 @@ python -m pytest
 
 # Run specific test file
 npx playwright test tests/basic.spec.js
+
+# Run repository hygiene checks (docs links, stale artifacts, layout)
+python scripts/repo_hygiene_check.py
+
+# Strict mode: fail on markdown link warnings
+python scripts/repo_hygiene_check.py --strict
 ```
 
 ### Test Organization

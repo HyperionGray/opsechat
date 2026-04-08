@@ -73,7 +73,7 @@ tor --ControlPort 9051 --CookieAuthentication 1
 python tui-server.py --tor
 ```
 
-Full TUI Guide: [TUI_README.md](docs/user-guide/TUI_README.md) | [Quick Start](docs/user-guide/TUI_QUICKSTART.md)
+Full TUI Guide: [TUI README](docs/user-guide/TUI_README.md) | [Quick Start](docs/user-guide/TUI_QUICKSTART.md)
 
 ---
 
@@ -189,6 +189,22 @@ Tests cover:
 - Responsive design
 
 For full testing documentation, see [Testing Guide](docs/user-guide/TESTING.md).
+
+Repository Hygiene
+==================
+
+The project includes a repository hygiene checker to keep docs and layout organized.
+
+```bash
+# Run hygiene checks (broken links are warnings)
+python scripts/repo_hygiene_check.py
+
+# Strict mode (broken links fail)
+python scripts/repo_hygiene_check.py --strict
+
+# Included in pf test workflow
+python pf-tasks/test.py --strict-hygiene
+```
 
 
 How it works
