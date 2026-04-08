@@ -3,6 +3,43 @@
 ## Overview
 This document summarizes the automation consolidation changes made to reduce noise and improve CI/CD reliability.
 
+## 2026-04-08: Post-Consolidation Hardening
+
+To prevent workflow drift after the cleanup, the repository now includes an
+automated workflow hygiene guard:
+
+- **Policy file:** `.github/workflow-hygiene.json`
+  - `allowed_local_workflows`: explicitly approved local-only workflows
+  - `required_template_workflows`: template-backed workflows that must exist
+- **Checker module:** `scripts/check_workflow_hygiene.py`
+- **CLI wrapper:** `scripts/check-workflow-hygiene.py`
+- **pf task:** `pf workflow-hygiene`
+
+### What It Enforces
+
+1. Files in `.github/workflows/` must either:
+   - exist in `.github/workflow-templates/`, or
+   - be explicitly allowlisted in `.github/workflow-hygiene.json`.
+2. Required template workflows must exist in both templates and active
+   workflows.
+3. Nested placeholder workflow files under `.github/.github/workflows/` are
+   rejected.
+
+### Manual Verification
+
+Run either command from repository root:
+
+```bash
+python3 scripts/check-workflow-hygiene.py
+pf workflow-hygiene
+```
+
+Both commands should report:
+
+```text
+Workflow hygiene check passed.
+```
+
 ## Changes Made
 
 ### 1. New CI Infrastructure

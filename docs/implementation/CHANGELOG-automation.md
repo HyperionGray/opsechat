@@ -1,5 +1,30 @@
 # Changelog - Automation Consolidation
 
+## 2026-04-08 - Workflow Hygiene Guardrails and Cleanup
+
+### Added
+1. **Workflow hygiene checker**:
+   - `scripts/check_workflow_hygiene.py` - Core validator library and CLI entrypoint
+   - `scripts/check-workflow-hygiene.py` - Compatibility wrapper for hyphenated script naming
+   - `.github/workflow-hygiene.json` - Policy for allowlisted local workflows and required template-backed workflows
+2. **Automated tests**:
+   - `tests/test_workflow_hygiene.py` - Coverage for pass/fail scenarios and nested placeholder detection
+3. **Task runner integration**:
+   - `Pfyfile.pf` now includes `workflow-hygiene` task
+
+### Removed
+1. **Stray/stale files**:
+   - `.github/.github/workflows/auto-copilot-org-playwright-loopv2.yml` (placeholder)
+   - `.github/.github/workflows/workflows-sync.yml` (placeholder)
+   - `.github/d` (empty stray file)
+   - `Dockerfile~HEAD` and `docker-compose.yml~HEAD` (stale backup artifacts)
+
+### Updated
+1. `TODO-automation.md` - Marked workflow drift review/documentation follow-up as completed and documented checker usage.
+2. `docs/AUTOMATION_CONSOLIDATION.md` - Added guardrail workflow hygiene section.
+3. `docs/README.md` - Removed stale TODO marker from quick start link.
+4. `app_factory.py` - Replaced stale CSP migration checklist comment with current-state note.
+
 ## 2026-03-01 - Workflow Consolidation
 
 ### Summary

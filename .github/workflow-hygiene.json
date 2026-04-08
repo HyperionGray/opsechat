@@ -1,0 +1,9 @@
+{
+  "allowed_local_workflows": [
+    "oz-pr-review.yml",
+    "swarm-mode.yml"
+  ],
+  "required_template_workflows": [
+    "auto-close-issues.yml"
+  ]
+}
