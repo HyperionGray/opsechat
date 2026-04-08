@@ -19,6 +19,7 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
@@ -49,6 +50,18 @@ def save_config(config):
         print(f"Configuration saved to {CONFIG_FILE}")
     except Exception as e:
         print(f"Error saving config: {e}")
+
+
+def _format_datetime(value, fmt: str) -> str:
+    """Format datetime-like values from runtime or persisted state."""
+    if isinstance(value, datetime):
+        return value.strftime(fmt)
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value).strftime(fmt)
+        except ValueError:
+            return value
+    return "unknown"
 
 
 def configure_api():
@@ -109,12 +122,16 @@ def get_manager():
     )
     
     # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+    if config.get('current_spending') is not None:
+        try:
+            manager.current_spending = float(config['current_spending'])
+        except (TypeError, ValueError):
+            manager.current_spending = 0.0
+    manager.load_owned_domains(config.get('owned_domains') or [])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
+    if config.get('active_provider'):
+        manager.active_provider = config['active_provider']
     
     return manager, config
 
@@ -122,8 +139,9 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = manager.serialize_owned_domains()
     config['active_domain'] = manager.active_domain
+    config['active_provider'] = manager.active_provider
     save_config(config)
 
 
@@ -144,8 +162,10 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        if domain.get("provider"):
+            print(f"   Provider: {domain['provider']}")
+        print(f"   Purchased: {_format_datetime(domain.get('purchased_at'), '%Y-%m-%d %H:%M')}")
+        print(f"   Expires: {_format_datetime(domain.get('expires_at'), '%Y-%m-%d')}")
         print()
 
 
@@ -156,14 +176,14 @@ def search_domains():
     print("\n=== Searching for Available Cheap Domains ===\n")
     print("Searching for domains under $5...\n")
     
-    for i in range(5):
-        print(f"Attempt {i+1}/5...")
-        domain_info = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
-        
-        if domain_info:
-            print(f"  ✅ Found: {domain_info['domain']} - ${domain_info['price']}")
-        else:
-            print(f"  ❌ No cheap domain found in this attempt")
+    results = manager.search_cheap_domains(max_price=5.0, limit=5, max_attempts=20)
+    if not results:
+        print("  ❌ No cheap domains found")
+        return
+
+    for i, domain_info in enumerate(results, 1):
+        provider = domain_info.get("provider", "unknown")
+        print(f"  {i}. {domain_info['domain']} - ${domain_info['price']} ({provider})")
     
     print("\nTo purchase a domain, run: python domain_rotation_cli.py rotate")
 
@@ -192,7 +212,8 @@ def rotate_domain():
         print("❌ Could not find an available cheap domain within budget.")
         return
     
-    print(f"\nFound: {domain_info['domain']} for ${domain_info['price']}")
+    provider = domain_info.get("provider", "unknown")
+    print(f"\nFound: {domain_info['domain']} for ${domain_info['price']} via {provider}")
     
     confirm = input("\nProceed with purchase? (yes/no): ").strip().lower()
     
@@ -203,7 +224,8 @@ def rotate_domain():
     print("\nPurchasing domain...")
     success = manager.purchase_domain_if_budget_allows(
         domain_info['domain'],
-        domain_info['price']
+        domain_info['price'],
+        provider=domain_info.get("provider")
     )
     
     if success:

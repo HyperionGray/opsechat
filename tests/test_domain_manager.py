@@ -1,7 +1,7 @@
 """
 Tests for domain management module
 """
-import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +174,71 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_find_cheap_available_domain_selects_lowest_price_provider(self):
+        """Test provider fallback picks lowest available price."""
+        expensive_client = Mock(spec=DomainAPIClient)
+        expensive_client.search_domain.return_value = {
+            "available": True,
+            "price": "4.99",
+        }
+
+        cheap_client = Mock(spec=DomainAPIClient)
+        cheap_client.search_domain.return_value = {
+            "available": True,
+            "price": "$2.49",
+        }
+
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.add_api_client("expensive", expensive_client)
+        manager.add_api_client("cheap", cheap_client, set_as_primary=True)
+
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1, tlds=["xyz"])
+
+        assert result is not None
+        assert result["provider"] == "cheap"
+        assert result["price"] == 2.49
+        assert result["domain"].endswith(".xyz")
+
+    def test_purchase_domain_with_specific_provider(self):
+        """Test purchase uses explicitly selected provider."""
+        default_client = Mock(spec=DomainAPIClient)
+        default_client.purchase_domain.return_value = {"success": True}
+
+        backup_client = Mock(spec=DomainAPIClient)
+        backup_client.purchase_domain.return_value = {"success": True}
+
+        manager = DomainRotationManager(default_client, monthly_budget=50.0)
+        manager.add_api_client("backup", backup_client)
+
+        success = manager.purchase_domain_if_budget_allows(
+            domain="abc123.xyz",
+            price="2.00",
+            provider="backup"
+        )
+
+        assert success is True
+        backup_client.purchase_domain.assert_called_once_with("abc123.xyz", years=1)
+        default_client.purchase_domain.assert_not_called()
+        assert manager.active_provider == "backup"
+
+    def test_serialize_and_load_owned_domains(self):
+        """Test datetime-safe persistence and re-loading of domain state."""
+        manager = DomainRotationManager(monthly_budget=10.0)
+        manager.owned_domains = [{
+            "domain": "example.xyz",
+            "price": 1.99,
+            "provider": "porkbun",
+            "purchased_at": datetime(2026, 3, 1, 12, 0, 0),
+            "expires_at": datetime(2027, 3, 1, 12, 0, 0),
+        }]
+
+        serialized = manager.serialize_owned_domains()
+        assert isinstance(serialized[0]["purchased_at"], str)
+        assert isinstance(serialized[0]["expires_at"], str)
+
+        restored = DomainRotationManager(monthly_budget=10.0)
+        restored.load_owned_domains(serialized)
+        assert isinstance(restored.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(restored.owned_domains[0]["expires_at"], datetime)
+        assert restored.owned_domains[0]["domain"] == "example.xyz"

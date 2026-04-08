@@ -8,7 +8,10 @@ OpSecChat supports automated domain rotation for burner email systems. This allo
 
 Currently supported:
 - **Porkbun** (Recommended - cheap .xyz, .club domains)
-- Additional registrars can be added by extending `DomainAPIClient`
+
+The runtime manager now supports registering multiple providers in parallel.
+When more than one provider is configured, it checks availability across the
+configured providers and picks the cheapest matching result under your price cap.
 
 ## Setup
 
@@ -52,15 +55,19 @@ export DOMAIN_BUDGET="10"  # Monthly budget in USD
 ```python
 from domain_manager import domain_rotation_manager
 
-# Check available domains
-available_domains = domain_rotation_manager.search_cheap_domains()
-print(available_domains)
+# Check available domains across all configured providers
+available_domains = domain_rotation_manager.search_cheap_domains(
+    max_price=5.00,
+    limit=5
+)
+print(available_domains)  # includes provider per result
 
-# Purchase a domain
-result = domain_rotation_manager.rotate_to_new_domain()
+# Purchase/rotate to a domain (auto-select best provider)
+result = domain_rotation_manager.rotate_to_new_domain(max_price=5.00)
 if result['success']:
     print(f"New domain: {result['domain']}")
     print(f"Cost: ${result['cost']}")
+    print(f"Provider: {result['provider']}")
 else:
     print(f"Error: {result['error']}")
 ```
@@ -346,9 +353,22 @@ class NamecheapAPIClient(DomainAPIClient):
         # Implementation here
         pass
 
-# Register new client
+# Register new client(s)
 domain_rotation_manager.add_api_client('namecheap', NamecheapAPIClient(api_key))
+# Existing provider can remain active as fallback
+# domain_rotation_manager.add_api_client('porkbun', PorkbunAPIClient(...))
+
+# Rotate while preferring one provider
+result = domain_rotation_manager.rotate_to_new_domain(preferred_provider='namecheap')
+print(result)
 ```
+
+### Provider Selection and Fallback
+
+- If `preferred_provider` is set and configured, rotation uses that provider.
+- If no provider is specified, the manager evaluates all configured providers and
+  chooses the cheapest available domain within the budget/price limit.
+- Purchase metadata stores the provider used for each domain.
 
 ### Custom Domain Patterns
 
