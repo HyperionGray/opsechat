@@ -1,10 +1,9 @@
 """
 Tests for domain management module
 """
-import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, DomainRotationManager, parse_price_value
 )
 
 
@@ -112,6 +111,25 @@ class TestDomainRotationManager:
         assert result is not None
         assert result["domain"].endswith((".xyz", ".club", ".online", ".site", ".website"))
         assert result["price"] <= 5.0
+
+    def test_find_cheap_available_domain_skips_unparseable_price(self):
+        """Unparseable prices should be ignored."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.side_effect = [
+            {"available": True, "domain": "bad.xyz", "price": "not-a-number"},
+            {"available": True, "domain": "good.xyz", "price": "$2.10"},
+        ]
+
+        manager = DomainRotationManager(mock_client)
+        with patch.object(
+            manager,
+            "generate_random_domain",
+            side_effect=["bad.xyz", "good.xyz"],
+        ):
+            result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=2)
+
+        assert result is not None
+        assert result["price"] == 2.10
     
     def test_purchase_domain_if_budget_allows_success(self):
         """Test domain purchase within budget"""
@@ -142,20 +160,36 @@ class TestDomainRotationManager:
         assert result is False
         assert manager.current_spending == 4.0
         assert len(manager.owned_domains) == 0
-    
+
+    def test_purchase_domain_if_budget_allows_multi_year(self):
+        """Supports multi-year purchases for CLI workflows."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "test123.xyz",
+            "order_id": "12345"
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        result = manager.purchase_domain_if_budget_allows("test123.xyz", 6.0, years=2)
+
+        assert result is True
+        mock_client.purchase_domain.assert_called_once_with("test123.xyz", years=2)
+        assert manager.owned_domains[0]["years"] == 2
+
     def test_get_budget_status(self):
         """Test budget status retrieval"""
         manager = DomainRotationManager(monthly_budget=50.0)
         manager.current_spending = 10.0
         manager.owned_domains = [{"domain": "test.xyz"}]
-        
+
         status = manager.get_budget_status()
-        
+
         assert status["monthly_budget"] == 50.0
         assert status["current_spending"] == 10.0
         assert status["remaining"] == 40.0
         assert status["domains_owned"] == 1
-    
+
     def test_rotate_domain(self):
         """Test domain rotation"""
         mock_client = Mock(spec=DomainAPIClient)
@@ -168,9 +202,20 @@ class TestDomainRotationManager:
             "success": True,
             "domain": "test456.xyz"
         }
-        
+
         manager = DomainRotationManager(mock_client, monthly_budget=50.0)
         new_domain = manager.rotate_domain()
-        
+
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+
+class TestPriceParsing:
+    """Test parsing registrar price values."""
+
+    def test_parse_price_value(self):
+        assert parse_price_value("$2.99") == 2.99
+        assert parse_price_value("€1,234.50") == 1234.50
+        assert parse_price_value(5) == 5.0
+        assert parse_price_value(None) is None
+        assert parse_price_value("bad") is None

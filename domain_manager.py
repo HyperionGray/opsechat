@@ -2,17 +2,38 @@
 Domain management and API integration
 Supports automated domain purchasing for burner email rotation
 """
+from abc import ABC, abstractmethod
 import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
 
-class DomainAPIClient:
+def parse_price_value(value: Any) -> Optional[float]:
+    """Normalize registrar price values into a float when possible."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        normalized = (
+            value.strip()
+            .replace("$", "")
+            .replace("€", "")
+            .replace(",", "")
+        )
+        try:
+            return float(normalized)
+        except ValueError:
+            return None
+    return None
+
+
+class DomainAPIClient(ABC):
     """
     Base class for domain registrar API clients
     """
@@ -21,17 +42,20 @@ class DomainAPIClient:
         self.api_key = api_key
         self.api_secret = api_secret
     
+    @abstractmethod
     def search_domain(self, domain: str) -> Dict:
         """Search if domain is available"""
-        raise NotImplementedError
+        pass
     
+    @abstractmethod
     def purchase_domain(self, domain: str, years: int = 1) -> Dict:
         """Purchase domain"""
-        raise NotImplementedError
+        pass
     
+    @abstractmethod
     def get_pricing(self, tld: str) -> Dict:
         """Get pricing for TLD"""
-        raise NotImplementedError
+        pass
 
 
 class PorkbunAPIClient(DomainAPIClient):
@@ -168,22 +192,22 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
-                
-                if price <= max_price:
+                parsed_price = parse_price_value(result.get("price"))
+                if parsed_price is None:
+                    continue
+
+                if parsed_price <= max_price:
                     return {
                         "domain": domain,
-                        "price": price,
+                        "price": parsed_price,
                         "tld": tld
                     }
         
         return None
     
-    def purchase_domain_if_budget_allows(self, domain: str, price: float) -> bool:
+    def purchase_domain_if_budget_allows(
+        self, domain: str, price: float, years: int = 1
+    ) -> bool:
         """
         Purchase domain if within budget
         Returns True on success
@@ -199,15 +223,16 @@ class DomainRotationManager:
             return False
         
         # Attempt purchase
-        result = self.api_client.purchase_domain(domain, years=1)
+        result = self.api_client.purchase_domain(domain, years=years)
         
         if result.get("success"):
             self.current_spending += price
             self.owned_domains.append({
                 "domain": domain,
                 "price": price,
+                "years": years,
                 "purchased_at": datetime.now(),
-                "expires_at": datetime.now() + timedelta(days=365)
+                "expires_at": datetime.now() + timedelta(days=365 * years),
             })
             
             # Set as active if no active domain
