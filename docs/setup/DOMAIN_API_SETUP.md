@@ -81,7 +81,8 @@ Porkbun offers cheap domains and a simple API, making it ideal for burner email 
 
 ### Namecheap
 
-While not directly integrated, Namecheap offers competitive pricing and API access.
+Namecheap is now integrated in `domain_manager.py` and available through
+`domain_rotation_cli.py`.
 
 #### Getting Started
 - Website: [namecheap.com](https://namecheap.com)
@@ -89,9 +90,10 @@ While not directly integrated, Namecheap offers competitive pricing and API acce
 - Pricing: .com domains ~$8.88/year, .xyz ~$1.98/year
 
 #### Integration Notes
-- Requires custom API client implementation
-- More complex API than Porkbun
-- Good for high-volume usage
+- Uses Namecheap XML API (`namecheap.domains.check`, `namecheap.users.getPricing`,
+  and `namecheap.domains.create`)
+- Requires API key, account username, and an allowlisted client IP
+- Works well as a secondary/fallback registrar for domain rotation
 
 ### GoDaddy
 

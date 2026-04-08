@@ -3,7 +3,7 @@
 Domain Rotation CLI for Burner Emails
 
 This CLI tool allows easy rotation of domains for burner email services.
-It integrates with Porkbun API (and can be extended for other registrars).
+It integrates with multiple registrars (Porkbun and Namecheap).
 
 Usage:
     python domain_rotation_cli.py list          # List owned domains
@@ -19,10 +19,28 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
-from domain_manager import PorkbunAPIClient, DomainRotationManager
+from datetime import datetime
+from domain_manager import PorkbunAPIClient, NamecheapAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _upgrade_legacy_config(config):
+    """Upgrade legacy single-registrar config in-place."""
+    if not config:
+        return {}
+
+    registrars = config.get("registrars", {})
+    if config.get("api_key") and config.get("api_secret") and "porkbun" not in registrars:
+        registrars["porkbun"] = {
+            "api_key": config.get("api_key", ""),
+            "api_secret": config.get("api_secret", "")
+        }
+        config["default_registrar"] = config.get("default_registrar", "porkbun")
+
+    config["registrars"] = registrars
+    return config
 
 
 def load_config():
@@ -32,7 +50,7 @@ def load_config():
     
     try:
         with open(CONFIG_FILE, 'r') as f:
-            return json.load(f)
+            return _upgrade_legacy_config(json.load(f))
     except Exception as e:
         print(f"Error loading config: {e}")
         return {}
@@ -54,31 +72,52 @@ def save_config(config):
 def configure_api():
     """Configure API credentials"""
     print("\n=== Domain API Configuration ===\n")
-    print("This tool supports Porkbun API for domain management.")
-    print("You can get API credentials from: https://porkbun.com/account/api\n")
+    print("Supported registrars:")
+    print("  1) Porkbun")
+    print("  2) Namecheap")
+    print("\nPorkbun API: https://porkbun.com/account/api")
+    print("Namecheap API: https://www.namecheap.com/support/api/intro/\n")
     
     config = load_config()
+    registrars = config.setdefault("registrars", {})
     
     print("Current configuration:")
-    if config.get('api_key'):
-        print(f"  API Key: {'*' * 20}{config['api_key'][-4:]}")
-    else:
-        print("  API Key: Not configured")
+    print(f"  Default Registrar: {config.get('default_registrar', 'not set')}")
+    print(f"  Configured Registrars: {', '.join(sorted(registrars.keys())) or 'none'}")
     
     if config.get('monthly_budget'):
         print(f"  Monthly Budget: ${config['monthly_budget']}")
     else:
         print("  Monthly Budget: Not configured")
     
-    print("\nEnter new values (or press Enter to keep current):\n")
-    
-    api_key = input("Porkbun API Key: ").strip()
-    if api_key:
-        config['api_key'] = api_key
-    
-    api_secret = getpass("Porkbun API Secret: ").strip()
-    if api_secret:
-        config['api_secret'] = api_secret
+    print("\nEnter registrar configuration:\n")
+    registrar_choice = input("Registrar [porkbun/namecheap] (default: porkbun): ").strip().lower() or "porkbun"
+    if registrar_choice not in {"porkbun", "namecheap"}:
+        print("Invalid registrar choice.")
+        return
+
+    if registrar_choice == "porkbun":
+        api_key = input("Porkbun API Key: ").strip()
+        api_secret = getpass("Porkbun API Secret: ").strip()
+        if not api_key or not api_secret:
+            print("Porkbun requires both API key and API secret.")
+            return
+        registrars["porkbun"] = {"api_key": api_key, "api_secret": api_secret}
+    else:
+        api_key = input("Namecheap API Key: ").strip()
+        username = input("Namecheap Username: ").strip()
+        client_ip = input("Namecheap Client IP (default: 127.0.0.1): ").strip() or "127.0.0.1"
+        if not api_key or not username:
+            print("Namecheap requires API key and username.")
+            return
+        registrars["namecheap"] = {
+            "api_key": api_key,
+            "username": username,
+            "client_ip": client_ip
+        }
+
+    if input(f"Set '{registrar_choice}' as default registrar? [Y/n]: ").strip().lower() != "n":
+        config["default_registrar"] = registrar_choice
     
     budget = input("Monthly Budget (USD) [default: 50]: ").strip()
     if budget:
@@ -90,23 +129,51 @@ def configure_api():
         config['monthly_budget'] = 50.0
     
     save_config(config)
-    print("\n✅ Configuration updated successfully!")
+    print("\nConfiguration updated successfully.")
 
 
 def get_manager():
     """Get configured domain manager"""
     config = load_config()
-    
-    if not config.get('api_key') or not config.get('api_secret'):
-        print("❌ Error: API credentials not configured.")
+
+    registrars = config.get("registrars", {})
+    if not registrars:
+        print("Error: No registrar credentials configured.")
         print("Run: python domain_rotation_cli.py config")
         sys.exit(1)
-    
-    client = PorkbunAPIClient(config['api_key'], config['api_secret'])
-    manager = DomainRotationManager(
-        api_client=client,
-        monthly_budget=config.get('monthly_budget', 50.0)
-    )
+
+    manager = DomainRotationManager(monthly_budget=config.get('monthly_budget', 50.0))
+
+    porkbun_cfg = registrars.get("porkbun")
+    if porkbun_cfg and porkbun_cfg.get("api_key") and porkbun_cfg.get("api_secret"):
+        manager.add_api_client(
+            "porkbun",
+            PorkbunAPIClient(porkbun_cfg["api_key"], porkbun_cfg["api_secret"])
+        )
+
+    namecheap_cfg = registrars.get("namecheap")
+    if namecheap_cfg and namecheap_cfg.get("api_key") and namecheap_cfg.get("username"):
+        manager.add_api_client(
+            "namecheap",
+            NamecheapAPIClient(
+                api_key=namecheap_cfg["api_key"],
+                username=namecheap_cfg["username"],
+                client_ip=namecheap_cfg.get("client_ip", "127.0.0.1")
+            )
+        )
+
+    available = manager.get_available_registrars()
+    if not available:
+        print("Error: Config exists but no valid registrar credentials were found.")
+        print("Run: python domain_rotation_cli.py config")
+        sys.exit(1)
+
+    default_registrar = config.get("default_registrar")
+    if default_registrar in available:
+        manager.set_default_registrar(default_registrar)
+    else:
+        manager.set_default_registrar(available[0])
+        config["default_registrar"] = available[0]
     
     # Load saved state
     if config.get('current_spending'):
@@ -124,6 +191,7 @@ def save_manager_state(manager, config):
     config['current_spending'] = manager.current_spending
     config['owned_domains'] = manager.owned_domains
     config['active_domain'] = manager.active_domain
+    config['default_registrar'] = manager.default_registrar
     save_config(config)
 
 
@@ -144,9 +212,35 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        if domain.get("registrar"):
+            print(f"   Registrar: {domain['registrar']}")
+        purchased_at = _parse_dt(domain.get("purchased_at"))
+        expires_at = _parse_dt(domain.get("expires_at"))
+        print(f"   Purchased: {purchased_at.strftime('%Y-%m-%d %H:%M') if purchased_at else domain.get('purchased_at', 'n/a')}")
+        print(f"   Expires: {expires_at.strftime('%Y-%m-%d') if expires_at else domain.get('expires_at', 'n/a')}")
         print()
+
+
+def _parse_dt(value):
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def show_registrars():
+    """List configured registrars and selected default."""
+    manager, config = get_manager()
+    print("\n=== Registrar Configuration ===\n")
+    print(f"Default registrar: {manager.default_registrar}")
+    print("Configured registrars:")
+    for registrar in manager.get_available_registrars():
+        marker = " (default)" if registrar == manager.default_registrar else ""
+        print(f"  - {registrar}{marker}")
 
 
 def search_domains():
@@ -154,16 +248,17 @@ def search_domains():
     manager, config = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
-    print("Searching for domains under $5...\n")
+    print("Searching for domains under $5 across configured registrars...\n")
     
     for i in range(5):
         print(f"Attempt {i+1}/5...")
         domain_info = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
         
         if domain_info:
-            print(f"  ✅ Found: {domain_info['domain']} - ${domain_info['price']}")
+            registrar = domain_info.get("registrar", "unknown")
+            print(f"  Found: {domain_info['domain']} - ${domain_info['price']} via {registrar}")
         else:
-            print(f"  ❌ No cheap domain found in this attempt")
+            print("  No cheap domain found in this attempt")
     
     print("\nTo purchase a domain, run: python domain_rotation_cli.py rotate")
 
@@ -173,6 +268,7 @@ def rotate_domain():
     manager, config = get_manager()
     
     print("\n=== Domain Rotation ===\n")
+    print(f"Default Registrar: {manager.default_registrar}")
     
     budget_status = manager.get_budget_status()
     print(f"Monthly Budget: ${budget_status['monthly_budget']}")
@@ -181,7 +277,7 @@ def rotate_domain():
     print(f"Domains Owned: {budget_status['domains_owned']}\n")
     
     if budget_status['remaining'] < 1:
-        print("❌ Insufficient budget remaining this month.")
+        print("Insufficient budget remaining this month.")
         return
     
     print("Searching for available cheap domain...")
@@ -189,10 +285,10 @@ def rotate_domain():
     domain_info = manager.find_cheap_available_domain(max_price=min(5.0, budget_status['remaining']))
     
     if not domain_info:
-        print("❌ Could not find an available cheap domain within budget.")
+        print("Could not find an available cheap domain within budget.")
         return
     
-    print(f"\nFound: {domain_info['domain']} for ${domain_info['price']}")
+    print(f"\nFound: {domain_info['domain']} for ${domain_info['price']} via {domain_info.get('registrar', 'unknown')}")
     
     confirm = input("\nProceed with purchase? (yes/no): ").strip().lower()
     
@@ -203,14 +299,15 @@ def rotate_domain():
     print("\nPurchasing domain...")
     success = manager.purchase_domain_if_budget_allows(
         domain_info['domain'],
-        domain_info['price']
+        domain_info['price'],
+        registrar=domain_info.get('registrar')
     )
     
     if success:
-        print(f"\n✅ Successfully purchased and activated: {domain_info['domain']}")
+        print(f"\nSuccessfully purchased and activated: {domain_info['domain']}")
         save_manager_state(manager, config)
     else:
-        print("\n❌ Failed to purchase domain. Check API credentials and budget.")
+        print("\nFailed to purchase domain. Check API credentials and budget.")
 
 
 def show_status():
@@ -228,8 +325,11 @@ def show_status():
     print(f"  Remaining: ${budget_status['remaining']}")
     print(f"\nDomains Owned: {budget_status['domains_owned']}")
     
+    print(f"\nRegistrars configured: {', '.join(manager.get_available_registrars())}")
+    print(f"Default registrar: {manager.default_registrar}")
+
     if manager.active_domain:
-        print(f"\n✅ Current burner email domain: {manager.active_domain}")
+        print(f"\nCurrent burner email domain: {manager.active_domain}")
         print(f"   Configure your email system to use: user@{manager.active_domain}")
 
 
@@ -240,17 +340,18 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python domain_rotation_cli.py config     # Configure API credentials
+  python domain_rotation_cli.py config      # Configure a registrar
   python domain_rotation_cli.py status     # Show current status
   python domain_rotation_cli.py search     # Search for available domains
   python domain_rotation_cli.py rotate     # Rotate to a new domain
   python domain_rotation_cli.py list       # List owned domains
+  python domain_rotation_cli.py registrars # Show configured registrars
         """
     )
     
     parser.add_argument(
         'command',
-        choices=['config', 'status', 'search', 'rotate', 'list'],
+        choices=['config', 'status', 'search', 'rotate', 'list', 'registrars'],
         help='Command to execute'
     )
     
@@ -266,6 +367,8 @@ Examples:
         rotate_domain()
     elif args.command == 'list':
         list_domains()
+    elif args.command == 'registrars':
+        show_registrars()
 
 
 if __name__ == '__main__':

@@ -1,10 +1,9 @@
 """
 Tests for domain management module
 """
-import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient, PorkbunAPIClient, NamecheapAPIClient, DomainRotationManager
 )
 
 
@@ -74,6 +73,66 @@ class TestPorkbunAPIClient:
         
         assert result["tld"] == "com"
         assert result["registration"] == "9.99"
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch('domain_manager.requests.Session')
+    def test_search_domain_available(self, mock_session_class):
+        """Test Namecheap domain availability search"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">'
+            '<CommandResponse>'
+            '<DomainCheckResult Domain="test123.xyz" Available="true" />'
+            '</CommandResponse>'
+            '</ApiResponse>'
+        )
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient("test_key", "test_user")
+        client.get_pricing = Mock(return_value={"registration": 2.49, "currency": "USD"})
+
+        result = client.search_domain("test123.xyz")
+
+        assert result["available"] is True
+        assert result["domain"] == "test123.xyz"
+        assert result["price"] == 2.49
+
+    @patch('domain_manager.requests.Session')
+    def test_get_pricing(self, mock_session_class):
+        """Test Namecheap pricing retrieval"""
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.text = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">'
+            '<CommandResponse>'
+            '<UserGetPricingResult>'
+            '<ProductType Name="DOMAIN">'
+            '<ProductCategory Name="DOMAINS">'
+            '<Product Name="XYZ">'
+            '<Price Price="1.98" RegularPrice="11.98" YourPrice="10.98" />'
+            '</Product>'
+            '</ProductCategory>'
+            '</ProductType>'
+            '</UserGetPricingResult>'
+            '</CommandResponse>'
+            '</ApiResponse>'
+        )
+        mock_session.get.return_value = mock_response
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient("test_key", "test_user")
+        result = client.get_pricing("xyz")
+
+        assert result["tld"] == "xyz"
+        assert result["registration"] == 1.98
+        assert result["renewal"] == 11.98
 
 
 class TestDomainRotationManager:
@@ -174,3 +233,48 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_uses_default_registrar_first(self):
+        """Test default registrar is preferred when multiple are configured"""
+        primary = Mock(spec=DomainAPIClient)
+        fallback = Mock(spec=DomainAPIClient)
+
+        primary.search_domain.return_value = {
+            "available": True,
+            "price": 2.00
+        }
+        primary.purchase_domain.return_value = {"success": True, "domain": "test.xyz"}
+        fallback.search_domain.return_value = {
+            "available": True,
+            "price": 1.50
+        }
+
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.add_api_client("primary", primary)
+        manager.add_api_client("fallback", fallback)
+        manager.set_default_registrar("primary")
+
+        new_domain = manager.rotate_domain()
+
+        assert new_domain is not None
+        assert primary.search_domain.called
+        assert primary.purchase_domain.called
+
+    def test_fallback_registrar_when_preferred_unavailable(self):
+        """Test registrar fallback when first registrar has no available domain"""
+        unavailable = Mock(spec=DomainAPIClient)
+        available = Mock(spec=DomainAPIClient)
+
+        unavailable.search_domain.return_value = {"available": False}
+        available.search_domain.return_value = {"available": True, "price": 2.10}
+        available.purchase_domain.return_value = {"success": True}
+
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.add_api_client("unavailable", unavailable)
+        manager.add_api_client("available", available)
+        manager.set_default_registrar("unavailable")
+
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["registrar"] == "available"
