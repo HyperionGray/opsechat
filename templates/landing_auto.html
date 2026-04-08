@@ -1,12 +1,12 @@
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-<script>
-window.location = "http://" + window.location.hostname + "/{{path}}/yesscript";
-</script>
+  <title>Redirecting to Script Mode</title>
+  <script src="{{ url_for('static', filename='landing-auto.js') }}"></script>
 </head>
-
+<body data-redirect-path="{{ path }}">
 <noscript>
-  <style>html{display:none;}</style>
-  <meta http-equiv="refresh" content="0.0;url={{path}}/noscript">
+  <meta http-equiv="refresh" content="0.0;url=/{{ path }}/noscript">
 </noscript>
+</body>
 </html>
