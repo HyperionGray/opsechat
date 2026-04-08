@@ -45,6 +45,20 @@ def test_find_unfinished_markers_detects_only_comment_markers(tmp_path: Path) ->
     assert issues[0].line == 1
 
 
+def test_find_unfinished_markers_ignores_minified_assets(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "include").mkdir()
+    (tmp_path / "docs").mkdir()
+    static_dir = tmp_path / "static"
+    static_dir.mkdir()
+    minified = static_dir / "bundle.min.js"
+    minified.write_text("// TODO this is from vendor bundle", encoding="utf-8")
+
+    issues = find_unfinished_markers(tmp_path)
+
+    assert issues == []
+
+
 def test_find_root_test_scripts_returns_warning(tmp_path: Path) -> None:
     (tmp_path / "src").mkdir()
     (tmp_path / "include").mkdir()

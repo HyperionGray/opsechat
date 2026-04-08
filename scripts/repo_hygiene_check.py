@@ -24,6 +24,7 @@ BACKUP_PATTERNS = ("**/*~HEAD", "**/*~", "**/*.orig", "**/*.rej")
 CODE_SUFFIXES = {".py", ".sh", ".js", ".ts", ".tsx", ".jsx"}
 MARKER_PATTERN = re.compile(r"\b(TODO|FIXME|STUB|TBD|UNFINISHED)\b", re.IGNORECASE)
 REQUIRED_TOP_LEVEL = ("docs", "src", "include")
+GENERATED_FILE_SUFFIXES = (".min.js", ".min.ts", ".bundle.js")
 
 IGNORED_PATH_PARTS = {
     ".git",
@@ -67,6 +68,10 @@ def _is_comment_line(line: str, suffix: str) -> bool:
     return False
 
 
+def _is_generated_asset(path: Path) -> bool:
+    return any(path.name.endswith(suffix) for suffix in GENERATED_FILE_SUFFIXES)
+
+
 def find_backup_artifacts(root: Path) -> list[Issue]:
     issues: list[Issue] = []
     seen: set[Path] = set()
@@ -98,6 +103,8 @@ def find_unfinished_markers(root: Path) -> list[Issue]:
             continue
         rel_path = file_path.relative_to(root)
         if _is_ignored_path(rel_path):
+            continue
+        if _is_generated_asset(file_path):
             continue
 
         try:
