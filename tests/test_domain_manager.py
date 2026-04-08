@@ -4,7 +4,10 @@ Tests for domain management module
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
-    DomainAPIClient, PorkbunAPIClient, DomainRotationManager
+    DomainAPIClient,
+    DomainRotationManager,
+    NamecheapAPIClient,
+    PorkbunAPIClient,
 )
 
 
@@ -74,6 +77,66 @@ class TestPorkbunAPIClient:
         
         assert result["tld"] == "com"
         assert result["registration"] == "9.99"
+
+
+class TestNamecheapAPIClient:
+    """Test Namecheap API client"""
+
+    @patch('domain_manager.requests.Session')
+    def test_search_domain_available(self, mock_session_class):
+        """Test Namecheap domain availability search"""
+        mock_session = Mock()
+        check_response = Mock()
+        pricing_response = Mock()
+        check_response.text = """<?xml version="1.0" encoding="utf-8"?>
+<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+  <CommandResponse Type="namecheap.domains.check">
+    <DomainCheckResult Domain="test123.xyz" Available="true" />
+  </CommandResponse>
+</ApiResponse>"""
+        pricing_response.text = """<?xml version="1.0" encoding="utf-8"?>
+<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+  <CommandResponse Type="namecheap.users.getPricing">
+    <UserGetPricingResult>
+      <ProductType Name="DOMAIN">
+        <ProductCategory Name="register">
+          <Product Name="xyz">
+            <Price Duration="1" DurationType="YEAR" YourPrice="1.88" />
+          </Product>
+        </ProductCategory>
+      </ProductType>
+    </UserGetPricingResult>
+  </CommandResponse>
+</ApiResponse>"""
+        mock_session.get.side_effect = [check_response, pricing_response]
+        mock_session_class.return_value = mock_session
+
+        client = NamecheapAPIClient(
+            api_key="test_key",
+            username="test_user",
+            client_ip="127.0.0.1",
+        )
+        result = client.search_domain("test123.xyz")
+
+        assert result["available"] is True
+        assert result["domain"] == "test123.xyz"
+        assert result["price"] == 1.88
+        assert result["registrar"] == "namecheap"
+
+    @patch('domain_manager.requests.Session')
+    def test_purchase_domain_requires_contact_profile(self, mock_session_class):
+        """Test Namecheap purchase requires contact profile fields"""
+        mock_session_class.return_value = Mock()
+
+        client = NamecheapAPIClient(
+            api_key="test_key",
+            username="test_user",
+            client_ip="127.0.0.1",
+        )
+        result = client.purchase_domain("test123.xyz")
+
+        assert result["success"] is False
+        assert "Missing Namecheap contact profile fields" in result["message"]
 
 
 class TestDomainRotationManager:
@@ -174,3 +237,26 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_find_domain_falls_back_to_secondary_registrar(self):
+        """Test fallback from preferred registrar to secondary registrar"""
+        porkbun_client = Mock(spec=DomainAPIClient)
+        porkbun_client.search_domain.return_value = {"available": False}
+
+        namecheap_client = Mock(spec=DomainAPIClient)
+        namecheap_client.search_domain.return_value = {
+            "available": True,
+            "domain": "fallback123.xyz",
+            "price": 2.50,
+        }
+
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.add_api_client("porkbun", porkbun_client)
+        manager.add_api_client("namecheap", namecheap_client)
+        manager.set_preferred_registrar("porkbun")
+
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["registrar"] == "namecheap"
+        assert result["price"] == 2.50
