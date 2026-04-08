@@ -6,7 +6,7 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -134,6 +134,28 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+
+    @staticmethod
+    def _parse_price(value: Any, default: float = 999.0) -> float:
+        """Convert API/domain price values to float safely."""
+        if isinstance(value, (int, float)):
+            return float(value)
+
+        if isinstance(value, str):
+            cleaned = (
+                value.strip()
+                .replace("$", "")
+                .replace("€", "")
+                .replace(",", "")
+            )
+            if not cleaned:
+                return default
+            try:
+                return float(cleaned)
+            except ValueError:
+                return default
+
+        return default
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
@@ -168,12 +190,7 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
-                
+                price = self._parse_price(result.get("price"), default=999.0)
                 if price <= max_price:
                     return {
                         "domain": domain,
@@ -190,6 +207,11 @@ class DomainRotationManager:
         """
         if not self.api_client:
             logger.error("No API client configured")
+            return False
+
+        price = self._parse_price(price, default=-1.0)
+        if price < 0:
+            logger.error(f"Invalid purchase price for domain {domain}: {price}")
             return False
         
         # Check budget
@@ -219,6 +241,132 @@ class DomainRotationManager:
         else:
             logger.error(f"Failed to purchase domain: {result.get('message')}")
             return False
+
+    @staticmethod
+    def _serialize_datetime(value: Any) -> Optional[str]:
+        """Serialize datetimes for JSON-safe state persistence."""
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, str):
+            return value
+        return None
+
+    @staticmethod
+    def _deserialize_datetime(value: Any, fallback: datetime) -> datetime:
+        """Convert persisted datetime values back to datetime objects."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return fallback
+        return fallback
+
+    def serialize_owned_domains(self) -> List[Dict]:
+        """Return owned domains in a JSON-serializable format."""
+        serialized_domains: List[Dict] = []
+
+        for entry in self.owned_domains:
+            if isinstance(entry, str):
+                serialized_domains.append({"domain": entry, "price": 0.0})
+                continue
+
+            if not isinstance(entry, dict):
+                continue
+
+            domain_name = entry.get("domain")
+            if not isinstance(domain_name, str) or not domain_name:
+                continue
+
+            domain_entry: Dict[str, Any] = {
+                "domain": domain_name,
+                "price": self._parse_price(entry.get("price"), default=0.0),
+            }
+
+            purchased_at = self._serialize_datetime(entry.get("purchased_at"))
+            expires_at = self._serialize_datetime(entry.get("expires_at"))
+            if purchased_at:
+                domain_entry["purchased_at"] = purchased_at
+            if expires_at:
+                domain_entry["expires_at"] = expires_at
+
+            serialized_domains.append(domain_entry)
+
+        return serialized_domains
+
+    def load_owned_domains(self, domains: Any) -> None:
+        """Load persisted owned domain state, normalizing legacy formats."""
+        loaded_domains: List[Dict] = []
+
+        if not isinstance(domains, list):
+            self.owned_domains = loaded_domains
+            return
+
+        for entry in domains:
+            if isinstance(entry, str):
+                loaded_domains.append({
+                    "domain": entry,
+                    "price": 0.0,
+                    "purchased_at": datetime.now(),
+                    "expires_at": datetime.now() + timedelta(days=365),
+                })
+                continue
+
+            if not isinstance(entry, dict):
+                continue
+
+            domain_name = entry.get("domain")
+            if not isinstance(domain_name, str) or not domain_name:
+                continue
+
+            purchased_default = datetime.now()
+            purchased_at = self._deserialize_datetime(
+                entry.get("purchased_at"),
+                fallback=purchased_default,
+            )
+            expires_at = self._deserialize_datetime(
+                entry.get("expires_at"),
+                fallback=purchased_at + timedelta(days=365),
+            )
+
+            loaded_domains.append({
+                "domain": domain_name,
+                "price": self._parse_price(entry.get("price"), default=0.0),
+                "purchased_at": purchased_at,
+                "expires_at": expires_at,
+            })
+
+        self.owned_domains = loaded_domains
+
+    def export_state(self) -> Dict:
+        """Export manager state in JSON-safe format for persistence."""
+        return {
+            "state_version": 1,
+            "monthly_budget": float(self.monthly_budget),
+            "current_spending": self._parse_price(self.current_spending, default=0.0),
+            "active_domain": self.active_domain,
+            "owned_domains": self.serialize_owned_domains(),
+        }
+
+    def import_state(self, state: Any) -> None:
+        """Import persisted state with backward compatibility for older configs."""
+        if not isinstance(state, dict):
+            return
+
+        self.monthly_budget = self._parse_price(
+            state.get("monthly_budget", self.monthly_budget),
+            default=self.monthly_budget,
+        )
+        self.current_spending = self._parse_price(
+            state.get("current_spending", 0.0),
+            default=0.0,
+        )
+
+        active_domain = state.get("active_domain")
+        self.active_domain = active_domain if isinstance(active_domain, str) else None
+
+        self.load_owned_domains(state.get("owned_domains", []))
     
     def rotate_domain(self) -> Optional[str]:
         """

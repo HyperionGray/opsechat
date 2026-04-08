@@ -1,6 +1,7 @@
 """
 Tests for domain management module
 """
+from datetime import datetime
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
@@ -174,3 +175,55 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_find_cheap_available_domain_parses_currency_and_commas(self):
+        """Price parser accepts common API price string formats."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "test999.xyz",
+            "price": "$1,234.56",
+        }
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=2000.0, max_attempts=1)
+
+        assert result is not None
+        assert result["price"] == 1234.56
+
+    def test_import_and_export_state_normalizes_owned_domains(self):
+        """Persisted state is imported/exported in JSON-safe and normalized format."""
+        manager = DomainRotationManager(monthly_budget=20.0)
+        manager.import_state({
+            "monthly_budget": "75.5",
+            "current_spending": "$5.25",
+            "active_domain": "active.example",
+            "owned_domains": [
+                {
+                    "domain": "one.example",
+                    "price": "2.99",
+                    "purchased_at": "2026-03-01T10:00:00",
+                    "expires_at": "2027-03-01T10:00:00",
+                },
+                # Legacy string-only format.
+                "legacy.example",
+            ],
+        })
+
+        assert manager.monthly_budget == 75.5
+        assert manager.current_spending == 5.25
+        assert manager.active_domain == "active.example"
+        assert len(manager.owned_domains) == 2
+        assert isinstance(manager.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(manager.owned_domains[0]["expires_at"], datetime)
+        assert manager.owned_domains[1]["domain"] == "legacy.example"
+        assert isinstance(manager.owned_domains[1]["purchased_at"], datetime)
+
+        exported = manager.export_state()
+        assert exported["state_version"] == 1
+        assert exported["monthly_budget"] == 75.5
+        assert exported["current_spending"] == 5.25
+        assert exported["active_domain"] == "active.example"
+        assert isinstance(exported["owned_domains"], list)
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert exported["owned_domains"][0]["domain"] == "one.example"
