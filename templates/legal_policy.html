@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpSecChat - {{ page_title }}</title>
+    <link rel="stylesheet" href="/static/legal-policy.css">
+</head>
+<body>
+    <main class="container" role="main">
+        <nav class="policy-nav" aria-label="Policy navigation">
+            <a href="/terms" {% if active_policy == "terms" %}aria-current="page"{% endif %}>Terms</a>
+            <a href="/privacy" {% if active_policy == "privacy" %}aria-current="page"{% endif %}>Privacy</a>
+            <a href="/aup" {% if active_policy == "aup" %}aria-current="page"{% endif %}>AUP</a>
+            <a href="/chat">Chat</a>
+        </nav>
+
+        <article class="policy-content" aria-label="{{ page_title }}">
+            <h1>{{ page_title }}</h1>
+            <p class="source-label">Source: {{ source_path }}</p>
+            <pre>{{ policy_text }}</pre>
+        </article>
+    </main>
+</body>
+</html>

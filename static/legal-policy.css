@@ -1,0 +1,50 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 20px;
+    background-color: #000;
+    color: #0f0;
+    font-family: "Courier New", monospace;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 980px;
+    margin: 0 auto;
+}
+
+.policy-nav {
+    border-bottom: 1px solid #0f0;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+}
+
+.policy-nav a {
+    color: #0ff;
+    margin-right: 16px;
+    text-decoration: none;
+}
+
+.policy-nav a:hover {
+    text-decoration: underline;
+}
+
+.policy-nav a[aria-current="page"] {
+    color: #0f0;
+    font-weight: bold;
+}
+
+h1 {
+    margin-top: 0;
+    color: #0f0;
+}
+
+.policy-content pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: "Courier New", monospace;
+}

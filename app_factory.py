@@ -105,6 +105,10 @@ def create_app():
     register_review_routes(app, id_generator, get_random_color, 
                           add_review_wrapper, get_reviews, get_review_stats)
 
+    # Register legal policy routes (/terms, /privacy, /aup)
+    from legal_routes import register_legal_routes
+    register_legal_routes(app)
+
     # Register HTTP mail routes (email over HTTP, no SMTP/IMAP)
     from http_mail_routes import register_http_mail_routes
     register_http_mail_routes(app)
