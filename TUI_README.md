@@ -11,6 +11,7 @@ This is a serious privacy and opsec tool for serious privacy and opsec people. I
 ✅ **Randomized Usernames** - Server-assigned, no "Jerry Here" problem  
 ✅ **Text Only** - No images, no video, no b64 encoded garbage  
 ✅ **Message Validation** - Max 1000 chars, prevents b64 image encoding  
+✅ **Protocol Error Feedback** - Invalid payloads now return explicit server errors  
 ✅ **Secure Deletion** - Messages overwritten before removal  
 ✅ **Zero Disk** - Nothing touches disk except the application code  
 ✅ **Tor Integration** - Full support for Tor hidden services (.onion)  
@@ -105,6 +106,7 @@ This prevents:
 - HTML/special characters stripped
 - Detects and rejects likely b64-encoded data
 - **No images, no video, no binary data**
+- Invalid payloads receive protocol-level error packets (`type: "error"`)
 
 ### Tor Integration
 
@@ -139,6 +141,27 @@ sudo systemctl start tor
 - **No images**: Text only, no exceptions
 - **No video**: Text only, no exceptions
 - **No b64 encoding**: Large base64-like strings are rejected
+
+### Server Error Responses
+
+When a client sends an invalid packet, the server returns a structured error:
+
+```json
+{
+  "type": "error",
+  "error_code": "validation_error",
+  "message": "Message cannot be empty",
+  "timestamp": "2026-01-01T00:00:00"
+}
+```
+
+Error codes currently used:
+- `invalid_json`
+- `invalid_payload`
+- `unsupported_message_type`
+- `validation_error`
+
+The TUI client displays these as system messages so users understand why a send was rejected.
 
 ## Architecture
 

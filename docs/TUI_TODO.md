@@ -38,6 +38,15 @@ This file tracks what needs to be done for the TUI chat system.
   - [ ] Add SOCKS proxy support
   - [ ] Connection status indicator
 
+## ✅ COMPLETED (Protocol hardening)
+
+- [x] Server now returns explicit protocol errors for invalid payloads
+  - [x] Invalid JSON packets return `type=error` with `error_code=invalid_json`
+  - [x] Unsupported packet types return `error_code=unsupported_message_type`
+  - [x] Invalid message content returns `error_code=validation_error`
+- [x] Client displays server validation errors in-system instead of failing silently
+- [x] Added protocol tests (`tests/test_tui_protocol.py`) covering success and error paths
+
 ## 📋 TODO (Phase 3: Security & OpSec)
 
 ### Security Enhancements

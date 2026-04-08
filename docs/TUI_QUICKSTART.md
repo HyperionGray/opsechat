@@ -140,6 +140,7 @@ The client automatically detects `.onion` and uses Tor SOCKS proxy.
 
 ### ✅ Security Features
 - **Message Validation** - Max 1000 chars
+- **Validation Error Feedback** - Rejected messages return explicit server errors
 - **Secure Deletion** - Overwrite before delete
 - **No Configuration Files** - Ephemeral by design
 - **No Logs** - Zero persistence
@@ -256,6 +257,8 @@ python tests/test-tui-client.py
 3. Send messages from different clients
 4. Verify all clients see the messages
 5. Wait 4+ minutes, verify messages disappear
+6. Paste a long base64-like string (`"A"*700` equivalent) and verify client shows:
+   `Server rejected message: Message appears to be encoded/binary data and was rejected`
 
 ## Next Steps
 

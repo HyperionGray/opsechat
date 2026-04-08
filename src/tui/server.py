@@ -70,19 +70,56 @@ class ChatServer:
                     msg['username'] = 'X' * len(msg['username'])
             
             self.messages = new_messages
+
+    @staticmethod
+    def sanitize_message(message: str) -> str:
+        """Strip potentially dangerous characters from message text."""
+        return message.replace('<', '').replace('>', '').replace('&', '')
+
+    def validate_message(self, message: Any) -> Optional[str]:
+        """
+        Validate an incoming chat message.
+
+        Returns:
+            Optional[str]: None when valid, else a user-facing error reason.
+        """
+        if not isinstance(message, str):
+            return "Message must be text"
+
+        if not message.strip():
+            return "Message cannot be empty"
+
+        if len(message) > self.MAX_MESSAGE_LENGTH:
+            return f"Message too long (max {self.MAX_MESSAGE_LENGTH} chars)"
+
+        # Check for potential b64 encoded data (rough heuristic)
+        if len(message) > 500 and message.replace('=', '').isalnum():
+            return "Message appears to be encoded/binary data and was rejected"
+
+        return None
+
+    def send_error(self, client_socket: socket.socket, error_code: str, message: str):
+        """Send a protocol error response to a specific client."""
+        error_payload = {
+            'type': 'error',
+            'error_code': error_code,
+            'message': message,
+            'timestamp': datetime.datetime.now().isoformat()
+        }
+        try:
+            client_socket.send((json.dumps(error_payload) + '\n').encode())
+        except (OSError, socket.error):
+            # If the client is already gone, nothing else to do.
+            return
     
     def add_message(self, username: str, message: str) -> bool:
         """Add a message to the chat (with validation)"""
-        # Validate message
-        if not message or len(message) > self.MAX_MESSAGE_LENGTH:
+        validation_error = self.validate_message(message)
+        if validation_error:
             return False
-        
-        # Check for potential b64 encoded data (rough heuristic)
-        if len(message) > 500 and message.replace('=', '').isalnum():
-            return False  # Likely b64 encoded image/video
-        
+
         # Strip any HTML/special chars
-        message = message.replace('<', '').replace('>', '').replace('&', '')
+        message = self.sanitize_message(message)
         
         with self.lock:
             self.messages.append({
@@ -142,15 +179,39 @@ class ChatServer:
                         if line:
                             try:
                                 msg_obj = json.loads(line)
-                                if msg_obj.get('type') == 'message':
-                                    message = msg_obj.get('message', '')
-                                    if self.add_message(username, message):
-                                        # Broadcast to all clients
-                                        self.broadcast_message(username, message)
                             except json.JSONDecodeError:
-                                pass
+                                self.send_error(client_socket, "invalid_json", "Invalid JSON payload")
+                                continue
+
+                            if not isinstance(msg_obj, dict):
+                                self.send_error(
+                                    client_socket,
+                                    "invalid_payload",
+                                    "Payload must be a JSON object"
+                                )
+                                continue
+
+                            msg_type = msg_obj.get('type')
+                            if msg_type != 'message':
+                                self.send_error(
+                                    client_socket,
+                                    "unsupported_message_type",
+                                    "Only message packets are supported"
+                                )
+                                continue
+
+                            message = msg_obj.get('message', '')
+                            validation_error = self.validate_message(message)
+                            if validation_error:
+                                self.send_error(client_socket, "validation_error", validation_error)
+                                continue
+
+                            sanitized_message = self.sanitize_message(message)
+                            if self.add_message(username, sanitized_message):
+                                # Broadcast sanitized text to all clients.
+                                self.broadcast_message(username, sanitized_message)
                 
-                except (OSError, socket.error) as e:
+                except (OSError, socket.error):
                     break
         
         finally:
