@@ -33,7 +33,10 @@ def _parse_datetime(value):
     if isinstance(value, str) and value:
         try:
             return datetime.fromisoformat(value)
-        except ValueError:
+        except ValueError as e:
+            # Log parse failures to help diagnose data issues
+            import logging
+            logging.warning(f"Failed to parse datetime value '{value}': {e}")
             return None
     return None
 
