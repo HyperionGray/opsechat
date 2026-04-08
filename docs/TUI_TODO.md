@@ -26,17 +26,17 @@ This file tracks what needs to be done for the TUI chat system.
 - [x] Basic testing and validation
 - [x] Create TUI_README.md documentation
 
-## 🔄 IN PROGRESS (Phase 2: Tor Integration)
+## ✅ COMPLETED (Phase 2: Tor Integration)
 
-- [ ] Integrate Tor hidden service in TUI server
-  - [ ] Modify `src/tui/server.py` to support Tor
-  - [ ] Add ephemeral hidden service creation
-  - [ ] Display .onion address to share
-  - [ ] Handle Tor connection failures gracefully
-- [ ] Update client for Tor connections
-  - [ ] Support connecting to .onion addresses
-  - [ ] Add SOCKS proxy support
-  - [ ] Connection status indicator
+- [x] Integrate Tor hidden service in TUI server
+  - [x] `src/tui/server.py` supports Tor hidden service setup
+  - [x] Ephemeral hidden service creation implemented
+  - [x] Displays shareable `.onion:port` address
+  - [x] Handles Tor setup failures with local-mode fallback
+- [x] Update client for Tor connections
+  - [x] Supports connecting to `.onion` addresses
+  - [x] SOCKS proxy support through PySocks
+  - [x] Connection status indicator in TUI footer
 
 ## 📋 TODO (Phase 3: Security & OpSec)
 
@@ -186,5 +186,5 @@ This file tracks what needs to be done for the TUI chat system.
 ---
 
 **Created**: 2026-02-26  
-**Last Updated**: 2026-02-26  
-**Status**: Phase 1 Complete, Phase 2 In Progress
+**Last Updated**: 2026-04-08  
+**Status**: Phase 2 Complete, Phase 3 In Progress

@@ -13,7 +13,6 @@ Features:
 - Optional PGP encryption
 """
 
-import sys
 import time
 import datetime
 import secrets
@@ -25,7 +24,7 @@ from typing import Dict, List, Any, Optional
 # Message storage (in-memory only)
 class ChatServer:
     MAX_MESSAGE_LENGTH = 1000  # Prevent b64 encoded images
-    MESSAGE_LIFETIME = 180  # 3 minutes in seconds
+    MESSAGE_LIFETIME = 240  # 4 minutes in seconds
     
     def __init__(self, host='127.0.0.1', port=5555):
         self.host = host
@@ -35,10 +34,7 @@ class ChatServer:
         self.lock = threading.Lock()
         self.server_socket = None
         self.running = False
-        
-        # Start cleanup thread
-        self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
-        self.cleanup_thread.start()
+        self.cleanup_thread = None
     
     def generate_username(self) -> str:
         """Generate a random username - no user choice allowed"""
@@ -49,7 +45,7 @@ class ChatServer:
     
     def _cleanup_loop(self):
         """Continuously clean up old messages"""
-        while True:
+        while self.running:
             time.sleep(10)  # Check every 10 seconds
             self._cleanup_old_messages()
     
@@ -113,7 +109,7 @@ class ChatServer:
             welcome = {
                 'type': 'welcome',
                 'username': username,
-                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
+                'message': f'Welcome! You are {username}. Messages burn in 4 minutes.'
             }
             client_socket.send((json.dumps(welcome) + '\n').encode())
             
@@ -191,11 +187,14 @@ class ChatServer:
     
     def start(self):
         """Start the chat server"""
+        self.running = True
+        self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
+        self.cleanup_thread.start()
+
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen(5)
-        self.running = True
         
         print(f"[*] OpSecChat TUI Server running on {self.host}:{self.port}")
         print(f"[*] Messages burn after {self.MESSAGE_LIFETIME} seconds")
@@ -249,29 +248,37 @@ class ChatServer:
         print("\n[*] Server stopped. All messages overwritten and cleared.")
 
 
-def setup_tor_hidden_service(port: int) -> Optional[tuple]:
+def setup_tor_hidden_service(
+    port: int,
+    control_port: int = 9051,
+    control_password: Optional[str] = None
+) -> Optional[tuple]:
     """
     Setup Tor hidden service for the chat server
     
     Returns:
-        tuple: (hostname, service_id) or None if Tor unavailable
+        tuple: (hostname, service_id, service_port) or None if Tor unavailable
     """
     try:
         from stem.control import Controller
         from stem import SocketError
+        service_port = port
         
-        with Controller.from_port(port=9051) as controller:
-            controller.authenticate()
+        with Controller.from_port(port=control_port) as controller:
+            if control_password:
+                controller.authenticate(password=control_password)
+            else:
+                controller.authenticate()
             
             print('[*] Creating ephemeral hidden service, this may take a minute or two')
             result = controller.create_ephemeral_hidden_service(
-                {80: port}, await_publication=True
+                {service_port: port}, await_publication=True
             )
             
             if result.service_id:
                 hostname = result.service_id + ".onion"
                 print(f"[*] Hidden service created: {hostname}")
-                return hostname, result.service_id
+                return hostname, result.service_id, service_port
             else:
                 print("[!] Unable to determine ephemeral service's hostname")
                 return None
@@ -299,6 +306,8 @@ def main():
     parser.add_argument('--host', default='127.0.0.1', help='Host to bind to (use 0.0.0.0 for all interfaces)')
     parser.add_argument('--port', type=int, default=5555, help='Port to bind to')
     parser.add_argument('--tor', action='store_true', help='Enable Tor hidden service')
+    parser.add_argument('--tor-control-port', type=int, default=9051, help='Tor control port (default: 9051)')
+    parser.add_argument('--tor-control-password', default=None, help='Optional Tor control password')
     parser.add_argument('--test', action='store_true', help='Test mode (skip Tor even if --tor specified)')
     args = parser.parse_args()
     
@@ -306,19 +315,23 @@ def main():
     tor_info = None
     if args.tor and not args.test:
         print("[*] Starting with Tor integration...")
-        tor_info = setup_tor_hidden_service(args.port)
+        tor_info = setup_tor_hidden_service(
+            args.port,
+            control_port=args.tor_control_port,
+            control_password=args.tor_control_password
+        )
         if tor_info:
-            hostname, service_id = tor_info
-            print(f"[*] Share this address: {hostname}:{args.port}")
-            print(f"[*] Clients should connect to: {hostname}")
+            hostname, service_id, service_port = tor_info
+            print(f"[*] Share this address: {hostname}:{service_port}")
+            print(f"[*] Clients should connect to: {hostname}:{service_port}")
     
     # Create and start server
     server = ChatServer(host=args.host, port=args.port)
     
     print("\n" + "="*60)
     if tor_info:
-        print(f"🧅 Tor Hidden Service: {tor_info[0]}")
-    print(f"📡 Local Server: {args.host}:{args.port}")
+        print(f"Tor Hidden Service: {tor_info[0]}:{tor_info[2]}")
+    print(f"Local Server: {args.host}:{args.port}")
     print("="*60 + "\n")
     
     try:
@@ -326,14 +339,15 @@ def main():
     except KeyboardInterrupt:
         print("\n[*] Shutting down...")
     finally:
-        server.stop()
-        
         # Remove Tor hidden service
         if tor_info:
             try:
                 from stem.control import Controller
-                with Controller.from_port(port=9051) as controller:
-                    controller.authenticate()
+                with Controller.from_port(port=args.tor_control_port) as controller:
+                    if args.tor_control_password:
+                        controller.authenticate(password=args.tor_control_password)
+                    else:
+                        controller.authenticate()
                     controller.remove_ephemeral_hidden_service(tor_info[1])
                     print("[*] Tor hidden service removed")
             except Exception as e:

@@ -18,7 +18,10 @@ import socket
 import json
 import threading
 import urwid
-import socks  # PySocks for SOCKS proxy support
+try:
+    import socks  # PySocks for SOCKS proxy support
+except ImportError:
+    socks = None
 
 
 def create_socket_connection(host, port, use_tor=False, tor_port=9050):
@@ -35,6 +38,8 @@ def create_socket_connection(host, port, use_tor=False, tor_port=9050):
         socket: Connected socket
     """
     if use_tor or host.endswith('.onion'):
+        if socks is None:
+            raise RuntimeError("PySocks is required for Tor connections. Install with: pip install PySocks")
         # Use SOCKS proxy for Tor
         sock = socks.socksocket()
         sock.set_proxy(socks.SOCKS5, "127.0.0.1", tor_port)
@@ -58,6 +63,7 @@ class ChatClient:
         self.username = "Unknown"
         self.running = False
         self.message_buffer = ""
+        self.connection_status = "DISCONNECTED"
         
         # UI components
         self.messages_walker = urwid.SimpleFocusListWalker([])
@@ -82,14 +88,7 @@ class ChatClient:
         )
         
         # Footer with instructions
-        footer_text = [
-            ('info', 'Enter'),
-            ': Send | ',
-            ('info', 'Ctrl+C'),
-            ': Quit | ',
-            ('warn', 'Your username: '),
-            ('username', self.username)
-        ]
+        footer_text = self._build_footer_text()
         footer = urwid.AttrMap(urwid.Text(footer_text), 'footer')
         
         # Messages area
@@ -130,6 +129,20 @@ class ChatClient:
             ('system_message', 'yellow', 'black'),
             ('timestamp', 'dark gray', 'black'),
         ]
+
+    def _build_footer_text(self):
+        mode_text = "TOR" if self.use_tor else "DIRECT"
+        return [
+            ('info', 'Enter'),
+            ': Send | ',
+            ('info', 'Ctrl+C'),
+            ': Quit | ',
+            ('warn', 'Status: '),
+            ('info', f'{self.connection_status} ({mode_text})'),
+            ' | ',
+            ('warn', 'Your username: '),
+            ('username', self.username),
+        ]
     
     def add_message(self, username, message, is_system=False):
         """Add a message to the display"""
@@ -155,6 +168,8 @@ class ChatClient:
     def connect(self):
         """Connect to the chat server"""
         try:
+            self.connection_status = "CONNECTING"
+            self.update_footer()
             if self.use_tor:
                 self.add_message("System", f"Connecting via Tor to {self.host}:{self.port}...", is_system=True)
             else:
@@ -162,16 +177,22 @@ class ChatClient:
             
             self.socket = create_socket_connection(self.host, self.port, self.use_tor, self.tor_port)
             self.running = True
+            self.connection_status = "CONNECTED"
+            self.update_footer()
             
             # Start receive thread
             receive_thread = threading.Thread(target=self.receive_messages, daemon=True)
             receive_thread.start()
             
             return True
-        except ImportError as e:
-            self.add_message("System", f"Missing dependency: {e}. Install with: pip install PySocks", is_system=True)
+        except RuntimeError as e:
+            self.connection_status = "FAILED"
+            self.update_footer()
+            self.add_message("System", str(e), is_system=True)
             return False
         except Exception as e:
+            self.connection_status = "FAILED"
+            self.update_footer()
             self.add_message("System", f"Failed to connect: {e}", is_system=True)
             return False
     
@@ -185,6 +206,8 @@ class ChatClient:
                 if not data:
                     self.add_message("System", "Disconnected from server", is_system=True)
                     self.running = False
+                    self.connection_status = "DISCONNECTED"
+                    self.update_footer()
                     break
                 
                 buffer += data
@@ -201,6 +224,8 @@ class ChatClient:
                 if self.running:
                     self.add_message("System", f"Connection error: {e}", is_system=True)
                 self.running = False
+                self.connection_status = "DISCONNECTED"
+                self.update_footer()
                 break
     
     def handle_server_message(self, msg):
@@ -220,14 +245,7 @@ class ChatClient:
     
     def update_footer(self):
         """Update the footer with current username"""
-        footer_text = [
-            ('info', 'Enter'),
-            ': Send | ',
-            ('info', 'Ctrl+C'),
-            ': Quit | ',
-            ('warn', 'Your username: '),
-            ('username', self.username)
-        ]
+        footer_text = self._build_footer_text()
         footer = urwid.AttrMap(urwid.Text(footer_text), 'footer')
         self.frame.footer = footer
     
@@ -284,6 +302,7 @@ class ChatClient:
     def cleanup(self):
         """Clean up resources"""
         self.running = False
+        self.connection_status = "DISCONNECTED"
         if self.socket:
             try:
                 self.socket.close()

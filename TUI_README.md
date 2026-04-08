@@ -1,8 +1,6 @@
 # OpSecChat TUI - Terminal User Interface Chat
 
-**Privacy-focused, OpSec-first terminal chat system. No GUI, no nonsense.**
-
-This is a serious privacy and opsec tool for serious privacy and opsec people. If you can't type 2 commands in the terminal, go download Telegram where they "totally swear you're private guys."
+Privacy-focused, OpSec-first terminal chat system.
 
 ## Features
 
@@ -40,8 +38,15 @@ python tui-server.py --tor
 # Output will show:
 # [*] Creating ephemeral hidden service...
 # [*] Hidden service created: abc123...xyz.onion
-# 🧅 Tor Hidden Service: abc123...xyz.onion
-# 📡 Local Server: 127.0.0.1:5555
+# Tor Hidden Service: abc123...xyz.onion:5555
+# Local Server: 127.0.0.1:5555
+```
+
+Optional Tor control settings:
+
+```bash
+python tui-server.py --tor --tor-control-port 9051
+python tui-server.py --tor --tor-control-port 9051 --tor-control-password "<password>"
 ```
 
 ### 2. Start the Server (without Tor - testing)
@@ -73,6 +78,11 @@ python tui-client.py --host <server> --port 5555 --tor --tor-port 9050
 The client will automatically use Tor SOCKS proxy if:
 - The hostname ends with `.onion`, OR
 - You specify `--tor` flag
+
+The client footer shows connection state:
+- `CONNECTING` while dialing
+- `CONNECTED` after handshake
+- `DISCONNECTED`/`FAILED` on errors
 
 ### 4. Chat!
 
@@ -243,7 +253,7 @@ Messages are:
 
 ## Coming Soon
 
-- [ ] Full Tor hidden service integration
+- [x] Full Tor hidden service integration
 - [ ] PGP encryption support (optional)
 - [ ] Multi-room support
 - [ ] Message signing/verification
@@ -251,7 +261,7 @@ Messages are:
 
 ## Security Notes
 
-⚠️ **Important:**
+Important:
 - This tool is for **legitimate privacy needs**
 - **No illegal content** - See [ACCEPTABLE_USE_POLICY.md](docs/legal/ACCEPTABLE_USE_POLICY.md)
 - Messages are ephemeral but not end-to-end encrypted by default
@@ -260,7 +270,7 @@ Messages are:
 
 ## Support
 
-Having issues? 
+Having issues?
 
 1. Check you have `urwid` installed: `pip install urwid>=2.1.0`
 2. Check Python version: `python --version` (need 3.8+)
@@ -273,4 +283,4 @@ MIT License - See [LICENSE.md](LICENSE.md)
 
 ---
 
-**Remember:** This is opsec first. Privacy first. No images, no video, no b64 garbage. Text only. Messages burn. Stay safe.
+Remember: this is opsec-first text chat with ephemeral messages.
