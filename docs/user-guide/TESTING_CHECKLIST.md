@@ -222,13 +222,21 @@ python domain_rotation_cli.py status
 
 3. Search for domains:
 ```bash
-python domain_rotation_cli.py search
+python domain_rotation_cli.py search --max-price 3 --limit 3
+```
+
+4. Validate non-interactive mode:
+```bash
+python domain_rotation_cli.py rotate --yes --max-attempts 10
+python domain_rotation_cli.py rotate-auto --dry-run --json
 ```
 
 **Expected Results:**
 - [ ] Config saved to `~/.opsechat/domain_config.json`
 - [ ] Status shows budget and owned domains
 - [ ] Search finds available cheap domains (if configured)
+- [ ] `rotate --yes` skips interactive prompt
+- [ ] `rotate-auto --dry-run --json` returns machine-readable output and exits 0
 
 **Note**: Actual rotation requires real API credentials and budget.
 

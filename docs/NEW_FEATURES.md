@@ -232,7 +232,7 @@ Attempt 2/5...
 ...
 ```
 
-#### Rotate to New Domain
+#### Rotate to New Domain (Interactive)
 ```bash
 python domain_rotation_cli.py rotate
 
@@ -253,6 +253,26 @@ Proceed with purchase? (yes/no): yes
 Purchasing domain...
 
 ✅ Successfully purchased and activated: n5x8q2k7.xyz
+```
+
+#### Rotate to New Domain (Automation / Non-Interactive)
+```bash
+# Skip interactive confirmation:
+python domain_rotation_cli.py rotate --yes --max-price 4.00 --max-attempts 30
+
+# Fully non-interactive command with JSON output:
+python domain_rotation_cli.py rotate-auto --max-price 4.00 --max-attempts 30 --json
+
+# Dry-run candidate discovery (no purchase):
+python domain_rotation_cli.py rotate-auto --dry-run --json
+```
+
+Environment variable overrides (useful in CI/cron):
+
+```bash
+export OPSECHAT_DOMAIN_API_KEY="pk1_..."
+export OPSECHAT_DOMAIN_API_SECRET="sk1_..."
+export OPSECHAT_DOMAIN_MONTHLY_BUDGET="25.00"
 ```
 
 #### List Owned Domains

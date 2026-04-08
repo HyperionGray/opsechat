@@ -93,24 +93,46 @@ python domain_rotation_cli.py config
 python domain_rotation_cli.py status
 python domain_rotation_cli.py search
 python domain_rotation_cli.py rotate
+python domain_rotation_cli.py rotate --yes
+python domain_rotation_cli.py rotate-auto --dry-run --json
+python domain_rotation_cli.py rotate-auto --max-price 3.00 --max-attempts 40 --json
 python domain_rotation_cli.py list
 ```
 
 Notes:
 
 - `rotate` is interactive and asks for purchase confirmation.
+- `rotate --yes` skips the confirmation prompt for scripted runs.
+- `rotate-auto` is non-interactive and returns exit codes for automation tools.
 - CLI state is persisted in `~/.opsechat/domain_config.json`.
 - Owned domain timestamps are stored in ISO format and restored automatically.
 
+### CLI exit codes (`rotate-auto`)
+
+- `0`: Success (or dry-run candidate found)
+- `2`: Budget exhausted
+- `3`: No candidate domain found in attempt window
+- `4`: Purchase call failed
+
 ## Automation
 
-For unattended automation (cron), prefer a Python one-liner over the interactive CLI:
+For unattended automation, use `rotate-auto` with environment variables.
+
+Environment variables supported by the CLI:
+
+- `OPSECHAT_DOMAIN_API_KEY`
+- `OPSECHAT_DOMAIN_API_SECRET`
+- `OPSECHAT_DOMAIN_MONTHLY_BUDGET`
+
+These override values from `~/.opsechat/domain_config.json` at runtime.
+
+Example cron entry:
 
 ```bash
-0 2 * * 0 cd /path/to/opsechat && python3 -c "from domain_manager import domain_rotation_manager; domain_rotation_manager.configure('pk1_x','sk1_y',20.0); print(domain_rotation_manager.rotate_to_new_domain())"
+0 2 * * 0 cd /path/to/opsechat && OPSECHAT_DOMAIN_API_KEY=pk1_x OPSECHAT_DOMAIN_API_SECRET=sk1_y OPSECHAT_DOMAIN_MONTHLY_BUDGET=20 python3 domain_rotation_cli.py rotate-auto --max-price 4.00 --json >> /var/log/opsechat-domain-rotation.log 2>&1
 ```
 
-Replace credentials with secure secret loading in production environments.
+In production, inject these via your scheduler or service environment rather than hardcoding secrets.
 
 ## Multi-Provider Extension
 
