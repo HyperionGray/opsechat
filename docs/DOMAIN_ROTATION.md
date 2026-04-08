@@ -68,20 +68,23 @@ else:
 ### CLI Commands
 
 ```bash
-# Check available cheap domains
-python -c "from domain_manager import domain_rotation_manager; \
-    print(domain_rotation_manager.search_cheap_domains(tlds=['xyz', 'club', 'online']))"
+# Configure API credentials and monthly budget
+python domain_rotation_cli.py config
 
-# Get current budget status
-python -c "from domain_manager import domain_rotation_manager; \
-    print(f'Budget: ${domain_rotation_manager.budget_manager.monthly_budget}'); \
-    print(f'Spent: ${domain_rotation_manager.budget_manager.get_month_spending()}'); \
-    print(f'Remaining: ${domain_rotation_manager.budget_manager.get_remaining_budget()}')"
+# Show status and active domain
+python domain_rotation_cli.py status
 
-# Rotate to new domain
-python -c "from domain_manager import domain_rotation_manager; \
-    result = domain_rotation_manager.rotate_to_new_domain(); \
-    print(result)"
+# Search for cheap available domains (dry run)
+python domain_rotation_cli.py search
+
+# Purchase and rotate to a new domain
+python domain_rotation_cli.py rotate
+
+# List owned domains from local state
+python domain_rotation_cli.py list
+
+# Prune expired domains from local state
+python domain_rotation_cli.py prune
 ```
 
 ### Automated Rotation
@@ -93,7 +96,7 @@ Set up a cron job for weekly rotation:
 crontab -e
 
 # Add rotation job (runs every Sunday at 2 AM)
-0 2 * * 0 cd /path/to/opsechat && python -c "from domain_manager import domain_rotation_manager; domain_rotation_manager.rotate_to_new_domain()"
+0 2 * * 0 cd /path/to/opsechat && python domain_rotation_cli.py rotate
 ```
 
 ## Budget Management
@@ -361,30 +364,9 @@ domain = domain_rotation_manager.generate_domain_from_pattern(pattern, tld='xyz'
 
 ## CLI Reference
 
-All domain rotation commands:
-
-```bash
-# Check available domains
-python -m domain_manager search --tld xyz --max-price 2.00
-
-# Purchase specific domain
-python -m domain_manager purchase --domain example.xyz
-
-# Rotate to new random domain
-python -m domain_manager rotate
-
-# Check budget status
-python -m domain_manager budget status
-
-# Set monthly budget
-python -m domain_manager budget set --amount 20.00
-
-# List all active domains
-python -m domain_manager list
-
-# Configure DNS
-python -m domain_manager dns --domain example.xyz --mx "mail.example.xyz"
-```
+The supported CLI entrypoint is `domain_rotation_cli.py`.
+Some older examples in this document that use `python -m domain_manager ...`
+are historical and not implemented by the current code.
 
 ## Summary
 

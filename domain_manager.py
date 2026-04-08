@@ -6,7 +6,7 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -130,6 +130,7 @@ class DomainRotationManager:
     def __init__(self, api_client: Optional[DomainAPIClient] = None, 
                  monthly_budget: float = 50.0):
         self.api_client = api_client
+        self._configured_provider: Optional[str] = "porkbun" if api_client else None
         self.monthly_budget = monthly_budget
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
@@ -138,6 +139,100 @@ class DomainRotationManager:
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+        self._configured_provider = "porkbun"
+
+    def configure(self, api_key: str, secret_key: str, monthly_budget: float = 50.0) -> Dict[str, Any]:
+        """
+        Configure domain rotation with Porkbun credentials.
+        Credentials are kept in-memory only.
+        """
+        if not api_key or not secret_key:
+            raise ValueError("api_key and secret_key are required")
+
+        self.api_client = PorkbunAPIClient(api_key, secret_key)
+        self._configured_provider = "porkbun"
+        self.monthly_budget = float(monthly_budget)
+        return self.get_config()
+
+    def get_config(self) -> Dict[str, Any]:
+        """Return safe, non-secret configuration and status details."""
+        return {
+            "configured": self.api_client is not None,
+            "provider": self._configured_provider,
+            "monthly_budget": self.monthly_budget,
+            "active_domain": self.active_domain,
+            "budget_status": self.get_budget_status(),
+        }
+
+    @staticmethod
+    def _serialize_datetime(value: Any) -> Any:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+
+    @staticmethod
+    def _deserialize_datetime(value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        try:
+            normalized = value.replace("Z", "+00:00")
+            return datetime.fromisoformat(normalized)
+        except ValueError:
+            return value
+
+    @staticmethod
+    def _coerce_price(value: Any, default: float = 999.0) -> float:
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            cleaned = value.replace("$", "").replace("€", "").strip()
+            try:
+                return float(cleaned)
+            except ValueError:
+                return default
+        return default
+
+    def get_state(self) -> Dict[str, Any]:
+        """Return JSON-serializable runtime state."""
+        serialized_domains: List[Dict[str, Any]] = []
+        for item in self.owned_domains:
+            if not isinstance(item, dict):
+                continue
+            entry = dict(item)
+            entry["purchased_at"] = self._serialize_datetime(entry.get("purchased_at"))
+            entry["expires_at"] = self._serialize_datetime(entry.get("expires_at"))
+            serialized_domains.append(entry)
+
+        return {
+            "current_spending": self.current_spending,
+            "owned_domains": serialized_domains,
+            "active_domain": self.active_domain,
+        }
+
+    def load_state(self, state: Optional[Dict[str, Any]]) -> None:
+        """Load runtime state produced by get_state."""
+        if not state:
+            return
+
+        try:
+            self.current_spending = float(state.get("current_spending", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            self.current_spending = 0.0
+
+        domains = state.get("owned_domains", [])
+        normalized_domains: List[Dict[str, Any]] = []
+        for item in domains:
+            if not isinstance(item, dict):
+                continue
+            entry = dict(item)
+            entry["purchased_at"] = self._deserialize_datetime(entry.get("purchased_at"))
+            entry["expires_at"] = self._deserialize_datetime(entry.get("expires_at"))
+            normalized_domains.append(entry)
+
+        self.owned_domains = normalized_domains
+        self.active_domain = state.get("active_domain")
+        if self.active_domain and not any(d.get("domain") == self.active_domain for d in self.owned_domains):
+            self.active_domain = self.owned_domains[0]["domain"] if self.owned_domains else None
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -168,12 +263,7 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
-                
+                price = self._coerce_price(result.get("price"), default=999.0)
                 if price <= max_price:
                     return {
                         "domain": domain,
@@ -251,6 +341,33 @@ class DomainRotationManager:
     def get_owned_domains(self) -> List[Dict]:
         """Get list of owned domains"""
         return self.owned_domains
+
+    def prune_expired_domains(self, now: Optional[datetime] = None) -> int:
+        """
+        Remove expired domains from local state.
+        Returns number of removed domains.
+        """
+        reference_time = now or datetime.now()
+        retained: List[Dict] = []
+        removed = 0
+
+        for entry in self.owned_domains:
+            expires_at = entry.get("expires_at")
+            parsed_expires = self._deserialize_datetime(expires_at)
+            if isinstance(parsed_expires, datetime) and parsed_expires <= reference_time:
+                removed += 1
+                continue
+
+            if parsed_expires is not expires_at:
+                entry = dict(entry)
+                entry["expires_at"] = parsed_expires
+            retained.append(entry)
+
+        self.owned_domains = retained
+        if self.active_domain and not any(item.get("domain") == self.active_domain for item in retained):
+            self.active_domain = retained[0]["domain"] if retained else None
+
+        return removed
     
     def get_budget_status(self) -> Dict:
         """Get budget information"""

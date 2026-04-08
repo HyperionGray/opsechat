@@ -176,15 +176,16 @@ def create_email_security_blueprint(id_generator, get_random_color):
             return jsonify({"success": False, "error": "No session"})
         
         try:
-            result = transport_manager.receive_emails()
-            
-            # Store received emails
-            if result["success"] and result["emails"]:
-                for email_data in result["emails"]:
-                    email_storage.add_email(session["_id"], email_data)
-            
-            return jsonify(result)
-        except Exception as e:
+            emails = transport_manager.receive_emails()
+            for email_data in emails:
+                email_storage.add_email(session["_id"], email_data)
+
+            return jsonify({
+                "success": True,
+                "emails": emails,
+                "count": len(emails),
+            })
+        except Exception:
             logging.exception("Error in email_receive_api")
             return jsonify({"success": False, "error": "Failed to receive emails"})
 
@@ -199,9 +200,11 @@ def create_email_security_blueprint(id_generator, get_random_color):
             return jsonify({"success": False, "error": "No session"})
         
         try:
-            result = domain_rotation_manager.rotate_domain()
-            return jsonify(result)
-        except Exception as e:
+            domain = domain_rotation_manager.rotate_domain()
+            if domain:
+                return jsonify({"success": True, "domain": domain})
+            return jsonify({"success": False, "error": "Could not rotate domain within budget"})
+        except Exception:
             logging.exception("Error in email_domain_rotate")
             return jsonify({"success": False, "error": "Failed to rotate domain"})
 
