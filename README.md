@@ -2,22 +2,23 @@
 **Documentation:** [docs/README.md](docs/README.md)  
 **License:** MIT
 
-## 🆕 NEW: Enhanced Security & Production Ready
+## NEW: Enhanced Security & Production Ready
 
 **Latest Updates (v0.8.0):**
-- 🔑 **Automated Key Exchange** - No manual key sharing needed
-- 💬 **Direct Messages** - Ephemeral DM feature for sharing room IDs (1-min expiry)
-- 🔒 **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
-- 🌐 **Domain Rotation CLI** - Easy burner email domain management
-- 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
-- ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use
-- 🚀 **Production Deployment** - Robust systemd units with auto-restart
+- **Automated Key Exchange** - No manual key sharing needed
+- **Direct Messages** - Ephemeral DM feature for sharing room IDs (1-min expiry)
+- **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
+- **Domain Rotation CLI** - Easy burner email domain management
+- **Email Rate Limiting** - 10 emails/hour to prevent abuse
+- **Strong Security Warnings** - Clear messaging about acceptable use
+- **Production Deployment** - Robust systemd units with auto-restart
+- **Container Readiness Endpoint** - New `/ready` probe for orchestrator healthchecks
 
-📖 **Full Details:** [New Features Guide](docs/NEW_FEATURES.md)
+Full details: [New Features Guide](docs/NEW_FEATURES.md)
 
 ---
 
-## 🆕 Simple Web-Based Chat Rooms
+## Simple Web-Based Chat Rooms
 
 **Secure, ephemeral chat rooms with one command - Web or TUI.**
 

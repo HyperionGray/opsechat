@@ -232,6 +232,10 @@ podman-compose -f container-compose.yml up -d --build
 docker-compose -f container-compose.yml up -d --build
 ```
 
+Health probes:
+- `/health` is a lightweight liveness endpoint for diagnostics.
+- `/ready` is the readiness endpoint used by container healthchecks.
+
 ### Running Tests
 
 Tests should be run outside containers on the host:

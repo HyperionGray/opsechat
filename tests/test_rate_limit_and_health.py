@@ -1,5 +1,5 @@
 """
-Tests for rate limiting (simple_chat_routes) and the /health endpoint (app_factory).
+Tests for rate limiting and health/readiness endpoints (app_factory).
 """
 
 import datetime
@@ -165,4 +165,43 @@ def test_health_endpoint_date_header_is_blank():
     client = _test_app.test_client()
     response = client.get("/health")
 
+    assert response.headers["Date"] == ""
+
+
+def test_ready_endpoint_returns_200_and_required_fields():
+    client = _test_app.test_client()
+    response = client.get("/ready")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data is not None
+    assert data.get("status") == "ready"
+    assert data.get("ready") is True
+    assert "timestamp" in data
+    assert "uptime_seconds" in data
+    assert "version" in data
+    assert "checks" in data
+
+
+def test_ready_endpoint_checks_are_all_ok():
+    client = _test_app.test_client()
+    response = client.get("/ready")
+    data = response.get_json()
+
+    assert data["checks"] == {
+        "version_loaded": "ok",
+        "metrics_initialized": "ok",
+    }
+
+
+def test_ready_endpoint_sets_json_and_security_headers():
+    client = _test_app.test_client()
+    response = client.get("/ready")
+
+    assert response.content_type == "application/json"
+    assert response.headers["Content-Security-Policy"].startswith("default-src 'self';")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
+    assert response.headers["Server"] == ""
     assert response.headers["Date"] == ""

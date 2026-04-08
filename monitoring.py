@@ -310,7 +310,7 @@ def monitor_performance(operation_name: str):
 # Global APM instance
 apm = ApplicationPerformanceMonitor()
 
-# Health check endpoint data
+# Health and readiness endpoint data
 def _read_version() -> str:
     """Read version from VERSION file, falling back to 'unknown'"""
     version_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'VERSION')
@@ -336,6 +336,28 @@ def get_health_status() -> Dict[str, Any]:
             'memory_usage': 'ok',
             'disk_space': 'ok'
         }
+    }
+
+
+def get_readiness_status() -> Dict[str, Any]:
+    """Get application readiness status for orchestrator probes."""
+    version = _read_version()
+    checks = {
+        'version_loaded': version != 'unknown',
+        'metrics_initialized': isinstance(apm.metrics.get('system'), dict),
+    }
+    ready = all(checks.values())
+
+    return {
+        'status': 'ready' if ready else 'not_ready',
+        'ready': ready,
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
+        'version': version,
+        'checks': {
+            name: ('ok' if passed else 'fail')
+            for name, passed in checks.items()
+        },
     }
 
 # Security event logging

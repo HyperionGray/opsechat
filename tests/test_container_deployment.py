@@ -86,7 +86,7 @@ class TestDockerComposeConfig:
 
         healthcheck = config['services']['opsechat']['healthcheck']
         assert healthcheck['test'] == [
-            'CMD', 'curl', '--fail', '--silent', 'http://127.0.0.1:5000/health'
+            'CMD', 'curl', '--fail', '--silent', 'http://127.0.0.1:5000/ready'
         ]
 
 
@@ -123,7 +123,7 @@ class TestDockerfile:
             content = f.read()
 
         assert 'HEALTHCHECK' in content
-        assert '/health' in content
+        assert '/ready' in content
     
     def test_dockerfile_copies_app_files(self):
         dockerfile_path = self.get_dockerfile_path()
