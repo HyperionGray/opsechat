@@ -126,21 +126,51 @@ http://yourservice.onion/{path}/email/config
 
 ## Domain Rotation Workflow
 
-1. **Initial Setup**: Configure API and budget
-2. **Generate Burner**: Creates email with current domain
-3. **Auto-Rotate**: When domain is flagged/old, rotate to new domain
-4. **Manual Rotate**: Force rotation via email config page
+1. **Initial Setup**: Configure API credentials and monthly budget
+2. **Search**: Find candidates under your target max price
+3. **Rotate**: Purchase and activate one domain
+4. **Report**: Review budget and expiry state
+5. **Prune**: Remove expired domains from local CLI state
+
+CLI examples:
+
+```bash
+# Configure credentials and budget
+python domain_rotation_cli.py config
+
+# Find candidates under $3 with 8 attempts
+python domain_rotation_cli.py search --max-price 3 --attempts 8
+
+# Rotate without interactive confirmation (for automation)
+python domain_rotation_cli.py rotate --max-price 4 --yes
+
+# Show operational report
+python domain_rotation_cli.py report
+
+# Remove expired entries from local state
+python domain_rotation_cli.py prune
+```
+
+### State Persistence
+
+The CLI now persists manager state in a JSON-safe format:
+
+- Datetimes are stored as ISO-8601 strings
+- Legacy fields (`current_spending`, `owned_domains`, `active_domain`) are still written for compatibility
+- New canonical storage uses `manager_state`
 
 ## Security Considerations
 
 ### API Key Storage
 
-⚠️ **Important**: API keys are stored in-memory only. They are NOT persisted to disk. After restart, you must reconfigure.
+By default, the CLI writes credentials and local state to:
 
-For persistent configuration:
-- Use environment variables in your deployment
-- Store encrypted credentials separately
-- Never commit API keys to version control
+`~/.opsechat/domain_config.json`
+
+For safety:
+- File permissions are set to `0600`
+- Never commit this file or copy it into repositories
+- Prefer environment-managed secrets in production environments
 
 ### Domain Privacy
 
@@ -161,10 +191,10 @@ Solution: Configure the domain API in email config page
 
 ### "Budget exceeded"
 
-Solution: 
-1. Wait for budget reset (restart application)
-2. Increase monthly budget
-3. Check current spending in config page
+Solution:
+1. Review budget usage with `python domain_rotation_cli.py report`
+2. Increase monthly budget in `python domain_rotation_cli.py config`
+3. Use `--max-price` to keep purchases below a stricter threshold
 
 ### "Could not find available cheap domain"
 

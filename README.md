@@ -294,6 +294,23 @@ For Amazon Q setup instructions, see [Amazon Q Setup Guide](docs/setup/AMAZON_Q_
 
 For full documentation, see [Email System Guide](docs/user-guide/EMAIL_SYSTEM.md).
 
+### Domain Rotation CLI quick examples
+
+```bash
+# Configure credentials and monthly budget
+python domain_rotation_cli.py config
+
+# Search available domains under a price ceiling
+python domain_rotation_cli.py search --max-price 3 --attempts 8
+
+# Rotate without interactive confirmation (automation-friendly)
+python domain_rotation_cli.py rotate --max-price 4 --yes
+
+# Operational visibility and local cleanup
+python domain_rotation_cli.py report
+python domain_rotation_cli.py prune
+```
+
 Security & Code Quality
 =======================
 

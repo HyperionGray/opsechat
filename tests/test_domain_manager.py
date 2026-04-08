@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
+from datetime import datetime, timedelta
 
 
 class TestPorkbunAPIClient:
@@ -174,3 +175,100 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_export_state_serializes_datetime(self):
+        """Exported state should be JSON-safe."""
+        manager = DomainRotationManager(monthly_budget=20.0)
+        manager.current_spending = 4.5
+        manager.active_domain = "alpha.xyz"
+        manager.owned_domains = [{
+            "domain": "alpha.xyz",
+            "price": 2.25,
+            "purchased_at": datetime(2026, 1, 2, 3, 4, 5),
+            "expires_at": datetime(2027, 1, 2, 3, 4, 5),
+        }]
+
+        state = manager.export_state()
+
+        assert state["state_version"] == 1
+        assert state["current_spending"] == 4.5
+        assert state["active_domain"] == "alpha.xyz"
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(state["owned_domains"][0]["expires_at"], str)
+
+    def test_import_state_supports_iso_datetimes(self):
+        """Import should parse persisted datetime strings."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.import_state({
+            "current_spending": 7.2,
+            "active_domain": "beta.xyz",
+            "owned_domains": [{
+                "domain": "beta.xyz",
+                "price": "2.99",
+                "purchased_at": "2026-03-10T12:30:00",
+                "expires_at": "2027-03-10T12:30:00",
+            }],
+        })
+
+        assert manager.current_spending == 7.2
+        assert manager.active_domain == "beta.xyz"
+        assert len(manager.owned_domains) == 1
+        assert isinstance(manager.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(manager.owned_domains[0]["expires_at"], datetime)
+
+    def test_prune_expired_domains_updates_active_domain(self):
+        """Pruning should remove expired domains and recalculate active domain."""
+        now = datetime(2026, 4, 1, 12, 0, 0)
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.owned_domains = [
+            {
+                "domain": "expired.xyz",
+                "price": 1.99,
+                "purchased_at": now - timedelta(days=370),
+                "expires_at": now - timedelta(days=1),
+            },
+            {
+                "domain": "active.xyz",
+                "price": 2.99,
+                "purchased_at": now - timedelta(days=10),
+                "expires_at": now + timedelta(days=355),
+            },
+        ]
+        manager.active_domain = "expired.xyz"
+
+        removed = manager.prune_expired_domains(now=now)
+
+        assert removed == 1
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["domain"] == "active.xyz"
+        assert manager.active_domain == "active.xyz"
+
+    def test_get_domain_report(self):
+        """Operational report should include expiry and budget metrics."""
+        now = datetime(2026, 4, 1, 12, 0, 0)
+        manager = DomainRotationManager(monthly_budget=10.0)
+        manager.current_spending = 2.5
+        manager.active_domain = "good.xyz"
+        manager.owned_domains = [
+            {
+                "domain": "expired.xyz",
+                "price": 1.0,
+                "purchased_at": now - timedelta(days=400),
+                "expires_at": now - timedelta(days=1),
+            },
+            {
+                "domain": "good.xyz",
+                "price": 1.5,
+                "purchased_at": now - timedelta(days=5),
+                "expires_at": now + timedelta(days=360),
+            },
+        ]
+
+        report = manager.get_domain_report(now=now)
+
+        assert report["active_domain"] == "good.xyz"
+        assert report["domains_owned"] == 2
+        assert report["expired_domains"] == 1
+        assert report["next_expiry"] is not None
+        assert report["budget"]["monthly_budget"] == 10.0
+        assert report["budget_spent_percent"] == 25.0
