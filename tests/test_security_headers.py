@@ -52,3 +52,20 @@ class TestSecurityHeaders:
     def test_server_header_stripped(self):
         h = self._headers()
         assert h.get("Server", "") == ""
+
+    def test_legacy_html_endpoints_allow_inline_for_compat(self):
+        app = _fresh_app()
+        app.config["path"] = "secpath"
+        app.config["hostname"] = "localhost"
+        client = app.test_client()
+        csp = client.get("/secpath/mail").headers["Content-Security-Policy"]
+        assert "script-src 'self' 'unsafe-inline'" in csp
+        assert "style-src 'self' 'unsafe-inline'" in csp
+
+    def test_strict_endpoints_do_not_allow_inline(self):
+        app = _fresh_app()
+        app.config["path"] = "secpath"
+        app.config["hostname"] = "localhost"
+        client = app.test_client()
+        csp = client.get("/chat").headers["Content-Security-Policy"]
+        assert "unsafe-inline" not in csp

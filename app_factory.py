@@ -6,7 +6,7 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
     from rate_limiter import init_limiter
@@ -21,6 +21,55 @@ except ModuleNotFoundError:
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
+
+    STRICT_CSP = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self'; "
+        "img-src 'self' data:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "object-src 'none';"
+    )
+    LEGACY_COMPAT_CSP = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "object-src 'none';"
+    )
+    LEGACY_HTML_ENDPOINTS = {
+        # Legacy chat templates with inline script/style and event handlers.
+        "drop",
+        "drop_landing",
+        "drop_landing_auto",
+        "drop_yes",
+        "drop_noscript",
+        "chat_messages",
+        # Legacy email templates with inline script/style and event handlers.
+        "email_inbox",
+        "email_inbox_script",
+        "email_burner",
+        "email_burner_script",
+        "email_config",
+        "email_compose",
+        "email_view",
+        "email_edit",
+        # Legacy reviews/templates that include inline script blocks.
+        "reviews_main",
+        "reviews_script",
+        # HTTP mail UI template has inline handlers and script block.
+        "http_mail_index",
+        "http_mail_send",
+        "http_mail_inbox",
+        "http_mail_destroy",
+    }
     
     # Set secret key for sessions
     app.secret_key = id_generator(size=64)
@@ -72,18 +121,12 @@ def create_app():
     def add_security_headers(response):
         response.headers["Server"] = ""
         response.headers["Date"] = ""
-        # Content Security Policy: restrict resources to same origin, block inline scripts
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self'; "
-            "style-src 'self'; "
-            "img-src 'self' data:; "
-            "font-src 'self'; "
-            "connect-src 'self'; "
-            "frame-ancestors 'none';"
-        )
-        # Checklist:
-        # - [ ] Verify that no templates rely on inline <script> or style attributes.
+        # Strict-by-default CSP. Legacy HTML endpoints get temporary compatibility
+        # while templates are migrated away from inline handlers/styles.
+        endpoint = request.endpoint or ""
+        is_html = response.mimetype == "text/html"
+        csp_value = LEGACY_COMPAT_CSP if (is_html and endpoint in LEGACY_HTML_ENDPOINTS) else STRICT_CSP
+        response.headers["Content-Security-Policy"] = csp_value
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
