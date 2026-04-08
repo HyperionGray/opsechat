@@ -3,6 +3,7 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime, timedelta
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -211,3 +212,33 @@ class TestDomainRotationManager:
         assert switched is True
         assert manager.api_client is backup
         assert manager.active_provider == "backup"
+
+    def test_budget_status_rolls_over_on_new_month(self):
+        """Budget status should reset spending when month changes."""
+        manager = DomainRotationManager(monthly_budget=20.0)
+        manager.current_spending = 7.5
+        manager.set_spending_cycle_start(datetime.now() - timedelta(days=40))
+
+        status = manager.get_budget_status()
+
+        assert status["current_spending"] == 0.0
+        assert status["remaining"] == 20.0
+        cycle_start = datetime.fromisoformat(status["budget_cycle_start"])
+        now = datetime.now()
+        assert (cycle_start.year, cycle_start.month) == (now.year, now.month)
+
+    def test_purchase_uses_fresh_budget_after_month_rollover(self):
+        """Purchases should be allowed after automatic monthly rollover."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "freshbudget.xyz",
+        }
+        manager = DomainRotationManager(mock_client, monthly_budget=10.0)
+        manager.current_spending = 10.0
+        manager.set_spending_cycle_start(datetime.now() - timedelta(days=40))
+
+        result = manager.purchase_domain_if_budget_allows("freshbudget.xyz", 2.0)
+
+        assert result["success"] is True
+        assert manager.current_spending == 2.0

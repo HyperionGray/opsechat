@@ -115,9 +115,10 @@ Then modify the runserver.py to read these on startup.
 
 Opsechat includes budget controls to prevent accidental overspending:
 
-- **Monthly Budget**: Maximum amount to spend per month
+- **Monthly Budget**: Maximum amount to spend per calendar month
 - **Domain Price Limit**: Maximum price per domain (default: $5)
-- **Current Spending**: Tracked in-memory (resets on restart)
+- **Current Spending**: Tracked against a monthly cycle and auto-reset when a new month starts
+- **Budget Cycle Start**: Exposed in status for auditing rollover behavior
 
 View budget status:
 ```
@@ -151,7 +152,8 @@ All domains purchased through the API will use registrar privacy protection (Por
 - Always set a monthly budget
 - Start with a low budget for testing ($10-20)
 - Monitor spending in the config page
-- Budget resets on application restart (intentional for ephemeral deployments)
+- Budget usage auto-resets at the first operation in a new calendar month
+- In ephemeral deployments, restart behavior still depends on how runtime state is persisted
 
 ## Troubleshooting
 
@@ -161,8 +163,8 @@ Solution: Configure the domain API in email config page
 
 ### "Budget exceeded"
 
-Solution: 
-1. Wait for budget reset (restart application)
+Solution:
+1. Wait for the next monthly rollover window
 2. Increase monthly budget
 3. Check current spending in config page
 

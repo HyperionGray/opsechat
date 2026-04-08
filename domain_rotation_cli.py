@@ -150,6 +150,8 @@ def get_manager():
     # Load saved state
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
+    if config.get('spending_cycle_start'):
+        manager.set_spending_cycle_start(config['spending_cycle_start'])
     if config.get('owned_domains'):
         manager.owned_domains = _deserialize_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
@@ -160,7 +162,9 @@ def get_manager():
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
+    budget_status = manager.get_budget_status()
     config['current_spending'] = manager.current_spending
+    config['spending_cycle_start'] = budget_status.get("budget_cycle_start")
     config['owned_domains'] = _serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
     save_config(config)

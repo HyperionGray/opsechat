@@ -139,6 +139,7 @@ class DomainRotationManager:
             self.active_provider = "default"
         self.monthly_budget = monthly_budget
         self.current_spending = 0.0
+        self.spending_cycle_start = datetime.now()
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
         self.api_key: Optional[str] = None
@@ -218,6 +219,45 @@ class DomainRotationManager:
             except ValueError:
                 return None
         return None
+
+    @staticmethod
+    def _parse_datetime(value) -> Optional[datetime]:
+        """Parse datetime values loaded from config/state."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str) and value:
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return None
+        return None
+
+    def set_spending_cycle_start(self, cycle_start) -> datetime:
+        """Set the budget cycle start; falls back to now when invalid."""
+        parsed = self._parse_datetime(cycle_start)
+        self.spending_cycle_start = parsed or datetime.now()
+        return self.spending_cycle_start
+
+    def _refresh_budget_cycle(self, now: Optional[datetime] = None) -> bool:
+        """
+        Reset monthly spend when a new calendar month starts.
+
+        Returns True when a rollover reset happened.
+        """
+        reference_time = now or datetime.now()
+        current_cycle = (self.spending_cycle_start.year, self.spending_cycle_start.month)
+        reference_cycle = (reference_time.year, reference_time.month)
+
+        if current_cycle != reference_cycle:
+            logger.info(
+                "Resetting domain budget cycle from %s to %s",
+                self.spending_cycle_start.isoformat(),
+                reference_time.isoformat(),
+            )
+            self.current_spending = 0.0
+            self.spending_cycle_start = reference_time
+            return True
+        return False
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -326,6 +366,9 @@ class DomainRotationManager:
                 "domain": domain,
                 "message": "No API client configured",
             }
+
+        # Automatically start a new budget cycle when month changes.
+        self._refresh_budget_cycle()
         
         # Check budget
         if self.current_spending + price > self.monthly_budget:
@@ -422,11 +465,13 @@ class DomainRotationManager:
     
     def get_budget_status(self) -> Dict:
         """Get budget information"""
+        self._refresh_budget_cycle()
         return {
             "monthly_budget": self.monthly_budget,
             "current_spending": self.current_spending,
             "remaining": self.monthly_budget - self.current_spending,
-            "domains_owned": len(self.owned_domains)
+            "domains_owned": len(self.owned_domains),
+            "budget_cycle_start": self.spending_cycle_start.isoformat(),
         }
 
 
