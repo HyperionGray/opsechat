@@ -283,7 +283,7 @@ self.api_secret = secret_key.strip() if secret_key.strip() else None
         if limit <= 0:
             return []
 
-        attempts = max_attempts if max_attempts is not None else max(10, limit * 3)
+attempts = max_attempts if max_attempts is not None else min(max(10, limit * 3), 100)
         seen_domains = set()
         matches: List[Dict] = []
         cheap_tlds = tlds or ["xyz", "club", "online", "site", "website"]
