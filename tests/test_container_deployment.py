@@ -262,6 +262,16 @@ class TestScripts:
     def test_install_quadlets_script_exists(self):
         self.assert_script_location('install-quadlets.sh')
 
+    def test_compose_up_script_waits_for_health(self):
+        path = os.path.join(REPO_DIR, 'scripts', 'compose-up.sh')
+        with open(path) as f:
+            content = f.read()
+
+        assert 'OPSECHAT_STARTUP_TIMEOUT' in content
+        assert 'inspect --format' in content
+        assert 'Timed out waiting for services to become ready' in content
+        assert 'logs tor opsechat' in content
+
 
 class TestReleaseSkeleton:
     """Test the requested release layout exists."""

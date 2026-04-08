@@ -37,7 +37,16 @@ This script will:
 2. Build the opsechat container image
 3. Start the Tor daemon
 4. Start the opsechat application
-5. Display status and instructions
+5. Poll container state/health until both services are ready
+6. Fail fast with compose status/log diagnostics if startup becomes unhealthy
+7. Display follow-up status and instructions
+
+By default, `compose-up.sh` waits up to 120 seconds for readiness.
+You can override the timeout with:
+
+```bash
+OPSECHAT_STARTUP_TIMEOUT=180 ./compose-up.sh
+```
 
 ### Viewing the Onion Address
 
