@@ -15,7 +15,7 @@ This implementation delivers all features requested in the final push issue:
 
 1. **Automated Key Exchange** - No manual key sharing needed
 2. **Secure Room IDs** - Cryptographically secure, non-discoverable  
-3. **Direct Messages** - Ephemeral DMs for room sharing (1-min expiry)
+3. **Direct Messages** - Ephemeral DMs for room sharing (1-min expiry, burn-after-read)
 4. **Domain Rotation CLI** - Easy burner email domain management
 5. **Email Rate Limiting** - Prevents abuse (10 emails/hour)
 6. **Enhanced Security** - Message caps, XSS protection, base64 detection
@@ -46,7 +46,7 @@ docs/NEW_FEATURES.md        - NEW: Complete documentation
 
 ### 💬 Direct Messages
 - Purpose: Share room IDs securely
-- Expiry: 1 minute
+- Expiry: 1 minute (or immediately after first successful read)
 - Max length: 200 characters
 - API: `POST /chat/dm/send`, `GET /chat/dm/{dm_id}`
 
@@ -274,7 +274,8 @@ systemctl --user restart opsechat-app
 3. User A gets dm_id: `xyz789`
 4. User A shares DM URL with User B (out-of-band)
 5. User B: `GET /chat/dm/xyz789` (within 60 seconds)
-6. User B gets room_id and joins chat
+6. User B gets room_id; DM is burned immediately after this read
+7. User B joins chat
 
 ### Rotating Burner Email Domain
 1. Admin: `python domain_rotation_cli.py search`
