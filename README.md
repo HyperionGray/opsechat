@@ -13,7 +13,7 @@
 - ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use
 - 🚀 **Production Deployment** - Robust systemd units with auto-restart
 
-📖 **Full Details:** [New Features Guide](docs/NEW_FEATURES.md)
+Full Details: [New Features Guide](docs/user-guide/NEW_FEATURES.md)
 
 ---
 
@@ -73,7 +73,7 @@ tor --ControlPort 9051 --CookieAuthentication 1
 python tui-server.py --tor
 ```
 
-📖 **Full TUI Guide:** [TUI_README.md](TUI_README.md) | [Quick Start](docs/TUI_QUICKSTART.md)
+Full TUI Guide: [TUI_README.md](docs/user-guide/TUI_README.md) | [Quick Start](docs/user-guide/TUI_QUICKSTART.md)
 
 ---
 
