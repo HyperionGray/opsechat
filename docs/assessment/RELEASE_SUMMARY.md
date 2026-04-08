@@ -137,14 +137,14 @@ Result: CLEAN ✅
 **Workaround:** Document key exchange process clearly  
 **Timeline:** 5-7 days to implement automatic exchange
 
-### 2. Domain Rotation CLI (API Only)
+### 2. Domain Rotation CLI
 
-**Current:** Domain rotation via Python API only  
-**Desired:** Simple CLI tool `python rotate-domain.py`
+**Current:** Domain rotation supports both command-style and legacy flag-style CLIs  
+**CLI:** `python domain_rotation_cli.py` and compatibility wrapper `python rotate-domain.py`
 
-**Impact:** Low - Advanced users can use API  
-**Workaround:** Document API usage  
-**Timeline:** 1-2 days to create CLI tool
+**Impact:** Low - Available for both advanced and non-programmer usage  
+**Workaround:** N/A  
+**Timeline:** Completed
 
 ---
 
@@ -162,7 +162,7 @@ Result: CLEAN ✅
 
 **Release Notes Must Include:**
 - PGP key exchange is manual (not automatic)
-- Domain rotation requires Python API usage
+- Domain rotation available via dedicated CLI tools
 - Alpha quality - limited feature set
 - Known limitations documented
 

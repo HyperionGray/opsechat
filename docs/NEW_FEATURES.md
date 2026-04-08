@@ -273,6 +273,17 @@ Output:
    Expires: 2027-03-02
 ```
 
+#### Legacy-Compatible Flag Wrapper
+```bash
+# Same operations using the legacy flag syntax
+python rotate-domain.py --status
+python rotate-domain.py --search
+python rotate-domain.py --search example.xyz
+python rotate-domain.py --buy example.xyz --years 1
+python rotate-domain.py --list-owned
+python rotate-domain.py --get-pricing xyz
+```
+
 ### Integration with Burner Email
 After rotating domains, update your email configuration:
 1. Run `python domain_rotation_cli.py status` to get active domain

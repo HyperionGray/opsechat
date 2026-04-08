@@ -1,7 +1,6 @@
 """
 Tests for domain management module
 """
-import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -112,6 +111,20 @@ class TestDomainRotationManager:
         assert result is not None
         assert result["domain"].endswith((".xyz", ".club", ".online", ".site", ".website"))
         assert result["price"] <= 5.0
+
+    def test_find_cheap_available_domain_skips_invalid_price(self):
+        """Invalid price values should be skipped instead of crashing."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.side_effect = [
+            {"available": True, "domain": "badprice.xyz", "price": "n/a"},
+            {"available": True, "domain": "goodprice.xyz", "price": "2.50"},
+        ]
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=2)
+
+        assert result is not None
+        assert result["price"] == 2.5
     
     def test_purchase_domain_if_budget_allows_success(self):
         """Test domain purchase within budget"""
@@ -129,6 +142,21 @@ class TestDomainRotationManager:
         assert manager.current_spending == 2.99
         assert len(manager.owned_domains) == 1
         assert manager.active_domain == "test123.xyz"
+
+    def test_purchase_domain_if_budget_allows_years_argument(self):
+        """Purchase should pass custom registration years to API client."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "test123.xyz",
+            "order_id": "12345"
+        }
+
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        result = manager.purchase_domain_if_budget_allows("test123.xyz", 2.99, years=2)
+
+        assert result is True
+        mock_client.purchase_domain.assert_called_once_with("test123.xyz", years=2)
     
     def test_purchase_domain_if_budget_allows_exceeds_budget(self):
         """Test domain purchase exceeds budget"""

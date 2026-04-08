@@ -17,12 +17,57 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 from getpass import getpass
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
-CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+DEFAULT_CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+CONFIG_FILE = Path(os.environ.get('OPSECHAT_DOMAIN_CONFIG', str(DEFAULT_CONFIG_FILE)))
+
+
+def _parse_datetime(value):
+    """Parse datetime values from config state."""
+    if isinstance(value, datetime):
+        return value
+    if not value:
+        return None
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def serialize_owned_domains(domains):
+    """Convert datetime objects to ISO strings for JSON storage."""
+    serialized = []
+    for domain in domains:
+        entry = dict(domain)
+        purchased_at = entry.get('purchased_at')
+        expires_at = entry.get('expires_at')
+        if isinstance(purchased_at, datetime):
+            entry['purchased_at'] = purchased_at.isoformat()
+        if isinstance(expires_at, datetime):
+            entry['expires_at'] = expires_at.isoformat()
+        serialized.append(entry)
+    return serialized
+
+
+def deserialize_owned_domains(domains):
+    """Convert persisted JSON domain entries to runtime-safe structures."""
+    deserialized = []
+    now = datetime.now()
+    for domain in domains:
+        entry = dict(domain)
+        purchased_at = _parse_datetime(entry.get('purchased_at')) or now
+        expires_at = _parse_datetime(entry.get('expires_at')) or (purchased_at + timedelta(days=365))
+        entry['purchased_at'] = purchased_at
+        entry['expires_at'] = expires_at
+        deserialized.append(entry)
+    return deserialized
 
 
 def load_config():
@@ -109,20 +154,23 @@ def get_manager():
     )
     
     # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
+    if 'current_spending' in config:
+        try:
+            manager.current_spending = float(config['current_spending'])
+        except (TypeError, ValueError):
+            manager.current_spending = 0.0
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = deserialize_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+        manager.active_domain = str(config['active_domain'])
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['current_spending'] = float(manager.current_spending)
+    config['owned_domains'] = serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -141,11 +189,15 @@ def list_domains():
         return
     
     for i, domain in enumerate(domains, 1):
-        active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
-        print(f"{i}. {domain['domain']}{active}")
-        print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        active = " [ACTIVE]" if domain.get('domain') == manager.active_domain else ""
+        purchased_at = _parse_datetime(domain.get('purchased_at'))
+        expires_at = _parse_datetime(domain.get('expires_at'))
+        purchased_label = purchased_at.strftime('%Y-%m-%d %H:%M') if purchased_at else str(domain.get('purchased_at', 'N/A'))
+        expires_label = expires_at.strftime('%Y-%m-%d') if expires_at else str(domain.get('expires_at', 'N/A'))
+        print(f"{i}. {domain.get('domain', 'unknown')}{active}")
+        print(f"   Price: ${domain.get('price', 'N/A')}")
+        print(f"   Purchased: {purchased_label}")
+        print(f"   Expires: {expires_label}")
         print()
 
 
