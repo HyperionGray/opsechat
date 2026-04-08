@@ -170,6 +170,7 @@ class TestDomainRotationManager:
         }
         
         manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        manager.generate_random_domain = Mock(return_value="test456.xyz")
         result = manager.rotate_domain()
         
         assert result["success"] is True
