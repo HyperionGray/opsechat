@@ -11,6 +11,7 @@ This is a serious privacy and opsec tool for serious privacy and opsec people. I
 ✅ **Randomized Usernames** - Server-assigned, no "Jerry Here" problem  
 ✅ **Text Only** - No images, no video, no b64 encoded garbage  
 ✅ **Message Validation** - Max 1000 chars, prevents b64 image encoding  
+✅ **Rate Limiting** - Per-user anti-spam guard (20 messages / 30 seconds by default)  
 ✅ **Secure Deletion** - Messages overwritten before removal  
 ✅ **Zero Disk** - Nothing touches disk except the application code  
 ✅ **Tor Integration** - Full support for Tor hidden services (.onion)  
@@ -135,10 +136,26 @@ sudo systemctl start tor
 
 - **Max message length**: 1000 characters
 - **Message lifetime**: 4 minutes (240 seconds)
+- **Rate limit**: 20 messages per 30 seconds per user (server-side, configurable)
 - **Max chat history**: 200 messages in client (memory management)
 - **No images**: Text only, no exceptions
 - **No video**: Text only, no exceptions
 - **No b64 encoding**: Large base64-like strings are rejected
+
+If you exceed the message rate limit, the server sends a system notification to your client and drops the extra message.
+
+### Rate-Limit Tuning
+
+Adjust server-side thresholds when needed:
+
+```bash
+# Example: allow up to 10 messages every 60 seconds per user
+python tui-server.py --rate-limit-max 10 --rate-limit-window 60
+```
+
+Defaults:
+- `--rate-limit-max 20`
+- `--rate-limit-window 30`
 
 ## Architecture
 

@@ -241,7 +241,7 @@ See `docs/TUI_TODO.md` for detailed roadmap:
 ### Remaining Considerations
 - No E2E encryption yet (Tor provides transport encryption)
 - No user authentication (ephemeral by design)
-- No spam prevention (future: rate limiting)
+- Message rate limiting now implemented (per-user sliding window, configurable)
 
 ## Conclusion
 

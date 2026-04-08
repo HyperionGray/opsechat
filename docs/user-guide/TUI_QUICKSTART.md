@@ -37,6 +37,9 @@ python -c "import urwid, socks, stem; print('✓ All dependencies installed')"
 
 ```bash
 python tui-server.py
+
+# Optional: tune anti-spam limit (default is 20 messages / 30 seconds per user)
+python tui-server.py --rate-limit-max 10 --rate-limit-window 20
 ```
 
 You should see:
@@ -48,6 +51,7 @@ You should see:
 [*] OpSecChat TUI Server running on 127.0.0.1:5555
 [*] Messages burn after 240 seconds
 [*] Max message length: 1000 chars
+[*] Rate limit: 20 messages per 30 seconds per user
 [*] Press Ctrl+C to stop
 ```
 
@@ -140,6 +144,7 @@ The client automatically detects `.onion` and uses Tor SOCKS proxy.
 
 ### ✅ Security Features
 - **Message Validation** - Max 1000 chars
+- **Per-User Rate Limiting** - Default 20 messages per 30 seconds
 - **Secure Deletion** - Overwrite before delete
 - **No Configuration Files** - Ephemeral by design
 - **No Logs** - Zero persistence
