@@ -312,3 +312,61 @@ class TestDMEndpoints:
             json={"room_id": self.room_id, "message": "x" * 201},
         )
         assert resp.status_code == 400
+
+
+# ===========================================================================
+# /<path>/email/config and /<path>/email/domain/rotate
+# ===========================================================================
+
+class TestEmailConfigurationEndpoints:
+    def setup_method(self):
+        _clear_rooms()
+        _clear_dms()
+        from domain_manager import domain_rotation_manager
+        domain_rotation_manager.api_client = None
+        domain_rotation_manager.api_provider = None
+        domain_rotation_manager.active_domain = None
+        domain_rotation_manager.owned_domains = []
+        domain_rotation_manager.current_spending = 0.0
+        domain_rotation_manager.monthly_budget = 50.0
+        self.app = _fresh_app()
+        self.app.config["path"] = "test-path-12345"
+        self.app.config["hostname"] = "localhost"
+        self.client = self.app.test_client()
+
+    def test_email_config_page_loads(self):
+        resp = self.client.get("/test-path-12345/email/config")
+        assert resp.status_code == 200
+        body = resp.get_data(as_text=True)
+        assert "Email System Configuration" in body
+
+    def test_email_config_rejects_wrong_path(self):
+        resp = self.client.get("/wrong-path/email/config")
+        assert resp.status_code == 404
+
+    def test_domain_config_submission_succeeds(self):
+        resp = self.client.post(
+            "/test-path-12345/email/config",
+            data={
+                "action": "configure_domain_api",
+                "api_key": "pk_test",
+                "api_secret": "sk_test",
+                "monthly_budget": "12.5",
+            },
+        )
+        assert resp.status_code == 200
+        body = resp.get_data(as_text=True)
+        assert "Domain API configuration saved successfully" in body
+
+    def test_domain_rotate_without_client_returns_400(self):
+        # Ensure manager is reset to unconfigured state.
+        from domain_manager import domain_rotation_manager
+        domain_rotation_manager.api_client = None
+        domain_rotation_manager.active_domain = None
+        domain_rotation_manager.owned_domains = []
+        domain_rotation_manager.current_spending = 0.0
+
+        resp = self.client.post("/test-path-12345/email/domain/rotate")
+        assert resp.status_code == 400
+        body = resp.get_data(as_text=True)
+        assert "Could not rotate to a new domain within current constraints" in body

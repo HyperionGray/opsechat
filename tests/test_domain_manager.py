@@ -1,7 +1,7 @@
 """
 Tests for domain management module
 """
-import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +174,78 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_export_state_serializes_datetimes(self):
+        """State export should be JSON-serializable."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 3.5
+        manager.active_domain = "example.xyz"
+        manager.owned_domains = [{
+            "domain": "example.xyz",
+            "price": 3.5,
+            "purchased_at": datetime(2026, 1, 2, 3, 4, 5),
+            "expires_at": datetime(2027, 1, 2, 3, 4, 5),
+        }]
+
+        state = manager.export_state()
+
+        assert state["monthly_budget"] == 50.0
+        assert state["current_spending"] == 3.5
+        assert state["active_domain"] == "example.xyz"
+        assert isinstance(state["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(state["owned_domains"][0]["expires_at"], str)
+
+    def test_import_state_deserializes_datetimes(self):
+        """State import should restore datetime fields."""
+        manager = DomainRotationManager(monthly_budget=20.0)
+        manager.import_state({
+            "monthly_budget": 40.0,
+            "current_spending": 5.0,
+            "active_domain": "restored.xyz",
+            "owned_domains": [{
+                "domain": "restored.xyz",
+                "price": 5.0,
+                "purchased_at": "2026-01-02T03:04:05",
+                "expires_at": "2027-01-02T03:04:05",
+            }],
+        })
+
+        assert manager.monthly_budget == 40.0
+        assert manager.current_spending == 5.0
+        assert manager.active_domain == "restored.xyz"
+        assert isinstance(manager.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(manager.owned_domains[0]["expires_at"], datetime)
+
+    def test_configure_and_get_config(self):
+        """Manager should expose route-friendly configuration API."""
+        manager = DomainRotationManager()
+        cfg = manager.configure(
+            api_key="pk_test",
+            secret_key="sk_test",
+            monthly_budget=15.0,
+        )
+
+        assert cfg["configured"] is True
+        assert cfg["provider"] == "porkbun"
+        assert cfg["monthly_budget"] == 15.0
+        assert cfg["remaining_budget"] == 15.0
+
+    def test_rotate_domain_with_result_success(self):
+        """Structured rotation API should include success metadata."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "result.xyz",
+            "price": 2.5
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "result.xyz"
+        }
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+
+        result = manager.rotate_domain_with_result()
+
+        assert result["success"] is True
+        assert result["domain"] == manager.active_domain
+        assert "budget_status" in result

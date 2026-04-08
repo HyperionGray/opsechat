@@ -39,6 +39,7 @@ Documentation for end users and operators.
 
 - [Email System](user-guide/EMAIL_SYSTEM.md) - Comprehensive email documentation
 - [Email Quick Start](user-guide/EMAIL_QUICKSTART.md) - Quick email setup guide
+- [Domain Rotation](DOMAIN_ROTATION.md) - Burner domain rotation via CLI and web config
 - [PGP Usage](user-guide/PGP_USAGE.md) - PGP encryption guide
 - [PGP Test Examples](user-guide/PGP_TEST_EXAMPLE.md) - PGP testing examples
 - [Testing Guide](user-guide/TESTING.md) - How to run tests
@@ -67,6 +68,7 @@ Implementation details and summaries of major features.
 - [CI/CD Implementation](implementation/CI_CD_IMPLEMENTATION_SUMMARY.md) - CI/CD setup
 - [Containerization Summary](implementation/CONTAINERIZATION_SUMMARY.md) - Container implementation
 - [jQuery Security Update](implementation/JQUERY_SECURITY_UPDATE.md) - jQuery 3.7.1 update
+- [Domain Rotation Guide](DOMAIN_ROTATION.md) - Domain rotation manager, CLI, and web config flow
 - [Changelog](implementation/CHANGELOG.md) - Version history
 - [PR Summaries](implementation/PR_SUMMARY.md) - Pull request summaries
 
