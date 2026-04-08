@@ -6,7 +6,7 @@ import requests
 import random
 import string
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -138,6 +138,32 @@ class DomainRotationManager:
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
         self.api_client = api_client
+
+    @staticmethod
+    def _parse_datetime(value: Any, fallback: datetime) -> datetime:
+        """Parse persisted datetime values safely."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            normalized = value.replace("Z", "+00:00")
+            try:
+                return datetime.fromisoformat(normalized)
+            except ValueError:
+                logger.warning(f"Invalid datetime value in domain state: {value}")
+        return fallback
+
+    @staticmethod
+    def _parse_price(value: Any, fallback: float = 0.0) -> float:
+        """Parse price values that may include currency symbols."""
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            cleaned = value.replace("$", "").replace("€", "").strip()
+            try:
+                return float(cleaned)
+            except ValueError:
+                logger.warning(f"Invalid price value in domain state: {value}")
+        return fallback
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
         """
@@ -168,11 +194,7 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
+                price = self._parse_price(result.get("price"), fallback=999.0)
                 
                 if price <= max_price:
                     return {
@@ -260,6 +282,70 @@ class DomainRotationManager:
             "remaining": self.monthly_budget - self.current_spending,
             "domains_owned": len(self.owned_domains)
         }
+
+    def export_state(self) -> Dict[str, Any]:
+        """
+        Export a JSON-serializable snapshot of manager state.
+        Useful for CLI persistence and automation workflows.
+        """
+        serialized_domains: List[Dict[str, Any]] = []
+        for domain in self.owned_domains:
+            purchased_at = domain.get("purchased_at")
+            expires_at = domain.get("expires_at")
+            serialized_domains.append({
+                "domain": domain.get("domain"),
+                "price": self._parse_price(domain.get("price")),
+                "purchased_at": purchased_at.isoformat() if isinstance(purchased_at, datetime) else None,
+                "expires_at": expires_at.isoformat() if isinstance(expires_at, datetime) else None,
+            })
+
+        return {
+            "current_spending": float(self.current_spending),
+            "active_domain": self.active_domain,
+            "owned_domains": serialized_domains,
+        }
+
+    def import_state(self, state: Optional[Dict[str, Any]]) -> None:
+        """Import persisted manager state from JSON-compatible data."""
+        if not state:
+            return
+
+        try:
+            self.current_spending = float(state.get("current_spending", 0.0))
+        except (TypeError, ValueError):
+            logger.warning("Invalid current_spending in domain state; using 0.0")
+            self.current_spending = 0.0
+
+        raw_active_domain = state.get("active_domain")
+        self.active_domain = raw_active_domain if isinstance(raw_active_domain, str) else None
+
+        imported_domains: List[Dict[str, Any]] = []
+        for raw_domain in state.get("owned_domains", []):
+            if not isinstance(raw_domain, dict):
+                continue
+
+            domain_name = raw_domain.get("domain")
+            if not isinstance(domain_name, str) or not domain_name:
+                continue
+
+            now = datetime.now()
+            purchased_at = self._parse_datetime(raw_domain.get("purchased_at"), now)
+            expires_at = self._parse_datetime(
+                raw_domain.get("expires_at"),
+                purchased_at + timedelta(days=365),
+            )
+            imported_domains.append({
+                "domain": domain_name,
+                "price": self._parse_price(raw_domain.get("price")),
+                "purchased_at": purchased_at,
+                "expires_at": expires_at,
+            })
+
+        self.owned_domains = imported_domains
+
+        # Ensure active domain points to an owned domain when available.
+        if self.active_domain and self.active_domain not in {d["domain"] for d in self.owned_domains}:
+            self.active_domain = self.owned_domains[0]["domain"] if self.owned_domains else None
 
 
 # Global domain rotation manager

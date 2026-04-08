@@ -3,6 +3,7 @@ Tests for domain management module
 """
 import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -174,3 +175,55 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_find_cheap_available_domain_parses_currency_price(self):
+        """Test that string prices with currency symbols are parsed safely."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "domain": "pricedomain.xyz",
+            "price": "$3.25",
+        }
+
+        manager = DomainRotationManager(mock_client)
+        result = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
+
+        assert result is not None
+        assert result["price"] == 3.25
+
+    def test_state_roundtrip_export_import(self):
+        """Test persisted state can be exported and imported losslessly."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        purchased_at = datetime.now()
+        expires_at = datetime.now()
+        manager.current_spending = 4.5
+        manager.active_domain = "active.xyz"
+        manager.owned_domains = [{
+            "domain": "active.xyz",
+            "price": "$4.50",
+            "purchased_at": purchased_at,
+            "expires_at": expires_at,
+        }]
+
+        exported = manager.export_state()
+
+        restored = DomainRotationManager(monthly_budget=50.0)
+        restored.import_state(exported)
+
+        assert restored.current_spending == 4.5
+        assert restored.active_domain == "active.xyz"
+        assert len(restored.owned_domains) == 1
+        assert restored.owned_domains[0]["price"] == 4.5
+        assert isinstance(restored.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(restored.owned_domains[0]["expires_at"], datetime)
+
+    def test_import_state_invalid_active_domain_falls_back(self):
+        """Test active domain fallback if persisted active domain is missing."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.import_state({
+            "current_spending": 1.0,
+            "active_domain": "missing.xyz",
+            "owned_domains": [{"domain": "kept.xyz", "price": 1.0}],
+        })
+
+        assert manager.active_domain == "kept.xyz"
