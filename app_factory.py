@@ -109,12 +109,17 @@ def create_app():
     from http_mail_routes import register_http_mail_routes
     register_http_mail_routes(app)
     
-    # Health check endpoint
-    from monitoring import get_health_status
+    # Health and readiness endpoints
+    from monitoring import get_health_status, get_readiness_status
 
     @app.route('/health', methods=["GET"])
     def health():
         return jsonify(get_health_status())
+
+    @app.route('/ready', methods=["GET"])
+    def ready():
+        payload, status_code = get_readiness_status()
+        return jsonify(payload), status_code
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])

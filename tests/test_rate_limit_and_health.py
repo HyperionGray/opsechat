@@ -1,5 +1,5 @@
 """
-Tests for rate limiting (simple_chat_routes) and the /health endpoint (app_factory).
+Tests for rate limiting plus /health and /ready endpoints.
 """
 
 import datetime
@@ -10,6 +10,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
+from monitoring import get_readiness_status
 from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
 
 # Shared test Flask app (avoids importing all of runserver.py)
@@ -166,3 +167,26 @@ def test_health_endpoint_date_header_is_blank():
     response = client.get("/health")
 
     assert response.headers["Date"] == ""
+
+
+def test_readiness_endpoint_returns_200_by_default():
+    client = _test_app.test_client()
+    response = client.get("/ready")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data["status"] == "ready"
+    assert data["checks"]["app_boot"] == "ok"
+    assert data["checks"]["tor_control_port"] == "skipped"
+
+
+def test_get_readiness_status_requires_tor_when_enabled(monkeypatch):
+    monkeypatch.setenv("OPSECHAT_REQUIRE_TOR_HEALTH", "1")
+    monkeypatch.setenv("TOR_CONTROL_HOST", "127.0.0.1")
+    monkeypatch.setenv("TOR_CONTROL_PORT", "1")
+
+    payload, status_code = get_readiness_status()
+
+    assert status_code == 503
+    assert payload["status"] == "not_ready"
+    assert payload["checks"]["tor_control_port"] == "failed"

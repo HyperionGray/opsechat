@@ -52,9 +52,9 @@ EXPOSE 5000
 ENV PYTHONUNBUFFERED=1
 ENV TOR_CONTROL_PORT=9051
 
-# Healthcheck: verify the Flask /health endpoint is responding
+# Healthcheck: verify readiness endpoint is responding
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl --fail --silent http://127.0.0.1:5000/health || exit 1
+    CMD curl --fail --silent http://127.0.0.1:5000/ready || exit 1
 
 # Run the application
 CMD ["python", "runserver.py"]

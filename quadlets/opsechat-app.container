@@ -25,6 +25,7 @@ ContainerName=opsechat-app
 # Environment variables
 Environment=TOR_CONTROL_PORT=9051
 Environment=TOR_CONTROL_HOST=opsechat-tor
+Environment=OPSECHAT_REQUIRE_TOR_HEALTH=1
 Environment=FLASK_DEBUG=0
 Environment=PYTHONUNBUFFERED=1
 
@@ -48,6 +49,11 @@ Terminal=true
 # Labels for identification
 Label=app=opsechat
 Label=component=flask-app
+HealthCmd=/usr/bin/curl --fail --silent http://127.0.0.1:5000/ready
+HealthInterval=30s
+HealthTimeout=5s
+HealthRetries=3
+HealthStartPeriod=10s
 
 [Service]
 # Auto-restart policy - keep service running at all times

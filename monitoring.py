@@ -8,8 +8,9 @@ import json
 import time
 import sys
 import os
+import socket
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 from functools import wraps
 import traceback
 
@@ -319,6 +320,58 @@ def _read_version() -> str:
             return f.read().strip()
     except OSError:
         return 'unknown'
+
+
+def _check_tor_control_port(host: str, port: int, timeout: float = 1.0) -> bool:
+    """Return True when the Tor control port can be reached."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def get_readiness_status() -> Tuple[Dict[str, Any], int]:
+    """
+    Return service readiness and HTTP status code.
+
+    By default, readiness only verifies that the app is running.
+    Set OPSECHAT_REQUIRE_TOR_HEALTH=1 to require Tor control port reachability.
+    """
+    require_tor = os.environ.get('OPSECHAT_REQUIRE_TOR_HEALTH', '0').strip().lower() in {
+        '1', 'true', 'yes', 'on'
+    }
+    tor_host = os.environ.get('TOR_CONTROL_HOST', '127.0.0.1')
+    try:
+        tor_port = int(os.environ.get('TOR_CONTROL_PORT', '9051'))
+    except ValueError:
+        tor_port = 9051
+
+    checks = {
+        'app_boot': 'ok',
+        'tor_control_port': 'skipped'
+    }
+
+    if require_tor:
+        tor_ok = _check_tor_control_port(tor_host, tor_port)
+        checks['tor_control_port'] = 'ok' if tor_ok else 'failed'
+        if not tor_ok:
+            return {
+                'status': 'not_ready',
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'checks': checks,
+                'details': {
+                    'tor_host': tor_host,
+                    'tor_port': tor_port,
+                    'reason': 'tor control port unreachable'
+                }
+            }, 503
+
+    return {
+        'status': 'ready',
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'checks': checks
+    }, 200
 
 
 def get_health_status() -> Dict[str, Any]:

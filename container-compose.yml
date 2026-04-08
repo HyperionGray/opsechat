@@ -33,6 +33,7 @@ services:
     environment:
       - TOR_CONTROL_PORT=9051
       - TOR_CONTROL_HOST=tor
+      - OPSECHAT_REQUIRE_TOR_HEALTH=1
       - FLASK_DEBUG=0
     # No ports exposed to host - access only via Tor hidden service
     # Uncomment for debugging/development only:
@@ -44,7 +45,7 @@ services:
     stdin_open: true
     tty: true
     healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:5000/health"]
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:5000/ready"]
       interval: 30s
       timeout: 5s
       retries: 3

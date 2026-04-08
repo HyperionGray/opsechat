@@ -8,6 +8,10 @@ The containerized setup includes:
 - **Tor daemon container**: Runs the Tor service with control port enabled
 - **Opsechat application container**: Runs the Flask application with chat, email, and burner email features
 
+Readiness and liveness endpoints:
+- `GET /health` = liveness/status metadata
+- `GET /ready` = readiness (optionally requires Tor connectivity)
+
 The compose file is `container-compose.yml` (a `docker-compose.yml` symlink exists for backward compatibility).
 
 ## Prerequisites
@@ -56,6 +60,22 @@ Look for a line like:
 [*] Your service is available at: abc123...xyz.onion/randompath
 ```
 
+### Health and Readiness Checks
+
+The app now exposes two separate operational endpoints:
+
+- **Liveness**: `http://127.0.0.1:5000/health`
+  - Returns process health details (uptime/version/check summary)
+  - Useful for diagnostics and dashboards
+
+- **Readiness**: `http://127.0.0.1:5000/ready`
+  - Returns `200` only when the service is ready to receive traffic
+  - In container configs, readiness requires Tor control-port reachability
+    (`OPSECHAT_REQUIRE_TOR_HEALTH=1`)
+
+Docker/Podman healthchecks use `/ready`, not `/health`, so startup and restart
+policies are based on real dependency readiness.
+
 ### Verifying the Setup
 
 Run the verification script to check that everything is working:
@@ -69,6 +89,7 @@ This will check:
 - Tor service health
 - Network connectivity
 - Hidden service address
+- App readiness endpoint
 
 ### Viewing Logs
 

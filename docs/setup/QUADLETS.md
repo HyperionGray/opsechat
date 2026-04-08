@@ -132,6 +132,7 @@ Key settings:
 - No ports exposed to host (Tor-only access)
 - Environment variables for Tor connection
 - Depends on Tor container being healthy
+- Readiness healthcheck probes `http://127.0.0.1:5000/ready`
 
 ## Managing Services
 

@@ -91,6 +91,15 @@ else
     echo "    Run: $COMPOSE_CMD -f $COMPOSE_FILE logs opsechat"
 fi
 
+# Check app readiness endpoint inside container
+echo ""
+echo -e "${YELLOW}[*]${NC} Checking app readiness endpoint..."
+if $COMPOSE_CMD -f "$COMPOSE_FILE" exec -T opsechat curl --fail --silent http://127.0.0.1:5000/ready &>/dev/null; then
+    echo -e "${GREEN}[✓]${NC} App readiness endpoint is healthy (/ready)"
+else
+    echo -e "${RED}[✗]${NC} App readiness endpoint failed (/ready)"
+fi
+
 # Check network connectivity
 echo ""
 echo -e "${YELLOW}[*]${NC} Checking container network..."
