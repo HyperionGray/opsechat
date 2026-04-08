@@ -217,6 +217,10 @@ class ChatClient:
             username = msg.get('username', 'Unknown')
             message = msg.get('message', '')
             self.add_message(username, message)
+        
+        elif msg_type == 'system':
+            message = msg.get('message', 'System notice')
+            self.add_message("System", message, is_system=True)
     
     def update_footer(self):
         """Update the footer with current username"""

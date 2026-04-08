@@ -212,6 +212,16 @@ python tui-server.py --port 6666
 python tui-client.py --port 6666
 ```
 
+### Configure Server Message Rate Limiting
+
+```bash
+# Default behavior: 20 messages per 30 seconds per user
+python tui-server.py --rate-limit-count 20 --rate-limit-window 30
+
+# Stricter example: 8 messages per 20 seconds per user
+python tui-server.py --rate-limit-count 8 --rate-limit-window 20
+```
+
 ### Bind to All Interfaces
 
 ```bash

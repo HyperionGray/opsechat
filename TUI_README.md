@@ -135,6 +135,7 @@ sudo systemctl start tor
 
 - **Max message length**: 1000 characters
 - **Message lifetime**: 4 minutes (240 seconds)
+- **Rate limit**: 20 messages per 30 seconds per user (default)
 - **Max chat history**: 200 messages in client (memory management)
 - **No images**: Text only, no exceptions
 - **No video**: Text only, no exceptions
@@ -173,6 +174,9 @@ python -c "from src.tui.server import ChatServer; s = ChatServer(); print(s.gene
 
 # Test imports
 python -c "from src.tui import client, server; print('✓ Imports OK')"
+
+# Run focused TUI server unit tests
+python -m pytest tests/test_tui_server.py
 ```
 
 ### Code Structure
@@ -248,6 +252,21 @@ Messages are:
 - [ ] Multi-room support
 - [ ] Message signing/verification
 - [ ] Improved standardized identity system
+
+## Rate Limit Configuration
+
+Tune server-side anti-spam throttling at startup:
+
+```bash
+# Default behavior: 20 messages per 30 seconds per user
+python tui-server.py
+
+# Tighten limits for higher-risk deployments
+python tui-server.py --rate-limit-count 10 --rate-limit-window 30
+
+# Disable rate limiting (not recommended)
+python tui-server.py --rate-limit-count 0
+```
 
 ## Security Notes
 
