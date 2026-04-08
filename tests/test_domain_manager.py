@@ -1,7 +1,7 @@
 """
 Tests for domain management module
 """
-import pytest
+from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -174,3 +174,80 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_configure_and_get_config(self):
+        """Test manager configuration API"""
+        manager = DomainRotationManager()
+        result = manager.configure("pk_test", "sk_test", monthly_budget=25.0)
+
+        assert result["success"] is True
+        cfg = manager.get_config()
+        assert cfg["configured"] is True
+        assert cfg["monthly_budget"] == 25.0
+        assert cfg["provider"] == "porkbun"
+
+    def test_configure_rejects_missing_credentials(self):
+        """Configuration should fail without both keys"""
+        manager = DomainRotationManager()
+        result = manager.configure("", "", monthly_budget=10.0)
+        assert result["success"] is False
+        assert "required" in result["error"]
+
+    def test_export_and_load_state_round_trip(self):
+        """State export/load should preserve domain data safely"""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 3.5
+        manager.owned_domains = [{
+            "domain": "alpha.xyz",
+            "price": "$3.50",
+            "purchased_at": datetime.now() - timedelta(days=1),
+            "expires_at": datetime.now() + timedelta(days=30),
+        }]
+        manager.active_domain = "alpha.xyz"
+
+        exported = manager.export_state()
+        assert isinstance(exported["owned_domains"][0]["purchased_at"], str)
+        assert isinstance(exported["owned_domains"][0]["expires_at"], str)
+        assert exported["owned_domains"][0]["price"] == 3.5
+
+        loaded = DomainRotationManager(monthly_budget=50.0)
+        loaded.load_state(exported)
+        assert loaded.current_spending == 3.5
+        assert loaded.active_domain == "alpha.xyz"
+        assert len(loaded.owned_domains) == 1
+        assert hasattr(loaded.owned_domains[0]["purchased_at"], "strftime")
+        assert hasattr(loaded.owned_domains[0]["expires_at"], "strftime")
+
+    def test_set_active_domain_requires_owned_domain(self):
+        """Can only activate a domain that is already owned"""
+        manager = DomainRotationManager()
+        manager.owned_domains = [{"domain": "one.xyz"}, {"domain": "two.xyz"}]
+
+        assert manager.set_active_domain("two.xyz") is True
+        assert manager.active_domain == "two.xyz"
+        assert manager.set_active_domain("missing.xyz") is False
+
+    def test_cleanup_expired_domains_removes_expired_and_repairs_active(self):
+        """Expired domains are removed from local state"""
+        manager = DomainRotationManager()
+        manager.owned_domains = [
+            {
+                "domain": "expired.xyz",
+                "price": 1.0,
+                "purchased_at": datetime.now() - timedelta(days=400),
+                "expires_at": datetime.now() - timedelta(days=1),
+            },
+            {
+                "domain": "active.xyz",
+                "price": 2.0,
+                "purchased_at": datetime.now() - timedelta(days=2),
+                "expires_at": datetime.now() + timedelta(days=100),
+            },
+        ]
+        manager.active_domain = "expired.xyz"
+
+        removed = manager.cleanup_expired_domains()
+        assert removed == 1
+        assert len(manager.owned_domains) == 1
+        assert manager.owned_domains[0]["domain"] == "active.xyz"
+        assert manager.active_domain == "active.xyz"

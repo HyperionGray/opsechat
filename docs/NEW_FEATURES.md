@@ -255,6 +255,20 @@ Purchasing domain...
 ✅ Successfully purchased and activated: n5x8q2k7.xyz
 ```
 
+#### Set Active Domain (without buying a new one)
+```bash
+python domain_rotation_cli.py set-active
+
+Output:
+=== Set Active Domain ===
+
+1. abc123xyz.club [ACTIVE]
+2. n5x8q2k7.xyz
+
+Enter domain name to activate: n5x8q2k7.xyz
+✅ Active domain set to: n5x8q2k7.xyz
+```
+
 #### List Owned Domains
 ```bash
 python domain_rotation_cli.py list
@@ -285,6 +299,12 @@ After rotating domains, update your email configuration:
 - CLI tracks spending automatically
 - Prevents purchases that would exceed budget
 - Resets monthly (manual reset required)
+
+### State Persistence Improvements
+- Domain state is now saved in JSON-safe format (timestamps serialized reliably)
+- CLI startup normalizes old/new config formats automatically
+- Expired domains are cleaned from local state during load
+- Active domain is auto-repaired if the previous active domain is expired/removed
 
 ---
 

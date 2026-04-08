@@ -10,6 +10,7 @@ Usage:
     python domain_rotation_cli.py search        # Search for available cheap domains
     python domain_rotation_cli.py rotate        # Rotate to a new domain
     python domain_rotation_cli.py status        # Show budget status
+    python domain_rotation_cli.py set-active    # Set active domain from owned list
     python domain_rotation_cli.py config        # Configure API credentials
 """
 
@@ -108,22 +109,18 @@ def get_manager():
         monthly_budget=config.get('monthly_budget', 50.0)
     )
     
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+    # Load saved state with normalization (datetime/price parsing + expiry cleanup)
+    manager.load_state(config)
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    state = manager.export_state()
+    config['current_spending'] = state['current_spending']
+    config['owned_domains'] = state['owned_domains']
+    config['active_domain'] = state['active_domain']
     save_config(config)
 
 
@@ -144,8 +141,18 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        purchased_at = domain.get('purchased_at')
+        expires_at = domain.get('expires_at')
+        if hasattr(purchased_at, 'strftime'):
+            purchased_label = purchased_at.strftime('%Y-%m-%d %H:%M')
+        else:
+            purchased_label = str(purchased_at or 'unknown')
+        if hasattr(expires_at, 'strftime'):
+            expires_label = expires_at.strftime('%Y-%m-%d')
+        else:
+            expires_label = str(expires_at or 'unknown')
+        print(f"   Purchased: {purchased_label}")
+        print(f"   Expires: {expires_label}")
         print()
 
 
@@ -233,6 +240,33 @@ def show_status():
         print(f"   Configure your email system to use: user@{manager.active_domain}")
 
 
+def set_active_domain():
+    """Set active domain from already owned domains"""
+    manager, config = get_manager()
+    domains = manager.get_owned_domains()
+
+    if not domains:
+        print("❌ No owned domains found.")
+        print("Run: python domain_rotation_cli.py rotate")
+        return
+
+    print("\n=== Set Active Domain ===\n")
+    for i, domain in enumerate(domains, 1):
+        marker = " [ACTIVE]" if domain.get('domain') == manager.active_domain else ""
+        print(f"{i}. {domain.get('domain')}{marker}")
+
+    target = input("\nEnter domain name to activate: ").strip()
+    if not target:
+        print("No domain entered.")
+        return
+
+    if manager.set_active_domain(target):
+        save_manager_state(manager, config)
+        print(f"✅ Active domain set to: {target}")
+    else:
+        print(f"❌ Domain not found in owned list: {target}")
+
+
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
@@ -244,13 +278,14 @@ Examples:
   python domain_rotation_cli.py status     # Show current status
   python domain_rotation_cli.py search     # Search for available domains
   python domain_rotation_cli.py rotate     # Rotate to a new domain
+  python domain_rotation_cli.py set-active # Set active from owned domains
   python domain_rotation_cli.py list       # List owned domains
         """
     )
     
     parser.add_argument(
         'command',
-        choices=['config', 'status', 'search', 'rotate', 'list'],
+        choices=['config', 'status', 'search', 'rotate', 'set-active', 'list'],
         help='Command to execute'
     )
     
@@ -264,6 +299,8 @@ Examples:
         search_domains()
     elif args.command == 'rotate':
         rotate_domain()
+    elif args.command == 'set-active':
+        set_active_domain()
     elif args.command == 'list':
         list_domains()
 

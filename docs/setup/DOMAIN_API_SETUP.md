@@ -177,6 +177,11 @@ Enterprise-focused with comprehensive API.
    - Old domains expire automatically
    - Budget tracking prevents overspending
 
+4. **Manage Active Domain from Existing Purchases**
+   - If you already own multiple domains, you can switch without a new purchase:
+   - `python domain_rotation_cli.py set-active`
+   - This updates the active domain in persisted state and keeps budget unchanged
+
 ### Maintenance
 
 1. **Monthly Review**
