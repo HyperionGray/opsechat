@@ -18,6 +18,9 @@
 - [x] Structured logging / APM via `monitoring.py`
 - [x] Test suite for `simple_chat_routes.py` (31 tests)
 - [x] Fixed `datetime.utcnow()` deprecation – use `datetime.now(timezone.utc)`
+- [x] Added startup template security audit with `TEMPLATE_AUDIT_MODE` (`warn`/`strict`/`off`)
+- [x] Fixed legacy route/template mismatch in `chat_routes.py` for `/chats`, `/chatsjs`, and `/messages.json`
+- [x] Removed stale backup artifacts `Dockerfile~HEAD` and `docker-compose.yml~HEAD`
 
 ---
 
@@ -99,6 +102,11 @@
   - [x] Add per-endpoint throttling (`/chat/create`, `/chat/*/messages`, `/chat/dm/send`)
   - [ ] Configure reasonable thresholds (review after load testing)
   - [ ] Add backoff/retry logic
+- [x] Add startup template security audit for CSP compatibility
+  - [x] Added `TEMPLATE_AUDIT_MODE` with `warn|strict|off`
+  - [x] Added `TEMPLATE_AUDIT_EXCLUDE_FILES` for temporary legacy exemptions
+  - [x] Added tests for audit scan and strict-mode behavior
+  - [x] Added implementation docs at `docs/implementation/TEMPLATE_SECURITY_AUDIT.md`
 - [ ] Integrate second domain registrar API
   - [ ] Choose registrar (Namecheap recommended)
   - [ ] Implement API client
