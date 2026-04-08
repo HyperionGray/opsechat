@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpSecChat - {{ policy_title }}</title>
+    <link rel="stylesheet" href="/static/legal-policy.css">
+</head>
+<body>
+    <main class="legal-container">
+        <header class="legal-header">
+            <h1>{{ policy_title }}</h1>
+            <p class="subtitle">Public policy document for OpSecChat</p>
+            <nav class="policy-nav" aria-label="Policy navigation">
+                <a href="/terms">Terms</a>
+                <a href="/aup">AUP</a>
+                <a href="/privacy">Privacy</a>
+                <a href="/chat">Chat</a>
+            </nav>
+        </header>
+
+        <section class="policy-content" aria-label="{{ policy_title }} content">
+            {{ policy_html|safe }}
+        </section>
+    </main>
+</body>
+</html>

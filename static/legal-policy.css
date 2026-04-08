@@ -1,0 +1,72 @@
+body {
+    background: #0b0d12;
+    color: #e7ecf3;
+    font-family: Arial, Helvetica, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.legal-container {
+    margin: 0 auto;
+    max-width: 920px;
+    padding: 24px 16px 48px;
+}
+
+.legal-header h1 {
+    margin: 0;
+    font-size: 2rem;
+}
+
+.subtitle {
+    color: #a8b1c0;
+    margin: 8px 0 14px;
+}
+
+.policy-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.policy-nav a {
+    color: #7fc8ff;
+    text-decoration: none;
+}
+
+.policy-nav a:hover,
+.policy-content a:hover {
+    text-decoration: underline;
+}
+
+.policy-content {
+    border: 1px solid #2c3647;
+    border-radius: 8px;
+    background: #131a24;
+    line-height: 1.6;
+    padding: 18px;
+}
+
+.policy-content h2,
+.policy-content h3,
+.policy-content h4 {
+    margin-top: 1.2em;
+}
+
+.policy-content hr {
+    border: 0;
+    border-top: 1px solid #2c3647;
+    margin: 1em 0;
+}
+
+.policy-content code {
+    background: #1e2633;
+    border-radius: 4px;
+    color: #d5e4ff;
+    padding: 1px 5px;
+}
+
+.policy-content a {
+    color: #7fc8ff;
+    word-break: break-word;
+}

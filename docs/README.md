@@ -68,6 +68,7 @@ Legal documents and policies.
 
 - [Acceptable Use Policy](legal/ACCEPTABLE_USE_POLICY.md) - AUP (requires legal review)
 - [Terms of Service](legal/TERMS_OF_SERVICE.md) - ToS (requires legal review)
+- [Privacy Policy](legal/PRIVACY_POLICY.md) - Privacy/data handling policy (draft)
 
 ### Implementation
 Implementation details and summaries of major features.
@@ -113,5 +114,5 @@ When adding new documentation:
 
 ---
 
-**Last Updated:** March 30, 2026  
+**Last Updated:** April 8, 2026  
 **Maintained by:** OpSecChat Team

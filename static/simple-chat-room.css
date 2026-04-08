@@ -220,6 +220,23 @@ body {
     margin-top: 20px;
 }
 
+.room-footer {
+    border-top: 1px solid #0f0;
+    color: #9fd89f;
+    font-size: 0.85em;
+    padding: 8px 20px;
+    text-align: center;
+}
+
+.room-footer a {
+    color: #9fe2ff;
+    text-decoration: none;
+}
+
+.room-footer a:hover {
+    text-decoration: underline;
+}
+
 ::-webkit-scrollbar {
     width: 10px;
 }
