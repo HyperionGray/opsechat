@@ -66,6 +66,7 @@ python pf-tasks/test.py --skip-e2e
 - Tests Tor connectivity and hidden service creation
 - Tests Python module imports
 - Runs Playwright end-to-end tests (if available)
+- Runs repository hygiene checks (backup artifacts, unfinished markers, root clutter)
 - Comprehensive test reporting
 
 ### clean.py

@@ -164,6 +164,18 @@ def test_playwright_e2e():
         print("[*] npm not available, skipping Playwright tests")
         return True
 
+def test_repo_hygiene():
+    """Run repository hygiene checks"""
+    print("[*] Running repository hygiene checks")
+    project_root = Path(__file__).parent.parent
+    cmd = ['python3', 'scripts/repo_hygiene_check.py', '--strict']
+    result = run_command(cmd, cwd=project_root, check=False)
+    if result.returncode == 0:
+        print("[✓] Repository hygiene checks passed")
+        return True
+    print("[!] Repository hygiene checks failed")
+    return False
+
 def main():
     """Main test task"""
     parser = argparse.ArgumentParser(description='Test opsechat deployment')
@@ -201,6 +213,10 @@ def main():
             total_tests += 1
             if test_playwright_e2e():
                 tests_passed += 1
+
+        total_tests += 1
+        if test_repo_hygiene():
+            tests_passed += 1
     
     print(f"\n=== Test Results ===")
     print(f"Tests passed: {tests_passed}/{total_tests}")

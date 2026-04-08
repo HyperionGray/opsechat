@@ -147,6 +147,17 @@ npm run lint
 ./scripts/security-scan.sh
 ```
 
+### Repository Hygiene Checks
+Use the hygiene checker to catch backup artifacts, unfinished markers in
+production code comments, and root-level scratch files before they accumulate:
+
+```bash
+python3 scripts/repo_hygiene_check.py --strict
+```
+
+This command is also wired into `pf-tasks/test.py` and should pass before
+committing cleanup-oriented changes.
+
 ## Development Workflow
 
 1. **Create a feature branch**

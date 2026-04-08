@@ -108,3 +108,41 @@ See `TODO-automation.md` for:
 - Issue: "Automation: Direction"
 - Requirements: Per P4X-ng comment - keep only triggered workflows, fix continuous progress, bi-weekly security, keep sync
 - Full Documentation: `docs/AUTOMATION_CONSOLIDATION.md`
+
+## 2026-04-08 - Repository Hygiene Automation
+
+### Summary
+Added a practical repository hygiene lane to keep cleanup continuous and prevent accidental clutter from landing in main development paths.
+
+### Added
+1. **Repo hygiene checker**:
+   - `scripts/repo_hygiene_check.py`
+   - Detects:
+     - merge/backup artifacts (e.g., `*~HEAD`, `*.orig`, `*.rej`)
+     - unfinished comment markers (`TODO|FIXME|STUB|TBD|UNFINISHED`) in production code
+     - root-level ad-hoc `test-*.js` clutter
+     - missing required top-level structure (`docs`, `src`, `include`)
+2. **Test coverage for checker**:
+   - `tests/test_repo_hygiene_check.py`
+3. **Scheduled/manual workflow**:
+   - `.github/workflows/repo-hygiene.yml`
+   - Runs every 3 hours and on demand.
+   - Uploads JSON report artifact.
+
+### Modified
+1. **PF test integration**:
+   - `pf-tasks/test.py` now runs hygiene checks during `--method all`.
+2. **Developer docs**:
+   - `docs/development/DEVELOPMENT.md` includes local hygiene commands.
+3. **PF docs**:
+   - `pf-tasks/README.md` documents hygiene validation in `test.py`.
+4. **Compatibility wrappers**:
+   - root scripts (`compose-up.sh`, `compose-down.sh`, `install-quadlets.sh`, `quadlet-setup.sh`, `verify-setup.sh`) now proxy to canonical scripts in `scripts/`.
+
+### Cleanup Performed
+- Removed stale backup files from repository root:
+  - `Dockerfile~HEAD`
+  - `docker-compose.yml~HEAD`
+
+### Notes
+- Root wrappers were retained to avoid breaking existing docs/commands while centralizing script maintenance in `scripts/`.

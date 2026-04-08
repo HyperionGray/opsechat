@@ -45,6 +45,13 @@
 - [ ] Watch for any missing checks or unexpected behavior
 - [ ] Check GitHub Actions usage/costs to confirm reduction
 
+### 6. Repository Hygiene Automation
+- [x] Add automated repo hygiene scanner (`scripts/repo_hygiene_check.py`)
+- [x] Add CI workflow for hygiene checks (`.github/workflows/repo-hygiene.yml`)
+- [x] Add unit tests for hygiene scanner (`tests/test_repo_hygiene_check.py`)
+- [x] Integrate hygiene checks into PF testing task (`pf-tasks/test.py`)
+- [ ] Expand hygiene checks over time (duplicate scripts, stale docs references, dead files)
+
 ## Notes
 - The bi-weekly cron for security scan runs on 1st and 3rd Sunday of each month (approximately every 2 weeks)
 - All workflows now have proper timeouts to prevent runaway jobs
