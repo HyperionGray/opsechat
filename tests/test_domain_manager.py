@@ -1,6 +1,7 @@
 """
 Tests for domain management module
 """
+from datetime import datetime, timedelta, timezone
 import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
@@ -155,6 +156,7 @@ class TestDomainRotationManager:
         assert status["current_spending"] == 10.0
         assert status["remaining"] == 40.0
         assert status["domains_owned"] == 1
+        assert "period_start" in status
     
     def test_rotate_domain(self):
         """Test domain rotation"""
@@ -174,3 +176,63 @@ class TestDomainRotationManager:
         
         assert new_domain is not None
         assert manager.active_domain == new_domain
+
+    def test_set_monthly_budget(self):
+        """Test monthly budget setter validation."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.set_monthly_budget(75.0)
+        assert manager.monthly_budget == 75.0
+
+        with pytest.raises(ValueError):
+            manager.set_monthly_budget(0)
+
+    def test_purchase_resets_spending_on_new_month(self):
+        """Test spending resets when entering a new budget period."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.purchase_domain.return_value = {"success": True}
+
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        manager.current_spending = 40.0
+        manager.spending_period_start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+        with patch.object(
+            manager,
+            "_now",
+            return_value=datetime(2026, 2, 15, tzinfo=timezone.utc),
+        ):
+            result = manager.purchase_domain_if_budget_allows("newdomain.xyz", 5.0)
+
+        assert result is True
+        # 40 was reset at month boundary, then 5 was added.
+        assert manager.current_spending == 5.0
+        assert manager.spending_period_start == datetime(2026, 2, 1, tzinfo=timezone.utc)
+
+    def test_serialize_and_load_state_roundtrip(self):
+        """Test manager state can be serialized and restored."""
+        manager = DomainRotationManager(monthly_budget=42.0)
+        purchased_at = datetime(2026, 3, 20, 11, 30, tzinfo=timezone.utc)
+        expires_at = purchased_at + timedelta(days=365)
+        manager.current_spending = 12.5
+        manager.active_domain = "alpha.xyz"
+        manager.spending_period_start = datetime(2026, 3, 1, tzinfo=timezone.utc)
+        manager.owned_domains = [
+            {
+                "domain": "alpha.xyz",
+                "price": "$12.50",
+                "purchased_at": purchased_at,
+                "expires_at": expires_at,
+            }
+        ]
+
+        serialized = manager.serialize_state()
+        restored = DomainRotationManager(monthly_budget=1.0)
+        restored.load_state(serialized)
+
+        assert restored.monthly_budget == 42.0
+        assert restored.current_spending == 12.5
+        assert restored.active_domain == "alpha.xyz"
+        assert restored.spending_period_start == datetime(2026, 3, 1, tzinfo=timezone.utc)
+        assert len(restored.owned_domains) == 1
+        assert restored.owned_domains[0]["domain"] == "alpha.xyz"
+        assert restored.owned_domains[0]["price"] == 12.5
+        assert restored.owned_domains[0]["purchased_at"] == purchased_at

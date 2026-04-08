@@ -18,6 +18,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from datetime import datetime
 from getpass import getpass
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
@@ -49,6 +50,19 @@ def save_config(config):
         print(f"Configuration saved to {CONFIG_FILE}")
     except Exception as e:
         print(f"Error saving config: {e}")
+
+
+def format_datetime(value):
+    """Render datetime values safely for CLI display."""
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M")
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value)
+            return parsed.strftime("%Y-%m-%d %H:%M")
+        except ValueError:
+            return value
+    return "unknown"
 
 
 def configure_api():
@@ -107,29 +121,25 @@ def get_manager():
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+
+    # Load saved state (supports both current and legacy config layouts)
+    manager.load_state(config.get('manager_state', config))
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    serialized = manager.serialize_state()
+    config['manager_state'] = serialized
+    # Keep top-level fields for backward compatibility with older configs
+    config.update(serialized)
     save_config(config)
 
 
 def list_domains():
     """List owned domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Owned Domains ===\n")
     
@@ -144,14 +154,14 @@ def list_domains():
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {format_datetime(domain.get('purchased_at'))}")
+        print(f"   Expires: {format_datetime(domain.get('expires_at'))}")
         print()
 
 
 def search_domains():
     """Search for available cheap domains"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
     print("Searching for domains under $5...\n")
@@ -175,9 +185,9 @@ def rotate_domain():
     print("\n=== Domain Rotation ===\n")
     
     budget_status = manager.get_budget_status()
-    print(f"Monthly Budget: ${budget_status['monthly_budget']}")
-    print(f"Current Spending: ${budget_status['current_spending']}")
-    print(f"Remaining: ${budget_status['remaining']}")
+    print(f"Monthly Budget: ${budget_status['monthly_budget']:.2f}")
+    print(f"Current Spending: ${budget_status['current_spending']:.2f}")
+    print(f"Remaining: ${budget_status['remaining']:.2f}")
     print(f"Domains Owned: {budget_status['domains_owned']}\n")
     
     if budget_status['remaining'] < 1:
@@ -207,6 +217,7 @@ def rotate_domain():
     )
     
     if success:
+        manager.active_domain = domain_info['domain']
         print(f"\n✅ Successfully purchased and activated: {domain_info['domain']}")
         save_manager_state(manager, config)
     else:
@@ -215,7 +226,7 @@ def rotate_domain():
 
 def show_status():
     """Show current status"""
-    manager, config = get_manager()
+    manager, _ = get_manager()
     
     print("\n=== Domain Rotation Status ===\n")
     
@@ -223,9 +234,11 @@ def show_status():
     
     print(f"Active Domain: {manager.active_domain or 'None'}")
     print(f"\nBudget:")
-    print(f"  Monthly: ${budget_status['monthly_budget']}")
-    print(f"  Spent: ${budget_status['current_spending']}")
-    print(f"  Remaining: ${budget_status['remaining']}")
+    print(f"  Monthly: ${budget_status['monthly_budget']:.2f}")
+    print(f"  Spent: ${budget_status['current_spending']:.2f}")
+    print(f"  Remaining: ${budget_status['remaining']:.2f}")
+    if budget_status.get("period_start"):
+        print(f"  Period Start (UTC): {budget_status['period_start']}")
     print(f"\nDomains Owned: {budget_status['domains_owned']}")
     
     if manager.active_domain:

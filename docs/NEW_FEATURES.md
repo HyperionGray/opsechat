@@ -284,7 +284,8 @@ After rotating domains, update your email configuration:
 - Set monthly budget to prevent overspending
 - CLI tracks spending automatically
 - Prevents purchases that would exceed budget
-- Resets monthly (manual reset required)
+- Spending now resets automatically at the start of a new UTC month
+- Domain ownership state is serialized to JSON safely (ISO timestamps), so `list`/`status` stay reliable across runs
 
 ---
 

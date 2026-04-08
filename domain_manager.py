@@ -7,7 +7,7 @@ import random
 import string
 import logging
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +134,68 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
+        self.spending_period_start: datetime = self._start_of_month(self._now())
+
+    def _now(self) -> datetime:
+        """Get current UTC time (isolated for testability)."""
+        return datetime.now(timezone.utc)
+
+    @staticmethod
+    def _start_of_month(ts: datetime) -> datetime:
+        """Normalize datetime to month boundary in UTC."""
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        return ts.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    @staticmethod
+    def _parse_datetime(value) -> Optional[datetime]:
+        """Parse ISO datetime or return None for invalid values."""
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                return value.replace(tzinfo=timezone.utc)
+            return value
+        if not isinstance(value, str):
+            return None
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed
+
+    @staticmethod
+    def _normalize_price(price) -> Optional[float]:
+        """Convert price variants (number or currency string) to float."""
+        if isinstance(price, (int, float)):
+            return float(price)
+        if isinstance(price, str):
+            cleaned = (
+                price.strip()
+                .replace("$", "")
+                .replace("€", "")
+                .replace(",", "")
+            )
+            if not cleaned:
+                return None
+            try:
+                return float(cleaned)
+            except ValueError:
+                return None
+        return None
+
+    def _ensure_budget_period_current(self):
+        """Reset spending when a new calendar month starts."""
+        now = self._now()
+        current_period = self._start_of_month(now)
+        if self._start_of_month(self.spending_period_start) < current_period:
+            logger.info(
+                "Starting new monthly budget period. "
+                "Previous spending: $%.2f",
+                self.current_spending,
+            )
+            self.current_spending = 0.0
+            self.spending_period_start = current_period
     
     def set_api_client(self, api_client: DomainAPIClient):
         """Set the domain API client"""
@@ -147,6 +209,12 @@ class DomainRotationManager:
         chars = string.ascii_lowercase + string.digits
         random_name = ''.join(random.choice(chars) for _ in range(length))
         return f"{random_name}.{tld}"
+
+    def set_monthly_budget(self, amount: float):
+        """Update monthly budget limit."""
+        if amount <= 0:
+            raise ValueError("Monthly budget must be greater than zero")
+        self.monthly_budget = float(amount)
     
     def find_cheap_available_domain(self, max_price: float = 5.0, 
                                    max_attempts: int = 10) -> Optional[Dict]:
@@ -168,12 +236,9 @@ class DomainRotationManager:
             result = self.api_client.search_domain(domain)
             
             if result.get("available"):
-                price = result.get("price", 999)
-                
-                if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
-                
+                price = self._normalize_price(result.get("price", 999))
+                if price is None:
+                    continue
                 if price <= max_price:
                     return {
                         "domain": domain,
@@ -191,30 +256,38 @@ class DomainRotationManager:
         if not self.api_client:
             logger.error("No API client configured")
             return False
+
+        normalized_price = self._normalize_price(price)
+        if normalized_price is None or normalized_price <= 0:
+            logger.error("Invalid domain price: %s", price)
+            return False
+
+        self._ensure_budget_period_current()
         
         # Check budget
-        if self.current_spending + price > self.monthly_budget:
+        if self.current_spending + normalized_price > self.monthly_budget:
             logger.warning(f"Budget exceeded. Current: ${self.current_spending}, "
-                          f"Requested: ${price}, Budget: ${self.monthly_budget}")
+                          f"Requested: ${normalized_price}, Budget: ${self.monthly_budget}")
             return False
         
         # Attempt purchase
         result = self.api_client.purchase_domain(domain, years=1)
         
         if result.get("success"):
-            self.current_spending += price
+            now = self._now()
+            self.current_spending += normalized_price
             self.owned_domains.append({
                 "domain": domain,
-                "price": price,
-                "purchased_at": datetime.now(),
-                "expires_at": datetime.now() + timedelta(days=365)
+                "price": normalized_price,
+                "purchased_at": now,
+                "expires_at": now + timedelta(days=365)
             })
             
             # Set as active if no active domain
             if not self.active_domain:
                 self.active_domain = domain
             
-            logger.info(f"Successfully purchased domain: {domain} for ${price}")
+            logger.info(f"Successfully purchased domain: {domain} for ${normalized_price}")
             return True
         else:
             logger.error(f"Failed to purchase domain: {result.get('message')}")
@@ -250,16 +323,90 @@ class DomainRotationManager:
     
     def get_owned_domains(self) -> List[Dict]:
         """Get list of owned domains"""
-        return self.owned_domains
+        return list(self.owned_domains)
     
     def get_budget_status(self) -> Dict:
         """Get budget information"""
+        self._ensure_budget_period_current()
         return {
             "monthly_budget": self.monthly_budget,
             "current_spending": self.current_spending,
             "remaining": self.monthly_budget - self.current_spending,
-            "domains_owned": len(self.owned_domains)
+            "domains_owned": len(self.owned_domains),
+            "period_start": self.spending_period_start.isoformat()
         }
+
+    def serialize_state(self) -> Dict:
+        """Serialize manager state for JSON persistence."""
+        return {
+            "monthly_budget": self.monthly_budget,
+            "current_spending": self.current_spending,
+            "active_domain": self.active_domain,
+            "spending_period_start": self.spending_period_start.isoformat(),
+            "owned_domains": [
+                {
+                    "domain": d.get("domain"),
+                    "price": self._normalize_price(d.get("price")) or 0.0,
+                    "purchased_at": (
+                        self._parse_datetime(d.get("purchased_at")) or self._now()
+                    ).isoformat(),
+                    "expires_at": (
+                        self._parse_datetime(d.get("expires_at"))
+                        or ((self._parse_datetime(d.get("purchased_at")) or self._now()) + timedelta(days=365))
+                    ).isoformat(),
+                }
+                for d in self.owned_domains
+                if d.get("domain")
+            ],
+        }
+
+    def load_state(self, state: Optional[Dict]):
+        """Load manager state from dict (supports legacy CLI state)."""
+        if not isinstance(state, dict):
+            return
+
+        budget = state.get("monthly_budget")
+        if budget is not None:
+            parsed_budget = self._normalize_price(budget)
+            if parsed_budget and parsed_budget > 0:
+                self.monthly_budget = parsed_budget
+
+        parsed_spending = self._normalize_price(state.get("current_spending"))
+        if parsed_spending is not None and parsed_spending >= 0:
+            self.current_spending = parsed_spending
+
+        active_domain = state.get("active_domain")
+        if isinstance(active_domain, str) and active_domain:
+            self.active_domain = active_domain
+
+        parsed_period_start = self._parse_datetime(state.get("spending_period_start"))
+        self.spending_period_start = parsed_period_start or self._start_of_month(self._now())
+
+        loaded_domains: List[Dict] = []
+        for entry in state.get("owned_domains", []):
+            if not isinstance(entry, dict):
+                continue
+            domain = entry.get("domain")
+            if not domain:
+                continue
+
+            purchased_at = self._parse_datetime(entry.get("purchased_at")) or self._now()
+            expires_at = self._parse_datetime(entry.get("expires_at")) or (
+                purchased_at + timedelta(days=365)
+            )
+            price = self._normalize_price(entry.get("price")) or 0.0
+
+            loaded_domains.append(
+                {
+                    "domain": domain,
+                    "price": price,
+                    "purchased_at": purchased_at,
+                    "expires_at": expires_at,
+                }
+            )
+
+        self.owned_domains = loaded_domains
+        self._ensure_budget_period_current()
 
 
 # Global domain rotation manager
