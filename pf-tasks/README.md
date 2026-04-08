@@ -68,6 +68,27 @@ python pf-tasks/test.py --skip-e2e
 - Runs Playwright end-to-end tests (if available)
 - Comprehensive test reporting
 
+### hygiene.py
+Runs repository hygiene checks to find stale files and unfinished markers.
+
+```bash
+# Run hygiene checks (report only)
+python pf-tasks/hygiene.py
+
+# Fail if findings are present
+python pf-tasks/hygiene.py --strict
+
+# JSON output for automation
+python pf-tasks/hygiene.py --json
+```
+
+**Features:**
+- Detects stale backup files (for example, `*~HEAD`)
+- Detects nested non-active workflow files (`.github/.github/workflows`)
+- Detects placeholder workflows in active workflow directory
+- Detects suspicious zero-byte files
+- Detects unfinished comment markers in production code
+
 ### clean.py
 Cleans up opsechat deployment and resources.
 

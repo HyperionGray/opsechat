@@ -77,13 +77,26 @@ These are development and testing utilities that help during development:
 - **`comprehensive_functionality_test.py`** - Full functional test suite
 
 ### Main Application Files
-- **`runserver.py`** - Main entry point (legacy monolithic)
-- **`runserver_refactored.py`** - Refactored version (blueprint-based)
+- **`runserver.py`** - Main entry point using the app factory and blueprint-based routes
 - **`app_factory.py`** - Flask app factory pattern
 - **`chat-room.py`** - Standalone chat room creator
 - **`tui-server.py`** - Terminal UI server
 - **`tui-client.py`** - Terminal UI client
 - **`domain_rotation_cli.py`** - CLI for domain management
+
+### Repository Hygiene Checks
+
+A lightweight hygiene scanner is available to keep the repository clean and organized:
+
+```bash
+# Report-only scan
+python3 pf-tasks/hygiene.py
+
+# Fail on findings (for automation/CI)
+python3 pf-tasks/hygiene.py --strict
+```
+
+The scanner checks for stale backup files, nested non-active workflows, placeholder workflow stubs, suspicious zero-byte files, and unfinished comment markers in production code.
 
 ### Route Modules (Blueprints)
 - **`chat_routes.py`** - Chat functionality

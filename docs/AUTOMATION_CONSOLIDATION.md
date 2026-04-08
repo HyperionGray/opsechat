@@ -118,3 +118,25 @@ The following 13 workflows were removed as they created noise by running on ever
 3. Consider deprecating `playwright-tests.yml` and `python-tests.yml` files if they're only used via workflow_call
 4. Add more security checks to the baseline if needed
 5. Document the label-based workflow triggering for team members
+
+## Follow-up Implemented: Repository Hygiene Checks
+
+To keep the repository organized over time, an automated hygiene feature was added:
+
+- `scripts/repo_hygiene_check.py` scans for:
+  - stale backup files (for example `*~HEAD`)
+  - nested non-active workflow files in `.github/.github/workflows/`
+  - placeholder workflow files in active workflow directories
+  - suspicious zero-byte files
+  - unfinished markers in production code comments (`TODO`, `STUB`, `FIXME`, `XXX`, `TBD`, `UNFINISHED`)
+- `pf-tasks/hygiene.py` wraps the scanner for task-runner use
+- `Pfyfile.pf` now exposes `task hygiene python3 pf-tasks/hygiene.py`
+- `tests/test_repo_hygiene_check.py` validates scanner behavior
+
+Usage:
+
+```bash
+python3 pf-tasks/hygiene.py
+python3 pf-tasks/hygiene.py --strict
+python3 pf-tasks/hygiene.py --json
+```

@@ -5,7 +5,7 @@ Welcome to the OpSecChat documentation. All documentation has been organized int
 ## Quick Links
 
 - **[Main README](../README.md)** - Start here for project overview
-- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes (TODO)
+- **[Quick Start Guide](../QUICKSTART.md)** - Get started in 5 minutes
 - **[Security](../SECURITY.md)** - Security information and best practices
 - **[License](../LICENSE.md)** - MIT License
 
@@ -47,6 +47,7 @@ Documentation for end users and operators.
 Information for developers contributing to the project.
 
 - [Development Guide](development/DEVELOPMENT.md) - **NEW!** Complete development setup and workflow
+- [Repository Hygiene Checks](development/DEVELOPMENT.md#repository-hygiene-checks) - Scripted cleanup and stale-file detection
 - [Contributing Guide](development/CONTRIBUTING.md) - How to contribute
 - [Code of Conduct](development/CODE_OF_CONDUCT.md) - Community guidelines
 - [Modernization Notes](development/MODERNIZATION.md) - Upgrade notes
