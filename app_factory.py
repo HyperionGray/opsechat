@@ -6,8 +6,10 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
-from flask import Flask, jsonify
+import time
+from flask import Flask, jsonify, g, request
 from utils import id_generator, get_random_color, check_older_than, process_chat
+from monitoring import apm, get_health_status
 try:
     from rate_limiter import init_limiter
 except ModuleNotFoundError:
@@ -67,6 +69,11 @@ def create_app():
     def add_review_wrapper(user_id, rating, review_text):
         return add_review(reviews, user_id, rating, review_text)
     
+    @app.before_request
+    def mark_request_start():
+        """Capture per-request start time for metrics collection."""
+        g.request_start_time = time.perf_counter()
+
     # Add security headers after every response
     @app.after_request
     def add_security_headers(response):
@@ -87,6 +94,19 @@ def create_app():
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
+        start_time = getattr(g, "request_start_time", None)
+        if start_time is not None:
+            response_time = time.perf_counter() - start_time
+            try:
+                apm.record_request(
+                    endpoint=request.path,
+                    method=request.method,
+                    response_time=response_time,
+                    status_code=response.status_code,
+                )
+            except Exception:
+                # Never break HTTP responses because metrics collection failed.
+                pass
         return response
     
     # Register chat routes
@@ -110,11 +130,14 @@ def create_app():
     register_http_mail_routes(app)
     
     # Health check endpoint
-    from monitoring import get_health_status
-
     @app.route('/health', methods=["GET"])
     def health():
         return jsonify(get_health_status())
+
+    # Operational metrics endpoint
+    @app.route('/metrics', methods=["GET"])
+    def metrics():
+        return jsonify(apm.get_metrics_summary())
 
     # Empty Index page to avoid Flask fingerprinting
     @app.route('/', methods=["GET"])

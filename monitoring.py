@@ -223,6 +223,16 @@ class ApplicationPerformanceMonitor:
     def get_metrics_summary(self) -> Dict[str, Any]:
         """Get summarized metrics for reporting"""
         self.update_system_metrics()
+        endpoint_summary = {}
+        for endpoint, data in self.metrics['requests']['by_endpoint'].items():
+            count = data.get('count', 0)
+            avg_time = (data.get('total_time', 0.0) / count) if count else 0.0
+            error_rate = ((data.get('errors', 0) / count) * 100) if count else 0.0
+            endpoint_summary[endpoint] = {
+                'count': count,
+                'avg_response_time': avg_time,
+                'error_rate': error_rate
+            }
         
         summary = {
             'timestamp': datetime.now(timezone.utc).isoformat(),
@@ -230,7 +240,8 @@ class ApplicationPerformanceMonitor:
             'requests': {
                 'total': self.metrics['requests']['total'],
                 'error_rate': 0.0,
-                'avg_response_time': 0.0
+                'avg_response_time': 0.0,
+                'by_endpoint': endpoint_summary
             },
             'tor': {
                 'connection_success_rate': 0.0,
@@ -240,6 +251,9 @@ class ApplicationPerformanceMonitor:
                 'chat_messages': self.metrics['chat']['messages_sent'],
                 'emails_composed': self.metrics['email']['emails_composed'],
                 'burner_emails': self.metrics['email']['burner_emails_created']
+            },
+            'system': {
+                'memory_usage_mb': self.metrics['system']['memory_usage_mb']
             }
         }
         

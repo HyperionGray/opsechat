@@ -166,3 +166,53 @@ def test_health_endpoint_date_header_is_blank():
     response = client.get("/health")
 
     assert response.headers["Date"] == ""
+
+
+def test_metrics_endpoint_returns_200_with_expected_shape():
+    client = _test_app.test_client()
+    response = client.get("/metrics")
+    assert response.status_code == 200
+
+    data = response.get_json()
+    assert data is not None
+    assert "timestamp" in data
+    assert "uptime_seconds" in data
+    assert "requests" in data
+    assert "tor" in data
+    assert "activity" in data
+    assert "system" in data
+    assert "by_endpoint" in data["requests"]
+    assert isinstance(data["requests"]["by_endpoint"], dict)
+    assert "memory_usage_mb" in data["system"]
+
+
+def test_metrics_endpoint_tracks_health_requests():
+    client = _test_app.test_client()
+
+    before = client.get("/metrics").get_json()
+    before_total = before["requests"]["total"]
+    before_health_count = before["requests"]["by_endpoint"].get("GET /health", {}).get("count", 0)
+
+    client.get("/health")
+    client.get("/health")
+
+    after = client.get("/metrics").get_json()
+    after_total = after["requests"]["total"]
+    after_health_count = after["requests"]["by_endpoint"].get("GET /health", {}).get("count", 0)
+
+    # +3 because this test itself also calls /metrics once after the two /health calls.
+    assert after_total >= before_total + 3
+    assert after_health_count >= before_health_count + 2
+
+
+def test_metrics_endpoint_sets_security_headers():
+    client = _test_app.test_client()
+    response = client.get("/metrics")
+
+    assert response.content_type == "application/json"
+    assert response.headers["Content-Security-Policy"].startswith("default-src 'self';")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
+    assert response.headers["Server"] == ""
+    assert response.headers["Date"] == ""
