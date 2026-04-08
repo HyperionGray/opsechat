@@ -352,13 +352,14 @@ def _get_active_room_count() -> int:
 
 
 def get_chat_stats() -> Dict[str, Any]:
-    """Return lightweight operational stats about chat rooms.
+    """Return operational stats about chat rooms.
 
-    Useful for monitoring dashboards and alerting.
+    Useful for monitoring dashboards, alerting, and quick capacity checks.
     """
     try:
         from simple_chat_routes import (
             chat_rooms, rooms_lock, direct_messages, dm_lock,
+            RATE_LIMITS, _rate_limit_store, _rate_limit_lock, ENC_PREFIX,
             MESSAGE_EXPIRY_SECONDS, DM_EXPIRY_SECONDS, ROOM_INACTIVE_SECONDS,
         )
     except ImportError:
@@ -367,22 +368,90 @@ def get_chat_stats() -> Dict[str, Any]:
             'total_messages': 0,
             'active_users': 0,
             'pending_dms': 0,
+            'direct_messages': {
+                'read': 0,
+                'unread': 0,
+            },
+            'message_mix': {
+                'encrypted_messages': 0,
+                'plaintext_messages': 0,
+            },
+            'room_activity': {
+                'oldest_room_age_seconds': None,
+                'newest_room_age_seconds': None,
+                'oldest_message_age_seconds': None,
+                'newest_message_age_seconds': None,
+            },
+            'rate_limits': {
+                'active_sessions': 0,
+                'configured_endpoints': {},
+            },
             'config': {},
         }
 
+    now = datetime.now()
+
     with rooms_lock:
         active_rooms = len(chat_rooms)
-        total_messages = sum(len(r.messages) for r in chat_rooms.values())
-        active_users = sum(r.get_user_count() for r in chat_rooms.values())
+        total_messages = 0
+        active_users = 0
+        encrypted_messages = 0
+        plaintext_messages = 0
+        room_ages = []
+        message_ages = []
+
+        for room in chat_rooms.values():
+            total_messages += len(room.messages)
+            active_users += room.get_user_count()
+
+            room_age = max(0.0, (now - room.created_at).total_seconds())
+            room_ages.append(room_age)
+
+            for msg in room.messages:
+                msg_age = max(0.0, (now - msg["timestamp"]).total_seconds())
+                message_ages.append(msg_age)
+                if str(msg.get("message", "")).startswith(ENC_PREFIX):
+                    encrypted_messages += 1
+                else:
+                    plaintext_messages += 1
 
     with dm_lock:
         pending_dms = len(direct_messages)
+        read_dms = sum(1 for dm in direct_messages.values() if dm.get('read'))
+        unread_dms = pending_dms - read_dms
+
+    with _rate_limit_lock:
+        active_rate_limit_sessions = len(_rate_limit_store)
 
     return {
         'active_rooms': active_rooms,
         'total_messages': total_messages,
         'active_users': active_users,
         'pending_dms': pending_dms,
+        'direct_messages': {
+            'read': read_dms,
+            'unread': unread_dms,
+        },
+        'message_mix': {
+            'encrypted_messages': encrypted_messages,
+            'plaintext_messages': plaintext_messages,
+        },
+        'room_activity': {
+            'oldest_room_age_seconds': max(room_ages) if room_ages else None,
+            'newest_room_age_seconds': min(room_ages) if room_ages else None,
+            'oldest_message_age_seconds': max(message_ages) if message_ages else None,
+            'newest_message_age_seconds': min(message_ages) if message_ages else None,
+        },
+        'rate_limits': {
+            'active_sessions': active_rate_limit_sessions,
+            'configured_endpoints': {
+                endpoint: {
+                    'max_requests': limits['max_requests'],
+                    'window_seconds': limits['window_seconds'],
+                }
+                for endpoint, limits in RATE_LIMITS.items()
+            },
+        },
         'config': {
             'message_expiry_seconds': MESSAGE_EXPIRY_SECONDS,
             'dm_expiry_seconds': DM_EXPIRY_SECONDS,

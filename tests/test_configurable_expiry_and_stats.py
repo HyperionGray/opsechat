@@ -90,6 +90,10 @@ def test_chat_stats_required_fields():
     assert "total_messages" in data
     assert "active_users" in data
     assert "pending_dms" in data
+    assert "direct_messages" in data
+    assert "message_mix" in data
+    assert "room_activity" in data
+    assert "rate_limits" in data
     assert "config" in data
 
 
@@ -131,6 +135,119 @@ def test_chat_stats_counts_rooms_and_messages():
         with rooms_lock:
             chat_rooms.clear()
             chat_rooms.update(saved)
+
+
+def test_chat_stats_message_mix_counts_encrypted_and_plaintext():
+    from simple_chat_routes import chat_rooms, rooms_lock, ChatRoom
+
+    client = _test_app.test_client()
+
+    with rooms_lock:
+        saved = dict(chat_rooms)
+        chat_rooms.clear()
+
+    try:
+        room = ChatRoom("mix-room")
+        room.add_message("u1", "PlainUser", [255, 85, 85], "hello plaintext")
+        room.add_message("u2", "EncUser", [85, 170, 255], "ENC:YWJjMTIz")
+        with rooms_lock:
+            chat_rooms["mix-room"] = room
+
+        data = client.get("/chat/stats").get_json()
+        assert data["message_mix"]["plaintext_messages"] == 1
+        assert data["message_mix"]["encrypted_messages"] == 1
+    finally:
+        with rooms_lock:
+            chat_rooms.clear()
+            chat_rooms.update(saved)
+
+
+def test_chat_stats_dm_read_unread_breakdown():
+    from simple_chat_routes import direct_messages, dm_lock
+
+    client = _test_app.test_client()
+    now = datetime.datetime.now()
+
+    with dm_lock:
+        saved = dict(direct_messages)
+        direct_messages.clear()
+        direct_messages["dm-unread"] = {
+            "dm_id": "dm-unread",
+            "sender_id": "u1",
+            "sender_name": "Alice",
+            "room_id": "room-a",
+            "message": "join here",
+            "timestamp": now,
+            "read": False,
+        }
+        direct_messages["dm-read"] = {
+            "dm_id": "dm-read",
+            "sender_id": "u2",
+            "sender_name": "Bob",
+            "room_id": "room-b",
+            "message": "seen message",
+            "timestamp": now,
+            "read": True,
+        }
+
+    try:
+        data = client.get("/chat/stats").get_json()
+        assert data["pending_dms"] == 2
+        assert data["direct_messages"]["read"] == 1
+        assert data["direct_messages"]["unread"] == 1
+    finally:
+        with dm_lock:
+            direct_messages.clear()
+            direct_messages.update(saved)
+
+
+def test_chat_stats_room_activity_ages_present_when_data_exists():
+    from simple_chat_routes import chat_rooms, rooms_lock, ChatRoom
+
+    client = _test_app.test_client()
+    now = datetime.datetime.now()
+
+    with rooms_lock:
+        saved = dict(chat_rooms)
+        chat_rooms.clear()
+
+    try:
+        room = ChatRoom("activity-room")
+        room.created_at = now - datetime.timedelta(seconds=120)
+        room.add_message("u1", "Alice", [255, 85, 85], "older")
+        room.add_message("u2", "Bob", [85, 170, 255], "newer")
+        with room.lock:
+            room.messages[0]["timestamp"] = now - datetime.timedelta(seconds=80)
+            room.messages[1]["timestamp"] = now - datetime.timedelta(seconds=10)
+        with rooms_lock:
+            chat_rooms["activity-room"] = room
+
+        data = client.get("/chat/stats").get_json()
+        activity = data["room_activity"]
+        assert activity["oldest_room_age_seconds"] >= activity["newest_room_age_seconds"] >= 0
+        assert activity["oldest_message_age_seconds"] >= activity["newest_message_age_seconds"] >= 0
+    finally:
+        with rooms_lock:
+            chat_rooms.clear()
+            chat_rooms.update(saved)
+
+
+def test_chat_stats_rate_limit_snapshot_includes_config_and_session_count():
+    from simple_chat_routes import check_rate_limit, _rate_limit_lock, _rate_limit_store
+
+    client = _test_app.test_client()
+    with _rate_limit_lock:
+        _rate_limit_store.clear()
+
+    check_rate_limit("stats-session", "chat_create")
+    data = client.get("/chat/stats").get_json()
+
+    assert data["rate_limits"]["active_sessions"] >= 1
+    configured = data["rate_limits"]["configured_endpoints"]
+    assert configured["chat_create"]["max_requests"] == 10
+    assert configured["chat_create"]["window_seconds"] == 60
+    assert configured["chat_message"]["max_requests"] == 30
+    assert configured["dm_send"]["max_requests"] == 5
 
 
 def test_chat_stats_security_headers():

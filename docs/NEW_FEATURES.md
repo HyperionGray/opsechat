@@ -378,6 +378,67 @@ self.room_key = base64.b64encode(secrets.token_bytes(32)).decode('utf-8')
 
 ---
 
+## 📊 Chat Operational Stats Endpoint (`/chat/stats`)
+
+### What Changed
+The `/chat/stats` endpoint now returns a richer operational snapshot for dashboards,
+alerting, and quick capacity checks.
+
+### New Response Fields
+- `direct_messages`
+  - `read`: number of read pending DMs
+  - `unread`: number of unread pending DMs
+- `message_mix`
+  - `encrypted_messages`: count of messages with `ENC:` prefix
+  - `plaintext_messages`: count of non-encrypted messages
+- `room_activity`
+  - `oldest_room_age_seconds`
+  - `newest_room_age_seconds`
+  - `oldest_message_age_seconds`
+  - `newest_message_age_seconds`
+- `rate_limits`
+  - `active_sessions`: number of sessions currently tracked by in-memory rate limiter
+  - `configured_endpoints`: effective per-endpoint limits (`max_requests`, `window_seconds`)
+
+### Example Response (abridged)
+```json
+{
+  "active_rooms": 2,
+  "total_messages": 6,
+  "active_users": 3,
+  "pending_dms": 1,
+  "direct_messages": {
+    "read": 0,
+    "unread": 1
+  },
+  "message_mix": {
+    "encrypted_messages": 4,
+    "plaintext_messages": 2
+  },
+  "room_activity": {
+    "oldest_room_age_seconds": 95.7,
+    "newest_room_age_seconds": 11.3,
+    "oldest_message_age_seconds": 44.2,
+    "newest_message_age_seconds": 2.8
+  },
+  "rate_limits": {
+    "active_sessions": 5,
+    "configured_endpoints": {
+      "chat_create": {"max_requests": 10, "window_seconds": 60},
+      "chat_message": {"max_requests": 30, "window_seconds": 60},
+      "dm_send": {"max_requests": 5, "window_seconds": 60}
+    }
+  },
+  "config": {
+    "message_expiry_seconds": 180,
+    "dm_expiry_seconds": 60,
+    "room_inactive_seconds": 3600
+  }
+}
+```
+
+---
+
 ## 📋 Migration Guide
 
 ### For Existing Users
