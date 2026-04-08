@@ -125,7 +125,7 @@ class TestDomainRotationManager:
         manager = DomainRotationManager(mock_client, monthly_budget=50.0)
         result = manager.purchase_domain_if_budget_allows("test123.xyz", 2.99)
         
-        assert result is True
+        assert result["success"] is True
         assert manager.current_spending == 2.99
         assert len(manager.owned_domains) == 1
         assert manager.active_domain == "test123.xyz"
@@ -139,7 +139,7 @@ class TestDomainRotationManager:
         
         result = manager.purchase_domain_if_budget_allows("test123.xyz", 2.0)
         
-        assert result is False
+        assert result["success"] is False
         assert manager.current_spending == 4.0
         assert len(manager.owned_domains) == 0
     
@@ -170,7 +170,43 @@ class TestDomainRotationManager:
         }
         
         manager = DomainRotationManager(mock_client, monthly_budget=50.0)
-        new_domain = manager.rotate_domain()
+        result = manager.rotate_domain()
         
-        assert new_domain is not None
-        assert manager.active_domain == new_domain
+        assert result["success"] is True
+        assert result["active_domain"] == "test456.xyz"
+        assert manager.active_domain == "test456.xyz"
+
+    def test_search_cheap_domains_respects_limit(self):
+        """Test searching multiple cheap domains with a result limit."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": "1.99",
+        }
+        manager = DomainRotationManager(mock_client)
+
+        results = manager.search_cheap_domains(limit=3, max_attempts=20)
+
+        assert len(results) == 3
+        assert all(item["price"] <= 5.0 for item in results)
+
+    def test_set_monthly_budget_clamps_to_zero(self):
+        """Test monthly budget setter clamps negative values."""
+        manager = DomainRotationManager(monthly_budget=10.0)
+        updated = manager.set_monthly_budget(-5.0)
+
+        assert updated == 0.0
+        assert manager.monthly_budget == 0.0
+
+    def test_provider_registration_and_switch(self):
+        """Test adding and switching named API providers."""
+        primary = Mock(spec=DomainAPIClient)
+        backup = Mock(spec=DomainAPIClient)
+        manager = DomainRotationManager(primary)
+
+        manager.add_api_client("backup", backup)
+        switched = manager.use_api_client("backup")
+
+        assert switched is True
+        assert manager.api_client is backup
+        assert manager.active_provider == "backup"

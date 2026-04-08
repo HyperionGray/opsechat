@@ -19,10 +19,49 @@ import os
 import sys
 from pathlib import Path
 from getpass import getpass
+from datetime import datetime
 from domain_manager import PorkbunAPIClient, DomainRotationManager
 
 
 CONFIG_FILE = Path.home() / '.opsechat' / 'domain_config.json'
+
+
+def _parse_datetime(value):
+    """Parse an ISO timestamp when possible."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str) and value:
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _serialize_owned_domains(domains):
+    """Convert in-memory domain records to JSON-safe form."""
+    serialized = []
+    for entry in domains or []:
+        item = dict(entry)
+        for field in ("purchased_at", "expires_at"):
+            dt_value = item.get(field)
+            if isinstance(dt_value, datetime):
+                item[field] = dt_value.isoformat()
+        serialized.append(item)
+    return serialized
+
+
+def _deserialize_owned_domains(domains):
+    """Convert JSON-loaded domain records back to runtime-safe form."""
+    deserialized = []
+    for entry in domains or []:
+        item = dict(entry)
+        for field in ("purchased_at", "expires_at"):
+            parsed = _parse_datetime(item.get(field))
+            if parsed is not None:
+                item[field] = parsed
+        deserialized.append(item)
+    return deserialized
 
 
 def load_config():
@@ -112,7 +151,7 @@ def get_manager():
     if config.get('current_spending'):
         manager.current_spending = config['current_spending']
     if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
+        manager.owned_domains = _deserialize_owned_domains(config['owned_domains'])
     if config.get('active_domain'):
         manager.active_domain = config['active_domain']
     
@@ -122,7 +161,7 @@ def get_manager():
 def save_manager_state(manager, config):
     """Save manager state to config"""
     config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
+    config['owned_domains'] = _serialize_owned_domains(manager.owned_domains)
     config['active_domain'] = manager.active_domain
     save_config(config)
 
@@ -142,10 +181,14 @@ def list_domains():
     
     for i, domain in enumerate(domains, 1):
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
+        purchased_at = _parse_datetime(domain.get('purchased_at'))
+        expires_at = _parse_datetime(domain.get('expires_at'))
+        purchased_text = purchased_at.strftime('%Y-%m-%d %H:%M') if purchased_at else str(domain.get('purchased_at', 'unknown'))
+        expires_text = expires_at.strftime('%Y-%m-%d') if expires_at else str(domain.get('expires_at', 'unknown'))
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {purchased_text}")
+        print(f"   Expires: {expires_text}")
         print()
 
 
@@ -156,14 +199,12 @@ def search_domains():
     print("\n=== Searching for Available Cheap Domains ===\n")
     print("Searching for domains under $5...\n")
     
-    for i in range(5):
-        print(f"Attempt {i+1}/5...")
-        domain_info = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
-        
-        if domain_info:
-            print(f"  ✅ Found: {domain_info['domain']} - ${domain_info['price']}")
-        else:
-            print(f"  ❌ No cheap domain found in this attempt")
+    matches = manager.search_cheap_domains(max_price=5.0, limit=5, max_attempts=25)
+    if not matches:
+        print("  No cheap domains found in this search window")
+        return
+    for domain_info in matches:
+        print(f"  Found: {domain_info['domain']} - ${domain_info['price']}")
     
     print("\nTo purchase a domain, run: python domain_rotation_cli.py rotate")
 
@@ -201,16 +242,16 @@ def rotate_domain():
         return
     
     print("\nPurchasing domain...")
-    success = manager.purchase_domain_if_budget_allows(
+    result = manager.purchase_domain_if_budget_allows(
         domain_info['domain'],
         domain_info['price']
     )
     
-    if success:
-        print(f"\n✅ Successfully purchased and activated: {domain_info['domain']}")
+    if result.get("success"):
+        print(f"\nSuccessfully purchased and activated: {domain_info['domain']}")
         save_manager_state(manager, config)
     else:
-        print("\n❌ Failed to purchase domain. Check API credentials and budget.")
+        print(f"\nFailed to purchase domain: {result.get('message', 'unknown error')}")
 
 
 def show_status():

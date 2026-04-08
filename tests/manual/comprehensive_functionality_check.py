@@ -220,7 +220,7 @@ def test_domain_manager():
         # Test PorkbunAPIClient (without actual API calls)
         api_client = PorkbunAPIClient("test_key", "test_secret")
         assert api_client.api_key == "test_key"
-        assert api_client.secret_key == "test_secret"
+        assert api_client.api_secret == "test_secret"
         print("✅ API client initialization works")
         
         return True
