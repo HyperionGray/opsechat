@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive CI/CD review integration
 - Complete documentation suite including CHANGELOG.md and CODE_OF_CONDUCT.md
 - Enhanced security documentation and vulnerability tracking
+- Public legal policy pages: `/terms`, `/aup`, and `/privacy`
+- New privacy policy document at `docs/legal/PRIVACY_POLICY.md`
 
 ### Changed
 - Improved repository structure and documentation organization
