@@ -108,6 +108,10 @@ def create_app():
     # Register HTTP mail routes (email over HTTP, no SMTP/IMAP)
     from http_mail_routes import register_http_mail_routes
     register_http_mail_routes(app)
+
+    # Register legal policy routes (Terms, Privacy, AUP)
+    from legal_routes import register_legal_routes
+    register_legal_routes(app)
     
     # Health check endpoint
     from monitoring import get_health_status, get_chat_stats

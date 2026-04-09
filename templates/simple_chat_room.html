@@ -8,7 +8,7 @@
 </head>
 <body data-room-id="{{ room_id }}">
     <div class="header" role="banner">
-        <div>
+        <div class="header-left">
             <h1>🔒 OpSecChat Room</h1>
             <span id="userInfo">You are: <span class="user-color {{ user_color_class }}" aria-label="Your username">{{ username }}</span></span>
         </div>
@@ -21,6 +21,11 @@
                 </label>
             </span>
         </div>
+    </div>
+    <div class="policy-links" aria-label="Legal links">
+        <a href="/terms">Terms</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/aup">AUP</a>
     </div>
     
     <div class="messages-container" id="messagesContainer" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions">
