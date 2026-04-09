@@ -108,22 +108,29 @@ def get_manager():
         monthly_budget=config.get('monthly_budget', 50.0)
     )
     
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+    # Load saved state (supports legacy top-level keys and new nested format)
+    state = config.get('manager_state')
+    if state is None:
+        state = {
+            "monthly_budget": config.get('monthly_budget'),
+            "current_spending": config.get('current_spending'),
+            "active_domain": config.get('active_domain'),
+            "owned_domains": config.get('owned_domains', []),
+        }
+    manager.load_state(state)
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    serialized = manager.export_state()
+    config['manager_state'] = serialized
+    # Keep legacy keys for compatibility with older scripts/tools.
+    config['monthly_budget'] = serialized['monthly_budget']
+    config['current_spending'] = serialized['current_spending']
+    config['owned_domains'] = serialized['owned_domains']
+    config['active_domain'] = serialized['active_domain']
     save_config(config)
 
 
@@ -142,10 +149,26 @@ def list_domains():
     
     for i, domain in enumerate(domains, 1):
         active = " [ACTIVE]" if domain['domain'] == manager.active_domain else ""
+        purchased_at = domain.get('purchased_at')
+        if hasattr(purchased_at, "strftime"):
+            purchased_at_str = purchased_at.strftime('%Y-%m-%d %H:%M')
+        elif isinstance(purchased_at, str) and purchased_at:
+            purchased_at_str = purchased_at
+        else:
+            purchased_at_str = "unknown"
+
+        expires_at = domain.get('expires_at')
+        if hasattr(expires_at, "strftime"):
+            expires_at_str = expires_at.strftime('%Y-%m-%d')
+        elif isinstance(expires_at, str) and expires_at:
+            expires_at_str = expires_at
+        else:
+            expires_at_str = "unknown"
+
         print(f"{i}. {domain['domain']}{active}")
         print(f"   Price: ${domain['price']}")
-        print(f"   Purchased: {domain['purchased_at'].strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Expires: {domain['expires_at'].strftime('%Y-%m-%d')}")
+        print(f"   Purchased: {purchased_at_str}")
+        print(f"   Expires: {expires_at_str}")
         print()
 
 
@@ -154,18 +177,24 @@ def search_domains():
     manager, config = get_manager()
     
     print("\n=== Searching for Available Cheap Domains ===\n")
-    print("Searching for domains under $5...\n")
-    
-    for i in range(5):
-        print(f"Attempt {i+1}/5...")
-        domain_info = manager.find_cheap_available_domain(max_price=5.0, max_attempts=1)
-        
-        if domain_info:
-            print(f"  ✅ Found: {domain_info['domain']} - ${domain_info['price']}")
-        else:
-            print(f"  ❌ No cheap domain found in this attempt")
-    
-    print("\nTo purchase a domain, run: python domain_rotation_cli.py rotate")
+    print("Searching for up to 5 domains under $5...\n")
+    candidates = manager.search_available_domains(
+        max_price=5.0,
+        max_attempts=30,
+        max_results=5,
+    )
+
+    if not candidates:
+        print("No cheap domains found right now. Try again in a bit.")
+        return
+
+    for idx, candidate in enumerate(candidates, 1):
+        print(
+            f"{idx}. {candidate['domain']} - "
+            f"${candidate['price']:.2f} ({candidate.get('currency', 'USD')})"
+        )
+
+    print("\nTo purchase one, run: python domain_rotation_cli.py rotate")
 
 
 def rotate_domain():
@@ -201,16 +230,16 @@ def rotate_domain():
         return
     
     print("\nPurchasing domain...")
-    success = manager.purchase_domain_if_budget_allows(
+    purchase_result = manager.purchase_domain_if_budget_allows(
         domain_info['domain'],
         domain_info['price']
     )
     
-    if success:
+    if purchase_result.get("success"):
         print(f"\n✅ Successfully purchased and activated: {domain_info['domain']}")
         save_manager_state(manager, config)
     else:
-        print("\n❌ Failed to purchase domain. Check API credentials and budget.")
+        print(f"\n❌ Failed to purchase domain: {purchase_result.get('message', 'unknown error')}")
 
 
 def show_status():
