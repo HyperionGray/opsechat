@@ -134,11 +134,6 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
-        self.api_client = api_client
-        self.monthly_budget = monthly_budget
-        self.current_spending = 0.0
-        self.owned_domains: List[Dict] = []
-        self.active_domain: Optional[str] = None
         # API credentials stored internally only - not exposed via get_config()
         self._api_key: Optional[str] = None
         self._api_secret: Optional[str] = None
@@ -202,7 +197,15 @@ class DomainRotationManager:
                 
                 if isinstance(price, str):
                     # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
+                    try:
+                        price = float(price.replace("$", "").replace("€", "").strip())
+                    except ValueError:
+                        logger.warning(
+                            "Ignoring domain %s due to unparseable price %r",
+                            domain,
+                            price,
+                        )
+                        continue
                 
                 if price <= max_price:
                     return {
@@ -298,6 +301,95 @@ class DomainRotationManager:
             result["active_domain"] = self.active_domain
 
         return result
+
+    @staticmethod
+    def _parse_datetime(value):
+        """Best-effort parser for persisted datetime values."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return None
+        return None
+
+    @classmethod
+    def _serialize_owned_domain(cls, domain: Dict) -> Dict:
+        """Convert owned domain entry to JSON-safe primitives."""
+        serialized = dict(domain)
+        for key in ("purchased_at", "expires_at"):
+            if isinstance(serialized.get(key), datetime):
+                serialized[key] = serialized[key].isoformat()
+        return serialized
+
+    @classmethod
+    def _deserialize_owned_domain(cls, domain: Dict) -> Dict:
+        """Convert persisted owned domain entry to runtime structure."""
+        normalized = dict(domain)
+        for key in ("purchased_at", "expires_at"):
+            parsed = cls._parse_datetime(normalized.get(key))
+            if parsed:
+                normalized[key] = parsed
+        if "price" in normalized:
+            try:
+                normalized["price"] = float(normalized["price"])
+            except (TypeError, ValueError):
+                pass
+        return normalized
+
+    def export_state(self) -> Dict:
+        """Return JSON-serializable state for persistence."""
+        return {
+            "current_spending": self.current_spending,
+            "active_domain": self.active_domain,
+            "owned_domains": [
+                self._serialize_owned_domain(domain) for domain in self.owned_domains
+            ],
+        }
+
+    def load_state(self, state: Dict):
+        """Load persisted state from a dictionary."""
+        self.current_spending = float(state.get("current_spending", 0.0) or 0.0)
+        self.active_domain = state.get("active_domain")
+
+        owned_domains = state.get("owned_domains") or []
+        if isinstance(owned_domains, list):
+            self.owned_domains = [
+                self._deserialize_owned_domain(domain)
+                for domain in owned_domains
+                if isinstance(domain, dict)
+            ]
+        else:
+            self.owned_domains = []
+
+    def prune_expired_domains(self, now: Optional[datetime] = None) -> Dict:
+        """
+        Remove expired domains from the local state cache.
+        This does not call registrar APIs; it only cleans persisted metadata.
+        """
+        now = now or datetime.now()
+        removed = 0
+        kept_domains: List[Dict] = []
+
+        for domain in self.owned_domains:
+            expires_at = self._parse_datetime(domain.get("expires_at"))
+            if expires_at and expires_at <= now:
+                removed += 1
+                continue
+            kept_domains.append(domain)
+
+        self.owned_domains = kept_domains
+        if self.active_domain and not any(
+            domain.get("domain") == self.active_domain for domain in self.owned_domains
+        ):
+            self.active_domain = self.owned_domains[-1]["domain"] if self.owned_domains else None
+
+        return {
+            "removed": removed,
+            "remaining": len(self.owned_domains),
+            "active_domain": self.active_domain,
+        }
     
     def get_active_domain(self) -> Optional[str]:
         """Get currently active domain"""
@@ -305,7 +397,7 @@ class DomainRotationManager:
     
     def get_owned_domains(self) -> List[Dict]:
         """Get list of owned domains"""
-        return self.owned_domains
+        return list(self.owned_domains)
     
     def get_budget_status(self) -> Dict:
         """Get budget information"""
