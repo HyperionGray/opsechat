@@ -273,6 +273,25 @@ Output:
    Expires: 2027-03-02
 ```
 
+#### Prune Expired Cached Domains
+```bash
+python domain_rotation_cli.py prune
+
+Output:
+=== Prune Expired Domains ===
+
+Removed: 1
+Remaining: 2
+Active domain: n5x8q2k7.xyz
+
+Saved updated state.
+```
+
+Notes:
+- Local CLI state is stored in `~/.opsechat/domain_config.json`
+- Domain timestamps are persisted as ISO 8601 and restored automatically
+- `prune` only cleans local cached metadata; it does not delete domains at registrar
+
 ### Integration with Burner Email
 After rotating domains, update your email configuration:
 1. Run `python domain_rotation_cli.py status` to get active domain
