@@ -52,36 +52,31 @@ export DOMAIN_BUDGET="10"  # Monthly budget in USD
 ```python
 from domain_manager import domain_rotation_manager
 
-# Check available domains
-available_domains = domain_rotation_manager.search_cheap_domains()
-print(available_domains)
+# Find one available cheap domain candidate
+candidate = domain_rotation_manager.find_cheap_available_domain(
+    max_price=5.0,
+    max_attempts=5,
+)
+print(candidate)
 
-# Purchase a domain
-result = domain_rotation_manager.rotate_to_new_domain()
-if result['success']:
-    print(f"New domain: {result['domain']}")
-    print(f"Cost: ${result['cost']}")
+# Rotate (find + purchase + activate)
+result = domain_rotation_manager.rotate_domain()
+if result["success"]:
+    print(f"New domain: {result['active_domain']}")
+    print(f"Cost: ${result['price']}")
 else:
-    print(f"Error: {result['error']}")
+    print(f"Error: {result['message']}")
 ```
 
 ### CLI Commands
 
 ```bash
-# Check available cheap domains
-python -c "from domain_manager import domain_rotation_manager; \
-    print(domain_rotation_manager.search_cheap_domains(tlds=['xyz', 'club', 'online']))"
-
-# Get current budget status
-python -c "from domain_manager import domain_rotation_manager; \
-    print(f'Budget: ${domain_rotation_manager.budget_manager.monthly_budget}'); \
-    print(f'Spent: ${domain_rotation_manager.budget_manager.get_month_spending()}'); \
-    print(f'Remaining: ${domain_rotation_manager.budget_manager.get_remaining_budget()}')"
-
-# Rotate to new domain
-python -c "from domain_manager import domain_rotation_manager; \
-    result = domain_rotation_manager.rotate_to_new_domain(); \
-    print(result)"
+# Interactive CLI commands
+python domain_rotation_cli.py config
+python domain_rotation_cli.py status
+python domain_rotation_cli.py search
+python domain_rotation_cli.py rotate
+python domain_rotation_cli.py list
 ```
 
 ### Automated Rotation
@@ -93,7 +88,40 @@ Set up a cron job for weekly rotation:
 crontab -e
 
 # Add rotation job (runs every Sunday at 2 AM)
-0 2 * * 0 cd /path/to/opsechat && python -c "from domain_manager import domain_rotation_manager; domain_rotation_manager.rotate_to_new_domain()"
+0 2 * * 0 cd /path/to/opsechat && python -c "from domain_manager import domain_rotation_manager; print(domain_rotation_manager.rotate_domain())"
+```
+
+## Persistent State Management
+
+The CLI persists `current_spending`, `owned_domains`, and `active_domain` in
+`~/.opsechat/domain_config.json`.
+
+- Datetime fields are saved as ISO 8601 strings.
+- On startup, the CLI normalizes persisted state back into runtime-safe values.
+- This prevents crashes when listing domains after restarting the CLI.
+
+Programmatic usage:
+
+```python
+from domain_manager import DomainRotationManager
+
+manager = DomainRotationManager(monthly_budget=20.0)
+
+# Restore persisted state
+manager.load_state({
+    "current_spending": "4.5",
+    "owned_domains": [{
+        "domain": "example.xyz",
+        "price": "4.5",
+        "purchased_at": "2026-01-01T00:00:00",
+        "expires_at": "2027-01-01T00:00:00",
+    }],
+    "active_domain": "example.xyz",
+})
+
+# Export JSON-safe state for persistence
+state_to_save = manager.export_state()
+print(state_to_save)
 ```
 
 ## Budget Management
@@ -103,16 +131,17 @@ crontab -e
 ```python
 from domain_manager import domain_rotation_manager
 
-# Set monthly budget to $20
-domain_rotation_manager.budget_manager.set_monthly_budget(20.0)
+# Configure credentials + budget
+domain_rotation_manager.configure(
+    api_key="pk1_...",
+    secret_key="sk1_...",
+    monthly_budget=20.0,
+)
 
-# Check spending
-spending = domain_rotation_manager.budget_manager.get_month_spending()
-print(f"Spent this month: ${spending}")
-
-# Check remaining budget
-remaining = domain_rotation_manager.budget_manager.get_remaining_budget()
-print(f"Remaining: ${remaining}")
+# Check spending and remaining budget
+status = domain_rotation_manager.get_budget_status()
+print(f"Spent this month: ${status['current_spending']}")
+print(f"Remaining: ${status['remaining']}")
 ```
 
 ### Budget Safety Features
@@ -137,12 +166,16 @@ The system prioritizes these cheap TLDs:
 ### Search Parameters
 
 ```python
-# Search for available domains with specific TLDs
-domains = domain_rotation_manager.search_cheap_domains(
-    tlds=['xyz', 'club'],
-    max_price=3.00,
-    limit=10
-)
+from domain_manager import domain_rotation_manager
+
+# Search repeatedly for low-cost available candidates
+for _ in range(10):
+    candidate = domain_rotation_manager.find_cheap_available_domain(
+        max_price=3.00,
+        max_attempts=1,
+    )
+    if candidate:
+        print(f"{candidate['domain']}: ${candidate['price']}")
 ```
 
 ### Random Domain Generation
@@ -151,7 +184,7 @@ The system can generate random domain names:
 
 ```python
 # Generate random domain
-domain = domain_rotation_manager.generate_random_domain_name(
+domain = domain_rotation_manager.generate_random_domain(
     length=8,
     tld='xyz'
 )
@@ -162,27 +195,14 @@ domain = domain_rotation_manager.generate_random_domain_name(
 
 ### DNS Setup
 
-After purchasing a domain, configure DNS:
+DNS management is handled at your registrar. `domain_manager.py` currently covers:
 
-```python
-from domain_manager import domain_rotation_manager
+- availability checks
+- purchases
+- budget enforcement
+- active-domain tracking
 
-# Add MX record for email
-domain_rotation_manager.configure_domain_dns(
-    domain="example.xyz",
-    mx_records=[
-        {"priority": 10, "host": "mail.example.xyz"}
-    ]
-)
-
-# Add A record
-domain_rotation_manager.configure_domain_dns(
-    domain="example.xyz",
-    a_records=[
-        {"host": "@", "ip": "1.2.3.4"}
-    ]
-)
-```
+Use your registrar dashboard/API to set MX/A/TXT records after purchase.
 
 ### Email Integration
 
@@ -192,11 +212,10 @@ Link domain to burner email system:
 from domain_manager import domain_rotation_manager
 from email_system import burner_manager
 
-# Rotate domain and update burner emails
-new_domain = domain_rotation_manager.rotate_to_new_domain()
-if new_domain['success']:
-    # Update all burner emails to use new domain
-    burner_manager.update_domain(new_domain['domain'])
+# Rotate domain and update burner email generation
+result = domain_rotation_manager.rotate_domain()
+if result["success"]:
+    burner_manager.set_custom_domain(result["active_domain"])
 ```
 
 ## Testing Domain Rotation
@@ -206,13 +225,20 @@ if new_domain['success']:
 Use test mode to verify setup without spending money:
 
 ```python
-from domain_manager import domain_rotation_manager
+from domain_manager import DomainRotationManager
+from unittest.mock import Mock
 
-# Enable test mode
-domain_rotation_manager.set_test_mode(True)
+# Use a mocked API client to test without live purchases.
+mock_client = Mock()
+mock_client.search_domain.return_value = {
+    "available": True,
+    "domain": "testdomain.xyz",
+    "price": 2.0,
+}
+mock_client.purchase_domain.return_value = {"success": True}
 
-# This will simulate rotation without actual purchase
-result = domain_rotation_manager.rotate_to_new_domain()
+manager = DomainRotationManager(api_client=mock_client, monthly_budget=10.0)
+result = manager.rotate_domain()
 print(f"Test result: {result}")
 ```
 
@@ -294,10 +320,10 @@ curl -X POST https://porkbun.com/api/json/v3/ping \
 from domain_manager import domain_rotation_manager
 
 # Check current budget
-print(domain_rotation_manager.budget_manager.get_remaining_budget())
+print(domain_rotation_manager.get_budget_status()["remaining"])
 
 # Increase monthly budget
-domain_rotation_manager.budget_manager.set_monthly_budget(50.0)
+domain_rotation_manager.monthly_budget = 50.0
 ```
 
 ### Domain Not Available
@@ -306,10 +332,13 @@ domain_rotation_manager.budget_manager.set_monthly_budget(50.0)
 
 **Solution:**
 ```python
-# Generate alternative domains
-alternatives = domain_rotation_manager.search_cheap_domains(limit=20)
-for domain in alternatives:
-    print(f"{domain['name']}: ${domain['price']}")
+from domain_manager import domain_rotation_manager
+
+# Retry search several times for an available candidate
+for _ in range(20):
+    candidate = domain_rotation_manager.find_cheap_available_domain(max_attempts=1)
+    if candidate:
+        print(f"{candidate['domain']}: ${candidate['price']}")
 ```
 
 ### DNS Not Updating
@@ -346,17 +375,17 @@ class NamecheapAPIClient(DomainAPIClient):
         # Implementation here
         pass
 
-# Register new client
-domain_rotation_manager.add_api_client('namecheap', NamecheapAPIClient(api_key))
+# Use a different client implementation
+domain_rotation_manager.set_api_client(NamecheapAPIClient(api_key))
 ```
 
-### Custom Domain Patterns
+### Custom Domain Generation
 
 ```python
-# Use specific naming pattern
-pattern = "burner-{timestamp}-{random}"
-domain = domain_rotation_manager.generate_domain_from_pattern(pattern, tld='xyz')
-# Example: burner-20260302-k3s9.xyz
+from domain_manager import domain_rotation_manager
+
+domain = domain_rotation_manager.generate_random_domain(tld="xyz", length=10)
+print(domain)
 ```
 
 ## CLI Reference
@@ -364,26 +393,11 @@ domain = domain_rotation_manager.generate_domain_from_pattern(pattern, tld='xyz'
 All domain rotation commands:
 
 ```bash
-# Check available domains
-python -m domain_manager search --tld xyz --max-price 2.00
-
-# Purchase specific domain
-python -m domain_manager purchase --domain example.xyz
-
-# Rotate to new random domain
-python -m domain_manager rotate
-
-# Check budget status
-python -m domain_manager budget status
-
-# Set monthly budget
-python -m domain_manager budget set --amount 20.00
-
-# List all active domains
-python -m domain_manager list
-
-# Configure DNS
-python -m domain_manager dns --domain example.xyz --mx "mail.example.xyz"
+python domain_rotation_cli.py config
+python domain_rotation_cli.py status
+python domain_rotation_cli.py search
+python domain_rotation_cli.py rotate
+python domain_rotation_cli.py list
 ```
 
 ## Summary

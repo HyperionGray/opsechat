@@ -134,11 +134,6 @@ class DomainRotationManager:
         self.current_spending = 0.0
         self.owned_domains: List[Dict] = []
         self.active_domain: Optional[str] = None
-        self.api_client = api_client
-        self.monthly_budget = monthly_budget
-        self.current_spending = 0.0
-        self.owned_domains: List[Dict] = []
-        self.active_domain: Optional[str] = None
         # API credentials stored internally only - not exposed via get_config()
         self._api_key: Optional[str] = None
         self._api_secret: Optional[str] = None
@@ -167,6 +162,88 @@ class DomainRotationManager:
             "monthly_budget": self.monthly_budget,
             "active_domain": self.active_domain,
             # API key presence intentionally omitted for security
+        }
+
+    @staticmethod
+    def _parse_datetime(value) -> Optional[datetime]:
+        """Parse datetime values from either datetime objects or ISO strings."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return None
+        return None
+
+    @classmethod
+    def _normalize_owned_domain(cls, entry: Dict) -> Optional[Dict]:
+        """Normalize persisted domain entries into runtime-safe records."""
+        if not isinstance(entry, dict):
+            return None
+
+        domain = str(entry.get("domain", "")).strip()
+        if not domain:
+            return None
+
+        try:
+            price = float(entry.get("price", 0.0))
+        except (TypeError, ValueError):
+            price = 0.0
+
+        purchased_at = cls._parse_datetime(entry.get("purchased_at")) or datetime.now()
+        expires_at = cls._parse_datetime(entry.get("expires_at")) or (purchased_at + timedelta(days=365))
+
+        return {
+            "domain": domain,
+            "price": price,
+            "purchased_at": purchased_at,
+            "expires_at": expires_at,
+        }
+
+    def load_state(self, state: Optional[Dict]) -> Dict:
+        """
+        Load persisted state from a dict.
+
+        This accepts JSON-safe values and normalizes them for runtime use.
+        """
+        state = state or {}
+
+        try:
+            self.current_spending = float(state.get("current_spending", 0.0))
+        except (TypeError, ValueError):
+            self.current_spending = 0.0
+
+        normalized_domains: List[Dict] = []
+        for raw_entry in state.get("owned_domains", []):
+            normalized = self._normalize_owned_domain(raw_entry)
+            if normalized:
+                normalized_domains.append(normalized)
+        self.owned_domains = normalized_domains
+
+        active = state.get("active_domain")
+        self.active_domain = active.strip() if isinstance(active, str) and active.strip() else None
+
+        return {
+            "current_spending": self.current_spending,
+            "domains_loaded": len(self.owned_domains),
+            "active_domain": self.active_domain,
+        }
+
+    def export_state(self) -> Dict:
+        """Export runtime state in JSON-safe format."""
+        return {
+            "current_spending": self.current_spending,
+            "owned_domains": [
+                {
+                    "domain": entry["domain"],
+                    "price": entry["price"],
+                    "purchased_at": entry["purchased_at"].isoformat(),
+                    "expires_at": entry["expires_at"].isoformat(),
+                }
+                for entry in self.owned_domains
+            ],
+            "active_domain": self.active_domain,
         }
     
     def generate_random_domain(self, tld: str = "xyz", length: int = 8) -> str:
@@ -201,8 +278,11 @@ class DomainRotationManager:
                 price = result.get("price", 999)
                 
                 if isinstance(price, str):
-                    # Remove currency symbols
-                    price = float(price.replace("$", "").replace("€", ""))
+                    # Remove currency symbols and normalize to float.
+                    try:
+                        price = float(price.replace("$", "").replace("€", ""))
+                    except ValueError:
+                        continue
                 
                 if price <= max_price:
                     return {
@@ -227,6 +307,16 @@ class DomainRotationManager:
             }
         
         # Check budget
+        try:
+            price = float(price)
+        except (TypeError, ValueError):
+            return {
+                "success": False,
+                "domain": domain,
+                "message": "Invalid price value",
+                "budget_status": self.get_budget_status(),
+            }
+
         if self.current_spending + price > self.monthly_budget:
             logger.warning(f"Budget exceeded. Current: ${self.current_spending}, "
                           f"Requested: ${price}, Budget: ${self.monthly_budget}")
@@ -241,12 +331,13 @@ class DomainRotationManager:
         result = self.api_client.purchase_domain(domain, years=1)
         
         if result.get("success"):
+            now = datetime.now()
             self.current_spending += price
             self.owned_domains.append({
                 "domain": domain,
                 "price": price,
-                "purchased_at": datetime.now(),
-                "expires_at": datetime.now() + timedelta(days=365)
+                "purchased_at": now,
+                "expires_at": now + timedelta(days=365)
             })
             
             # Set as active if no active domain

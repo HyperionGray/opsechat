@@ -1,8 +1,8 @@
 """
 Tests for domain management module
 """
-import pytest
 from unittest.mock import Mock, patch
+from datetime import datetime
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
 )
@@ -125,7 +125,9 @@ class TestDomainRotationManager:
         manager = DomainRotationManager(mock_client, monthly_budget=50.0)
         result = manager.purchase_domain_if_budget_allows("test123.xyz", 2.99)
         
-        assert result is True
+        assert result["success"] is True
+        assert result["domain"] == "test123.xyz"
+        assert result["price"] == 2.99
         assert manager.current_spending == 2.99
         assert len(manager.owned_domains) == 1
         assert manager.active_domain == "test123.xyz"
@@ -139,7 +141,8 @@ class TestDomainRotationManager:
         
         result = manager.purchase_domain_if_budget_allows("test123.xyz", 2.0)
         
-        assert result is False
+        assert result["success"] is False
+        assert result["message"] == "Budget exceeded"
         assert manager.current_spending == 4.0
         assert len(manager.owned_domains) == 0
     
@@ -170,7 +173,48 @@ class TestDomainRotationManager:
         }
         
         manager = DomainRotationManager(mock_client, monthly_budget=50.0)
-        new_domain = manager.rotate_domain()
+        with patch.object(manager, "generate_random_domain", return_value="rotated.xyz"):
+            result = manager.rotate_domain()
         
-        assert new_domain is not None
-        assert manager.active_domain == new_domain
+        assert result["success"] is True
+        assert result["active_domain"] == "rotated.xyz"
+        assert manager.active_domain == "rotated.xyz"
+
+    def test_export_state_serializes_datetimes(self):
+        """Exported state should be JSON-safe."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        manager.current_spending = 3.14
+        manager.owned_domains = [{
+            "domain": "persisted.xyz",
+            "price": 3.14,
+            "purchased_at": datetime(2026, 1, 1, 12, 30, 0),
+            "expires_at": datetime(2027, 1, 1, 12, 30, 0),
+        }]
+        manager.active_domain = "persisted.xyz"
+
+        exported = manager.export_state()
+
+        assert exported["current_spending"] == 3.14
+        assert exported["active_domain"] == "persisted.xyz"
+        assert exported["owned_domains"][0]["purchased_at"] == "2026-01-01T12:30:00"
+        assert exported["owned_domains"][0]["expires_at"] == "2027-01-01T12:30:00"
+
+    def test_load_state_parses_iso_datetimes(self):
+        """Persisted JSON state should be normalized for runtime usage."""
+        manager = DomainRotationManager(monthly_budget=50.0)
+        result = manager.load_state({
+            "current_spending": "7.5",
+            "owned_domains": [{
+                "domain": "loaded.xyz",
+                "price": "7.5",
+                "purchased_at": "2026-02-01T00:00:00",
+                "expires_at": "2027-02-01T00:00:00",
+            }],
+            "active_domain": "loaded.xyz",
+        })
+
+        assert result["domains_loaded"] == 1
+        assert manager.current_spending == 7.5
+        assert manager.active_domain == "loaded.xyz"
+        assert isinstance(manager.owned_domains[0]["purchased_at"], datetime)
+        assert isinstance(manager.owned_domains[0]["expires_at"], datetime)

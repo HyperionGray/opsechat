@@ -107,23 +107,14 @@ def get_manager():
         api_client=client,
         monthly_budget=config.get('monthly_budget', 50.0)
     )
-    
-    # Load saved state
-    if config.get('current_spending'):
-        manager.current_spending = config['current_spending']
-    if config.get('owned_domains'):
-        manager.owned_domains = config['owned_domains']
-    if config.get('active_domain'):
-        manager.active_domain = config['active_domain']
+    manager.load_state(config)
     
     return manager, config
 
 
 def save_manager_state(manager, config):
     """Save manager state to config"""
-    config['current_spending'] = manager.current_spending
-    config['owned_domains'] = manager.owned_domains
-    config['active_domain'] = manager.active_domain
+    config.update(manager.export_state())
     save_config(config)
 
 
@@ -201,16 +192,16 @@ def rotate_domain():
         return
     
     print("\nPurchasing domain...")
-    success = manager.purchase_domain_if_budget_allows(
+    result = manager.purchase_domain_if_budget_allows(
         domain_info['domain'],
         domain_info['price']
     )
     
-    if success:
-        print(f"\n✅ Successfully purchased and activated: {domain_info['domain']}")
+    if result.get("success"):
+        print(f"\n✅ Successfully purchased and activated: {result.get('active_domain', domain_info['domain'])}")
         save_manager_state(manager, config)
     else:
-        print("\n❌ Failed to purchase domain. Check API credentials and budget.")
+        print(f"\n❌ Failed to purchase domain: {result.get('message', 'unknown error')}")
 
 
 def show_status():
