@@ -1,7 +1,6 @@
 """
 Tests for domain management module
 """
-import pytest
 from unittest.mock import Mock, patch
 from domain_manager import (
     DomainAPIClient, PorkbunAPIClient, DomainRotationManager
@@ -125,7 +124,9 @@ class TestDomainRotationManager:
         manager = DomainRotationManager(mock_client, monthly_budget=50.0)
         result = manager.purchase_domain_if_budget_allows("test123.xyz", 2.99)
         
-        assert result is True
+        assert result["success"] is True
+        assert result["domain"] == "test123.xyz"
+        assert result["order_id"] == "12345"
         assert manager.current_spending == 2.99
         assert len(manager.owned_domains) == 1
         assert manager.active_domain == "test123.xyz"
@@ -139,7 +140,8 @@ class TestDomainRotationManager:
         
         result = manager.purchase_domain_if_budget_allows("test123.xyz", 2.0)
         
-        assert result is False
+        assert result["success"] is False
+        assert result["message"] == "Budget exceeded"
         assert manager.current_spending == 4.0
         assert len(manager.owned_domains) == 0
     
@@ -170,7 +172,44 @@ class TestDomainRotationManager:
         }
         
         manager = DomainRotationManager(mock_client, monthly_budget=50.0)
-        new_domain = manager.rotate_domain()
+        result = manager.rotate_domain()
         
-        assert new_domain is not None
-        assert manager.active_domain == new_domain
+        assert result["success"] is True
+        assert result["active_domain"] == manager.active_domain
+        assert result["active_domain"] is not None
+        assert len(manager.owned_domains) == 1
+
+    def test_export_and_load_state_round_trip(self):
+        """State export/load keeps budget, active domain and owned domain data."""
+        manager = DomainRotationManager(monthly_budget=42.0)
+        manager.current_spending = 4.2
+        manager.active_domain = "active.example"
+        manager.owned_domains = [
+            {
+                "domain": "active.example",
+                "price": 1.99,
+                "purchased_at": "2026-03-01T12:00:00",
+                "expires_at": "2027-03-01T12:00:00",
+                "order_id": "ord_1",
+            }
+        ]
+
+        exported = manager.export_state()
+
+        reloaded = DomainRotationManager()
+        reloaded.load_state(exported)
+        status = reloaded.get_budget_status()
+
+        assert reloaded.active_domain == "active.example"
+        assert status["monthly_budget"] == 42.0
+        assert status["current_spending"] == 4.2
+        assert status["domains_owned"] == 1
+
+    def test_invalid_price_is_rejected(self):
+        """Invalid purchase price should fail safely."""
+        mock_client = Mock(spec=DomainAPIClient)
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        result = manager.purchase_domain_if_budget_allows("badprice.xyz", "N/A")
+
+        assert result["success"] is False
+        assert result["message"] == "Invalid domain price"
