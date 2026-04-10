@@ -157,7 +157,7 @@ def register_email_routes(app, id_generator, get_random_color):
                 success = transport_manager.configure_smtp(
                     smtp_server=request.form.get("smtp_server", "").strip(),
                     smtp_port=int(request.form.get("smtp_port", 587)),
-                    username=request.form.get("smtp_username", "").strip(),
+                    smtp_port=int(request.form.get("smtp_port") if request.form.get("smtp_port", "").isdigit() else 587),
                     password=request.form.get("smtp_password", "").strip(),
                     use_tls=request.form.get("use_tls") == "true" or request.form.get("use_tls") == "on",
                 )
