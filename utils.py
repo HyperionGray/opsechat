@@ -87,7 +87,7 @@ def cleanup_old_reviews(reviews):
 
 def add_review(reviews, user_id, rating, review_text):
     """Add a new review to the reviews list."""
-    normalized_rating = int(rating)
+    normalized_rating = int(rating) if str(rating).isdigit() else 0
     normalized_text = review_text.strip()
     review = {
         'id': id_generator(size=16),
