@@ -74,7 +74,9 @@ def register_http_mail_routes(app):
             "inbox_url": f"/{url_addition}/mail/{mailbox.address}/inbox",
         }
 
-        if request.headers.get("Accept", "").startswith("application/json") or request.is_json:
+        response_mode = request.form.get("response_mode", "").strip().lower()
+        accepts_html = "text/html" in request.headers.get("Accept", "")
+        if response_mode != "html" and not accepts_html:
             return jsonify(response_payload)
 
         return _render_http_mail(
