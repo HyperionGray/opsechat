@@ -109,6 +109,10 @@ def create_app():
     from http_mail_routes import register_http_mail_routes
     register_http_mail_routes(app)
     
+    # Register MVP console and service manifest routes
+    from mvp_routes import register_mvp_routes
+    register_mvp_routes(app)
+
     # Health check endpoint
     from monitoring import get_health_status, get_chat_stats
 

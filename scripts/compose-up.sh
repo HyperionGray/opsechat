@@ -53,6 +53,7 @@ fi
 echo ""
 echo "[*] To view the onion address, run:"
 echo "    $COMPOSE_CMD -f $COMPOSE_FILE logs opsechat"
+echo "[*] Once you have the onion URL, open /console on that service for the MVP entry page."
 echo ""
 echo "[*] To verify the setup is working, run:"
 echo "    ./verify-setup.sh"

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpSecChat MVP Console</title>
+  <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='mvp-console.css') }}">
+</head>
+<body>
+  <main class="layout">
+    <header class="hero">
+      <p class="eyebrow">OpSecChat MVP</p>
+      <h1>Operator Console</h1>
+      <p class="lede">
+        One surface for the current deployable stack: secure chat rooms, HTTP
+        mailboxes, burner addresses, and the health endpoints needed to keep it
+        alive.
+      </p>
+    </header>
+
+    <section class="grid two-up">
+      <article class="panel">
+        <h2>Service state</h2>
+        <dl class="facts">
+          <div>
+            <dt>Hostname</dt>
+            <dd>{{ manifest.hostname }}</dd>
+          </div>
+          <div>
+            <dt>Secret path</dt>
+            <dd>{{ manifest.secret_path or 'Not assigned yet' }}</dd>
+          </div>
+          <div>
+            <dt>Full service path</dt>
+            <dd>{{ manifest.full_service_path or 'Bootstrap pending' }}</dd>
+          </div>
+          <div>
+            <dt>API manifest</dt>
+            <dd><a href="/console/api">/console/api</a></dd>
+          </div>
+        </dl>
+      </article>
+
+      <article class="panel">
+        <h2>MVP constraints</h2>
+        <ul class="bullets">
+          <li>Plain text only for user-authored content.</li>
+          <li>No attachments or media handling in MVP.</li>
+          <li>Ephemeral state only; user messages stay in memory.</li>
+          <li>Short retention windows with explicit destructive cleanup.</li>
+          <li>Tor remains the primary anonymity transport for v1.</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="panel">
+      <h2>Service map</h2>
+      <div class="cards">
+        {% for service in manifest.services %}
+        <article class="card">
+          <div class="card-header">
+            <h3>{{ service.label }}</h3>
+            {% if service.href %}
+            <a class="button" href="{{ service.href }}">Open</a>
+            {% else %}
+            <span class="button disabled">Pending</span>
+            {% endif %}
+          </div>
+
+          <ul class="endpoint-list">
+            {% for endpoint in service.api %}
+            <li><code>{{ endpoint }}</code></li>
+            {% endfor %}
+          </ul>
+
+          <dl class="constraints">
+            {% for key, value in service.constraints.items() %}
+            <div>
+              <dt>{{ key.replace('_', ' ') }}</dt>
+              <dd>{{ value }}</dd>
+            </div>
+            {% endfor %}
+          </dl>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="grid two-up">
+      <article class="panel">
+        <h2>Suggested workflow</h2>
+        <ol class="bullets numbered">
+          <li>Use <a href="/chat">secure chat rooms</a> for the primary communications path.</li>
+          {% if manifest.secret_path %}
+          <li>Use <a href="/{{ manifest.secret_path }}/mail">HTTP mail</a> when the sender only needs a one-way inbox.</li>
+          <li>Use <a href="/{{ manifest.secret_path }}/email/burner">burner addresses</a> for throwaway public-facing receipt.</li>
+          {% else %}
+          <li>Wait for the service path to finish bootstrapping before using mail features.</li>
+          {% endif %}
+          <li>Use <a href="/health">/health</a> and <a href="/chat/stats">/chat/stats</a> for operational monitoring.</li>
+        </ol>
+      </article>
+
+      <article class="panel">
+        <h2>Compose notes</h2>
+        <ul class="bullets">
+          <li>App and Tor run as separate services in a single compose stack.</li>
+          <li>Tor control authentication uses a shared cookie volume between services.</li>
+          <li>No host ports are exposed by default; use the onion service or opt into debug exposure.</li>
+          <li>The stack is intentionally minimal so operators can audit it quickly.</li>
+        </ul>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

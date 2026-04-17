@@ -41,6 +41,7 @@ class TestDockerComposeConfig:
         # Tor service checks
         tor_service = config['services']['tor']
         assert 'image' in tor_service
+        assert 'build' in tor_service
         assert 'volumes' in tor_service
         assert 'networks' in tor_service
         
@@ -50,6 +51,7 @@ class TestDockerComposeConfig:
         assert 'depends_on' in opsechat_service
         assert 'environment' in opsechat_service
         assert 'healthcheck' in opsechat_service
+        assert 'volumes' in opsechat_service
         assert 'networks' in opsechat_service
     
     def test_compose_network_isolation(self):
@@ -89,6 +91,17 @@ class TestDockerComposeConfig:
             'CMD', 'curl', '--fail', '--silent', 'http://127.0.0.1:5000/health'
         ]
 
+    def test_compose_shares_tor_cookie_volume_with_app(self):
+        compose_path = self.get_compose_path()
+        with open(compose_path) as f:
+            config = yaml.safe_load(f)
+
+        tor_volumes = config['services']['tor']['volumes']
+        app_volumes = config['services']['opsechat']['volumes']
+
+        assert 'tor-data:/var/lib/tor' in tor_volumes
+        assert 'tor-data:/var/lib/tor:ro' in app_volumes
+
 
 class TestDockerfile:
     """Test Dockerfile configuration"""
@@ -124,6 +137,10 @@ class TestDockerfile:
 
         assert 'HEALTHCHECK' in content
         assert '/health' in content
+
+    def test_tor_dockerfile_exists(self):
+        path = os.path.join(REPO_DIR, 'containers', 'tor.Dockerfile')
+        assert os.path.exists(path)
     
     def test_dockerfile_copies_app_files(self):
         dockerfile_path = self.get_dockerfile_path()

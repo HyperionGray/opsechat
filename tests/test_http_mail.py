@@ -235,6 +235,15 @@ class TestHttpMailRoutes:
         assert data["send_url"].startswith(f"/{self.path}/mail/")
         assert data["inbox_url"].endswith("/inbox")
 
+    def test_create_mailbox_form_mode_renders_tokens(self):
+        r = self.client.post(
+            f"/{self.path}/mail/new",
+            headers={"Accept": "text/html"},
+        )
+        assert r.status_code == 200
+        assert b"Save these values now" in r.data
+        assert b"Your Read Key" in r.data
+
     def test_send_message_json(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
@@ -247,6 +256,31 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "msg_id" in data
+
+    def test_send_message_generic_form_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        payload = r.get_json()
+        addr = payload["address"]
+        read_key = payload["read_key"]
+
+        send_response = self.client.post(
+            f"/{self.path}/mail/send",
+            data={
+                "_address_override": addr,
+                "subject": "Generic route",
+                "body": "Form delivery works",
+                "sender": "bob",
+            },
+        )
+        assert send_response.status_code == 200
+        assert b"Message sent." in send_response.data
+
+        inbox = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            headers={"Accept": "application/json"},
+        )
+        assert inbox.status_code == 200
+        assert inbox.get_json()["messages"][0]["subject"] == "Generic route"
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -282,6 +316,19 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert len(data["messages"]) == 1
         assert data["messages"][0]["subject"] == "Test"
+
+    def test_open_inbox_helper_redirects_to_canonical_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        read_key = r.get_json()["read_key"]
+
+        redirect_response = self.client.get(
+            f"/{self.path}/mail/open?address={addr}&key={read_key}"
+        )
+        assert redirect_response.status_code == 302
+        assert redirect_response.headers["Location"].endswith(
+            f"/{self.path}/mail/{addr}/inbox?key={read_key}"
+        )
 
     def test_read_inbox_wrong_key_is_denied(self):
         r = self.client.post(f"/{self.path}/mail/new")

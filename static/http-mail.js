@@ -208,9 +208,15 @@ document.addEventListener('DOMContentLoaded', () => {
     button.addEventListener('click', () => showMailSection(button.dataset.mailSection));
   });
 
-  document.getElementById('create-btn')?.addEventListener('click', () => createMailbox(path));
+  document.getElementById('create-form')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    createMailbox(path);
+  });
   document.getElementById('compose-address-input')?.addEventListener('input', () => updateComposeAction(path));
-  document.getElementById('open-inbox-btn')?.addEventListener('click', () => fetchInbox(path));
+  document.getElementById('read-form')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    fetchInbox(path);
+  });
   document.querySelectorAll('[data-copy-target]').forEach((button) => {
     button.addEventListener('click', () => copyText(button.dataset.copyTarget));
   });
