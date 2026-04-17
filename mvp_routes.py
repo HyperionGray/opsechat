@@ -51,8 +51,8 @@ def register_mvp_routes(app):
                 },
             },
             {
-                "name": "burner-mail",
-                "label": "Burner email rotation",
+                "name": "burner-receive",
+                "label": "Receive-only burner inboxes",
                 "href": f"{secret_prefix}/email/burner" if secret_prefix else None,
                 "api": [
                     f"{secret_prefix}/email/burner" if secret_prefix else None,
@@ -61,7 +61,7 @@ def register_mvp_routes(app):
                 "constraints": {
                     "storage": "memory-only",
                     "retention_hours": 24,
-                    "send_limit_per_hour": 10,
+                    "delivery_model": "receive-only burner aliases backed by HTTP mail inboxes",
                     "attachments": "not supported",
                 },
             },

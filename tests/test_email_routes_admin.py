@@ -203,7 +203,8 @@ class TestEmailAdminRoutes:
         response = self.client.post("/secpath/email/burner", data={"action": "generate"})
         assert response.status_code == 302
 
-        active = burner_manager.get_user_burners("testuser")
+        payload = self.client.get("/secpath/email/burner/list.json").get_json()
+        active = payload["burners"]
         assert len(active) == 1
         burner = active[0]
         assert burner["receive_only"] is True

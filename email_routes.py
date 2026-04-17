@@ -64,14 +64,18 @@ def register_email_routes(app, id_generator, get_random_color):
         for burner in active_burners:
             mailbox = mailbox_map.get(burner["email"])
             burner_copy = dict(burner)
-            burner_copy["mailbox"] = mailbox
+            burner_copy["receive_only"] = True
             burner_copy["message_count"] = mailbox.message_count() if mailbox else 0
             if mailbox:
+                burner_copy["mailbox_address"] = mailbox.address
+                burner_copy["mailbox_read_key"] = mailbox.read_key
                 burner_copy["send_path"] = f"/{app.config['path']}/mail/{mailbox.address}/send"
                 burner_copy["inbox_path"] = (
                     f"/{app.config['path']}/mail/{mailbox.address}/inbox?key={mailbox.read_key}"
                 )
             else:
+                burner_copy["mailbox_address"] = None
+                burner_copy["mailbox_read_key"] = None
                 burner_copy["send_path"] = None
                 burner_copy["inbox_path"] = None
             enriched.append(burner_copy)
