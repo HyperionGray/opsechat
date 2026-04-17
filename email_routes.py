@@ -14,6 +14,7 @@ from email_system import email_storage, burner_manager, EmailComposer, EmailVali
 from email_security_tools import spoofing_tester, phishing_simulator
 from email_transport import transport_manager
 from domain_manager import domain_rotation_manager, PorkbunAPIClient
+from http_mail_system import http_mail_storage
 
 
 def register_email_routes(app, id_generator, get_random_color):
@@ -53,6 +54,29 @@ def register_email_routes(app, id_generator, get_random_color):
         }
         defaults.update(kwargs)
         return render_template("email_compose.html", **defaults)
+
+    def _burner_mailboxes_for_user(user_id):
+        burner_manager.cleanup_expired()
+        active_burners = burner_manager.get_user_burners(user_id)
+        mailbox_map = http_mail_storage.get_mailboxes_for_owner(user_id)
+
+        enriched = []
+        for burner in active_burners:
+            mailbox = mailbox_map.get(burner["email"])
+            burner_copy = dict(burner)
+            burner_copy["mailbox"] = mailbox
+            burner_copy["message_count"] = mailbox.message_count() if mailbox else 0
+            if mailbox:
+                burner_copy["send_path"] = f"/{app.config['path']}/mail/{mailbox.address}/send"
+                burner_copy["inbox_path"] = (
+                    f"/{app.config['path']}/mail/{mailbox.address}/inbox?key={mailbox.read_key}"
+                )
+            else:
+                burner_copy["send_path"] = None
+                burner_copy["inbox_path"] = None
+            enriched.append(burner_copy)
+
+        return enriched
 
     @app.route('/<string:url_addition>/email', methods=["GET"])
     def email_inbox(url_addition):
@@ -97,8 +121,7 @@ def register_email_routes(app, id_generator, get_random_color):
             return ('', 404)
 
         _ensure_session()
-        burner_manager.cleanup_expired()
-        active_burners = burner_manager.get_user_burners(session["_id"])
+        active_burners = _burner_mailboxes_for_user(session["_id"])
 
         return render_template(
             "email_burner.html",
@@ -115,8 +138,7 @@ def register_email_routes(app, id_generator, get_random_color):
             return ('', 404)
 
         _ensure_session()
-        burner_manager.cleanup_expired()
-        active_burners = burner_manager.get_user_burners(session["_id"])
+        active_burners = _burner_mailboxes_for_user(session["_id"])
 
         return render_template(
             "email_burner.html",
@@ -136,8 +158,7 @@ def register_email_routes(app, id_generator, get_random_color):
         if "_id" not in session:
             return jsonify({"error": "No session"}), 401
 
-        burner_manager.cleanup_expired()
-        active_burners = burner_manager.get_user_burners(session["_id"])
+        active_burners = _burner_mailboxes_for_user(session["_id"])
         stats = burner_manager.get_user_stats(session["_id"])
         return jsonify({"burners": active_burners, "stats": stats})
 
@@ -336,7 +357,7 @@ def register_email_routes(app, id_generator, get_random_color):
 
     @app.route('/<string:url_addition>/email/burner', methods=["POST"])
     def email_burner_post(url_addition):
-        """Handle burner email generation and rotation."""
+        """Handle receive-only burner mailbox generation and rotation."""
         if not _require_path(url_addition):
             return ('', 404)
 
@@ -344,10 +365,16 @@ def register_email_routes(app, id_generator, get_random_color):
         action = request.form.get("action", "generate")
 
         if action == "generate":
-            burner_manager.generate_burner_email(session["_id"])
+            burner_email = burner_manager.generate_burner_email(session["_id"])
+            http_mail_storage.create_mailbox(owner_id=session["_id"], alias=burner_email)
         elif action == "rotate":
             old_email = request.form.get("old_email", "").strip() or None
-            burner_manager.rotate_burner(session["_id"], old_email)
+            if old_email:
+                mailbox = http_mail_storage.get_mailbox_by_alias(old_email)
+                if mailbox and mailbox.owner_id == session["_id"]:
+                    http_mail_storage.delete_mailbox(mailbox.address, mailbox.read_key)
+            burner_email = burner_manager.rotate_burner(session["_id"], old_email)
+            http_mail_storage.create_mailbox(owner_id=session["_id"], alias=burner_email)
 
         return redirect(url_for("email_burner", url_addition=url_addition))
 
@@ -361,6 +388,9 @@ def register_email_routes(app, id_generator, get_random_color):
             return ('', 401)
 
         if burner_manager.get_user_for_burner(burner_email) == session["_id"]:
+            mailbox = http_mail_storage.get_mailbox_by_alias(burner_email)
+            if mailbox and mailbox.owner_id == session["_id"]:
+                http_mail_storage.delete_mailbox(mailbox.address, mailbox.read_key)
             burner_manager.expire_burner(burner_email)
         return redirect(url_for("email_burner", url_addition=url_addition))
 

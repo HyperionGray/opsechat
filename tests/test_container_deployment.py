@@ -32,6 +32,7 @@ class TestDockerComposeConfig:
         assert 'services' in config
         assert 'tor' in config['services']
         assert 'opsechat' in config['services']
+        assert 'admin-proxy' in config['services']
     
     def test_compose_services_have_required_config(self):
         compose_path = self.get_compose_path()
@@ -53,6 +54,12 @@ class TestDockerComposeConfig:
         assert 'healthcheck' in opsechat_service
         assert 'volumes' in opsechat_service
         assert 'networks' in opsechat_service
+
+        admin_proxy_service = config['services']['admin-proxy']
+        assert 'build' in admin_proxy_service
+        assert 'depends_on' in admin_proxy_service
+        assert 'ports' in admin_proxy_service
+        assert 'networks' in admin_proxy_service
     
     def test_compose_network_isolation(self):
         """Verify services use isolated network"""
@@ -66,6 +73,7 @@ class TestDockerComposeConfig:
         # Both services should use the same network
         assert 'opsechat-network' in config['services']['tor']['networks']
         assert 'opsechat-network' in config['services']['opsechat']['networks']
+        assert 'opsechat-network' in config['services']['admin-proxy']['networks']
     
     def test_compose_no_ports_exposed_by_default(self):
         """Verify no ports are exposed to host by default"""
@@ -80,6 +88,14 @@ class TestDockerComposeConfig:
         # Opsechat should not expose ports (might be commented out)
         opsechat_service = config['services']['opsechat']
         assert 'ports' not in opsechat_service or not opsechat_service['ports']
+
+    def test_compose_admin_proxy_is_localhost_only(self):
+        compose_path = self.get_compose_path()
+        with open(compose_path) as f:
+            config = yaml.safe_load(f)
+
+        proxy_ports = config['services']['admin-proxy']['ports']
+        assert proxy_ports == ['127.0.0.1:8080:8080']
 
     def test_compose_app_healthcheck_targets_local_health_endpoint(self):
         compose_path = os.path.join(REPO_DIR, 'docker-compose.yml')

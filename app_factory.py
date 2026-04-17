@@ -125,10 +125,11 @@ def create_app():
     def chat_stats():
         return jsonify(get_chat_stats())
 
-    # Empty Index page to avoid Flask fingerprinting
+    # Redirect the root to the operator console.
     @app.route('/', methods=["GET"])
     def index():
-        return ('', 200)
+        from flask import redirect, url_for
+        return redirect(url_for("mvp_console"))
     
     # CHANGELOG (AI assistant):
     # - Made rate_limiter import optional with a no-op fallback to prevent

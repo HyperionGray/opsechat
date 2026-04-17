@@ -26,6 +26,13 @@ def test_console_route_returns_200():
     assert b"Operator Console" in response.data
 
 
+def test_root_redirects_to_console():
+    client = _app_with_path().test_client()
+    response = client.get("/")
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/console")
+
+
 def test_console_links_secret_path_services():
     client = _app_with_path().test_client()
     response = client.get("/console")
@@ -44,3 +51,4 @@ def test_console_api_returns_service_manifest():
     assert data["hostname"] == "consolehost"
     assert any(service["name"] == "secure-chat" for service in data["services"])
     assert any(service["name"] == "http-mail" for service in data["services"])
+    assert any(service["name"] == "burner-receive" for service in data["services"])

@@ -65,9 +65,12 @@ class HttpMailbox:
         self.messages: List[HttpMessage] = []
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
+        self.destroyed = False
 
     def add_message(self, subject: str, body: str, sender_handle: str) -> str:
         """Add a message; returns the new message ID."""
+        if self.destroyed:
+            raise RuntimeError("Mailbox has been destroyed")
         msg_id = _generate_id(12)  # 12 bytes → 16 URL-safe chars
         msg = HttpMessage(
             msg_id=msg_id,
@@ -125,13 +128,23 @@ class HttpMailStorage:
         self._mailboxes: Dict[str, HttpMailbox] = {}  # address -> mailbox
         self._lock = threading.Lock()
 
-    def create_mailbox(self) -> HttpMailbox:
+    def create_mailbox(self, address: Optional[str] = None) -> HttpMailbox:
         """Create a new mailbox; returns the mailbox object (contains address + read_key)."""
-        address = _generate_id(9)    # 9 bytes → 12 URL-safe chars
         read_key = _generate_id(24)  # 24 bytes → 32 URL-safe chars
-        mailbox = HttpMailbox(address=address, read_key=read_key)
+
         with self._lock:
+            if address is None:
+                while True:
+                    candidate = _generate_id(9)  # 9 bytes → 12 URL-safe chars
+                    if candidate not in self._mailboxes:
+                        address = candidate
+                        break
+            elif address in self._mailboxes:
+                raise ValueError("Mailbox address already exists")
+
+            mailbox = HttpMailbox(address=address, read_key=read_key)
             self._mailboxes[address] = mailbox
+
         return mailbox
 
     def get_mailbox(self, address: str) -> Optional[HttpMailbox]:
@@ -160,6 +173,9 @@ class HttpMailStorage:
             # Remove the mailbox from the global mapping while still holding
             # the storage lock so no new lookups can obtain it.
             del self._mailboxes[address]
+            for alias, alias_address in list(self._aliases.items()):
+                if alias_address == address:
+                    del self._aliases[alias]
 
         # Now that the mailbox is no longer globally reachable, safely
         # overwrite and clear its messages under the per-mailbox lock.

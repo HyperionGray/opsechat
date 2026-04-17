@@ -5,7 +5,7 @@ Provides a single operator-facing entry point that ties together the hardened
 chat, HTTP mail, and burner workflows exposed by the application.
 """
 
-from flask import jsonify, render_template
+from flask import jsonify, redirect, render_template, url_for
 
 
 def register_mvp_routes(app):
@@ -93,6 +93,10 @@ def register_mvp_routes(app):
     def mvp_console():
         manifest = _build_manifest()
         return render_template("mvp_console.html", manifest=manifest)
+
+    @app.route("/", methods=["GET"])
+    def console_root():
+        return redirect(url_for("mvp_console"))
 
     @app.route("/console/api", methods=["GET"])
     def mvp_console_api():
