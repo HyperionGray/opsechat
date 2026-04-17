@@ -228,7 +228,7 @@ def register_http_mail_routes(app):
             return _render_http_mail(
                 error="Mailbox not found",
                 inbox_address=address,
-                inbox_read_key=read_key,
+                inbox_read_key=request.form.get("read_key", ""),
                 initial_section="read",
             ), 404
 
