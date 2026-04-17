@@ -220,17 +220,18 @@ def register_http_mail_routes(app):
         if url_addition != app.config["path"]:
             return ('', 404)
         _ensure_session()
-
         mailbox = http_mail_storage.get_mailbox(address)
         if mailbox is None:
             if request.is_json:
                 return jsonify({"error": "Mailbox not found"}), 404
+            # read_key not available yet when mailbox is not found
             return _render_http_mail(
                 error="Mailbox not found",
                 inbox_address=address,
-                inbox_read_key=request.form.get("read_key", ""),
                 initial_section="read",
             ), 404
+
+        if request.is_json:
 
         if request.is_json:
             read_key = (request.get_json() or {}).get("read_key", "")
