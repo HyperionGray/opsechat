@@ -1,1 +1,0 @@
-docs/setup/DOMAIN_REGISTRAR_API.md

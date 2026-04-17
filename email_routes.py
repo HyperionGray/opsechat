@@ -344,7 +344,8 @@ def register_email_routes(app, id_generator, get_random_color):
         action = request.form.get("action", "generate")
 
         if action == "generate":
-            burner_manager.generate_burner_email(session["_id"])
+            burner_email = burner_manager.generate_burner_email(session["_id"])
+            http_mail_storage.create_mailbox(owner_id=session["_id"], alias=burner_email)
         elif action == "rotate":
             old_email = request.form.get("old_email", "").strip() or None
             burner_manager.rotate_burner(session["_id"], old_email)

@@ -3,11 +3,13 @@
 
 FROM python:3.12-slim
 
-# Install Tor and required system dependencies
+# Install runtime dependencies needed by health checks.
 RUN apt-get update && apt-get install -y \
-    tor \
     curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Create an unprivileged runtime user.
+RUN useradd --create-home --home-dir /home/opsechat --shell /usr/sbin/nologin opsechat
 
 # Set working directory
 WORKDIR /app
@@ -52,12 +54,21 @@ COPY VERSION .
 COPY static/ static/
 COPY templates/ templates/
 
+RUN chown -R opsechat:opsechat /app
+
 # Expose Flask port
 EXPOSE 5000
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV TOR_CONTROL_PORT=9051
+ENV PYTHONDONTWRITEBYTECODE=1
+
+USER opsechat
+
+# Healthcheck: verify the Flask /health endpoint is responding
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl --fail --silent http://127.0.0.1:5000/health || exit 1
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=10 \
   CMD curl --fail --silent http://127.0.0.1:5000/health || exit 1

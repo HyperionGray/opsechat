@@ -76,7 +76,7 @@ def create_app():
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self'; "
-            "style-src 'self'; "
+            "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data:; "
             "font-src 'self'; "
             "connect-src 'self'; "
@@ -109,17 +109,27 @@ def create_app():
     from http_mail_routes import register_http_mail_routes
     register_http_mail_routes(app)
     
+    # Register MVP console and service manifest routes
+    from mvp_routes import register_mvp_routes
+    register_mvp_routes(app)
+
     # Health check endpoint
-    from monitoring import get_health_status
+    from monitoring import get_health_status, get_chat_stats
 
     @app.route('/health', methods=["GET"])
     def health():
         return jsonify(get_health_status())
 
-    # Empty Index page to avoid Flask fingerprinting
+    # Operational stats endpoint for monitoring dashboards
+    @app.route('/chat/stats', methods=["GET"])
+    def chat_stats():
+        return jsonify(get_chat_stats())
+
+    # Redirect the root to the operator console.
     @app.route('/', methods=["GET"])
     def index():
-        return ('', 200)
+        from flask import redirect, url_for
+        return redirect(url_for("mvp_console"))
     
     # CHANGELOG (AI assistant):
     # - Made rate_limiter import optional with a no-op fallback to prevent

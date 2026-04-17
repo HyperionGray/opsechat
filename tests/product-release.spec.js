@@ -56,7 +56,7 @@ test.describe('Product Release - Core Requirements', () => {
   });
   
   test('should have TUI README with usage instructions', () => {
-    const tuiReadme = path.join(projectRoot, 'TUI_README.md');
+    const tuiReadme = path.join(projectRoot, 'docs', 'user-guide', 'TUI_README.md');
     expect(fs.existsSync(tuiReadme)).toBeTruthy();
     
     const content = fs.readFileSync(tuiReadme, 'utf8');
@@ -284,7 +284,7 @@ test.describe('Product Release - UX Requirements', () => {
   });
   
   test('should have single-command startup examples', () => {
-    const tuiReadme = path.join(projectRoot, 'TUI_README.md');
+    const tuiReadme = path.join(projectRoot, 'docs', 'user-guide', 'TUI_README.md');
     const content = fs.readFileSync(tuiReadme, 'utf8');
     
     expect(content).toContain('python tui-server.py');
@@ -292,7 +292,7 @@ test.describe('Product Release - UX Requirements', () => {
   });
   
   test('should document terminal-based UX', () => {
-    const tuiReadme = path.join(projectRoot, 'TUI_README.md');
+    const tuiReadme = path.join(projectRoot, 'docs', 'user-guide', 'TUI_README.md');
     const content = fs.readFileSync(tuiReadme, 'utf8');
     
     expect(content).toContain('TUI');

@@ -1,18 +1,14 @@
 <!doctype html>
 <html lang="en">
 <head>
-<title>Burner Email - OpSec</title>
+<title>Burner Mailboxes - OpSec</title>
 <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="{{ url_for('static', filename='email-burner.js') }}"></script>
 </head>
 
 <style>
-  * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
     background-color: #000;
@@ -29,21 +25,11 @@
     margin-bottom: 20px;
   }
 
-  h1 {
-    color: #0f0;
-    font-size: 24px;
-  }
+  h1 { color: #0f0; font-size: 24px; }
+  h2 { color: #0ff; font-size: 20px; margin: 20px 0 10px 0; }
+  h3 { color: #0ff; margin-bottom: 10px; }
 
-  h2 {
-    color: #0ff;
-    font-size: 20px;
-    margin: 20px 0 10px 0;
-  }
-
-  .nav {
-    margin: 20px 0;
-  }
-
+  .nav { margin: 20px 0; }
   .nav a {
     color: #0f0;
     text-decoration: none;
@@ -53,39 +39,72 @@
     display: inline-block;
     margin-bottom: 10px;
   }
-
-  .nav a:hover {
-    background-color: #0f0;
-    color: #000;
-  }
+  .nav a:hover { background-color: #0f0; color: #000; }
 
   .content {
     max-width: 1200px;
     margin: 20px auto;
   }
 
-  .info {
-    background-color: #003;
-    border: 1px solid #0ff;
-    color: #0ff;
-    padding: 15px;
+  .panel,
+  .info,
+  .warning,
+  .danger-note {
+    padding: 16px;
     margin: 20px 0;
+    border: 1px solid #0f0;
+    background-color: #111;
   }
 
-  .success {
-    background-color: #030;
-    border: 1px solid #0f0;
-    color: #0f0;
-    padding: 15px;
-    margin: 20px 0;
+  .info {
+    background-color: #003;
+    border-color: #0ff;
+    color: #0ff;
   }
 
   .warning {
     background-color: #330;
-    border: 1px solid #f90;
+    border-color: #f90;
     color: #f90;
-    padding: 15px;
+  }
+
+  .danger-note {
+    background-color: #300;
+    border-color: #f55;
+    color: #fbb;
+  }
+
+  .stats {
+    display: flex;
+    gap: 20px;
     margin: 20px 0;
+    flex-wrap: wrap;
+  }
+
+  .stat-box {
+    background-color: #111;
+    border: 1px solid #0f0;
+    padding: 15px;
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .stat-value {
+    font-size: 32px;
+    color: #0ff;
+    font-weight: bold;
+  }
+
+  .stat-label {
+    color: #888;
+    font-size: 14px;
+  }
+
+  .generate-section {
+    text-align: center;
+    margin: 30px 0;
+    padding: 30px;
+    border: 2px dashed #0f0;
   }
 
   button, .button {
@@ -125,17 +144,13 @@
     border: 2px solid #0f0;
     padding: 20px;
     margin: 15px 0;
-    position: relative;
     transition: border-color 0.3s;
   }
 
-  .burner-card.expiring-soon {
-    border-color: #f90;
-  }
-
+  .burner-card.expiring-soon { border-color: #f90; }
   .burner-card.expired {
     border-color: #f00;
-    opacity: 0.6;
+    opacity: 0.75;
   }
 
   .burner-email {
@@ -150,6 +165,23 @@
     color: #888;
     font-size: 14px;
     margin: 10px 0;
+    line-height: 1.5;
+  }
+
+  .token-box {
+    background: #090909;
+    border: 1px solid #0ff;
+    padding: 12px;
+    margin: 10px 0;
+    color: #0ff;
+    word-break: break-all;
+  }
+
+  .token-label {
+    color: #888;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
   .time-remaining {
@@ -158,70 +190,30 @@
     margin: 10px 0;
   }
 
-  .time-remaining.expiring {
-    color: #f90;
-  }
-
-  .time-remaining.expired {
-    color: #f00;
-  }
+  .time-remaining.expiring { color: #f90; }
+  .time-remaining.expired { color: #f00; }
 
   .burner-actions {
     margin-top: 15px;
   }
 
-  .features {
-    margin: 20px 0;
-    padding: 15px;
-    border: 1px solid #0f0;
-  }
-
-  .features ul {
-    margin-left: 20px;
-    margin-top: 10px;
-  }
-
-  .features li {
-    margin: 8px 0;
-  }
-
-  .stats {
-    display: flex;
-    gap: 20px;
-    margin: 20px 0;
-    flex-wrap: wrap;
-  }
-
-  .stat-box {
-    background-color: #111;
-    border: 1px solid #0f0;
-    padding: 15px;
-    flex: 1;
-    min-width: 200px;
-  }
-
-  .stat-value {
-    font-size: 32px;
-    color: #0ff;
-    font-weight: bold;
-  }
-
-  .stat-label {
-    color: #888;
-    font-size: 14px;
-  }
-
-  .generate-section {
-    text-align: center;
-    margin: 30px 0;
-    padding: 30px;
-    border: 2px dashed #0f0;
+  .burner-actions form {
+    display: inline;
   }
 
   .empty-state {
     text-align: center;
     padding: 50px 20px;
     color: #888;
+  }
+
+  ul {
+    margin-left: 20px;
+    margin-top: 10px;
+  }
+
+  li {
+    margin: 8px 0;
   }
 
   @media (max-width: 768px) {
@@ -242,13 +234,15 @@
 
 <body data-path="{{ path }}" data-script-enabled="{{ 'true' if script_enabled else 'false' }}">
   <div class="header">
-    <h1>🔥 Burner Email Generator</h1>
-    <p>Modern rotating anonymous email addresses</p>
+    <h1>🔥 Burner Mailboxes</h1>
+    <p>Receive-only, rotating inboxes backed by the HTTP-mail service</p>
   </div>
 
   <div class="nav">
-    <a href="/{{ path }}/email">📧 Inbox</a>
-    <a href="/{{ path }}">💬 Chat</a>
+    <a href="/console">🧭 Console</a>
+    <a href="/chat">💬 Chat Rooms</a>
+    <a href="/{{ path }}/mail">📨 HTTP Mail</a>
+    <a href="/{{ path }}/email">📧 Classic Inbox</a>
     {% if script_enabled %}
     <a href="/{{ path }}/email/burner">NoScript Mode</a>
     {% else %}
@@ -256,76 +250,87 @@
     {% endif %}
   </div>
 
-  <!-- Security Warning -->
   <div class="content">
-    <div class="info" style="border-color: #f00; background-color: #300; color: #faa;">
-      <strong>⚠️ IMPORTANT: FOR ENCRYPTED MESSAGES ONLY</strong><br><br>
-      
-      <strong>APPROVED USE:</strong> Anonymous service sign-ups, encrypted communication, secure whistleblowing.<br><br>
-      
-      <strong>RATE LIMITS:</strong> Sending limited to 10 emails per hour. Receiving is unlimited.<br><br>
-      
-      <strong>❌ STRICTLY PROHIBITED:</strong> Spam, abuse, illegal content, harassment.<br><br>
-      
-      <strong>⚠️ VIOLATIONS = CONSEQUENCES:</strong> Abuse will result in permanent ban, logs preserved (not deleted), and potential reporting to authorities.
+    <div class="danger-note">
+      <strong>⚠️ MVP scope:</strong> burner mailboxes are receive-focused aliases only.
+      They exist to give you a short-lived address and a hidden read key. Senders
+      can post plain-text messages through HTTP, but this page is optimized for
+      receiving and reading, not for acting like a general outbound email client.
     </div>
-  </div>
 
-  <div class="content">
-    <!-- Stats Section -->
+    <div class="info">
+      <strong>How this works:</strong>
+      <ul>
+        <li>Each burner email maps to a hidden HTTP mailbox plus a private read key.</li>
+        <li>The burner email is what you share; the read key stays private.</li>
+        <li>Messages remain memory-only and expire automatically.</li>
+        <li>No attachments, HTML mail, or arbitrary hosting payloads are supported.</li>
+      </ul>
+    </div>
+
     {% if active_burners %}
     <div class="stats">
       <div class="stat-box">
         <div class="stat-value">{{ active_burners|length }}</div>
-        <div class="stat-label">Active Burners</div>
+        <div class="stat-label">Active burner inboxes</div>
       </div>
       <div class="stat-box">
         <div class="stat-value" id="total-time">{{ active_burners|length * 24 }}h</div>
-        <div class="stat-label">Total Time Remaining</div>
+        <div class="stat-label">Approximate combined time remaining</div>
       </div>
     </div>
     {% endif %}
 
-    <!-- Generate New Burner Section -->
     <div class="generate-section">
-      <h2>🚀 Generate New Burner</h2>
+      <h2>Generate burner inbox</h2>
       <p style="margin: 15px 0; color: #888;">
-        Create a new temporary email address for anonymous communication
+        Create a short-lived receive-only mailbox with a public alias and a private read key.
       </p>
       <form method="POST" action="/{{ path }}/email/burner" style="display: inline;">
         <input type="hidden" name="action" value="generate">
-        <button type="submit">Generate New Burner Email</button>
+        <button type="submit">Generate Burner Mailbox</button>
       </form>
     </div>
 
-    <!-- Active Burners List -->
     {% if active_burners %}
-    <h2>📬 Active Burner Emails</h2>
+    <h2>Active burner inboxes</h2>
     <div class="burner-list" id="burner-list">
       {% for burner in active_burners %}
       <div class="burner-card {% if burner.time_remaining_seconds < 3600 %}expiring-soon{% endif %}" data-email="{{ burner.email }}" data-expires="{{ burner.time_remaining_seconds }}">
         <div class="burner-email">{{ burner.email }}</div>
-        
+
         <div class="burner-meta">
-          Created: {{ burner.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
-          <br>
-          Expires: {{ burner.expires_at.strftime('%Y-%m-%d %H:%M:%S') }}
+          Created: {{ burner.created_at.strftime('%Y-%m-%d %H:%M:%S') }}<br>
+          Expires: {{ burner.expires_at.strftime('%Y-%m-%d %H:%M:%S') }}<br>
+          HTTP mailbox address: {{ burner.mailbox_address or 'Unavailable' }}
         </div>
-        
+
+        {% if burner.read_key %}
+        <div class="token-label">Private read key</div>
+        <div class="token-box" id="read-key-{{ loop.index }}">{{ burner.read_key }}</div>
+        <button type="button" data-copy-target="read-key-{{ loop.index }}">📋 Copy Read Key</button>
+        {% endif %}
+
+        {% if burner.send_path %}
+        <div class="token-label">Public send path</div>
+        <div class="token-box" id="send-path-{{ loop.index }}">{{ burner.send_path }}</div>
+        <button type="button" data-copy-target="send-path-{{ loop.index }}">📋 Copy Send Path</button>
+        {% endif %}
+
         <div class="time-remaining {% if burner.time_remaining_seconds < 3600 %}expiring{% endif %}" data-seconds="{{ burner.time_remaining_seconds }}">
           ⏱️ Time Remaining: <span class="countdown">{{ burner.time_remaining_str }}</span>
         </div>
-        
+
         <div class="burner-actions">
           <button type="button" data-copy-email="{{ burner.email }}">📋 Copy Email</button>
           <a href="/{{ path }}/email" class="button">📧 View Inbox</a>
           <form method="POST" action="/{{ path }}/email/burner" style="display: inline;">
             <input type="hidden" name="action" value="rotate">
             <input type="hidden" name="old_email" value="{{ burner.email }}">
-            <button type="submit">🔄 Rotate (Generate New)</button>
+            <button type="submit">🔄 Rotate</button>
           </form>
           <form method="POST" action="/{{ path }}/email/burner/expire/{{ burner.email }}" style="display: inline;">
-            <button type="submit" class="danger">🗑️ Delete Now</button>
+            <button type="submit" class="danger">🗑 Delete Now</button>
           </form>
         </div>
       </div>
@@ -333,46 +338,28 @@
     </div>
     {% else %}
     <div class="empty-state">
-      <h2>No Active Burner Emails</h2>
-      <p>Generate your first burner email to get started!</p>
+      <h2>No active burner inboxes</h2>
+      <p>Generate your first burner mailbox to get a fresh alias plus a hidden read key.</p>
     </div>
     {% endif %}
 
-    <!-- Info Section -->
-    <div class="info">
-      💡 <strong>How Burner Emails Work:</strong><br><br>
-      <ul style="margin-left: 20px;">
-        <li><strong>No Login Required:</strong> Instant anonymous email addresses</li>
-        <li><strong>24-Hour Validity:</strong> Each email expires after 24 hours</li>
-        <li><strong>Auto-Rotation:</strong> Generate new emails or rotate existing ones</li>
-        <li><strong>Multiple Active:</strong> Keep several burner emails active at once</li>
-        <li><strong>Real-Time Updates:</strong> See countdown timers with JavaScript enabled</li>
-        <li><strong>Privacy First:</strong> All data stored in memory, nothing hits disk</li>
-      </ul>
-    </div>
-
-    <div class="features">
-      <h3 style="color: #0ff; margin-bottom: 10px;">✨ Modern Features:</h3>
+    <div class="panel">
+      <h3>Operational notes</h3>
       <ul>
-        <li><strong>Quick Rotation:</strong> One-click rotation to new addresses</li>
-        <li><strong>Live Countdowns:</strong> Real-time expiry timers (with JS)</li>
-        <li><strong>Multiple Burners:</strong> Manage several addresses simultaneously</li>
-        <li><strong>Instant Copy:</strong> One-click copy to clipboard</li>
-        <li><strong>Direct Inbox:</strong> Quick link to view emails</li>
-        <li><strong>Manual Expiry:</strong> Delete burners before they expire</li>
-        <li><strong>Tor-Compatible:</strong> Works seamlessly over Tor network</li>
-        <li><strong>PGP Support:</strong> Use with encrypted communications</li>
+        <li>These burner aliases are for inbound receipt in the MVP, not a full email ecosystem.</li>
+        <li>Senders should use the HTTP mail flow and the mailbox address behind the burner alias.</li>
+        <li>All data stays in memory and disappears on restart or expiry.</li>
+        <li>Use PGP or other client-side encryption if the message contents are sensitive.</li>
       </ul>
     </div>
 
     <div class="warning">
-      ⚠️ <strong>Privacy Notes:</strong>
-      <ul style="margin-left: 20px; margin-top: 10px;">
-        <li>Burner emails expire automatically after 24 hours</li>
-        <li>All data stored in memory - lost on server restart</li>
-        <li>For real email, configure SMTP/IMAP in settings</li>
-        <li>Consider using PGP encryption for sensitive messages</li>
-        <li>Access via Tor Browser for maximum anonymity</li>
+      <strong>Privacy notes:</strong>
+      <ul>
+        <li>Burner aliases expire automatically after 24 hours.</li>
+        <li>All mailbox material is lost on server restart.</li>
+        <li>Read keys are sensitive; anyone holding one can open the inbox.</li>
+        <li>Access through Tor remains the recommended posture for hostile environments.</li>
       </ul>
     </div>
   </div>
