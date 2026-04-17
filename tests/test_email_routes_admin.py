@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app_factory import create_app
 from email_system import email_storage, burner_manager
 from email_routes import transport_manager, domain_rotation_manager
+from http_mail_system import http_mail_storage
 
 
 def _fresh_app():
@@ -31,6 +32,7 @@ class TestEmailAdminRoutes:
         burner_manager.user_burners.clear()
         burner_manager.send_limits.clear()
         burner_manager.custom_domain = None
+        http_mail_storage._mailboxes.clear()
         domain_rotation_manager.api_client = None
         domain_rotation_manager.api_key = None
         domain_rotation_manager.api_secret = None
@@ -195,6 +197,26 @@ class TestEmailAdminRoutes:
         payload = response.get_json()
         assert payload["success"] is True
         assert burner_manager.get_custom_domain() == "fresh-example.xyz"
+
+    def test_burner_generate_creates_receive_only_mailbox(self):
+        self._login()
+        response = self.client.post("/secpath/email/burner", data={"action": "generate"})
+        assert response.status_code == 302
+
+        payload = self.client.get("/secpath/email/burner/list.json").get_json()
+        active = payload["burners"]
+        assert len(active) == 1
+        burner = active[0]
+        assert burner["receive_only"] is True
+        assert burner["mailbox_address"]
+        assert burner["mailbox_read_key"]
+        assert burner["send_path"].endswith(f"/mail/{burner['mailbox_address']}/send")
+        assert burner["inbox_path"].endswith(
+            f"/mail/{burner['mailbox_address']}/inbox?key={burner['mailbox_read_key']}"
+        )
+
+        mailbox = http_mail_storage.get_mailbox(burner["mailbox_address"])
+        assert mailbox is not None
 
     def test_spoof_test_detect_flow_renders_results(self):
         self._login()

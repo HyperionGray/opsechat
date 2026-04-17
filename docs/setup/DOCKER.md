@@ -4,9 +4,12 @@ This document describes how to run opsechat using containers with Podman (prefer
 
 ## Overview
 
-The containerized setup includes:
+The containerized MVP setup includes:
 - **Tor daemon container**: Runs the Tor service with control port enabled
-- **Opsechat application container**: Runs the Flask application with chat, email, and burner email features
+- **Opsechat application container**: Runs the Flask application with chat, HTTP mail, burner email, and the MVP operator console
+
+The operator entry point is `/console`, which also links to the JSON service
+manifest at `/console/api`.
 
 The compose file is `container-compose.yml` (a `docker-compose.yml` symlink exists for backward compatibility).
 
@@ -34,10 +37,11 @@ Simply run:
 
 This script will:
 1. Detect whether you have podman-compose or docker-compose
-2. Build the opsechat container image
+2. Build the opsechat, Tor, and admin proxy images
 3. Start the Tor daemon
 4. Start the opsechat application
-5. Display status and instructions
+5. Start the localhost-only admin proxy
+6. Display status and instructions
 
 ### Viewing the Onion Address
 
@@ -55,6 +59,23 @@ Look for a line like:
 ```
 [*] Your service is available at: abc123...xyz.onion/randompath
 ```
+
+The onion service now defaults to the operator console at:
+
+```
+http://abc123...xyz.onion/randompath/console
+```
+
+### Localhost Admin Access
+
+The compose stack also exposes a localhost-only reverse proxy for operator use:
+
+```text
+http://127.0.0.1:8080/
+```
+
+This proxy is intended for admin and debugging workflows on the host itself. It
+is not published beyond localhost.
 
 ### Verifying the Setup
 
@@ -125,16 +146,18 @@ docker-compose -f container-compose.yml down
 
 ### Network Configuration
 
-- Both containers run in an isolated `opsechat-network` bridge network
+- All three services run in an isolated `opsechat-network` bridge network
 - The opsechat app connects to the Tor daemon via the control port (9051)
-- **No ports are exposed to the host by default for security**
-- Access is **only through the Tor hidden service** (.onion address)
+- The app mounts the Tor cookie volume read-only so `stem` can authenticate to
+  the control port without weakening Tor auth
+- A localhost-only reverse proxy publishes `127.0.0.1:8080` for operator access
+- Public access is still intended to happen through the Tor hidden service
 - For debugging/development, you can uncomment the port mapping in docker-compose.yml
 
 ### Security Considerations
 
-1. **No Host Port Exposure**: By default, no ports are exposed to the host. The application is only accessible via the Tor hidden service, maintaining anonymity.
-2. **Cookie Authentication**: Tor uses cookie authentication instead of password authentication for better security.
+1. **Minimal Host Exposure**: The app itself exposes no host ports by default. Only the localhost-bound admin proxy publishes a port, and it is restricted to `127.0.0.1`.
+2. **Cookie Authentication**: Tor uses cookie authentication instead of password authentication, and the cookie file is shared read-only with the app container.
 3. **Isolated Network**: Containers communicate via a dedicated bridge network, isolated from the host.
 4. **Internal-Only Ports**: Tor control port and SOCKS proxy are only accessible within the container network.
 5. **No Disk Storage**: The opsechat app stores nothing on disk (in-memory only).
