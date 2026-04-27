@@ -1,120 +1,88 @@
-# PGP Feature End-to-End Test Example
+# Closed-Roster OpenPGP Test Example
 
-This document demonstrates how the PGP feature works in OpSechat.
+This example shows the current simple-room alpha flow for two members, Alice and Bob.
 
-## Test Scenario: Two Users Exchanging Encrypted Messages
+## Setup
 
-### Setup
+### Alice
 
-**User Alice:**
-1. Opens OpSechat chat interface
-2. Clicks "⚙️ PGP Settings"
-3. Generates/imports her private key
-4. Imports Bob's public key with identifier "Bob"
+1. Creates a room
+2. Generates or imports her OpenPGP identity
+3. Adds Bob's public key
+4. Verifies Bob's fingerprints out of band
+5. Locks epoch 1
 
-**User Bob:**
-1. Opens OpSechat chat interface  
-2. Clicks "⚙️ PGP Settings"
-3. Generates/imports his private key
-4. Imports Alice's public key with identifier "Alice"
+### Bob
 
-### Message Flow
+1. Opens the room URL
+2. Imports the OpenPGP identity that matches his roster entry
+3. Verifies Alice's fingerprints out of band
 
-**Alice sends message: "Hello Bob, this is secret!"**
+## Message Flow
 
-1. Alice types: "Hello Bob, this is secret!"
-2. Alice presses Enter
-3. JavaScript automatically encrypts with Bob's public key:
-   ```
-   -----BEGIN PGP MESSAGE-----
-   wcBMA4L1xmAndAq/AQf/QkDP7aQ8X4wIEd6TUQ+VR2orOgtaxnzcJME7LjUY
-   5axj0MRmrcHQxGm0QDVL6F8vKqJ...
-   -----END PGP MESSAGE-----
-   ```
-4. Encrypted message sent to server (stored in memory only)
+### Alice sends a message
 
-**Bob receives message:**
+Alice types:
 
-1. Bob's browser polls for new messages
-2. Receives encrypted PGP message
-3. JavaScript detects PGP format
-4. Automatically decrypts using Bob's private key
-5. Bob sees: "🔒 Alice123: Hello Bob, this is secret!"
+```text
+Hello Bob, this is secret.
+```
 
-**Alice sees her own message:**
+The browser creates a signed payload like:
 
-1. Alice's browser polls for messages
-2. Receives the same encrypted PGP message
-3. Since Alice has her private key, it decrypts successfully
-4. Alice sees: "🔒 Alice123: Hello Bob, this is secret!"
-
-### Security Properties
-
-✅ **End-to-End Encrypted**: Server only sees encrypted text
-✅ **Client-Side Keys**: Keys never leave browser
-✅ **Multi-Recipient**: Message encrypted for all configured public keys
-✅ **Seamless UX**: No manual encryption/decryption steps needed
-
-## Implementation Details
-
-### Encryption Process (pgp-manager.js)
-```javascript
-async function encryptMessage(plaintext) {
-    const publicKeys = getPublicKeys();
-    const publicKeyObjects = await Promise.all(
-        Object.values(publicKeys).map(key => openpgp.readKey({ armoredKey: key }))
-    );
-    
-    const encrypted = await openpgp.encrypt({
-        message: await openpgp.createMessage({ text: plaintext }),
-        encryptionKeys: publicKeyObjects
-    });
-    
-    return encrypted;
+```json
+{
+  "type": "closed_roster_openpgp_v1",
+  "room_id": "<room_id>",
+  "epoch": 1,
+  "sender_member_id": "alice",
+  "sender_signing_fingerprint": "<alice_signing_fp>",
+  "roster_hash": "<roster_hash>",
+  "recipient_encryption_fingerprints": [
+    "<alice_encryption_fp>",
+    "<bob_encryption_fp>"
+  ],
+  "intended_recipient_fingerprints": [
+    "<alice_encryption_fp>",
+    "<bob_encryption_fp>"
+  ],
+  "sent_at": "2026-04-26T00:00:00Z",
+  "text": "Hello Bob, this is secret."
 }
 ```
 
-### Decryption Process (pgp-manager.js)
-```javascript
-async function decryptMessage(ciphertext) {
-    if (!isPGPMessage(ciphertext)) {
-        return ciphertext; // Not encrypted, return as-is
-    }
-    
-    const privateKey = await openpgp.decryptKey({
-        privateKey: await openpgp.readPrivateKey({ armoredKey: getPrivateKey() }),
-        passphrase: getPassphrase() || ''
-    });
-    
-    const message = await openpgp.readMessage({
-        armoredMessage: ciphertext
-    });
-    
-    const { data: decrypted } = await openpgp.decrypt({
-        message,
-        decryptionKeys: privateKey
-    });
-    
-    return decrypted;
-}
+That payload is then encrypted and signed into an armored OpenPGP message before upload.
+
+## Receive-Side Checks
+
+When Bob polls the room, the browser:
+
+1. decrypts the OpenPGP envelope
+2. verifies Alice's signature
+3. checks `room_id`
+4. checks `epoch`
+5. checks `roster_hash`
+6. checks the recipient set against the active roster
+7. rejects the message if any check fails
+
+## Expected Result
+
+Bob sees:
+
+```text
+Alice: Hello Bob, this is secret.
 ```
 
-### Server-Side Handling (runserver.py)
-```python
-# Don't sanitize PGP messages, only sanitize regular messages
-if "-----BEGIN PGP MESSAGE-----" not in chat["msg"]:
-    chat["msg"] = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', chat["msg"])
+with a local note that Alice is either:
 
-# Don't wrap PGP messages
-is_pgp = "-----BEGIN PGP MESSAGE-----" in chat_dic["msg"]
-if is_pgp:
-    chats = [chat_dic]  # Keep as single message
-```
+- verified locally
+- pending local verification
+- or rejected if the key changed or validation failed
 
-## Test Results
+## Alpha Caveat
 
-✅ Encryption/Decryption: Works correctly
-✅ Multi-user support: Messages encrypted for all public keys
-✅ Key storage: Persists in localStorage
-✅ UI indicators: Shows encryption status correctly
-✅ Security scan: No vulnerabilities detected
+If Bob's or Alice's key changes, the current alpha workflow is:
+
+1. stop using the room
+2. create a new room
+3. bootstrap a new epoch-1 roster

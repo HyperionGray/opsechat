@@ -5,7 +5,7 @@
 ## 🆕 NEW: Enhanced Security & Production Ready
 
 **Latest Updates (v0.8.0):**
-- 🔑 **Automated Key Exchange** - No manual key sharing needed
+- 🔐 **Closed-Roster OpenPGP Rooms** - Explicit roster bootstrap with signed and encrypted room messages
 - 💬 **Direct Messages** - Ephemeral DM feature for sharing room IDs (1-min expiry)
 - 🔒 **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
 - 🌐 **Domain Rotation CLI** - Easy burner email domain management
@@ -25,10 +25,10 @@ OpSecChat now includes both **Web-Based Chat Rooms** and **Terminal UI (TUI)** f
 
 ### Web Chat Rooms
 - ✅ **Simple Room Creation** - One command to create a secure chat room
-- ✅ **Automated E2E Encryption** - Automatic key exchange, no manual setup
+- ✅ **Closed-Roster OpenPGP** - Explicit roster bootstrap with signed+encrypted room messages
 - ✅ **Terminal-Style UI** - Clean, minimal interface with no flashy elements
 - ✅ **Messages Burn** - Auto-delete after 3 minutes with memory overwriting
-- ✅ **Randomized Usernames** - Color-coded for easy distinction
+- ✅ **Local Trust States** - `new`, `known`, `changed`, and `verified` key states
 - ✅ **Text Only** - No images, videos, or media sharing (500 char limit)
 - ✅ **In-Memory Only** - Zero disk writes
 - ✅ **Tor Ready** - Works seamlessly with Tor hidden services
@@ -238,12 +238,12 @@ Features
 
 ### Chat System
 - **Simple Web Chat Rooms** - Create secure chat rooms with one command (`python chat-room.py`)
-- **E2E Encryption** - Optional encryption using Web Crypto API (simple, reviewable JavaScript)
+- **Closed-Roster OpenPGP** - Explicit roster bootstrap, signed room messages, and encryption to the full roster
 - **Terminal-Style UI** - Clean, minimal interface focused on security over aesthetics
 - As chat happens inside the Tor network via ephemeral hidden services, everything is encrypted and attribution of chatters is virtually impossible
 - *Nothing* touches disk except the app, everything happens in-memory, no chat, image, video, or ANYTHING caching to storage.
 - This chat is meant to help you with opsec, disappearing messages, randomized usernames, encrypted comms are the default (much more to come)
-- **PGP encryption support** - Optional end-to-end encryption using PGP keys (see [PGP Usage Guide](docs/user-guide/PGP_USAGE.md))
+- **PGP encryption support** - Closed-roster room workflow using OpenPGP keys (see [PGP Usage Guide](docs/user-guide/PGP_USAGE.md))
 - No configuration required
 - Low barrier to entry, few dependencies
 - No need for a client (web-based or TUI available)

@@ -3,64 +3,143 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpSecChat Room</title>
+    <title>OpSecChat Closed-Roster Room</title>
     <link rel="stylesheet" href="/static/simple-chat-room.css">
 </head>
-<body data-room-id="{{ room_id }}">
-    <div class="header" role="banner">
+<body data-room-id="{{ room_id }}" data-max-message-length="{{ max_message_length }}">
+    <header class="header" role="banner">
         <div>
-            <h1>🔒 OpSecChat Room</h1>
-            <span id="userInfo">You are: <span class="user-color {{ user_color_class }}" aria-label="Your username">{{ username }}</span></span>
+            <h1>Closed-Roster OpSecChat</h1>
+            <p class="header-copy">Room <code>{{ room_id }}</code></p>
         </div>
         <div class="header-info">
-            <span id="userCount" aria-live="polite">Users: 1</span>
-            <span class="encryption-toggle">
-                <label>
-                    <input type="checkbox" id="encryptionToggle" aria-label="Toggle end-to-end encryption">
-                    <span id="encryptionStatus" class="encryption-status">Encryption: OFF</span>
-                </label>
-            </span>
+            <span id="roomMode" class="mode-pill">Mode: Closed Roster OpenPGP</span>
+            <span id="userCount" aria-live="polite">Sessions: 0</span>
         </div>
+    </header>
+
+    <div class="layout">
+        <aside class="sidebar" aria-label="Room configuration">
+            <section class="panel" aria-labelledby="identityPanelTitle">
+                <div class="panel-head">
+                    <h2 id="identityPanelTitle">Local Identity</h2>
+                    <button type="button" id="copyPublicKeyBtn" class="secondary-button">
+                        Copy Public Key
+                    </button>
+                </div>
+                <p class="panel-copy">
+                    Generate or import the key pair you use in this room. The private key stays in this browser session.
+                </p>
+                <label class="field">
+                    <span>Member ID</span>
+                    <input type="text" id="memberIdInput" maxlength="128" autocomplete="off" placeholder="alice-workstation">
+                </label>
+                <label class="field">
+                    <span>Display Name</span>
+                    <input type="text" id="displayNameInput" maxlength="128" autocomplete="off" placeholder="Alice">
+                </label>
+                <label class="field">
+                    <span>Private Key Passphrase</span>
+                    <input type="password" id="identityPassphraseInput" autocomplete="off" placeholder="Optional, but recommended">
+                </label>
+                <div class="button-row">
+                    <button type="button" id="generateIdentityBtn">Generate Key Pair</button>
+                    <button type="button" id="importIdentityBtn">Import Private Key</button>
+                </div>
+                <div class="button-row">
+                    <button type="button" id="downloadPrivateKeyBtn" class="secondary-button">
+                        Download Private Key
+                    </button>
+                    <button type="button" id="clearIdentityBtn" class="danger-button">
+                        Clear Local Identity
+                    </button>
+                </div>
+                <label class="field">
+                    <span>Private Key</span>
+                    <textarea id="privateKeyInput" spellcheck="false" placeholder="-----BEGIN PGP PRIVATE KEY BLOCK-----"></textarea>
+                </label>
+                <label class="field">
+                    <span>Public Key</span>
+                    <textarea id="publicKeyOutput" spellcheck="false" readonly placeholder="Generated or derived public key appears here"></textarea>
+                </label>
+                <div id="identitySummary" class="summary-box" role="status" aria-live="polite"></div>
+                <div id="identityRecovery" class="summary-box" role="status" aria-live="polite"></div>
+            </section>
+
+            <section class="panel" id="bootstrapPanel" aria-labelledby="bootstrapPanelTitle">
+                <h2 id="bootstrapPanelTitle">Bootstrap Epoch 1</h2>
+                <p class="panel-copy">
+                    Before the first message, add every member&apos;s public key, verify fingerprints out of band, and then lock the roster.
+                </p>
+                <label class="field">
+                    <span>Peer Member ID</span>
+                    <input type="text" id="peerMemberIdInput" maxlength="128" autocomplete="off" placeholder="bob-laptop">
+                </label>
+                <label class="field">
+                    <span>Peer Display Name</span>
+                    <input type="text" id="peerDisplayNameInput" maxlength="128" autocomplete="off" placeholder="Bob">
+                </label>
+                <label class="field">
+                    <span>Peer Public Key</span>
+                    <textarea id="peerPublicKeyInput" spellcheck="false" placeholder="-----BEGIN PGP PUBLIC KEY BLOCK-----"></textarea>
+                </label>
+                <div class="button-row">
+                    <button type="button" id="addPeerBtn">Add Member</button>
+                    <button type="button" id="lockRosterBtn">Lock Room Roster</button>
+                </div>
+                <div id="draftRosterList" class="list-box" role="list" aria-label="Draft roster members"></div>
+            </section>
+
+            <section class="panel" aria-labelledby="epochPanelTitle">
+                <h2 id="epochPanelTitle">Active Epoch</h2>
+                <div id="epochSummary" class="summary-box" role="status" aria-live="polite"></div>
+                <div id="rosterList" class="list-box" role="list" aria-label="Active roster members"></div>
+            </section>
+        </aside>
+
+        <main class="chat-column">
+            <div id="roomAlerts" class="alerts" role="status" aria-live="polite"></div>
+
+            <div class="messages-container" id="messagesContainer" role="log" aria-label="Encrypted room messages" aria-live="polite" aria-relevant="additions">
+                <div class="empty-state">
+                    <h2>Room Messages</h2>
+                    <p>Messages will appear here after the roster is locked and signed OpenPGP envelopes start flowing.</p>
+                </div>
+            </div>
+
+            <div class="composer" role="form" aria-label="Compose a closed-roster message">
+                <label class="field composer-field">
+                    <span>Message</span>
+                    <textarea id="messageInput" maxlength="{{ max_message_length }}" placeholder="Type a message, then sign and encrypt it to the full roster."></textarea>
+                </label>
+                <div class="composer-actions">
+                    <span id="composerState" class="composer-state" aria-live="polite">
+                        Bootstrap the room roster before messaging.
+                    </span>
+                    <button type="button" id="sendBtn">Sign + Encrypt</button>
+                </div>
+            </div>
+
+            <div class="status" id="statusMsg" role="status" aria-live="polite"></div>
+        </main>
     </div>
-    
-    <div class="messages-container" id="messagesContainer" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions">
-        <!-- Messages will appear here -->
-    </div>
-    
-    <div class="input-container" role="form" aria-label="Send a message">
-        <input type="text" id="messageInput" placeholder="Type your message (max 500 chars)..." maxlength="500" autofocus
-               aria-label="Message text" aria-describedby="statusMsg">
-        <button id="sendBtn" aria-label="Send message">Send</button>
-    </div>
-    <div class="status" id="statusMsg" role="status" aria-live="polite"></div>
-    
-    <!-- Security Warning Modal -->
+
     <div id="securityWarning" class="security-warning-overlay"
          role="dialog" aria-modal="true" aria-labelledby="securityWarningTitle" aria-describedby="securityWarningBody">
         <div class="security-warning-content">
-            <h2 id="securityWarningTitle" class="security-warning-title">⚠️ CRITICAL SECURITY NOTICE ⚠️</h2>
+            <h2 id="securityWarningTitle" class="security-warning-title">Closed-Roster Security Rules</h2>
             <p id="securityWarningBody" class="security-warning-body">
-                <strong>THIS IS FOR SERIOUS OPERATIONAL SECURITY ONLY.</strong><br><br>
-                
-                ❌ <strong>NO MEDIA SHARING</strong> - Text only. Images, videos, or any encoded content is STRICTLY PROHIBITED.<br><br>
-                
-                ❌ <strong>NO ABUSE</strong> - This service is for secure communication only.<br><br>
-                
-                ⚠️ <strong>VIOLATIONS = CONSEQUENCES:</strong> Any attempts to circumvent these rules will result in:<br>
-                • Immediate removal from chat<br>
-                • Chat logs preserved (not burned as promised)<br>
-                • Potential reporting to authorities<br><br>
-                
-                ✅ <strong>APPROVED USE:</strong> Secure text communication for operational security, whistleblowing, journalism, activism.<br><br>
-                
-                🔒 <strong>YOUR SAFETY:</strong> Messages auto-delete after 3 minutes. Rooms expire after 1 hour. Everything in-memory only.
+                This room only makes sense for a small group that has already exchanged fingerprints out of band.
+                Locking the roster freezes who can read future messages in this alpha release.
+                Verify every member locally before you trust the room. If a known key changes, stop and create a new room.
             </p>
-            <button id="acceptSecurityWarningBtn" class="security-warning-button">
-                I UNDERSTAND AND AGREE
+            <button id="acceptSecurityWarningBtn" class="security-warning-button" type="button">
+                I Understand
             </button>
         </div>
     </div>
-    
+
+    <script src="/static/openpgp.min.js"></script>
     <script src="/static/chat-room.js"></script>
 </body>
 </html>

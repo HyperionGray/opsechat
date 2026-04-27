@@ -1,83 +1,109 @@
-# PGP Support in OpSechat
+# Closed-Roster OpenPGP Usage
 
-OpSechat now includes built-in PGP encryption support for enhanced message security.
+OpSecChat simple rooms now use an explicit closed-roster OpenPGP flow instead of the old shared room-key model.
 
-## Features
+## What Changed
 
-- **Client-side encryption/decryption**: All PGP operations happen in the browser using OpenPGP.js
-- **Automatic encryption**: Messages are automatically encrypted when public keys are configured
-- **Seamless decryption**: Encrypted messages are automatically decrypted when viewing
-- **No server-side storage**: Keys are stored only in your browser's localStorage
-- **Visual indicators**: Lock icons (🔒) show when messages are encrypted
+- Every room has an explicit active roster and roster hash.
+- Each message is signed by the sender and encrypted to the full roster.
+- Verification is local to each browser session.
+- The alpha release keeps room rosters immutable after bootstrap.
 
-## How to Use
+## Room Workflow
 
-### Setting Up PGP
+### 1. Create the room
 
-1. Click on "⚙️ PGP Settings" link in the chat interface
-2. The settings modal will open with two sections:
+1. Open `/chat`
+2. Create a room
+3. Share the URL only with the people who should be in the roster
 
-#### Private Key (For Decryption)
-- Import your PGP private key to decrypt messages from others
-- If your key is password-protected, enter the passphrase
-- Click "Import Private Key"
-- Your key is stored locally in your browser only
+### 2. Set your local identity
 
-#### Public Keys (For Encryption)
-- Add public PGP keys of other chat participants
-- Optionally provide a username identifier
-- Click "Add Public Key"
-- Messages will be automatically encrypted for all users with stored public keys
+Inside the room:
 
-### Sending Encrypted Messages
+1. Enter your `member_id`
+2. Enter a display name
+3. Generate a new key pair or import an existing private key
+4. Download the armored private-key backup and store it outside the browser session
+5. Keep the public key available for the rest of the roster
 
-Once you've configured public keys:
-1. Type your message normally
-2. Press Enter
-3. The message is automatically encrypted before sending
-4. Other users with the corresponding private key can decrypt and read it
+Notes:
 
-### Reading Encrypted Messages
+- The private key stays in browser session storage for this tab/session.
+- The room UI now records whether you exported a private-key backup in the current browser session.
+- If the key is passphrase protected, re-enter the passphrase after a reload.
+- If you clear the local identity or lose the session, re-import the same armored private key to recover access.
 
-Once you've configured your private key:
-1. Encrypted messages appear with a 🔒 icon
-2. They are automatically decrypted and displayed
-3. If decryption fails, you'll see "[Failed to decrypt message]"
+### 3. Bootstrap epoch 1
 
-### Status Indicators
+Before the first room message:
 
-The PGP status indicator shows:
-- `🔓 Can decrypt` - Private key is configured
-- `🔒 Will encrypt` - Public keys are configured
-- `❌ PGP not configured` - No keys configured
+1. Add every planned member's public key
+2. Verify fingerprints out of band
+3. Mark each member verified locally
+4. Lock the room roster
 
-## Security Notes
+Locking the roster creates:
 
-- Keys are stored in browser localStorage (not on the server)
-- Private keys should be password-protected for additional security
-- Share public keys through secure channels
-- PGP messages are much longer than regular messages
-- Messages without PGP keys configured are sent as plaintext
+- `epoch = 1`
+- a canonical member list
+- a deterministic `roster_hash`
 
-## Generating PGP Keys
+## Sending Messages
 
-If you don't have PGP keys, you can generate them using:
+Once the room has an active epoch and every non-local member is locally verified:
 
-### Command Line (GPG)
+1. Type the message
+2. Click `Sign + Encrypt`
+3. The browser signs the payload with your private key
+4. The browser encrypts the payload to every roster member's public key
+5. The server stores only the armored OpenPGP envelope plus roster metadata
+
+## Receiving Messages
+
+For every room message, the browser:
+
+1. Decrypts the OpenPGP message with the local private key
+2. Verifies the message signature
+3. Checks the active room id, epoch, and roster hash
+4. Checks the sender against the active roster
+5. Checks the recipient set against the active roster
+6. Rejects the message if any check fails
+
+## Trust States
+
+Each observed member can appear in one of these states:
+
+- `new`: first time this `member_id` and key pair were observed
+- `known`: same `member_id` and same fingerprints as before
+- `changed`: same `member_id`, different fingerprints
+- `verified`: you completed the out-of-band fingerprint check locally
+
+`verified` is local only. One participant verifying a key does not verify it for anyone else.
+
+## Alpha Release Limits
+
+- Membership changes are not supported inside an active room yet.
+- If a member key changes, stop using that room and create a new one.
+- The browser is still the local crypto owner for simple rooms in this alpha.
+- Intended-recipient packet subpacket parsing is not enforced yet.
+- Key revocation and in-room key rotation flows are not implemented yet.
+
+## Key Generation Outside the Browser
+
+You can bring an existing OpenPGP key:
+
 ```bash
 gpg --gen-key
-gpg --armor --export your-email@example.com > public-key.asc
-gpg --armor --export-secret-keys your-email@example.com > private-key.asc
+gpg --armor --export your-id@example.invalid > public-key.asc
+gpg --armor --export-secret-keys your-id@example.invalid > private-key.asc
 ```
 
-### Online Tools
-- Mailvelope (browser extension)
-- Keybase
-- Other PGP key generation tools
+Import the private key into the room UI and share only the public key with the roster.
 
-## Technical Details
+## Technical Notes
 
-- Uses OpenPGP.js v5.11.0 for all cryptographic operations
-- RSA and ECC keys are supported
-- Messages are encrypted for all configured public keys simultaneously
-- PGP messages bypass the normal character sanitization to preserve encryption data
+- Uses the bundled OpenPGP.js client library
+- Uses armored OpenPGP messages for transport simplicity
+- Uses explicit packet key ids by disabling wildcard recipients
+- Stores room state and messages in memory only on the server

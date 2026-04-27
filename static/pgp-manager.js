@@ -10,19 +10,19 @@ const PGPManager = (function() {
         PASSPHRASE: 'pgp_passphrase'
     };
     
-    // Load private key from localStorage
+    // Keep browser-held keys scoped to the current tab/session.
     function getPrivateKey() {
-        return localStorage.getItem(STORAGE_KEYS.PRIVATE_KEY);
+        return sessionStorage.getItem(STORAGE_KEYS.PRIVATE_KEY);
     }
     
-    // Save private key to localStorage
+    // Save private key for the current session only
     function setPrivateKey(armoredKey) {
-        localStorage.setItem(STORAGE_KEYS.PRIVATE_KEY, armoredKey);
+        sessionStorage.setItem(STORAGE_KEYS.PRIVATE_KEY, armoredKey);
     }
     
-    // Load all public keys from localStorage
+    // Load all public keys for the current session only
     function getPublicKeys() {
-        const keys = localStorage.getItem(STORAGE_KEYS.PUBLIC_KEYS);
+        const keys = sessionStorage.getItem(STORAGE_KEYS.PUBLIC_KEYS);
         return keys ? JSON.parse(keys) : {};
     }
     
@@ -30,14 +30,14 @@ const PGPManager = (function() {
     function addPublicKey(username, armoredKey) {
         const keys = getPublicKeys();
         keys[username] = armoredKey;
-        localStorage.setItem(STORAGE_KEYS.PUBLIC_KEYS, JSON.stringify(keys));
+        sessionStorage.setItem(STORAGE_KEYS.PUBLIC_KEYS, JSON.stringify(keys));
     }
     
     // Remove public key for a user
     function removePublicKey(username) {
         const keys = getPublicKeys();
         delete keys[username];
-        localStorage.setItem(STORAGE_KEYS.PUBLIC_KEYS, JSON.stringify(keys));
+        sessionStorage.setItem(STORAGE_KEYS.PUBLIC_KEYS, JSON.stringify(keys));
     }
     
     // Get passphrase (in-memory only for security)
@@ -53,13 +53,13 @@ const PGPManager = (function() {
     
     // Clear private key
     function clearPrivateKey() {
-        localStorage.removeItem(STORAGE_KEYS.PRIVATE_KEY);
+        sessionStorage.removeItem(STORAGE_KEYS.PRIVATE_KEY);
         cachedPassphrase = null;
     }
     
     // Clear all public keys
     function clearAllPublicKeys() {
-        localStorage.removeItem(STORAGE_KEYS.PUBLIC_KEYS);
+        sessionStorage.removeItem(STORAGE_KEYS.PUBLIC_KEYS);
     }
     
     // Check if message is PGP encrypted

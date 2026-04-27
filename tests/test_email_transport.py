@@ -73,6 +73,29 @@ class TestSMTPTransport:
         mock_server.login.assert_called_once()
         mock_server.quit.assert_called_once()
 
+    @patch('email_transport.TorSMTP')
+    def test_send_email_uses_tor_smtp_when_enabled(self, mock_tor_smtp, monkeypatch):
+        """Test SMTP traffic uses the Tor-aware transport when enabled."""
+        monkeypatch.setenv("OPSECHAT_FORCE_TOR_EGRESS", "1")
+
+        mock_server = Mock()
+        mock_tor_smtp.return_value = mock_server
+
+        transport = SMTPTransport(
+            "smtp.test.com", 587, "test@test.com", "password", True
+        )
+
+        result = transport.send_email(
+            "from@test.com",
+            "to@test.com",
+            "Test Subject",
+            "Test Body"
+        )
+
+        assert result is True
+        mock_tor_smtp.assert_called_once_with("smtp.test.com", 587)
+        mock_server.starttls.assert_called_once()
+
 
 class TestIMAPTransport:
     """Test IMAP email receiving"""
@@ -116,6 +139,23 @@ class TestIMAPTransport:
         
         result = transport.test_connection()
         assert result is True
+        mock_mail.login.assert_called_once()
+        mock_mail.logout.assert_called_once()
+
+    @patch('email_transport.TorIMAP4_SSL')
+    def test_test_connection_uses_tor_imap_when_enabled(self, mock_tor_imap, monkeypatch):
+        """Test IMAP traffic uses the Tor-aware transport when enabled."""
+        monkeypatch.setenv("OPSECHAT_FORCE_TOR_EGRESS", "1")
+
+        mock_mail = Mock()
+        mock_tor_imap.return_value = mock_mail
+
+        transport = IMAPTransport("imap.test.com", 993, "test@test.com", "password")
+
+        result = transport.test_connection()
+
+        assert result is True
+        mock_tor_imap.assert_called_once_with("imap.test.com", 993, timeout=10)
         mock_mail.login.assert_called_once()
         mock_mail.logout.assert_called_once()
 

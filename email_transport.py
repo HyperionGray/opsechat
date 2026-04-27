@@ -12,6 +12,7 @@ from typing import Dict, List, Optional
 import logging
 import time
 from datetime import datetime
+from tor_transport import TorIMAP4, TorIMAP4_SSL, TorSMTP, tor_egress_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,13 @@ class SMTPTransport:
         self.username = username
         self.password = password
         self.use_tls = use_tls
+
+    def _smtp_client(self, timeout: Optional[int] = None):
+        smtp_cls = TorSMTP if tor_egress_enabled() else smtplib.SMTP
+        kwargs = {}
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        return smtp_cls(self.smtp_server, self.smtp_port, **kwargs)
     
     def send_email(self, from_addr: str, to_addr: str, subject: str, 
                    body: str, headers: Optional[Dict] = None) -> bool:
@@ -53,11 +61,9 @@ class SMTPTransport:
             msg.attach(MIMEText(body, 'plain', 'utf-8'))
             
             # Connect and send
+            server = self._smtp_client()
             if self.use_tls:
-                server = smtplib.SMTP(self.smtp_server, self.smtp_port)
                 server.starttls()
-            else:
-                server = smtplib.SMTP(self.smtp_server, self.smtp_port)
             
             server.login(self.username, self.password)
             server.send_message(msg)
@@ -73,11 +79,9 @@ class SMTPTransport:
     def test_connection(self) -> bool:
         """Test SMTP connection"""
         try:
+            server = self._smtp_client(timeout=10)
             if self.use_tls:
-                server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=10)
                 server.starttls()
-            else:
-                server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=10)
             
             server.login(self.username, self.password)
             server.quit()
@@ -100,6 +104,17 @@ class IMAPTransport:
         self.username = username
         self.password = password
         self.use_ssl = use_ssl
+
+    def _imap_client(self, timeout: Optional[int] = None):
+        if self.use_ssl:
+            imap_cls = TorIMAP4_SSL if tor_egress_enabled() else imaplib.IMAP4_SSL
+        else:
+            imap_cls = TorIMAP4 if tor_egress_enabled() else imaplib.IMAP4
+
+        kwargs = {}
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        return imap_cls(self.imap_server, self.imap_port, **kwargs)
     
     def fetch_emails(self, folder: str = 'INBOX', limit: Optional[int] = None, 
                      unread_only: bool = False) -> List[Dict]:
@@ -111,10 +126,7 @@ class IMAPTransport:
         
         try:
             # Connect to IMAP server
-            if self.use_ssl:
-                mail = imaplib.IMAP4_SSL(self.imap_server, self.imap_port)
-            else:
-                mail = imaplib.IMAP4(self.imap_server, self.imap_port)
+            mail = self._imap_client()
             
             mail.login(self.username, self.password)
             mail.select(folder)
@@ -266,10 +278,7 @@ class IMAPTransport:
     def test_connection(self) -> bool:
         """Test IMAP connection"""
         try:
-            if self.use_ssl:
-                mail = imaplib.IMAP4_SSL(self.imap_server, self.imap_port, timeout=10)
-            else:
-                mail = imaplib.IMAP4(self.imap_server, self.imap_port, timeout=10)
+            mail = self._imap_client(timeout=10)
             
             mail.login(self.username, self.password)
             mail.logout()

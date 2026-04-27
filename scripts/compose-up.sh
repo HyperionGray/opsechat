@@ -12,22 +12,8 @@ fi
 COMPOSE_FILE="$REPO_ROOT/container-compose.yml"
 
 # Determine which compose tool is available
-if command -v podman-compose &> /dev/null; then
-    COMPOSE_CMD="podman-compose"
-    echo "[*] Using podman-compose"
-elif command -v docker-compose &> /dev/null; then
-    COMPOSE_CMD="docker-compose"
-    echo "[*] Using docker-compose"
-elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
-    COMPOSE_CMD="docker compose"
-    echo "[*] Using docker compose (plugin)"
-else
-    echo "[!] Error: Neither podman-compose nor docker-compose found."
-    echo "[!] Please install one of them:"
-    echo "    - Podman: https://podman.io/getting-started/installation"
-    echo "    - Docker: https://docs.docker.com/get-docker/"
-    exit 1
-fi
+COMPOSE_CMD="docker compose"
+echo "[*] Using docker compose (plugin)"
 
 echo "[*] Starting opsechat services..."
 $COMPOSE_CMD -f "$COMPOSE_FILE" up -d --build

@@ -75,6 +75,24 @@ class TestPorkbunAPIClient:
         assert result["tld"] == "com"
         assert result["registration"] == "9.99"
 
+    @patch('domain_manager.requests.Session')
+    def test_session_uses_tor_proxies_when_enabled(self, mock_session_class, monkeypatch):
+        """Test Tor proxy configuration for registrar egress."""
+        monkeypatch.setenv("OPSECHAT_FORCE_TOR_EGRESS", "1")
+        monkeypatch.setenv("TOR_SOCKS_HOST", "tor")
+        monkeypatch.setenv("TOR_SOCKS_PORT", "9050")
+
+        mock_session = Mock()
+        mock_session.proxies = {}
+        mock_session_class.return_value = mock_session
+
+        client = PorkbunAPIClient("test_key", "test_secret")
+
+        assert client.session is mock_session
+        assert mock_session.trust_env is False
+        assert mock_session.proxies["http"] == "socks5h://tor:9050"
+        assert mock_session.proxies["https"] == "socks5h://tor:9050"
+
 
 class TestDomainRotationManager:
     """Test domain rotation manager"""

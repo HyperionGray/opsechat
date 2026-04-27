@@ -6,6 +6,7 @@ extracted from runserver.py to improve code organization.
 """
 
 import os
+import secrets
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
@@ -18,12 +19,43 @@ except ModuleNotFoundError:
         return app
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    """Parse a boolean environment variable with a safe default."""
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
     
     # Set secret key for sessions
-    app.secret_key = id_generator(size=64)
+    app.secret_key = os.environ.get("OPSECHAT_SECRET_KEY") or secrets.token_urlsafe(64)
+    app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
+    app.config.setdefault("SESSION_COOKIE_SAMESITE", "Strict")
+    app.config.setdefault("SESSION_COOKIE_NAME", "opsechat_session")
+
+    # Safe-by-default profile: keep the public runtime focused on chat.
+    extended_services = _env_flag("OPSECHAT_ENABLE_EXTENDED_SERVICES", False)
+    app.config["OPSECHAT_ENABLE_EXTENDED_SERVICES"] = extended_services
+    app.config["OPSECHAT_ENABLE_LEGACY_CHAT"] = _env_flag(
+        "OPSECHAT_ENABLE_LEGACY_CHAT",
+        extended_services,
+    )
+    app.config["OPSECHAT_ENABLE_EMAIL_STACK"] = _env_flag(
+        "OPSECHAT_ENABLE_EMAIL_STACK",
+        extended_services,
+    )
+    app.config["OPSECHAT_ENABLE_HTTP_MAIL"] = _env_flag(
+        "OPSECHAT_ENABLE_HTTP_MAIL",
+        extended_services,
+    )
+    app.config["OPSECHAT_ENABLE_REVIEWS"] = _env_flag(
+        "OPSECHAT_ENABLE_REVIEWS",
+        False,
+    )
     
     # Initialize rate limiter
     init_limiter(app)
@@ -87,27 +119,30 @@ def create_app():
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Cache-Control"] = "no-store, no-cache, max-age=0, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
         return response
-    
-    # Register chat routes
-    register_chat_routes(app, chatlines, chatters, id_generator, get_random_color,
-                        check_older_than, process_chat)
     
     # Register simple chat routes (new simplified interface)
     from simple_chat_routes import register_simple_chat_routes
     register_simple_chat_routes(app)
-    
-    # Register email routes
-    from email_routes import register_email_routes
-    register_email_routes(app, id_generator, get_random_color)
-    
-    # Register review routes (existing function-based registration)
-    register_review_routes(app, id_generator, get_random_color, 
-                          add_review_wrapper, get_reviews, get_review_stats)
 
-    # Register HTTP mail routes (email over HTTP, no SMTP/IMAP)
-    from http_mail_routes import register_http_mail_routes
-    register_http_mail_routes(app)
+    if app.config["OPSECHAT_ENABLE_LEGACY_CHAT"]:
+        register_chat_routes(app, chatlines, chatters, id_generator, get_random_color,
+                            check_older_than, process_chat)
+    
+    if app.config["OPSECHAT_ENABLE_EMAIL_STACK"]:
+        from email_routes import register_email_routes
+        register_email_routes(app, id_generator, get_random_color)
+
+    if app.config["OPSECHAT_ENABLE_REVIEWS"]:
+        register_review_routes(app, id_generator, get_random_color,
+                              add_review_wrapper, get_reviews, get_review_stats)
+
+    if app.config["OPSECHAT_ENABLE_HTTP_MAIL"]:
+        from http_mail_routes import register_http_mail_routes
+        register_http_mail_routes(app)
     
     # Register MVP console and service manifest routes
     from mvp_routes import register_mvp_routes
@@ -124,21 +159,5 @@ def create_app():
     @app.route('/chat/stats', methods=["GET"])
     def chat_stats():
         return jsonify(get_chat_stats())
-
-    # Redirect the root to the operator console.
-    @app.route('/', methods=["GET"])
-    def index():
-        from flask import redirect, url_for
-        return redirect(url_for("mvp_console"))
-    
-    # CHANGELOG (AI assistant):
-    # - Made rate_limiter import optional with a no-op fallback to prevent
-    #   ModuleNotFoundError in containerized installs that omit rate_limiter.py.
-    #
-    # Remaining checklist (non-blocking for runtime):
-    # - Update container/Podman build configuration to ensure rate_limiter.py
-    #   is included in the image (e.g., COPY list or packaging config).
-    # - Once packaging reliably includes rate_limiter.py, consider removing
-    #   the fallback or turning it into an explicit configuration option.
     
     return app

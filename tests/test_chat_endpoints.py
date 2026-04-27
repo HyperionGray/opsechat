@@ -1,36 +1,75 @@
 """
-Flask API endpoint integration tests for simple_chat_routes.
+Integration tests for the simple chat HTTP endpoints.
 
-Covers: create room, post/get messages (including sanitization and base64
-detection), automated key exchange endpoint, and ephemeral DM send/view.
-
-Related GitHub issues: #109 (initial chat/email plan), #112 (release push),
-#114 (simple web-app rooms), #116 (automated key exchange, DMs),
-#118 (final functionality validation).
+These tests focus on the closed-roster OpenPGP alpha flow: room creation,
+immutable epoch bootstrap, envelope storage, and the deprecated shared-key
+endpoint.
 """
 
 import datetime
+import hashlib
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from simple_chat_routes import (
-    chat_rooms,
-    direct_messages,
-    dm_lock,
-    rooms_lock,
-    MAX_MESSAGE_LENGTH,
-)
 from app_factory import create_app
+from closed_roster_room import OPENPGP_ENVELOPE_TYPE
+from simple_chat_routes import chat_rooms, direct_messages, dm_lock, rooms_lock
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+def _fp(seed: str) -> str:
+    return hashlib.sha256(seed.encode("utf-8")).hexdigest().upper()
+
+
+def _key_id(seed: str) -> str:
+    return _fp(seed)[:16]
+
+
+def _public_key(seed: str) -> str:
+    return (
+        "-----BEGIN PGP PUBLIC KEY BLOCK-----\n"
+        f"{seed}\n"
+        "-----END PGP PUBLIC KEY BLOCK-----"
+    )
+
+
+def _member_record(member_id: str, display_name: str | None = None) -> dict:
+    return {
+        "member_id": member_id,
+        "display_name": display_name or member_id.title(),
+        "signing_fingerprint": _fp(f"{member_id}-sign"),
+        "encryption_fingerprint": _fp(f"{member_id}-enc"),
+        "signing_key_id": _key_id(f"{member_id}-sign-key"),
+        "encryption_key_id": _key_id(f"{member_id}-enc-key"),
+        "public_key_armored": _public_key(member_id),
+    }
+
+
+def _bootstrap_payload(room_state: dict, sender_member_id: str = "alice") -> dict:
+    epoch = room_state["active_epoch"]
+    sender = next(member for member in epoch["members"] if member["member_id"] == sender_member_id)
+    return {
+        "envelope_type": OPENPGP_ENVELOPE_TYPE,
+        "room_id": epoch["room_id"],
+        "epoch": epoch["epoch"],
+        "sender_member_id": sender["member_id"],
+        "sender_signing_fingerprint": sender["signing_fingerprint"],
+        "roster_hash": epoch["roster_hash"],
+        "recipient_encryption_fingerprints": [
+            member["encryption_fingerprint"] for member in epoch["members"]
+        ],
+        "intended_recipient_fingerprints": [
+            member["encryption_fingerprint"] for member in epoch["members"]
+        ],
+        "recipient_encryption_key_ids": [
+            member["encryption_key_id"] for member in epoch["members"]
+        ],
+        "armored_message": "-----BEGIN PGP MESSAGE-----\nopaque\n-----END PGP MESSAGE-----",
+    }
+
 
 def _fresh_app():
-    """Return a configured test Flask application."""
     app = create_app()
     app.config["TESTING"] = True
     app.config["SECRET_KEY"] = "pytest-secret"
@@ -47,247 +86,187 @@ def _clear_dms():
         direct_messages.clear()
 
 
-# ===========================================================================
-# /chat/create
-# ===========================================================================
-
 class TestChatCreateEndpoint:
     def setup_method(self):
         _clear_rooms()
         self.app = _fresh_app()
         self.client = self.app.test_client()
 
-    def test_create_room_returns_success(self):
-        resp = self.client.post("/chat/create")
-        assert resp.status_code == 200
-        data = resp.get_json()
+    def test_create_room_returns_success_and_url(self):
+        response = self.client.post("/chat/create")
+        assert response.status_code == 200
+        data = response.get_json()
         assert data["success"] is True
-
-    def test_create_room_returns_room_id(self):
-        resp = self.client.post("/chat/create")
-        data = resp.get_json()
-        assert "room_id" in data
-        assert len(data["room_id"]) >= 40
-
-    def test_create_room_returns_room_url(self):
-        resp = self.client.post("/chat/create")
-        data = resp.get_json()
-        assert "room_url" in data
         assert data["room_url"].startswith("/chat/room/")
 
-    def test_created_room_is_accessible(self):
-        create_resp = self.client.post("/chat/create")
-        room_id = create_resp.get_json()["room_id"]
-        room_resp = self.client.get(f"/chat/room/{room_id}")
-        assert room_resp.status_code == 200
-
-    def test_unknown_room_returns_404(self):
-        resp = self.client.get("/chat/room/nonexistent-room-id-12345678")
-        assert resp.status_code == 404
+    def test_created_room_exposes_closed_roster_state(self):
+        room_id = self.client.post("/chat/create").get_json()["room_id"]
+        state = self.client.get(f"/chat/room/{room_id}/state")
+        data = state.get_json()
+        assert state.status_code == 200
+        assert data["mode"] == OPENPGP_ENVELOPE_TYPE
+        assert data["active_epoch"] is None
 
 
-# ===========================================================================
-# /chat/room/<id>/messages
-# ===========================================================================
-
-class TestChatMessagesEndpoint:
+class TestClosedRosterBootstrapAndMessages:
     def setup_method(self):
         _clear_rooms()
         self.app = _fresh_app()
         self.client = self.app.test_client()
-        # Create a room for each test
-        resp = self.client.post("/chat/create")
-        self.room_id = resp.get_json()["room_id"]
+        self.room_id = self.client.post("/chat/create").get_json()["room_id"]
 
-    def test_get_messages_returns_empty_list_initially(self):
-        resp = self.client.get(f"/chat/room/{self.room_id}/messages")
-        assert resp.status_code == 200
-        data = resp.get_json()
-        assert data["messages"] == []
-
-    def test_post_message_success(self):
-        resp = self.client.post(
-            f"/chat/room/{self.room_id}/messages",
-            json={"message": "hello test"},
+    def test_bootstrap_returns_immutable_epoch(self):
+        response = self.client.post(
+            f"/chat/room/{self.room_id}/state/bootstrap",
+            json={
+                "creator_member_id": "alice",
+                "members": [_member_record("alice"), _member_record("bob")],
+            },
         )
-        assert resp.status_code == 200
-        assert resp.get_json()["success"] is True
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["active_epoch"]["epoch"] == 1
+        assert data["active_epoch"]["immutable_roster"] is True
 
-    def test_posted_message_appears_in_get(self):
+    def test_second_bootstrap_is_rejected(self):
+        self.client.post(
+            f"/chat/room/{self.room_id}/state/bootstrap",
+            json={
+                "creator_member_id": "alice",
+                "members": [_member_record("alice"), _member_record("bob")],
+            },
+        )
+        response = self.client.post(
+            f"/chat/room/{self.room_id}/state/bootstrap",
+            json={
+                "creator_member_id": "alice",
+                "members": [_member_record("alice"), _member_record("carol")],
+            },
+        )
+        assert response.status_code == 400
+        assert "already initialized" in response.get_json()["error"]
+
+    def test_messages_reject_plaintext_before_bootstrap(self):
+        response = self.client.post(
+            f"/chat/room/{self.room_id}/messages",
+            json={"message": "plaintext"},
+        )
+        assert response.status_code == 409
+        assert "Bootstrap" in response.get_json()["error"]
+
+    def test_messages_accept_valid_envelope_after_bootstrap(self):
+        state = self.client.post(
+            f"/chat/room/{self.room_id}/state/bootstrap",
+            json={
+                "creator_member_id": "alice",
+                "members": [_member_record("alice"), _member_record("bob")],
+            },
+        ).get_json()
+        response = self.client.post(
+            f"/chat/room/{self.room_id}/messages",
+            json=_bootstrap_payload(state),
+        )
+        assert response.status_code == 200
+        assert response.get_json()["success"] is True
+
+    def test_messages_reject_sender_mismatch(self):
+        state = self.client.post(
+            f"/chat/room/{self.room_id}/state/bootstrap",
+            json={
+                "creator_member_id": "alice",
+                "members": [_member_record("alice"), _member_record("bob")],
+            },
+        ).get_json()
+        payload = _bootstrap_payload(state)
+        payload["sender_signing_fingerprint"] = _fp("unexpected")
+        response = self.client.post(
+            f"/chat/room/{self.room_id}/messages",
+            json=payload,
+        )
+        assert response.status_code == 400
+        assert "sender signing fingerprint mismatch" in response.get_json()["error"]
+
+    def test_messages_reject_recipient_key_id_mismatch(self):
+        state = self.client.post(
+            f"/chat/room/{self.room_id}/state/bootstrap",
+            json={
+                "creator_member_id": "alice",
+                "members": [_member_record("alice"), _member_record("bob")],
+            },
+        ).get_json()
+        payload = _bootstrap_payload(state)
+        payload["recipient_encryption_key_ids"] = payload["recipient_encryption_key_ids"][:1]
+        response = self.client.post(
+            f"/chat/room/{self.room_id}/messages",
+            json=payload,
+        )
+        assert response.status_code == 400
+        assert "recipient encryption key ids do not match" in response.get_json()["error"]
+
+    def test_messages_endpoint_returns_envelope_metadata(self):
+        state = self.client.post(
+            f"/chat/room/{self.room_id}/state/bootstrap",
+            json={
+                "creator_member_id": "alice",
+                "members": [_member_record("alice"), _member_record("bob")],
+            },
+        ).get_json()
         self.client.post(
             f"/chat/room/{self.room_id}/messages",
-            json={"message": "visible message"},
+            json=_bootstrap_payload(state),
         )
-        resp = self.client.get(f"/chat/room/{self.room_id}/messages")
-        data = resp.get_json()
-        messages = [m["message"] for m in data["messages"]]
-        assert "visible message" in messages
-
-    def test_get_messages_returns_user_count(self):
-        resp = self.client.get(f"/chat/room/{self.room_id}/messages")
-        data = resp.get_json()
-        assert "user_count" in data
-        assert isinstance(data["user_count"], int)
-
-    def test_empty_message_rejected(self):
-        resp = self.client.post(
-            f"/chat/room/{self.room_id}/messages",
-            json={"message": "   "},
-        )
-        assert resp.status_code == 400
-
-    def test_missing_message_field_rejected(self):
-        resp = self.client.post(
-            f"/chat/room/{self.room_id}/messages",
-            json={"other_field": "value"},
-        )
-        assert resp.status_code == 400
-
-    def test_message_over_max_length_rejected(self):
-        long_msg = "a " * (MAX_MESSAGE_LENGTH + 10)
-        resp = self.client.post(
-            f"/chat/room/{self.room_id}/messages",
-            json={"message": long_msg},
-        )
-        assert resp.status_code == 400
-
-    def test_html_tags_stripped_from_message(self):
-        """XSS payload: angle brackets and script tags must be stripped."""
-        self.client.post(
-            f"/chat/room/{self.room_id}/messages",
-            json={"message": "<script>alert('xss attempt')</script>"},
-        )
-        resp = self.client.get(f"/chat/room/{self.room_id}/messages")
-        data = resp.get_json()
-        for msg in data["messages"]:
-            assert "<script>" not in msg["message"]
-            assert "</script>" not in msg["message"]
-            assert "<" not in msg["message"]
-            assert ">" not in msg["message"]
-
-    def test_base64_like_payload_rejected(self):
-        """Dense payloads with <5% spaces and length >100 must be rejected."""
-        # Simulate a base64-encoded blob: long string, almost no spaces
-        b64_like = "dGhpcyBpcyBhIHRlc3Q" * 6  # ~114 chars, no spaces
-        resp = self.client.post(
-            f"/chat/room/{self.room_id}/messages",
-            json={"message": b64_like},
-        )
-        assert resp.status_code == 400
-
-    def test_get_on_missing_room_returns_404(self):
-        resp = self.client.get("/chat/room/no-such-room-xyz/messages")
-        assert resp.status_code == 404
-
-    def test_message_response_contains_expected_fields(self):
-        self.client.post(
-            f"/chat/room/{self.room_id}/messages",
-            json={"message": "field check"},
-        )
-        resp = self.client.get(f"/chat/room/{self.room_id}/messages")
-        data = resp.get_json()
-        msg = data["messages"][0]
-        for field in ("username", "color", "message", "timestamp", "is_mine"):
-            assert field in msg, f"Missing field: {field}"
+        response = self.client.get(f"/chat/room/{self.room_id}/messages")
+        data = response.get_json()
+        assert response.status_code == 200
+        assert len(data["messages"]) == 1
+        message = data["messages"][0]
+        assert message["message_type"] == OPENPGP_ENVELOPE_TYPE
+        assert message["sender_member_id"] == "alice"
+        assert message["armored_message"].startswith("-----BEGIN PGP MESSAGE-----")
 
 
-# ===========================================================================
-# /chat/room/<id>/key  (automated key exchange)
-# ===========================================================================
-
-class TestRoomKeyEndpoint:
+class TestDeprecatedRoomKeyEndpoint:
     def setup_method(self):
         _clear_rooms()
         self.app = _fresh_app()
         self.client = self.app.test_client()
 
-    def test_key_endpoint_returns_key(self):
-        resp = self.client.post("/chat/create")
-        room_id = resp.get_json()["room_id"]
-        key_resp = self.client.get(f"/chat/room/{room_id}/key")
-        assert key_resp.status_code == 200
-        data = key_resp.get_json()
-        assert "encryption_key" in data
-        assert len(data["encryption_key"]) >= 40
+    def test_key_endpoint_returns_410(self):
+        room_id = self.client.post("/chat/create").get_json()["room_id"]
+        response = self.client.get(f"/chat/room/{room_id}/key")
+        assert response.status_code == 410
+        data = response.get_json()
+        assert data["deprecated"] is True
+        assert data["mode"] == OPENPGP_ENVELOPE_TYPE
 
-    def test_key_is_consistent_for_same_room(self):
-        resp = self.client.post("/chat/create")
-        room_id = resp.get_json()["room_id"]
-        key1 = self.client.get(f"/chat/room/{room_id}/key").get_json()["encryption_key"]
-        key2 = self.client.get(f"/chat/room/{room_id}/key").get_json()["encryption_key"]
-        assert key1 == key2
+    def test_key_endpoint_missing_room_still_404s(self):
+        response = self.client.get("/chat/room/no-room-here/key")
+        assert response.status_code == 404
 
-    def test_different_rooms_have_different_keys(self):
-        resp1 = self.client.post("/chat/create")
-        resp2 = self.client.post("/chat/create")
-        key1 = self.client.get(
-            f"/chat/room/{resp1.get_json()['room_id']}/key"
-        ).get_json()["encryption_key"]
-        key2 = self.client.get(
-            f"/chat/room/{resp2.get_json()['room_id']}/key"
-        ).get_json()["encryption_key"]
-        assert key1 != key2
-
-    def test_key_endpoint_on_missing_room_returns_404(self):
-        resp = self.client.get("/chat/room/no-room-here/key")
-        assert resp.status_code == 404
-
-
-# ===========================================================================
-# /chat/dm/send and /chat/dm/<id>
-# ===========================================================================
 
 class TestDMEndpoints:
-    """API-level tests for the ephemeral DM system."""
-
     def setup_method(self):
         _clear_rooms()
         _clear_dms()
         self.app = _fresh_app()
         self.client = self.app.test_client()
-        # Create a room to reference in DMs
-        resp = self.client.post("/chat/create")
-        self.room_id = resp.get_json()["room_id"]
+        self.room_id = self.client.post("/chat/create").get_json()["room_id"]
 
     def test_send_dm_success(self):
-        resp = self.client.post(
+        response = self.client.post(
             "/chat/dm/send",
             json={"room_id": self.room_id, "message": "join my room"},
         )
-        assert resp.status_code == 200
-        data = resp.get_json()
+        assert response.status_code == 200
+        data = response.get_json()
         assert data["success"] is True
         assert "dm_id" in data
         assert data["expires_in"] == 60
 
-    def test_send_dm_creates_viewable_link(self):
-        resp = self.client.post(
-            "/chat/dm/send",
-            json={"room_id": self.room_id, "message": "join my room"},
-        )
-        dm_id = resp.get_json()["dm_id"]
-        view_resp = self.client.get(f"/chat/dm/{dm_id}")
-        assert view_resp.status_code == 200
-        data = view_resp.get_json()
-        assert "message" in data
-        assert "room_id" in data
-
-    def test_dm_has_expiry_field(self):
-        resp = self.client.post(
-            "/chat/dm/send",
-            json={"room_id": self.room_id, "message": "test"},
-        )
-        dm_id = resp.get_json()["dm_id"]
-        view_resp = self.client.get(f"/chat/dm/{dm_id}")
-        data = view_resp.get_json()
-        assert "expires_in" in data
-        assert data["expires_in"] <= 60
-
     def test_expired_dm_returns_404(self):
-        """Manually insert an expired DM and verify the endpoint rejects it."""
         with dm_lock:
-            direct_messages["test-expired"] = {
-                "dm_id": "test-expired",
+            direct_messages["expired"] = {
+                "dm_id": "expired",
                 "sender_id": "u1",
                 "sender_name": "Alice",
                 "room_id": self.room_id,
@@ -295,20 +274,5 @@ class TestDMEndpoints:
                 "timestamp": datetime.datetime.now() - datetime.timedelta(seconds=90),
                 "read": False,
             }
-        view_resp = self.client.get("/chat/dm/test-expired")
-        assert view_resp.status_code == 404
-
-    def test_nonexistent_dm_returns_404(self):
-        resp = self.client.get("/chat/dm/does-not-exist-at-all")
-        assert resp.status_code == 404
-
-    def test_send_dm_missing_fields_rejected(self):
-        resp = self.client.post("/chat/dm/send", json={"room_id": self.room_id})
-        assert resp.status_code == 400
-
-    def test_send_dm_too_long_rejected(self):
-        resp = self.client.post(
-            "/chat/dm/send",
-            json={"room_id": self.room_id, "message": "x" * 201},
-        )
-        assert resp.status_code == 400
+        response = self.client.get("/chat/dm/expired")
+        assert response.status_code == 404

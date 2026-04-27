@@ -3,7 +3,7 @@ Simple OpSec Chat Routes
 
 This module provides a simplified, security-focused chat system with:
 - Room-based chat (create/join rooms with simple commands)
-- E2E encryption using simple Web Crypto API
+- Closed-roster OpenPGP rooms with explicit epoch-1 membership
 - Messages that disappear after 3 minutes
 - Randomized usernames with color distinction
 - In-memory only storage
@@ -16,11 +16,12 @@ import os
 import datetime
 import secrets
 import threading
-import base64
-import binascii
-from flask import render_template, request, session, jsonify, Blueprint
-from utils import id_generator, get_random_color, sanitize_emojis, filter_to_ascii
+from flask import render_template, request, session, jsonify
 from rate_limiter import limiter
+from closed_roster_room import (
+    ClosedRosterState,
+    OPENPGP_ENVELOPE_TYPE,
+)
 
 # Absolute path to this file's directory (used for reliable VERSION lookup)
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -50,16 +51,8 @@ RATE_LIMITS = {
     "dm_send": {"max_requests": 5, "window_seconds": 60},
 }
 
-# Maximum message length to prevent base64 encoding of images
-MAX_MESSAGE_LENGTH = 500  # Reasonable for text, prevents image encoding
-
-# Prefix for E2E-encrypted messages sent from the client.
-# The client prepends this ASCII marker before the base64 AES-GCM ciphertext.
-# The server stores the payload untouched; only the client can decrypt it.
-ENC_PREFIX = "ENC:"
-# Allow encrypted payloads to be larger: AES-GCM adds IV (12 B) + tag (16 B)
-# overhead, so a 500-char plaintext becomes ~700 chars of base64 plus the prefix.
-MAX_ENC_MESSAGE_LENGTH = MAX_MESSAGE_LENGTH * 2
+# Maximum plaintext message length in the browser UI before OpenPGP wrapping.
+MAX_MESSAGE_LENGTH = 500
 
 COLOR_CLASS_NAMES = {
     (255, 85, 85): "user-color-0",
@@ -84,23 +77,27 @@ class ChatRoom:
         self.users = {}
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
-        # Auto-generated shared encryption key for the room
-        self.room_key = base64.b64encode(secrets.token_bytes(32)).decode('utf-8')
-    
-    def get_room_key(self):
-        """Get the room's shared encryption key (for automatic key exchange)"""
-        return self.room_key
+        self.closed_roster = ClosedRosterState(room_id)
     
     def add_message(self, user_id, username, color, message_text):
-        """Add a message to the room"""
+        """Add a legacy message record; retained for isolated unit tests."""
+        payload = {
+            "message_type": "legacy_plaintext_test_only",
+            "message": message_text,
+        }
+        self._store_message(user_id, username, color, payload)
+
+    def _store_message(self, user_id, username, color, payload):
         with self.lock:
             msg = {
-                "message": message_text,
                 "user_id": user_id,
                 "username": username,
                 "color": color,
-                "timestamp": datetime.datetime.now()
+                "timestamp": datetime.datetime.now(),
             }
+            msg.update(payload)
+            if "message" not in msg and "armored_message" in msg:
+                msg["message"] = msg["armored_message"]
             self.messages.append(msg)
             
             # Track user
@@ -112,6 +109,22 @@ class ChatRoom:
                 }
             else:
                 self.users[user_id]["last_seen"] = datetime.datetime.now()
+
+    def bootstrap_closed_roster(self, members):
+        """Initialize the immutable epoch-1 closed roster for this room."""
+        with self.lock:
+            return self.closed_roster.bootstrap(members)
+
+    def serialize_closed_roster_state(self):
+        """Return the room's closed-roster OpenPGP state."""
+        with self.lock:
+            return self.closed_roster.serialize()
+
+    def add_encrypted_message(self, user_id, username, color, payload):
+        """Validate and store a closed-roster OpenPGP envelope."""
+        with self.lock:
+            normalized = self.closed_roster.validate_posted_envelope(payload)
+        self._store_message(user_id, username, color, normalized)
     
     def cleanup_old_messages(self):
         """Remove messages older than 3 minutes and overwrite memory"""
@@ -125,8 +138,18 @@ class ChatRoom:
                     new_messages.append(msg)
                 else:
                     # Overwrite message data before deletion (security)
-                    msg["message"] = "X" * len(msg["message"])
-                    msg["username"] = "X" * len(msg["username"])
+                    for field in (
+                        "message",
+                        "username",
+                        "armored_message",
+                        "sender_member_id",
+                        "sender_display_name",
+                        "sender_signing_fingerprint",
+                        "roster_hash",
+                    ):
+                        value = msg.get(field)
+                        if isinstance(value, str):
+                            msg[field] = "X" * len(value)
             
             self.messages = new_messages
     
@@ -339,11 +362,53 @@ def register_simple_chat_routes(app):
             session["username"] = generate_random_username()
             session["color"] = get_random_color_rgb()
         
-        return render_template("simple_chat_room.html", 
-                             room_id=room_id,
-                             username=session["username"],
-                             color=session["color"],
-                             user_color_class=get_color_class_name(session["color"]))
+        return render_template(
+            "simple_chat_room.html",
+            room_id=room_id,
+            max_message_length=MAX_MESSAGE_LENGTH,
+        )
+
+    @app.route('/chat/room/<string:room_id>/state', methods=['GET'])
+    def simple_chat_room_state(room_id):
+        """Get the closed-roster OpenPGP state for a room."""
+        with rooms_lock:
+            if room_id not in chat_rooms:
+                return jsonify({"error": "Room not found"}), 404
+            room = chat_rooms[room_id]
+
+        return jsonify(room.serialize_closed_roster_state())
+
+    @app.route('/chat/room/<string:room_id>/state/bootstrap', methods=['POST'])
+    @limiter.limit("10 per hour; 3 per minute")
+    def bootstrap_simple_chat_room(room_id):
+        """Lock a room to an immutable epoch-1 OpenPGP roster."""
+        with rooms_lock:
+            if room_id not in chat_rooms:
+                return jsonify({"error": "Room not found"}), 404
+            room = chat_rooms[room_id]
+
+        if "_id" not in session:
+            session["_id"] = generate_secure_dm_id()
+            session["username"] = generate_random_username()
+            session["color"] = get_random_color_rgb()
+
+        data = request.get_json(silent=True)
+        members = data.get("members") if isinstance(data, dict) else None
+        if not members:
+            return jsonify({"error": "No roster members provided"}), 400
+
+        try:
+            state = room.bootstrap_closed_roster(members)
+        except (TypeError, ValueError) as exc:
+            return jsonify({"error": str(exc)}), 400
+
+        session["room_member_ids"] = session.get("room_member_ids", {})
+        creator_member_id = data.get("creator_member_id") if isinstance(data, dict) else None
+        if isinstance(creator_member_id, str) and creator_member_id.strip():
+            session["room_member_ids"][room_id] = creator_member_id.strip()
+            session.modified = True
+
+        return jsonify({"success": True, **state})
     
     @app.route('/chat/room/<string:room_id>/messages', methods=['GET', 'POST'])
     @limiter.limit("60 per minute", methods=["POST"])
@@ -368,83 +433,61 @@ def register_simple_chat_routes(app):
                     "error": f"Rate limit exceeded. Maximum 30 messages per minute. Try again in {retry_after} seconds."
                 }), 429
             
-            # Get message from request
-            data = request.get_json()
-            if not data or "message" not in data:
+            data = request.get_json(silent=True)
+            if not isinstance(data, dict):
                 return jsonify({"error": "No message provided"}), 400
-            
-            message_text = data["message"].strip()
-            
-            # Validate message
-            if not message_text:
-                return jsonify({"error": "Empty message"}), 400
-            
-            # Detect E2E-encrypted messages (ASCII prefix set by the JS client)
-            is_encrypted = message_text.startswith(ENC_PREFIX)
-            
-            if is_encrypted:
-                # Encrypted payload: only length check, no further sanitization
-                # (the payload is opaque base64 AES-GCM ciphertext)
-                payload = message_text[len(ENC_PREFIX):]
-                if not payload:
-                    return jsonify({"error": "Empty encrypted payload"}), 400
-                if len(message_text) > MAX_ENC_MESSAGE_LENGTH:
-                    return jsonify({"error": "Encrypted message too long."}), 400
-                # Validate that the payload looks like valid base64
-                try:
-                    base64.b64decode(payload, validate=True)
-                except binascii.Error:
-                    return jsonify({"error": "Invalid encrypted message format."}), 400
-            else:
-                # Plain-text path: apply all sanitization and content checks
-                # Check for length cap to prevent base64 encoding of media
-                if len(message_text) > MAX_MESSAGE_LENGTH:
-                    return jsonify({"error": f"Message too long. Maximum {MAX_MESSAGE_LENGTH} characters allowed."}), 400
-                
-                # Detect potential base64 encoded content (basic check)
-                # Base64 has high entropy and typically lacks spaces
-                if len(message_text) > 100:
-                    space_count = message_text.count(' ')
-                    if space_count < len(message_text) * 0.05:  # Less than 5% spaces
-                        # Might be base64 or encoded content
-                        return jsonify({"error": "Invalid message format. Only plain text allowed."}), 400
-                
-                # Filter to ASCII only and remove emojis
-                message_text = filter_to_ascii(message_text)
-                message_text = sanitize_emojis(message_text)
-                
-                # Sanitize message (remove HTML tags)
-                message_text = re.sub(r'[<>&"\']', '', message_text)
-            
-            # Add message to room
-            room.add_message(
-                session["_id"],
-                session["username"],
-                session["color"],
-                message_text
-            )
-            
+
+            try:
+                room.add_encrypted_message(
+                    session["_id"],
+                    session["username"],
+                    session["color"],
+                    data,
+                )
+            except (TypeError, ValueError) as exc:
+                if "not initialized" in str(exc):
+                    return jsonify({
+                        "error": "Room roster is not initialized. Bootstrap the closed roster before messaging."
+                    }), 409
+                return jsonify({"error": str(exc)}), 400
+
+            sender_member_id = data.get("sender_member_id")
+            if isinstance(sender_member_id, str) and sender_member_id.strip():
+                room_member_ids = session.get("room_member_ids", {})
+                room_member_ids[room_id] = sender_member_id.strip()
+                session["room_member_ids"] = room_member_ids
+                session.modified = True
+
             return jsonify({"success": True})
         
         else:  # GET
             messages = room.get_messages()
             user_count = room.get_user_count()
+            room_member_id = session.get("room_member_ids", {}).get(room_id)
             
             return jsonify({
                 "messages": [
                     {
-                        "username": msg["username"],
+                        "message_type": msg.get("message_type"),
+                        "username": msg.get("sender_display_name", msg["username"]),
                         "color": msg["color"],
                         "color_class": get_color_class_name(msg["color"]),
                         "message": msg["message"],
+                        "armored_message": msg.get("armored_message", msg["message"]),
+                        "sender_member_id": msg.get("sender_member_id"),
+                        "sender_display_name": msg.get("sender_display_name"),
+                        "sender_signing_fingerprint": msg.get("sender_signing_fingerprint"),
+                        "epoch": msg.get("epoch"),
+                        "roster_hash": msg.get("roster_hash"),
                         "timestamp": msg["timestamp"].isoformat(),
-                        "is_mine": msg["user_id"] == session.get("_id")
+                        "is_mine": msg.get("sender_member_id") == room_member_id,
                     }
                     for msg in messages
                 ],
                 "user_count": user_count,
                 "my_username": session.get("username"),
-                "my_color": session.get("color")
+                "my_color": session.get("color"),
+                "my_member_id": room_member_id,
             })
     
     @app.route('/chat/dm/send', methods=['POST'])
@@ -529,16 +572,20 @@ def register_simple_chat_routes(app):
     
     @app.route('/chat/room/<string:room_id>/key', methods=['GET'])
     def get_room_key(room_id):
-        """Get room's shared encryption key (automated key exchange)"""
+        """Deprecated insecure endpoint kept only as an explicit failure path."""
         with rooms_lock:
             if room_id not in chat_rooms:
                 return jsonify({"error": "Room not found"}), 404
-            
-            room = chat_rooms[room_id]
-            return jsonify({
-                "room_id": room_id,
-                "encryption_key": room.get_room_key()
-            })
+
+        return jsonify({
+            "error": (
+                "The shared room-key endpoint is retired. "
+                "Use the closed-roster OpenPGP room bootstrap flow instead."
+            ),
+            "deprecated": True,
+            "replacement": f"/chat/room/{room_id}/state",
+            "mode": OPENPGP_ENVELOPE_TYPE,
+        }), 410
 
 
 def generate_random_username():

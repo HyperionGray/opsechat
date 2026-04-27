@@ -5,22 +5,16 @@ Provides a single operator-facing entry point that ties together the hardened
 chat, HTTP mail, and burner workflows exposed by the application.
 """
 
-from flask import jsonify, redirect, render_template, url_for
+from flask import jsonify, render_template
 
 
 def register_mvp_routes(app):
     """Register the operator console and a JSON service manifest."""
 
-    def _secret_path():
-        return app.config.get("path", "")
-
     def _hostname():
         return app.config.get("hostname", "localhost")
 
     def _build_manifest():
-        secret_path = _secret_path()
-        secret_prefix = f"/{secret_path}" if secret_path else None
-
         services = [
             {
                 "name": "secure-chat",
@@ -35,37 +29,6 @@ def register_mvp_routes(app):
                 },
             },
             {
-                "name": "http-mail",
-                "label": "HTTP mail inboxes",
-                "href": f"{secret_prefix}/mail" if secret_prefix else None,
-                "api": [
-                    f"{secret_prefix}/mail/new" if secret_prefix else None,
-                    f"{secret_prefix}/mail/<address>/send" if secret_prefix else None,
-                    f"{secret_prefix}/mail/<address>/inbox?key=<read_key>" if secret_prefix else None,
-                ],
-                "constraints": {
-                    "storage": "memory-only",
-                    "retention_hours": 24,
-                    "max_message_length": 2000,
-                    "attachments": "not supported",
-                },
-            },
-            {
-                "name": "burner-receive",
-                "label": "Receive-only burner inboxes",
-                "href": f"{secret_prefix}/email/burner" if secret_prefix else None,
-                "api": [
-                    f"{secret_prefix}/email/burner" if secret_prefix else None,
-                    f"{secret_prefix}/email/burner/list.json" if secret_prefix else None,
-                ],
-                "constraints": {
-                    "storage": "memory-only",
-                    "retention_hours": 24,
-                    "delivery_model": "receive-only burner aliases backed by HTTP mail inboxes",
-                    "attachments": "not supported",
-                },
-            },
-            {
                 "name": "health",
                 "label": "Operational health",
                 "href": "/health",
@@ -77,15 +40,47 @@ def register_mvp_routes(app):
             },
         ]
 
-        # Remove unavailable secret-path links while the app is bootstrapping.
-        for service in services:
-            service["api"] = [endpoint for endpoint in service["api"] if endpoint]
+        if app.config.get("OPSECHAT_ENABLE_HTTP_MAIL"):
+            services.append({
+                "name": "http-mail",
+                "label": "Restricted HTTP mail",
+                "href": None,
+                "api": [
+                    "/<secret-path>/mail/new",
+                    "/<secret-path>/mail/<address>/send",
+                    "/<secret-path>/mail/<address>/inbox?key=<read_key>",
+                ],
+                "constraints": {
+                    "storage": "memory-only",
+                    "retention_hours": 24,
+                    "max_message_length": 2000,
+                    "exposure": "restricted; secret path intentionally omitted",
+                },
+            })
+
+        if app.config.get("OPSECHAT_ENABLE_EMAIL_STACK"):
+            services.append({
+                "name": "burner-receive",
+                "label": "Restricted burner inboxes",
+                "href": None,
+                "api": [
+                    "/<secret-path>/email/burner",
+                    "/<secret-path>/email/burner/list.json",
+                ],
+                "constraints": {
+                    "storage": "memory-only",
+                    "retention_hours": 24,
+                    "delivery_model": "receive-only aliases backed by HTTP mailboxes",
+                    "exposure": "restricted; secret path intentionally omitted",
+                },
+            })
 
         return {
             "console": "/console",
             "hostname": _hostname(),
-            "secret_path": secret_path or None,
-            "full_service_path": app.config.get("full_path"),
+            "profile": "extended" if app.config.get("OPSECHAT_ENABLE_EXTENDED_SERVICES") else "core",
+            "extended_services_enabled": bool(app.config.get("OPSECHAT_ENABLE_EXTENDED_SERVICES")),
+            "legacy_chat_enabled": bool(app.config.get("OPSECHAT_ENABLE_LEGACY_CHAT")),
             "services": services,
         }
 
@@ -96,7 +91,8 @@ def register_mvp_routes(app):
 
     @app.route("/", methods=["GET"])
     def console_root():
-        return redirect(url_for("mvp_console"))
+        manifest = _build_manifest()
+        return render_template("mvp_console.html", manifest=manifest)
 
     @app.route("/console/api", methods=["GET"])
     def mvp_console_api():

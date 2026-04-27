@@ -10,11 +10,11 @@ Original file was 906 lines, refactored to ~70 lines for better maintainability.
 """
 
 import sys
-import os
 import logging
 from stem.control import Controller
 from stem import SocketError
 from app_factory import create_app
+from tor_transport import get_tor_control_endpoint, tor_ingress_required
 from utils import id_generator
 
 # Configure logging
@@ -25,7 +25,8 @@ log.setLevel(logging.ERROR)
 def setup_tor_configuration():
     """Setup Tor hidden service configuration"""
     try:
-        with Controller.from_port(port=9051) as controller:
+        tor_host, tor_port = get_tor_control_endpoint()
+        with Controller.from_port(address=tor_host, port=tor_port) as controller:
             controller.authenticate()
             
             # Create ephemeral hidden service
@@ -45,9 +46,13 @@ def setup_tor_configuration():
     except SocketError as e:
         print(f"[!] Tor proxy or Control Port are not running: {e}")
         print("Try starting the Tor Browser or Tor daemon and ensure the ControlPort is open.")
+        if tor_ingress_required():
+            raise RuntimeError("Tor ingress is required but the hidden service could not be created") from e
         return "localhost", None
     except Exception as e:
         print(f"Warning: Tor configuration error: {e}")
+        if tor_ingress_required():
+            raise RuntimeError("Tor ingress is required but the hidden service could not be created") from e
         return "localhost", None
 
 
@@ -64,20 +69,30 @@ def main():
         print("Test mode: Running on localhost:5001")
         app.config['path'] = path
         app.config['hostname'] = "localhost"
-        app.config['full_path'] = f"localhost:5001/{path}"
-        print(f"[*] Your service is available at: http://{app.config['full_path']}")
+        app.config['full_path'] = "localhost:5001/chat"
+        print(f"[*] Operator console: http://localhost:5001/")
+        print(f"[*] Chat rooms: http://{app.config['full_path']}")
+        if app.config.get("OPSECHAT_ENABLE_LEGACY_CHAT"):
+            print(f"[*] Legacy secret-path chat: http://localhost:5001/{path}")
         app.run(host='127.0.0.1', port=5001, debug=False)
         return
     
     # Production mode with Tor
-    hostname, service_id = setup_tor_configuration()
+    try:
+        hostname, service_id = setup_tor_configuration()
+    except RuntimeError as exc:
+        print(f"[!] {exc}")
+        sys.exit(1)
     
     # Configure application
     app.config['path'] = path
     app.config['hostname'] = hostname.replace('.onion', '') if hostname.endswith('.onion') else hostname
-    app.config['full_path'] = f"{hostname}/{path}"
+    app.config['full_path'] = f"{hostname}/chat"
     
-    print(f"[*] Your service is available at: http://{app.config['full_path']}")
+    print(f"[*] Operator console: http://{hostname}/")
+    print(f"[*] Chat rooms: http://{app.config['full_path']}")
+    if app.config.get("OPSECHAT_ENABLE_LEGACY_CHAT"):
+        print(f"[*] Legacy secret-path chat: http://{hostname}/{path}")
     print("Press Ctrl+C to quit")
     
     try:
@@ -86,7 +101,8 @@ def main():
         if service_id:
             print(" * Shutting down our hidden service")
             try:
-                with Controller.from_port(port=9051) as controller:
+                tor_host, tor_port = get_tor_control_endpoint()
+                with Controller.from_port(address=tor_host, port=tor_port) as controller:
                     controller.authenticate()
                     controller.remove_ephemeral_hidden_service(service_id)
             except Exception as e:

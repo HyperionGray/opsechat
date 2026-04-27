@@ -8,6 +8,7 @@ import string
 import logging
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
+from tor_transport import configure_requests_session
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class PorkbunAPIClient(DomainAPIClient):
         super().__init__(api_key, api_secret)
         # Legacy compatibility alias used by some manual checks/scripts.
         self.secret_key = api_secret
-        self.session = requests.Session()
+        self.session = configure_requests_session(requests.Session())
     
     def _make_request(self, endpoint: str, data: Optional[Dict] = None) -> Dict:
         """Make API request"""
@@ -176,8 +177,8 @@ class DomainRotationManager:
 
     def configure(self, api_key: str, secret_key: str, monthly_budget: float = 50.0) -> bool:
         """Configure registrar credentials and budget."""
-self.api_key = api_key.strip() if api_key.strip() else None
-self.api_secret = secret_key.strip() if secret_key.strip() else None
+        self.api_key = api_key.strip() if api_key.strip() else None
+        self.api_secret = secret_key.strip() if secret_key.strip() else None
         self.set_monthly_budget(monthly_budget)
 
         if not self.api_key or not self.api_secret:
@@ -283,7 +284,7 @@ self.api_secret = secret_key.strip() if secret_key.strip() else None
         if limit <= 0:
             return []
 
-attempts = max_attempts if max_attempts is not None else min(max(10, limit * 3), 100)
+        attempts = max_attempts if max_attempts is not None else min(max(10, limit * 3), 100)
         seen_domains = set()
         matches: List[Dict] = []
         cheap_tlds = tlds or ["xyz", "club", "online", "site", "website"]

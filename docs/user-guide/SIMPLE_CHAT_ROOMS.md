@@ -1,261 +1,128 @@
-# OpSecChat - Simple Web Chat Rooms
+# Simple Chat Rooms
 
 ## Overview
 
-OpSecChat now includes a simple, security-focused web-based chat room system designed for operational security communications. This system prioritizes security, simplicity, and reviewability over features.
+Simple chat rooms now use an immutable closed-roster OpenPGP workflow.
 
-## Key Features
+The important change is that the room no longer distributes a shared encryption key.
 
-- **Simple Room Creation**: Create secure chat rooms with a single command
-- **E2E Encryption**: Optional end-to-end encryption using Web Crypto API
-- **Terminal-Style UI**: Clean, minimal interface with no flashy elements
-- **3-Minute Message Expiry**: Messages automatically delete after 3 minutes
-- **Memory Overwriting**: Deleted messages are overwritten in memory
-- **Randomized Usernames**: Color-coded for easy visual distinction
-- **Text-Only**: No media, images, or file sharing
-- **In-Memory Storage**: Zero disk writes
-- **Tor Ready**: Works seamlessly with Tor hidden services
+Instead:
+
+- every member has a public key
+- the room is explicitly bootstrapped to epoch 1
+- every message is signed by the sender
+- every message is encrypted to the full roster
 
 ## Quick Start
 
-### Creating a Local Chat Room
+### Local server
 
 ```bash
 python chat-room.py
 ```
 
-This will start a local server and display URLs like:
-```
-============================================================
-💻 Local OpSecChat Server Started
-============================================================
-
-📍 Main URL: http://127.0.0.1:5000/[random-path]
-💬 Chat Rooms: http://127.0.0.1:5000/chat
-```
-
-### Creating a Tor Hidden Service
+### Tor hidden service
 
 ```bash
-# First, ensure Tor is running
 tor --ControlPort 9051 --CookieAuthentication 1
-
-# Then create the hidden service
 python chat-room.py --tor
 ```
 
-This will create a `.onion` address:
-```
-============================================================
-🧅 Tor Hidden Service Created!
-============================================================
+Then open `/chat`.
 
-📍 Main URL: http://[onion-address]/[random-path]
-💬 Chat Rooms: http://[onion-address]/chat
-```
+## Room Lifecycle
 
-### Custom Port
+### 1. Create the room
 
-```bash
-python chat-room.py --port 8080
-```
+- open `/chat`
+- create a room
+- share the URL only with the people who should be in the room
 
-## Using Chat Rooms
+### 2. Configure the local identity
 
-### Creating a Room
+Inside the room:
 
-1. Navigate to `/chat` on your server
-2. Click "Create New Chat Room"
-3. Share the room URL with trusted contacts
-4. Optionally enable E2E encryption in the room
+- set the local `member_id`
+- set the display name
+- generate a key pair or import an existing private key
+- download the armored private-key backup before you rely on the room
+- if you lose the browser session, re-import the same private key to recover access
 
-### Joining a Room
+### 3. Add the roster
 
-1. Open the room URL shared with you
-2. You'll be assigned a randomized username with a color
-3. Type messages in the input box
-4. Messages will appear for all users in the room
+Before the first message:
 
-### Enabling E2E Encryption
+- add every member's public key
+- verify fingerprints out of band
+- mark every non-local member verified
+- lock epoch 1
 
-1. In the chat room, toggle the "Encryption" switch
-2. All your messages will be encrypted using AES-GCM
-3. Other users must also enable encryption to read your messages
-4. The encryption key is stored in your browser's sessionStorage
-5. Keys are NOT shared - this is for protection against server compromise
+### 4. Send messages
 
-**Important**: E2E encryption is per-user. If you want to chat with encrypted messages:
-- All participants should enable encryption
-- The encryption protects against server compromise
-- Messages are still deleted after 3 minutes
-- Encryption keys are session-only (lost when you close the tab)
+Once the roster is locked:
 
-## Security Features
+- type the message
+- click `Sign + Encrypt`
+- the browser signs and encrypts the payload to the full roster
 
-### Message Expiry
-- All messages are automatically deleted after **3 minutes**
-- The timer starts when the message is sent
-- Deleted messages are overwritten in memory before removal
+## Security Model
 
-### Memory Overwriting
-When messages expire:
-```python
-# Message data is overwritten before deletion
-msg["message"] = "X" * len(msg["message"])
-msg["username"] = "X" * len(msg["username"])
-```
+### What the room enforces
 
-This prevents memory forensics from recovering deleted messages.
+- explicit active epoch
+- explicit roster hash
+- sender must be in the roster
+- recipient set must match the roster
+- wildcard recipients are not allowed
+- local trust state is visible to the operator
 
-### Room Expiry
-- Rooms are automatically deleted after **1 hour** of inactivity
-- All message data is overwritten before room deletion
-- No persistent storage - everything is in-memory
+### Alpha limitation
 
-### Username Randomization
-- Usernames are server-generated and non-reusable
-- Format: `[Adjective][Noun][4-digit-number]`
-- Examples: `SilentWolf0423`, `GhostRaven7821`
-- Each username is assigned a distinct color for easy identification
+The active roster is immutable in this release.
 
-### E2E Encryption (Optional)
-- Uses Web Crypto API (AES-GCM with 256-bit keys)
-- Simple, reviewable JavaScript implementation
-- No external dependencies beyond native browser APIs
-- Encrypted messages are prefixed with 🔒 emoji
-- Keys stored in sessionStorage (lost when tab closes)
+If membership changes or a key rotates:
 
-## Technical Details
+1. stop using the room
+2. create a new room
+3. bootstrap a new epoch-1 roster
 
-### API Endpoints
+The room UI now includes:
 
-#### Create Room
-```
+- explicit private-key download/export
+- a warning when no backup export is recorded for the current browser session
+- recovery guidance for re-importing the same key after session loss
+
+## API Summary
+
+### Create room
+
+```text
 POST /chat/create
-Response: {"success": true, "room_id": "...", "room_url": "/chat/room/..."}
 ```
 
-#### Get/Post Messages
+### Fetch room state
+
+```text
+GET /chat/room/<room_id>/state
 ```
+
+### Bootstrap epoch 1
+
+```text
+POST /chat/room/<room_id>/state/bootstrap
+```
+
+### Fetch or post messages
+
+```text
 GET  /chat/room/<room_id>/messages
 POST /chat/room/<room_id>/messages
-Body: {"message": "..."}
 ```
 
-### Encryption Implementation
+### Deprecated endpoint
 
-The E2E encryption uses native Web Crypto API:
-
-```javascript
-// Key generation
-const key = await window.crypto.subtle.generateKey(
-    { name: "AES-GCM", length: 256 },
-    true,
-    ["encrypt", "decrypt"]
-);
-
-// Encryption
-const iv = window.crypto.getRandomValues(new Uint8Array(12));
-const encrypted = await window.crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: iv },
-    key,
-    encoded_message
-);
+```text
+GET /chat/room/<room_id>/key
 ```
 
-This is **simple** and **reviewable** - only ~100 lines of JavaScript for the entire encryption system.
-
-## Security Considerations
-
-### What This Protects Against
-- ✅ Server-side message logging
-- ✅ Memory forensics (with overwriting)
-- ✅ Long-term message retention
-- ✅ Username correlation across sessions
-- ✅ Network traffic analysis (when using Tor)
-
-### What This Does NOT Protect Against
-- ❌ Compromised client devices
-- ❌ Man-in-the-middle attacks (use Tor + HTTPS)
-- ❌ Malicious JavaScript injection (verify code)
-- ❌ Screenshot/screen recording
-- ❌ Keystroke logging
-
-### Best Practices
-1. **Use Tor Browser** - For maximum anonymity
-2. **Verify Code** - Review the JavaScript before using
-3. **Enable Encryption** - For additional protection
-4. **Share Carefully** - Only share room URLs with trusted contacts
-5. **Short Sessions** - Don't leave rooms open for extended periods
-6. **No Sensitive Credentials** - Never share passwords or keys
-
-## Comparison with Other Features
-
-### Web Chat Rooms vs TUI
-- **Web**: Browser-based, easier to use, E2E encryption option
-- **TUI**: Terminal-only, no JavaScript, direct socket connection
-
-### Web Chat vs Drop Chat
-- **Web Rooms**: Multiple rooms, modern UI, E2E encryption
-- **Drop Chat**: Single ephemeral chat, PGP support, legacy interface
-
-Both are secure and suitable for operational security communications.
-
-## Command Reference
-
-```bash
-# Start local server
-python chat-room.py
-
-# Start with Tor
-python chat-room.py --tor
-
-# Custom port
-python chat-room.py --port 8080
-
-# Bind to all interfaces (be careful!)
-python chat-room.py --host 0.0.0.0
-
-# Show help
-python chat-room.py --help
-```
-
-## Troubleshooting
-
-### "Tor Connection Failed"
-Ensure Tor is running:
-```bash
-tor --ControlPort 9051 --CookieAuthentication 1
-```
-
-### "Room Not Found"
-Rooms expire after 1 hour of inactivity. Create a new room.
-
-### "Port Already in Use"
-Use a different port:
-```bash
-python chat-room.py --port 8080
-```
-
-### Encryption Not Working
-- Ensure both users have enabled encryption toggle
-- Check browser console for errors
-- Verify Web Crypto API is available (requires HTTPS or localhost)
-
-## Code Review
-
-The implementation is intentionally simple and reviewable:
-
-- **simple_chat_routes.py** (~260 lines): Server-side logic
-- **simple_chat_room.html** (~440 lines): Client-side UI and encryption
-- **simple_chat_index.html** (~150 lines): Landing page
-
-Total: ~850 lines of reviewable code for the entire system.
-
-## License
-
-MIT License - Same as the main OpSecChat project.
-
-## Security Disclosure
-
-If you find security vulnerabilities, please report them responsibly to the maintainers.
+This endpoint now returns `410 Gone`.

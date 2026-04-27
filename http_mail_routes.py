@@ -36,6 +36,9 @@ def register_http_mail_routes(app):
         text = re.sub(r'[<>&"\']', '', text)
         return text[:max_len]
 
+    def _resolve_mailbox(address: str):
+        return http_mail_storage.get_mailbox(address) or http_mail_storage.get_mailbox_by_alias(address)
+
     def _render_http_mail(**kwargs):
         defaults = {
             "path": app.config["path"],
@@ -109,7 +112,7 @@ def register_http_mail_routes(app):
             return ('', 404)
         _ensure_session()
 
-        mailbox = http_mail_storage.get_mailbox(address)
+        mailbox = _resolve_mailbox(address)
         if mailbox is None:
             if request.is_json:
                 return jsonify({"error": "Mailbox not found"}), 404
@@ -186,7 +189,7 @@ def register_http_mail_routes(app):
             return ('', 404)
         _ensure_session()
 
-        mailbox = http_mail_storage.get_mailbox(address)
+        mailbox = _resolve_mailbox(address)
         if mailbox is None:
             if request.headers.get("Accept", "").startswith("application/json"):
                 return jsonify({"error": "Mailbox not found"}), 404
@@ -220,7 +223,7 @@ def register_http_mail_routes(app):
         if url_addition != app.config["path"]:
             return ('', 404)
         _ensure_session()
-        mailbox = http_mail_storage.get_mailbox(address)
+        mailbox = _resolve_mailbox(address)
         if mailbox is None:
             if request.is_json:
                 return jsonify({"error": "Mailbox not found"}), 404
@@ -230,8 +233,6 @@ def register_http_mail_routes(app):
                 inbox_address=address,
                 initial_section="read",
             ), 404
-
-        if request.is_json:
 
         if request.is_json:
             read_key = (request.get_json() or {}).get("read_key", "")
@@ -273,7 +274,18 @@ def register_http_mail_routes(app):
         else:
             read_key = request.form.get("read_key", "")
 
-        deleted = http_mail_storage.delete_mailbox(address, read_key)
+        mailbox = _resolve_mailbox(address)
+        if mailbox is None:
+            if request.is_json:
+                return jsonify({"error": "Mailbox not found"}), 404
+            return _render_http_mail(
+                error="Mailbox not found",
+                inbox_address=address,
+                inbox_read_key=read_key,
+                initial_section="read",
+            ), 404
+
+        deleted = http_mail_storage.delete_mailbox(mailbox.address, read_key)
 
         if not deleted:
             if request.is_json:

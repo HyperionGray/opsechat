@@ -31,7 +31,21 @@ from app_factory import create_app
 # ---------------------------------------------------------------------------
 
 def _fresh_app():
-    app = create_app()
+    feature_flags = {
+        "OPSECHAT_ENABLE_EXTENDED_SERVICES": "1",
+        "OPSECHAT_ENABLE_EMAIL_STACK": "1",
+        "OPSECHAT_ENABLE_HTTP_MAIL": "1",
+    }
+    previous = {name: os.environ.get(name) for name in feature_flags}
+    try:
+        os.environ.update(feature_flags)
+        app = create_app()
+    finally:
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
     app.config["TESTING"] = True
     app.config["SECRET_KEY"] = "pytest-secret"
     return app

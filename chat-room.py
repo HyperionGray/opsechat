@@ -14,6 +14,7 @@ Usage:
 import sys
 import argparse
 from app_factory import create_app
+from tor_transport import get_tor_control_endpoint, tor_ingress_required
 from utils import id_generator
 
 
@@ -33,7 +34,7 @@ Security Features:
   - In-memory only (no disk storage)
   - Memory overwriting on deletion
   - Randomized usernames with color distinction
-  - Optional E2E encryption (Web Crypto API)
+  - Closed-roster OpenPGP room bootstrap
   - Text-only (no media)
         """
     )
@@ -58,6 +59,10 @@ Security Features:
     )
     
     args = parser.parse_args()
+
+    if tor_ingress_required() and not args.tor:
+        print("[*] OPSECHAT_REQUIRE_TOR=1 detected; forcing Tor hidden service mode")
+        args.tor = True
     
     # Create Flask app
     app = create_app()
@@ -74,7 +79,8 @@ Security Features:
             print('[*] Connecting to Tor...')
             print('[*] Creating ephemeral hidden service, this may take a minute or two')
             
-            with Controller.from_port(port=9051) as controller:
+            tor_host, tor_port = get_tor_control_endpoint()
+            with Controller.from_port(address=tor_host, port=tor_port) as controller:
                 controller.authenticate()
                 
                 result = controller.create_ephemeral_hidden_service(
@@ -84,16 +90,18 @@ Security Features:
                 if result.service_id:
                     hostname = result.service_id + ".onion"
                     app.config['hostname'] = result.service_id
-                    app.config['full_path'] = f"{hostname}/{path}"
+                    app.config['full_path'] = f"{hostname}/chat"
                     
                     print(f'\n{"="*60}')
                     print(f'🧅 Tor Hidden Service Created!')
                     print(f'{"="*60}')
-                    print(f'\n📍 Main URL: http://{hostname}/{path}')
+                    print(f'\n🧭 Operator Console: http://{hostname}/')
                     print(f'💬 Chat Rooms: http://{hostname}/chat')
+                    if app.config.get("OPSECHAT_ENABLE_LEGACY_CHAT"):
+                        print(f'🕳 Legacy Chat: http://{hostname}/{path}')
                     print(f'\n⚠️  Share these URLs only with trusted contacts')
                     print(f'⏱️  Messages auto-delete after 3 minutes')
-                    print(f'🔒 Enable E2E encryption in room settings')
+                    print(f'🔒 Closed-roster OpenPGP rooms require explicit roster bootstrap before the first message')
                     print(f'\n{"="*60}')
                     print('\nPress Ctrl+C to stop the server\n')
                     
@@ -102,7 +110,7 @@ Security Features:
                     finally:
                         print("\n[*] Shutting down hidden service...")
                         try:
-                            with Controller.from_port(port=9051) as ctrl:
+                            with Controller.from_port(address=tor_host, port=tor_port) as ctrl:
                                 ctrl.authenticate()
                                 ctrl.remove_ephemeral_hidden_service(result.service_id)
                         except Exception as e:
@@ -118,8 +126,8 @@ Security Features:
         except SocketError as e:
             print(f"[!] Tor proxy or Control Port not running: {e}")
             print("Try starting the Tor Browser or Tor daemon:")
-            print("  - Ensure ControlPort 9051 is configured")
-            print("  - Run: tor --ControlPort 9051 --CookieAuthentication 1")
+            print("  - Ensure the configured Tor control endpoint is reachable")
+            print("  - Default: tor --ControlPort 9051 --CookieAuthentication 1")
             sys.exit(1)
         except Exception as e:
             print(f"[!] Error setting up Tor: {e}")
@@ -127,16 +135,18 @@ Security Features:
     else:
         # Local mode
         app.config['hostname'] = f"{args.host}:{args.port}"
-        app.config['full_path'] = f"http://{args.host}:{args.port}/{path}"
+        app.config['full_path'] = f"http://{args.host}:{args.port}/chat"
         
         print(f'\n{"="*60}')
         print(f'💻 Local OpSecChat Server Started')
         print(f'{"="*60}')
-        print(f'\n📍 Main URL: http://{args.host}:{args.port}/{path}')
+        print(f'\n🧭 Operator Console: http://{args.host}:{args.port}/')
         print(f'💬 Chat Rooms: http://{args.host}:{args.port}/chat')
+        if app.config.get("OPSECHAT_ENABLE_LEGACY_CHAT"):
+            print(f'🕳 Legacy Chat: http://{args.host}:{args.port}/{path}')
         print(f'\n⚠️  For maximum security, use --tor flag')
         print(f'⏱️  Messages auto-delete after 3 minutes')
-        print(f'🔒 Enable E2E encryption in room settings')
+        print(f'🔒 Closed-roster OpenPGP rooms require explicit roster bootstrap before the first message')
         print(f'\n{"="*60}')
         print('\nPress Ctrl+C to stop the server\n')
         

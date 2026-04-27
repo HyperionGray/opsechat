@@ -16,8 +16,9 @@
                 <li>Messages disappear after 3 minutes</li>
                 <li>In-memory only - no disk storage</li>
                 <li>Memory overwritten on message deletion</li>
-                <li>Randomized usernames with color distinction</li>
-                <li>Optional E2E encryption with Web Crypto API</li>
+                <li>Explicit closed-roster OpenPGP room bootstrap</li>
+                <li>Signed and encrypted room messages to the full roster</li>
+                <li>Local verification states for known, changed, and verified keys</li>
                 <li>Text-only - no media or file sharing</li>
                 <li>Tor hidden service ready</li>
             </ul>
@@ -27,10 +28,10 @@
             <h2>How It Works</h2>
             <ul>
                 <li>Click "Create New Chat Room" below</li>
-                <li>Share the room URL with your contacts</li>
-                <li>Chat securely and anonymously</li>
-                <li>Messages auto-delete after 3 minutes</li>
-                <li>Enable E2E encryption in room settings</li>
+                <li>Generate or import your local OpenPGP identity</li>
+                <li>Add every planned member and verify fingerprints out of band</li>
+                <li>Lock epoch 1 before the first room message</li>
+                <li>Share the room URL only after the roster is locked</li>
             </ul>
         </div>
         
@@ -43,6 +44,7 @@
             <h2 class="warning">⚠ Security Reminder</h2>
             <ul>
                 <li>Only share room URLs with trusted contacts</li>
+                <li>This alpha release keeps room rosters immutable after bootstrap</li>
                 <li>Use Tor Browser for maximum anonymity</li>
                 <li>Rooms expire after 1 hour of inactivity</li>
                 <li>Do not share sensitive credentials</li>

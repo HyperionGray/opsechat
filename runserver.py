@@ -10,28 +10,20 @@ Original file was 906 lines, refactored to ~70 lines for better maintainability.
 """
 
 import sys
-import os
 import logging
 from stem.control import Controller
 from stem import SocketError
 from app_factory import create_app
+from tor_transport import get_tor_control_endpoint, tor_ingress_required
 from utils import id_generator
 
 # Configure logging
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
-
-def _get_tor_endpoint():
-    """Return Tor control host/port from environment."""
-    host = os.environ.get("TOR_CONTROL_HOST", "127.0.0.1")
-    port = int(os.environ.get("TOR_CONTROL_PORT", "9051"))
-    return host, port
-
-
 def setup_tor_configuration():
     """Setup Tor hidden service configuration"""
-    tor_host, tor_port = _get_tor_endpoint()
+    tor_host, tor_port = get_tor_control_endpoint()
     try:
         with Controller.from_port(address=tor_host, port=tor_port) as controller:
             controller.authenticate()
@@ -53,9 +45,13 @@ def setup_tor_configuration():
     except SocketError as e:
         print(f"[!] Tor proxy or Control Port are not running: {e}")
         print("Try starting the Tor Browser or Tor daemon and ensure the ControlPort is open.")
+        if tor_ingress_required():
+            raise RuntimeError("Tor ingress is required but the hidden service could not be created") from e
         return "localhost", None
     except Exception as e:
         print(f"Warning: Tor configuration error: {e}")
+        if tor_ingress_required():
+            raise RuntimeError("Tor ingress is required but the hidden service could not be created") from e
         return "localhost", None
 
 
@@ -78,7 +74,11 @@ def main():
         return
     
     # Production mode with Tor
-    hostname, service_id = setup_tor_configuration()
+    try:
+        hostname, service_id = setup_tor_configuration()
+    except RuntimeError as exc:
+        print(f"[!] {exc}")
+        sys.exit(1)
     
     # Configure application
     app.config['path'] = path
@@ -94,7 +94,7 @@ def main():
         if service_id:
             print(" * Shutting down our hidden service")
             try:
-                tor_host, tor_port = _get_tor_endpoint()
+                tor_host, tor_port = get_tor_control_endpoint()
                 with Controller.from_port(address=tor_host, port=tor_port) as controller:
                     controller.authenticate()
                     controller.remove_ephemeral_hidden_service(service_id)

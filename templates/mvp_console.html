@@ -28,15 +28,19 @@
             <dd>{{ manifest.hostname }}</dd>
           </div>
           <div>
-            <dt>Secret path</dt>
-            <dd>{{ manifest.secret_path or 'Not assigned yet' }}</dd>
+            <dt>Deployment profile</dt>
+            <dd>{{ manifest.profile }}</dd>
           </div>
           <div>
-            <dt>Full service path</dt>
-            <dd>{{ manifest.full_service_path or 'Bootstrap pending' }}</dd>
+            <dt>Extended services</dt>
+            <dd>{{ 'Enabled (restricted)' if manifest.extended_services_enabled else 'Disabled by default' }}</dd>
           </div>
           <div>
-            <dt>API manifest</dt>
+            <dt>Legacy chat</dt>
+            <dd>{{ 'Enabled (restricted)' if manifest.legacy_chat_enabled else 'Disabled by default' }}</dd>
+          </div>
+          <div>
+            <dt>Public manifest</dt>
             <dd><a href="/console/api">/console/api</a></dd>
           </div>
         </dl>
@@ -49,7 +53,7 @@
           <li>No attachments or media handling in MVP.</li>
           <li>Ephemeral state only; user messages stay in memory.</li>
           <li>Short retention windows with explicit destructive cleanup.</li>
-          <li>Tor remains the primary anonymity transport for v1.</li>
+          <li>Restricted services are opt-in and intentionally omitted from the public console.</li>
         </ul>
       </article>
     </section>
@@ -92,11 +96,10 @@
         <h2>Suggested workflow</h2>
         <ol class="bullets numbered">
           <li>Use <a href="/chat">secure chat rooms</a> for the primary communications path.</li>
-          {% if manifest.secret_path %}
-          <li>Use <a href="/{{ manifest.secret_path }}/mail">HTTP mail</a> when the sender only needs a one-way inbox.</li>
-          <li>Use <a href="/{{ manifest.secret_path }}/email/burner">burner addresses</a> for throwaway public-facing receipt.</li>
+          {% if manifest.extended_services_enabled %}
+          <li>Extended services are enabled, but their secret-path entrypoints are intentionally not disclosed here.</li>
           {% else %}
-          <li>Wait for the service path to finish bootstrapping before using mail features.</li>
+          <li>Keep the runtime in core mode until the restricted mail stack is fully hardened.</li>
           {% endif %}
           <li>Use <a href="/health">/health</a> and <a href="/chat/stats">/chat/stats</a> for operational monitoring.</li>
         </ol>

@@ -61,6 +61,10 @@ services:
     environment:
       TOR_CONTROL_PORT: "9051"
       TOR_CONTROL_HOST: tor
+      TOR_SOCKS_PORT: "9050"
+      TOR_SOCKS_HOST: tor
+      OPSECHAT_REQUIRE_TOR: "1"
+      OPSECHAT_FORCE_TOR_EGRESS: "1"
       FLASK_DEBUG: "0"
       PYTHONDONTWRITEBYTECODE: "1"
     volumes:

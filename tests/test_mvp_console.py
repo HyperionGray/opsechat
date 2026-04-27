@@ -29,17 +29,17 @@ def test_console_route_returns_200():
 def test_root_redirects_to_console():
     client = _app_with_path().test_client()
     response = client.get("/")
-    assert response.status_code == 302
-    assert response.headers["Location"].endswith("/console")
+    assert response.status_code == 200
+    assert b"Operator Console" in response.data
 
 
-def test_console_links_secret_path_services():
+def test_console_does_not_disclose_secret_path_services_by_default():
     client = _app_with_path().test_client()
     response = client.get("/console")
     body = response.data.decode()
-    assert "/secpath/mail" in body
-    assert "/secpath/email/burner" in body
     assert "/chat" in body
+    assert "secpath" not in body
+    assert "/<secret-path>/" not in body
 
 
 def test_console_api_returns_service_manifest():
@@ -47,8 +47,10 @@ def test_console_api_returns_service_manifest():
     response = client.get("/console/api")
     assert response.status_code == 200
     data = response.get_json()
-    assert data["secret_path"] == "secpath"
     assert data["hostname"] == "consolehost"
+    assert data["profile"] == "core"
+    assert data["extended_services_enabled"] is False
     assert any(service["name"] == "secure-chat" for service in data["services"])
-    assert any(service["name"] == "http-mail" for service in data["services"])
-    assert any(service["name"] == "burner-receive" for service in data["services"])
+    assert any(service["name"] == "health" for service in data["services"])
+    assert not any(service["name"] == "http-mail" for service in data["services"])
+    assert not any(service["name"] == "burner-receive" for service in data["services"])
