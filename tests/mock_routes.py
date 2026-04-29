@@ -25,6 +25,12 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     def generate_room_username():
         number = secrets.randbelow(10000)
         return f"{secrets.choice(adjectives)}{secrets.choice(nouns)}{number:04d}"
+
+    def sanitize_xss_tokens(message_text: str) -> str:
+        """Strip common event-handler and javascript URL tokens from text input."""
+        sanitized = re.sub(r"(?i)on[a-zA-Z]{1,32}\s*=", "", message_text)
+        sanitized = re.sub(r"(?i)javascript:", "", sanitized)
+        return sanitized
     
     def check_older_than(chat_dic, secs_to_live=180):
         """Check if a chat message is older than specified seconds"""
@@ -211,8 +217,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
                 message_text = request.form["dropdata"].strip()
                 message_text = filter_to_ascii(message_text)
                 message_text = sanitize_emojis(message_text)
-                message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
-                message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
+                message_text = sanitize_xss_tokens(message_text)
                 message_text = re.sub(r"[<>&\"']", '', message_text)
                 chat = {
                     "msg": message_text,
@@ -403,8 +408,8 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             return jsonify({"error": "No roster members provided"}), 400
         try:
             serialized = state.bootstrap(members)
-        except (TypeError, ValueError) as exc:
-            return jsonify({"error": str(exc)}), 400
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid roster payload"}), 400
         return jsonify({"success": True, **serialized}), 200
 
     @app.route('/chat/room/<string:room_id>/key', methods=["GET"])
@@ -438,8 +443,8 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
                     return jsonify({"error": "Room not found"}), 404
                 try:
                     message_data = state.validate_posted_envelope(data)
-                except (TypeError, ValueError) as exc:
-                    return jsonify({"error": str(exc)}), 400
+                except (TypeError, ValueError):
+                    return jsonify({"error": "Invalid message envelope"}), 400
                 message_data.update({
                     "user_id": session["_id"],
                     "username": session.get("username", "Anonymous"),
@@ -453,8 +458,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
                     return jsonify({"error": "Empty message"}), 400
                 message_text = filter_to_ascii(message_text)
                 message_text = sanitize_emojis(message_text)
-                message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
-                message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
+                message_text = sanitize_xss_tokens(message_text)
                 message_text = re.sub(r"[<>&\"']", '', message_text)
                 chat_rooms[room_id].append({
                     "message_type": "legacy_plaintext_test_only",
@@ -522,18 +526,17 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         if request.method == "POST":
             data = request.get_json()
             if data and "message" in data:
-                    message_text = data["message"].strip()
-                    if message_text:
-                        message_text = filter_to_ascii(message_text)
-                        message_text = sanitize_emojis(message_text)
-                        message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
-                        message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
-                        message_text = re.sub(r"[<>&\"']", '', message_text)
-                        chat = {
-                            "msg": message_text,
-                            "timestamp": datetime.datetime.now(),
-                            "username": session["_id"],
-                            "color": session["color"]
+                message_text = data["message"].strip()
+                if message_text:
+                    message_text = filter_to_ascii(message_text)
+                    message_text = sanitize_emojis(message_text)
+                    message_text = sanitize_xss_tokens(message_text)
+                    message_text = re.sub(r"[<>&\"']", '', message_text)
+                    chat = {
+                        "msg": message_text,
+                        "timestamp": datetime.datetime.now(),
+                        "username": session["_id"],
+                        "color": session["color"]
                     }
                     chatlines.append(chat)
         
