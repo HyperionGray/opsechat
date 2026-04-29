@@ -13,6 +13,7 @@ import os
 import datetime
 import string
 import random
+from werkzeug.serving import WSGIRequestHandler
 
 # Add parent directory to Python path for imports
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -87,7 +88,7 @@ except ImportError as e:
 def remove_headers(response):
     # Strip framework-identifying headers and avoid version leakage
     response.headers.pop("Server", None)
-    response.headers["Server"] = "OpSecChat"
+    response.headers["Server"] = ""
     response.headers["Date"] = ""
     return response
 
@@ -114,6 +115,9 @@ def health_check():
 
 def main():
     """Main entry point for mock server"""
+    WSGIRequestHandler.server_version = "OpSecChat"
+    WSGIRequestHandler.sys_version = ""
+
     # Set up mock configuration
     app.config["hostname"] = "localhost"
     app.config["path"] = "test-path-12345"

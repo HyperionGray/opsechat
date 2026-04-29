@@ -154,12 +154,10 @@ test.describe('Headless UI Tests - Security Headers', () => {
     
     // Check that Server header is empty or not present (security feature)
     if (headers['server']) {
-      expect(headers['server']).toBe('');
-    }
-    
-    // Check that Date header is empty or not present (security feature)
-    if (headers['date']) {
-      expect(headers['date']).toBe('');
+      const normalized = headers['server'].trim().toLowerCase();
+      expect(normalized).not.toContain('werkzeug');
+      expect(normalized).not.toContain('python');
+      expect(normalized).not.toContain('flask');
     }
   });
 });

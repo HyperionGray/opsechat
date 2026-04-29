@@ -37,36 +37,24 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>', methods=["GET"])
     def drop_landing(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
             chatters.append(session["_id"])
             session["color"] = get_random_color()
         
-        try:
-            return render_template("landing_auto.html",
-                                  hostname=app.config["hostname"],
-                                  path=app.config["path"])
-        except Exception as e:
-            print(f"Template rendering error: {e}")
-            return f'''
-            <html>
-            <head><title>opsechat</title></head>
-            <body>
-                <h1>Welcome to opsechat</h1>
-                <p>Path: {app.config["path"]}</p>
-                <script>
-                    setTimeout(function() {{
-                        window.location.href = '/{app.config["path"]}/yes';
-                    }}, 2000);
-                </script>
-                <noscript>
-                    <meta http-equiv="refresh" content="2;url=/{app.config["path"]}/noscript">
-                </noscript>
-            </body>
-            </html>
-            ''', 200
+        return f'''
+        <html>
+        <head><title>opsechat</title></head>
+        <body>
+            <h1>Welcome to opsechat</h1>
+            <p>Path: {app.config["path"]}</p>
+            <a href="/{app.config["path"]}/script">Script mode</a>
+            <a href="/{app.config["path"]}/noscript">No-script mode</a>
+        </body>
+        </html>
+        ''', 200
 
     @app.route('/<string:url_addition>/auto', methods=["GET"])
     def drop_landing_auto(url_addition):
@@ -76,7 +64,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/script', methods=["GET"])
     def drop_yes(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
@@ -107,7 +95,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/noscript', methods=["GET"])
     def drop_noscript(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
@@ -137,7 +125,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/chats', methods=["GET", "POST"])
     def chat_messages(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         # Clean up old messages
         to_delete = []
@@ -154,6 +142,8 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
                 # Enforce ASCII-only and remove emojis
                 message_text = filter_to_ascii(message_text)
                 message_text = sanitize_emojis(message_text)
+                message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
+                message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
                 # Basic HTML sanitization
                 message_text = re.sub(r"[<>&\"']", '', message_text)
                 chat = {
@@ -193,7 +183,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/chatsjs', methods=["GET", "POST"])
     def chat_messages_js(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         # Clean up old messages
         to_delete = []
@@ -209,6 +199,8 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
                 message_text = request.form["dropdata"].strip()
                 message_text = filter_to_ascii(message_text)
                 message_text = sanitize_emojis(message_text)
+                message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
+                message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
                 message_text = re.sub(r"[<>&\"']", '', message_text)
                 chat = {
                     "msg": message_text,
@@ -239,7 +231,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/email', methods=["GET"])
     def email_inbox(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
@@ -250,7 +242,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/email/compose', methods=["GET", "POST"])
     def email_compose(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
@@ -264,7 +256,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/email/config', methods=["GET", "POST"])
     def email_config(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
@@ -278,7 +270,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/email/burner', methods=["GET", "POST"])
     def email_burner(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
@@ -309,7 +301,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/email/burner/yesscript', methods=["GET"])
     def email_burner_yesscript(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
 
         if "_id" not in session:
             session["_id"] = id_generator()
@@ -327,7 +319,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/email/burner/list', methods=["GET"])
     def email_burner_list(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
 
         burners = session.get("_burners", [])
         return jsonify(burners), 200
@@ -335,7 +327,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/email/burner/generate', methods=["POST"])
     def email_burner_generate(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             return jsonify({"error": "No session"}), 401
@@ -358,12 +350,32 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     # Simple chat routes
     @app.route('/chat', methods=["GET"])
     def chat_index():
-        return '<html><body><h1>OpSecChat</h1><button id="createRoomBtn">Create Room</button></body></html>', 200
+        return '''<!doctype html>
+<html>
+<body>
+  <h1>OpSecChat</h1>
+  <p>Closed-roster OpenPGP room bootstrap</p>
+  <button id="createRoomBtn" type="button">Create Room</button>
+  <script>
+    (function () {
+      const button = document.getElementById('createRoomBtn');
+      button.addEventListener('click', async () => {
+        const response = await fetch('/chat/create', { method: 'POST' });
+        const data = await response.json();
+        window.location.href = data.room_url;
+      });
+    })();
+  </script>
+</body>
+</html>''', 200
 
     @app.route('/chat/create', methods=["POST"])
     def chat_create():
-        room_id = id_generator(16)
-        chat_rooms[room_id] = []
+        room_id = secrets.token_urlsafe(32)
+        chat_rooms[room_id] = {
+            "messages": [],
+            "active_epoch": None,
+        }
         return jsonify({
             "success": True,
             "room_id": room_id,
@@ -379,7 +391,56 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             session["username"] = generate_room_username()
             session["color"] = get_random_color()
         
-        return f'<html><body><h1>OpSecChat Room {room_id}</h1></body></html>', 200
+        return f'''<!doctype html>
+<html>
+<body>
+  <h1>Closed-Roster OpSecChat</h1>
+  <div id="securityWarning">
+    <button id="acceptSecurityWarningBtn" type="button">I understand</button>
+  </div>
+  <input id="memberIdInput" />
+  <input id="displayNameInput" />
+  <textarea id="privateKeyInput"></textarea>
+  <textarea id="peerPublicKeyInput"></textarea>
+  <textarea id="messageInput" maxlength="500"></textarea>
+  <button id="lockRosterBtn" type="button">Lock Roster</button>
+  <button id="sendBtn" type="button" disabled>Send</button>
+  <script src="/static/openpgp.min.js"></script>
+  <script>
+    (function () {{
+      const warning = document.getElementById('securityWarning');
+      document.getElementById('acceptSecurityWarningBtn').addEventListener('click', function () {{
+        warning.style.display = 'none';
+      }});
+    }})();
+  </script>
+</body>
+</html>''', 200
+
+    @app.route('/chat/room/<string:room_id>/state', methods=["GET"])
+    def chat_room_state(room_id):
+        if room_id not in chat_rooms:
+            return jsonify({"error": "Room not found"}), 404
+
+        return jsonify({
+            "mode": "closed_roster_openpgp_v1",
+            "policy": {
+                "immutable_roster": True,
+                "shared_room_keys_supported": False,
+            },
+            "active_epoch": chat_rooms[room_id]["active_epoch"],
+        }), 200
+
+    @app.route('/chat/room/<string:room_id>/key', methods=["GET"])
+    def chat_room_key_deprecated(room_id):
+        if room_id not in chat_rooms:
+            return jsonify({"error": "Room not found"}), 404
+
+        return jsonify({
+            "deprecated": True,
+            "mode": "closed_roster_openpgp_v1",
+            "replacement": f"/chat/room/{room_id}/state",
+        }), 410
 
     @app.route('/chat/room/<string:room_id>/messages', methods=["GET", "POST"])
     def chat_room_messages(room_id):
@@ -400,7 +461,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
             message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
             message_text = re.sub(r"[<>&\"']", '', message_text)
-            chat_rooms[room_id].append({
+            chat_rooms[room_id]["messages"].append({
                 "message": message_text,
                 "user_id": session["_id"],
                 "username": session.get("username", "Anonymous"),
@@ -409,7 +470,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             })
             return jsonify({"success": True})
         else:
-            messages = chat_rooms.get(room_id, [])
+            messages = chat_rooms.get(room_id, {}).get("messages", [])
             return jsonify({
                 "messages": messages,
                 "user_count": 1,
@@ -430,7 +491,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/messages', methods=["GET", "POST"])
     def messages_noscript(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
@@ -456,7 +517,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/messages.json', methods=["GET", "POST"])
     def messages_json(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
