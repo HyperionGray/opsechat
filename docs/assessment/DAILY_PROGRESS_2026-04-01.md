@@ -54,8 +54,8 @@ The repository direction is still **stabilization + production hardening** rathe
 ## Quick Wins (1–2 days each)
 
 - [ ] Add `docs/architecture/DECISIONS.md` with first 3 decisions and rationale.
-- [ ] Add a `/version` JSON endpoint to pair with `/health`.
-- [ ] Add a minimal dashboard placeholder route/template with links to existing features.
+- [x] Add a `/version` JSON endpoint to pair with `/health`.
+- [x] Add a minimal dashboard placeholder route/template with links to existing features.
 - [ ] Add acceptance criteria checklists to auth and key-management TODO sections.
 
 ## Short Sprint (3–5 days)
