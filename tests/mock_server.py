@@ -87,7 +87,7 @@ except ImportError as e:
 def remove_headers(response):
     # Strip framework-identifying headers and avoid version leakage
     response.headers.pop("Server", None)
-    response.headers["Server"] = "OpSecChat"
+    response.headers["Server"] = ""
     response.headers["Date"] = ""
     return response
 
