@@ -212,7 +212,6 @@ class ClosedRosterState:
 
         return {
             "message_type": OPENPGP_ENVELOPE_TYPE,
-            "envelope_type": OPENPGP_ENVELOPE_TYPE,
             "room_id": self._active_epoch["room_id"],
             "epoch": self._active_epoch["epoch"],
             "sender_member_id": sender_member.member_id,
