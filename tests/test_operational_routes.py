@@ -3,24 +3,24 @@ Tests for operational endpoints registered by app_factory.
 """
 
 from flask import Flask
+import pytest
 
 from app_factory import register_operational_routes
 
 
-def _build_app():
+@pytest.fixture
+def client():
     app = Flask(__name__)
     register_operational_routes(app)
-    return app
+    return app.test_client()
 
 
-def test_version_endpoint_returns_200():
-    client = _build_app().test_client()
+def test_version_endpoint_returns_200(client):
     response = client.get("/version")
     assert response.status_code == 200
 
 
-def test_version_endpoint_returns_json_version_string():
-    client = _build_app().test_client()
+def test_version_endpoint_returns_json_version_string(client):
     response = client.get("/version")
     data = response.get_json()
     assert data is not None
@@ -29,8 +29,7 @@ def test_version_endpoint_returns_json_version_string():
     assert data["version"] != ""
 
 
-def test_health_endpoint_still_registered_after_refactor():
-    client = _build_app().test_client()
+def test_health_endpoint_still_registered_after_refactor(client):
     response = client.get("/health")
     data = response.get_json()
     assert response.status_code == 200
@@ -38,8 +37,7 @@ def test_health_endpoint_still_registered_after_refactor():
     assert "status" in data
 
 
-def test_chat_stats_endpoint_still_registered_after_refactor():
-    client = _build_app().test_client()
+def test_chat_stats_endpoint_still_registered_after_refactor(client):
     response = client.get("/chat/stats")
     data = response.get_json()
     assert response.status_code == 200
