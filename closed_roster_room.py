@@ -115,8 +115,6 @@ class ClosedRosterState:
             raise TypeError("message payload must be an object")
 
         active_epoch = self._active_epoch
-        if active_epoch is None:
-            raise RuntimeError("closed roster internal state unavailable")
 
         envelope_type = payload.get("envelope_type")
         if envelope_type != OPENPGP_ENVELOPE_TYPE:
