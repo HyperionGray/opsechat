@@ -11,7 +11,7 @@ import hashlib
 from typing import Any
 
 
-OPENPGP_ENVELOPE_TYPE = "closed-roster-openpgp-v1"
+OPENPGP_ENVELOPE_TYPE = "closed_roster_openpgp_v1"
 ROSTER_HASH_DOMAIN = "opsechat-roster-v1"
 
 

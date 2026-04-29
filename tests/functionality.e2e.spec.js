@@ -209,8 +209,8 @@ test.describe('Chatroom Functionality Tests', () => {
 });
 
 test.describe('Secret URL Access Tests', () => {
-  test('should reject access with wrong URL path', async ({ page }) => {
-    const response = await page.goto('/wrong-path-12345');
+  test('should reject access with wrong URL path', async ({ request }) => {
+    const response = await request.get('/wrong-path-12345');
     
     // Should return 404
     expect(response?.status()).toBe(404);
@@ -223,10 +223,10 @@ test.describe('Secret URL Access Tests', () => {
     expect(response?.status()).toBe(200);
   });
 
-  test('should protect email routes with correct path', async ({ page }) => {
+  test('should protect email routes with correct path', async ({ page, request }) => {
     // Wrong path should fail
-    const wrongResponse = await page.goto('/wrong-path/email');
-    expect(wrongResponse?.status()).toBe(404);
+    const wrongResponse = await request.get('/wrong-path/email');
+    expect(wrongResponse.status()).toBe(404);
     
     // Correct path should work
     const rightResponse = await page.goto('/test-path-12345/email');

@@ -209,6 +209,8 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
                 message_text = request.form["dropdata"].strip()
                 message_text = filter_to_ascii(message_text)
                 message_text = sanitize_emojis(message_text)
+                message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
+                message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
                 message_text = re.sub(r"[<>&\"']", '', message_text)
                 chat = {
                     "msg": message_text,
@@ -358,7 +360,20 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     # Simple chat routes
     @app.route('/chat', methods=["GET"])
     def chat_index():
-        return '<html><body><h1>OpSecChat</h1><button id="createRoomBtn">Create Room</button></body></html>', 200
+        return (
+            "<html><body>"
+            "<h1>OpSecChat</h1>"
+            "<p>Closed-roster OpenPGP room bootstrap</p>"
+            "<button id='createRoomBtn'>Create Room</button>"
+            "<script>"
+            "document.getElementById('createRoomBtn').addEventListener('click', async () => {"
+            "  const response = await fetch('/chat/create', { method: 'POST' });"
+            "  const data = await response.json();"
+            "  if (data && data.room_url) { window.location.href = data.room_url; }"
+            "});"
+            "</script>"
+            "</body></html>"
+        ), 200
 
     @app.route('/chat/create', methods=["POST"])
     def chat_create():
@@ -378,8 +393,49 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             session["_id"] = id_generator(16)
             session["username"] = generate_room_username()
             session["color"] = get_random_color()
-        
-        return f'<html><body><h1>OpSecChat Room {room_id}</h1></body></html>', 200
+
+        return (
+            "<html><body>"
+            "<h1>Closed-Roster OpSecChat</h1>"
+            "<div id='securityWarning'>Security warning</div>"
+            "<button id='acceptSecurityWarningBtn'>Acknowledge</button>"
+            "<input id='memberIdInput' />"
+            "<textarea id='privateKeyInput'></textarea>"
+            "<textarea id='peerPublicKeyInput'></textarea>"
+            "<button id='lockRosterBtn'>Lock Roster</button>"
+            "<textarea id='messageInput' maxlength='500'></textarea>"
+            "<button id='sendBtn' disabled>Send</button>"
+            "<script>"
+            "document.getElementById('acceptSecurityWarningBtn').addEventListener('click', () => {"
+            "  const warning = document.getElementById('securityWarning');"
+            "  if (warning) { warning.style.display = 'none'; }"
+            "});"
+            "</script>"
+            "</body></html>"
+        ), 200
+
+    @app.route('/chat/room/<string:room_id>/state', methods=["GET"])
+    def chat_room_state(room_id):
+        if room_id not in chat_rooms:
+            return jsonify({"error": "Room not found"}), 404
+        return jsonify({
+            "mode": "closed_roster_openpgp_v1",
+            "active_epoch": None,
+            "policy": {
+                "immutable_roster": True,
+                "shared_room_keys_supported": False,
+            },
+        }), 200
+
+    @app.route('/chat/room/<string:room_id>/key', methods=["GET"])
+    def chat_room_key(room_id):
+        if room_id not in chat_rooms:
+            return jsonify({"error": "Room not found"}), 404
+        return jsonify({
+            "error": "The shared room-key endpoint is retired.",
+            "deprecated": True,
+            "mode": "closed_roster_openpgp_v1",
+        }), 410
 
     @app.route('/chat/room/<string:room_id>/messages', methods=["GET", "POST"])
     def chat_room_messages(room_id):
