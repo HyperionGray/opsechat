@@ -133,11 +133,18 @@ class ClosedRosterState:
             raise ValueError("roster hash mismatch")
 
         expected_recipient_fps = sorted(member["encryption_fingerprint"] for member in members)
-        recipient_fps = sorted(self._normalize_hex(value, "recipient_encryption_fingerprint")
-                               for value in payload.get("recipient_encryption_fingerprints", []))
-        intended_fps = sorted(self._normalize_hex(value, "intended_recipient_fingerprint")
-                              for value in payload.get("intended_recipient_fingerprints", []))
-        if recipient_fps != expected_recipient_fps or intended_fps != expected_recipient_fps:
+        recipient_fingerprints = sorted(
+            self._normalize_hex(fingerprint_value, "recipient_encryption_fingerprint")
+            for fingerprint_value in payload.get("recipient_encryption_fingerprints", [])
+        )
+        intended_fingerprints = sorted(
+            self._normalize_hex(fingerprint_value, "intended_recipient_fingerprint")
+            for fingerprint_value in payload.get("intended_recipient_fingerprints", [])
+        )
+        if (
+            recipient_fingerprints != expected_recipient_fps
+            or intended_fingerprints != expected_recipient_fps
+        ):
             raise ValueError("recipient set does not match active roster")
 
         expected_recipient_key_ids = sorted(member["encryption_key_id"] for member in members)
@@ -163,8 +170,10 @@ class ClosedRosterState:
         }
 
     @staticmethod
-    def _normalize_hex(value, field_name: str, lengths=(40, 64)) -> str:
-        normalized = "".join(ch for ch in str(value or "").upper() if ch in "0123456789ABCDEF")
+    def _normalize_hex(fingerprint_value, field_name: str, lengths=(40, 64)) -> str:
+        normalized = "".join(
+            ch for ch in str(fingerprint_value or "").upper() if ch in "0123456789ABCDEF"
+        )
         if len(normalized) not in lengths:
             if len(lengths) == 1:
                 raise ValueError(f"{field_name} must be {lengths[0]} hex characters")
