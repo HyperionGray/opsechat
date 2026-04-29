@@ -1,5 +1,5 @@
 """
-Closed-roster room state helpers used by simple_chat_routes.
+Closed-roster room state management for OpenPGP-based secure chat.
 
 This module provides a small state container for immutable epoch-1 room roster
 bootstrap and payload validation for OpenPGP envelope metadata.
@@ -7,7 +7,6 @@ bootstrap and payload validation for OpenPGP envelope metadata.
 
 from __future__ import annotations
 
-import copy
 import hashlib
 from dataclasses import dataclass
 from typing import Any
@@ -47,9 +46,19 @@ class ClosedRosterState:
         self._members_by_id: dict[str, _RosterMember] = {}
 
     def serialize(self) -> dict[str, Any]:
+        active_epoch = None
+        if self._active_epoch is not None:
+            active_epoch = {
+                "room_id": self._active_epoch["room_id"],
+                "epoch": self._active_epoch["epoch"],
+                "roster_hash": self._active_epoch["roster_hash"],
+                "immutable_roster": self._active_epoch["immutable_roster"],
+                "members": [member.copy() for member in self._active_epoch["members"]],
+            }
+
         return {
             "mode": OPENPGP_ENVELOPE_TYPE,
-            "active_epoch": copy.deepcopy(self._active_epoch),
+            "active_epoch": active_epoch,
             "policy": {
                 "immutable_roster": True,
                 "shared_room_keys_supported": False,
