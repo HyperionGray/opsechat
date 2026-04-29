@@ -8,10 +8,11 @@ posted OpenPGP envelope metadata against the initialized roster.
 from __future__ import annotations
 
 import hashlib
-from typing import Dict, List
+from typing import Any, Dict, List
 
 
 OPENPGP_ENVELOPE_TYPE = "closed-roster-openpgp-v1"
+ROSTER_HASH_DOMAIN = "opsechat-roster-v1"
 
 
 class ClosedRosterState:
@@ -19,7 +20,7 @@ class ClosedRosterState:
 
     def __init__(self, room_id: str):
         self.room_id = room_id
-        self._active_epoch: Dict | None = None
+        self._active_epoch: Dict[str, Any] | None = None
 
     def bootstrap(self, members: List[Dict]) -> Dict:
         if self._active_epoch is not None:
@@ -170,7 +171,9 @@ class ClosedRosterState:
         }
 
     @staticmethod
-    def _normalize_hex(fingerprint_value, field_name: str, lengths=(40, 64)) -> str:
+    def _normalize_hex(
+        fingerprint_value: str | None, field_name: str, lengths=(40, 64)
+    ) -> str:
         normalized = "".join(
             ch for ch in str(fingerprint_value or "").upper() if ch in "0123456789ABCDEF"
         )
@@ -183,7 +186,7 @@ class ClosedRosterState:
     @staticmethod
     def _hash_roster(members: List[Dict]) -> str:
         digest = hashlib.sha256()
-        digest.update(b"opsechat-roster-v1\n")
+        digest.update(f"{ROSTER_HASH_DOMAIN}\n".encode("utf-8"))
         for member in members:
             digest.update(
                 (
