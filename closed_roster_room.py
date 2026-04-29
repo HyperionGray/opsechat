@@ -10,7 +10,7 @@ against the active room roster and normalizes accepted message records for
 
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from openpgp_room_policy import RoomEpoch, RoomMember, normalize_fingerprint
 
@@ -34,7 +34,7 @@ class ClosedRosterState:
         self._room_id = str(room_id).strip()
         if not self._room_id:
             raise ValueError("room_id must be non-empty")
-        self._active_epoch: Dict | None = None
+        self._active_epoch: Dict[str, Any] | None = None
 
     def bootstrap(self, members: List[Dict]) -> Dict:
         if self._active_epoch is not None:
@@ -42,7 +42,7 @@ class ClosedRosterState:
         if not isinstance(members, list) or not members:
             raise ValueError("members must be a non-empty list")
 
-        prepared: Dict[str, Dict] = {}
+        prepared: Dict[str, Dict[str, Any]] = {}
         room_members: List[RoomMember] = []
         for member in members:
             if not isinstance(member, dict):
@@ -184,10 +184,10 @@ class ClosedRosterState:
             "roster_hash": str(active_epoch["roster_hash"]).upper(),
             "recipient_encryption_fingerprints": sorted(recipient_fingerprints),
             "intended_recipient_fingerprints": sorted(intended_fingerprints),
-            "recipient_encryption_key_ids": sorted(recipient_key_ids),
-            "armored_message": armored_message,
             # Compatibility field retained for legacy callers/tests that still
             # read `message` from stored records. Keep this mirrored to
             # `armored_message` until those consumers are migrated.
+            "recipient_encryption_key_ids": sorted(recipient_key_ids),
+            "armored_message": armored_message,
             "message": armored_message,
         }
