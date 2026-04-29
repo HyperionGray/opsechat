@@ -65,6 +65,8 @@ def _hash_roster(members: Iterable[Dict[str, str]]) -> str:
 @dataclass
 class ClosedRosterState:
     room_id: str
+    # Populated by bootstrap(); contains room_id, epoch, immutable_roster,
+    # roster_hash, and normalized members for the active closed roster.
     _active_epoch: Dict[str, Any] | None = None
 
     def bootstrap(self, members: List[Dict[str, Any]]) -> Dict[str, Any]:
