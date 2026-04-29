@@ -186,7 +186,8 @@ class ClosedRosterState:
             "intended_recipient_fingerprints": sorted(intended_fingerprints),
             "recipient_encryption_key_ids": sorted(recipient_key_ids),
             "armored_message": armored_message,
-            # `simple_chat_routes` and existing tests expect `message` in each
-            # stored entry; for OpenPGP envelopes that value is the armored body.
+            # Compatibility field retained for legacy callers/tests that still
+            # read `message` from stored records. Keep this mirrored to
+            # `armored_message` until those consumers are migrated.
             "message": armored_message,
         }
