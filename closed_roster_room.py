@@ -173,7 +173,7 @@ class ClosedRosterState:
             "room_id": active_epoch["room_id"],
             "epoch": active_epoch["epoch"],
             "sender_member_id": sender_member_id,
-            "sender_display_name": sender_member.get("display_name", sender_member_id),
+            "sender_display_name": sender_member["display_name"],
             "sender_signing_fingerprint": sender_signing_fingerprint,
             "roster_hash": str(active_epoch["roster_hash"]).upper(),
             "recipient_encryption_fingerprints": sorted(recipient_fingerprints),
