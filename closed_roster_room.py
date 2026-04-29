@@ -1,8 +1,12 @@
 """
 Closed-roster OpenPGP room state helpers.
 
-Provides a minimal immutable roster model for epoch-1 chat rooms and
-validation for posted encrypted message envelopes.
+Provides a minimal immutable roster model for chat rooms and validation for
+posted encrypted message envelopes.
+
+"Epoch-1" refers to the initial roster snapshot for a room (the first and only
+membership epoch in this alpha model). Once bootstrapped, roster membership is
+immutable for the life of the room.
 """
 
 from __future__ import annotations
@@ -107,11 +111,11 @@ class ClosedRosterState:
         expected_recipient_fps = {m["encryption_fingerprint"] for m in epoch["members"]}
         recipient_fps = payload.get("recipient_encryption_fingerprints")
         if set(_as_string_list(recipient_fps, field_name="recipient_encryption_fingerprints")) != expected_recipient_fps:
-            raise ValueError("recipient set does not match")
+            raise ValueError("recipient set does not match: recipient_encryption_fingerprints")
 
         intended_fps = payload.get("intended_recipient_fingerprints")
         if set(_as_string_list(intended_fps, field_name="intended_recipient_fingerprints")) != expected_recipient_fps:
-            raise ValueError("recipient set does not match")
+            raise ValueError("recipient set does not match: intended_recipient_fingerprints")
 
         expected_key_ids = {m["encryption_key_id"] for m in epoch["members"]}
         key_ids = payload.get("recipient_encryption_key_ids")
