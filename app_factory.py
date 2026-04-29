@@ -149,7 +149,7 @@ def create_app():
     register_mvp_routes(app)
 
     # Health check endpoint
-    from monitoring import get_health_status, get_chat_stats, _read_version
+    from monitoring import get_health_status, get_chat_stats, get_version
 
     @app.route('/health', methods=["GET"])
     def health():
@@ -159,7 +159,7 @@ def create_app():
     def version():
         return jsonify({
             "service": "opsechat",
-            "version": _read_version(),
+            "version": get_version(),
         })
 
     # Operational stats endpoint for monitoring dashboards

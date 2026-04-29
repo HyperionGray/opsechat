@@ -94,7 +94,9 @@ class ClosedRosterState:
             raise ValueError("roster hash mismatch")
 
         sender_member_id = payload.get("sender_member_id")
-        sender = self._member_by_id(str(sender_member_id))
+        if not isinstance(sender_member_id, str) or not sender_member_id.strip():
+            raise ValueError("missing sender member id")
+        sender = self._member_by_id(sender_member_id.strip())
         if sender is None:
             raise ValueError("unknown sender member")
 
@@ -104,16 +106,16 @@ class ClosedRosterState:
 
         expected_recipient_fps = {m["encryption_fingerprint"] for m in epoch["members"]}
         recipient_fps = payload.get("recipient_encryption_fingerprints")
-        if set(_as_string_list(recipient_fps)) != expected_recipient_fps:
+        if set(_as_string_list(recipient_fps, field_name="recipient_encryption_fingerprints")) != expected_recipient_fps:
             raise ValueError("recipient set does not match")
 
         intended_fps = payload.get("intended_recipient_fingerprints")
-        if set(_as_string_list(intended_fps)) != expected_recipient_fps:
+        if set(_as_string_list(intended_fps, field_name="intended_recipient_fingerprints")) != expected_recipient_fps:
             raise ValueError("recipient set does not match")
 
         expected_key_ids = {m["encryption_key_id"] for m in epoch["members"]}
         key_ids = payload.get("recipient_encryption_key_ids")
-        if set(_as_string_list(key_ids)) != expected_key_ids:
+        if set(_as_string_list(key_ids, field_name="recipient_encryption_key_ids")) != expected_key_ids:
             raise ValueError("recipient encryption key ids do not match")
 
         armored_message = payload.get("armored_message")
@@ -157,12 +159,12 @@ def _compute_roster_hash(room_id: str, epoch: int, members: list[dict[str, str]]
     return hashlib.sha256(payload.encode("utf-8")).hexdigest().upper()
 
 
-def _as_string_list(value: Any) -> list[str]:
+def _as_string_list(value: Any, *, field_name: str) -> list[str]:
     if not isinstance(value, list) or not value:
-        return []
+        raise ValueError(f"{field_name} must be a non-empty list")
     strings: list[str] = []
     for item in value:
         if not isinstance(item, str) or not item.strip():
-            continue
+            raise ValueError(f"{field_name} contains invalid value")
         strings.append(item.strip())
     return strings

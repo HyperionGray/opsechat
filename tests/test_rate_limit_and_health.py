@@ -10,6 +10,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
+from monitoring import get_version
 from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
 
 # Shared test Flask app (avoids importing all of runserver.py)
@@ -176,7 +177,7 @@ def test_version_endpoint_returns_expected_payload():
     assert response.status_code == 200
     assert data is not None
     assert data["service"] == "opsechat"
-    assert "version" in data
+    assert data["version"] == get_version()
 
 
 def test_version_endpoint_sets_security_headers():
