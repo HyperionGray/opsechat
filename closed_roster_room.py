@@ -37,11 +37,26 @@ def _normalize_fingerprint_set(values: Iterable[str], field: str) -> Set[str]:
     return {_normalize_fingerprint(item, field) for item in values}
 
 
+def _normalize_epoch(value) -> int:
+    try:
+        epoch = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("epoch must be a positive integer") from exc
+    if epoch < 1:
+        raise ValueError("epoch must be a positive integer")
+    return epoch
+
+
 def _roster_hash(room_id: str, epoch: int, members: List[Dict[str, str]]) -> str:
     """
     Build a deterministic room roster hash.
 
-    Canonical format:
+    Expects normalized member dictionaries containing:
+    - ``member_id``
+    - ``signing_fingerprint``
+    - ``encryption_fingerprint``
+
+    Canonical hash format:
     - Domain prefix: ``opsechat-room-state-v1``
     - Room identity: ``room_id``
     - Epoch number
@@ -174,7 +189,7 @@ class ClosedRosterState:
 
         if _normalize_text(payload.get("room_id"), "room_id") != self.active_epoch["room_id"]:
             raise ValueError("room_id mismatch")
-        if int(payload.get("epoch")) != int(self.active_epoch["epoch"]):
+        if _normalize_epoch(payload.get("epoch")) != int(self.active_epoch["epoch"]):
             raise ValueError("epoch mismatch")
         if _normalize_text(payload.get("roster_hash"), "roster_hash") != self.active_epoch["roster_hash"]:
             raise ValueError("roster hash mismatch")

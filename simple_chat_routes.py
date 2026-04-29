@@ -73,6 +73,7 @@ class ChatRoom:
     
     def __init__(self, room_id):
         self.room_id = room_id
+        self.room_key = secrets.token_urlsafe(32)
         self.messages = []
         self.users = {}
         self.created_at = datetime.datetime.now()
@@ -88,8 +89,8 @@ class ChatRoom:
         self._store_message(user_id, username, color, payload)
 
     def get_room_key(self):
-        """Legacy helper retained for compatibility with existing tests."""
-        return secrets.token_urlsafe(32)
+        """Return this room's ephemeral in-memory key for legacy compatibility."""
+        return self.room_key
 
     def _store_message(self, user_id, username, color, payload):
         with self.lock:
