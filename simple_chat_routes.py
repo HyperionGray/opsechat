@@ -78,8 +78,7 @@ class ChatRoom:
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
         self.closed_roster = ClosedRosterState(room_id)
-        # Backward-compatibility token retained while legacy room-key callers are
-        # phased out in favor of closed-roster OpenPGP envelopes.
+        # Backward-compatibility token for legacy room-key callers.
         self._legacy_room_key = secrets.token_urlsafe(32)
     
     def add_message(self, user_id, username, color, message_text):
