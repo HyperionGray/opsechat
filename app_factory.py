@@ -29,7 +29,7 @@ def _env_flag(name: str, default: bool = False) -> bool:
 
 def register_operational_routes(app: Flask) -> None:
     """Register operational monitoring endpoints."""
-    from monitoring import get_health_status, get_chat_stats, _read_version
+    from monitoring import get_health_status, get_chat_stats, get_version
 
     @app.route('/health', methods=["GET"])
     def health():
@@ -37,7 +37,7 @@ def register_operational_routes(app: Flask) -> None:
 
     @app.route('/version', methods=["GET"])
     def version():
-        return jsonify({"version": _read_version()})
+        return jsonify({"version": get_version()})
 
     @app.route('/chat/stats', methods=["GET"])
     def chat_stats():

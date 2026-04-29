@@ -27,3 +27,21 @@ def test_version_endpoint_returns_json_version_string():
     assert "version" in data
     assert isinstance(data["version"], str)
     assert data["version"] != ""
+
+
+def test_health_endpoint_still_registered_after_refactor():
+    client = _build_app().test_client()
+    response = client.get("/health")
+    data = response.get_json()
+    assert response.status_code == 200
+    assert data is not None
+    assert "status" in data
+
+
+def test_chat_stats_endpoint_still_registered_after_refactor():
+    client = _build_app().test_client()
+    response = client.get("/chat/stats")
+    data = response.get_json()
+    assert response.status_code == 200
+    assert data is not None
+    assert "active_rooms" in data
