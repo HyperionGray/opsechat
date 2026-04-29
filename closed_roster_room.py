@@ -38,6 +38,19 @@ def _normalize_fingerprint_set(values: Iterable[str], field: str) -> Set[str]:
 
 
 def _roster_hash(room_id: str, epoch: int, members: List[Dict[str, str]]) -> str:
+    """
+    Build a deterministic room roster hash.
+
+    Canonical format:
+    - Domain prefix: ``opsechat-room-state-v1``
+    - Room identity: ``room_id``
+    - Epoch number
+    - Canonical member lines sorted by ``(member_id, signing_fingerprint)``
+      where each line is ``member_id|signing_fingerprint|encryption_fingerprint``.
+
+    The domain/version prefix allows future hash format changes without
+    ambiguity.
+    """
     canonical_lines = [
         f"{member['member_id']}|{member['signing_fingerprint']}|{member['encryption_fingerprint']}"
         for member in sorted(members, key=lambda m: (m["member_id"], m["signing_fingerprint"]))
@@ -66,6 +79,19 @@ class ClosedRosterState:
         }
 
     def bootstrap(self, members: List[dict]) -> dict:
+        """
+        Initialize immutable epoch-1 roster state.
+
+        Expected member object fields:
+        - required: ``member_id``, ``signing_fingerprint``,
+          ``encryption_fingerprint``, ``public_key_armored``
+        - optional (derived when absent): ``display_name``, ``signing_key_id``,
+          ``encryption_key_id``
+
+        Fingerprints must be unique and valid hex (40 or 64 chars after
+        normalization). ``public_key_armored`` must be a non-empty string
+        containing the member's ASCII-armored public key block.
+        """
         if self.active_epoch is not None:
             raise ValueError("room roster already initialized")
         if not isinstance(members, list) or not members:
