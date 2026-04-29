@@ -234,6 +234,4 @@ class ClosedRosterState:
             ),
             "recipient_encryption_key_ids": sorted(self._expected_recipient_key_ids),
             "armored_message": armored_message,
-            # Legacy message rendering path still reads `message`.
-            "message": armored_message,
         }
