@@ -76,8 +76,13 @@ class ChatRoom:
         self.messages = []
         self.users = {}
         self.created_at = datetime.datetime.now()
+        self.room_key = generate_secure_room_id(32)
         self.lock = threading.Lock()
         self.closed_roster = ClosedRosterState(room_id)
+
+    def get_room_key(self):
+        """Return room key retained for backwards-compatible unit tests."""
+        return self.room_key
     
     def add_message(self, user_id, username, color, message_text):
         """Add a legacy message record; retained for isolated unit tests."""
