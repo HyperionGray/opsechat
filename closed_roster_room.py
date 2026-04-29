@@ -7,6 +7,8 @@ bootstrap and payload validation for OpenPGP envelope metadata.
 
 from __future__ import annotations
 
+import copy
+import hashlib
 from dataclasses import dataclass
 from typing import Any
 
@@ -47,7 +49,7 @@ class ClosedRosterState:
     def serialize(self) -> dict[str, Any]:
         return {
             "mode": OPENPGP_ENVELOPE_TYPE,
-            "active_epoch": self._active_epoch,
+            "active_epoch": copy.deepcopy(self._active_epoch),
             "policy": {
                 "immutable_roster": True,
                 "shared_room_keys_supported": False,
@@ -117,7 +119,6 @@ class ClosedRosterState:
             f"{m.member_id}|{m.signing_fingerprint}|{m.encryption_fingerprint}"
             for m in canonical_members
         )
-        import hashlib
 
         roster_hash = hashlib.sha256(
             f"opsechat-roster-v1\n{roster_payload}".encode("utf-8")
