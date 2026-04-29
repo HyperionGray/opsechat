@@ -78,6 +78,7 @@ class ChatRoom:
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
         self.closed_roster = ClosedRosterState(room_id)
+        self._legacy_room_key = secrets.token_urlsafe(32)
     
     def add_message(self, user_id, username, color, message_text):
         """Add a legacy message record; retained for isolated unit tests."""
@@ -119,6 +120,10 @@ class ChatRoom:
         """Return the room's closed-roster OpenPGP state."""
         with self.lock:
             return self.closed_roster.serialize()
+
+    def get_room_key(self):
+        """Return a legacy per-room key value retained for unit-test compatibility."""
+        return self._legacy_room_key
 
     def add_encrypted_message(self, user_id, username, color, payload):
         """Validate and store a closed-roster OpenPGP envelope."""
