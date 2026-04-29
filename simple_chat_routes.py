@@ -79,7 +79,9 @@ class ChatRoom:
         self.lock = threading.Lock()
         self.closed_roster = ClosedRosterState(room_id)
         # Compatibility shim for legacy unit/integration tests that still call
-        # ChatRoom.get_room_key(); the HTTP room-key endpoint remains retired.
+        # ChatRoom.get_room_key() (tests/test_chatroom.py, tests/test_new_features.py).
+        # The HTTP /chat/room/<room_id>/key endpoint remains retired; remove this
+        # shim only after those tests and remaining legacy callers are migrated.
         self._legacy_room_key = secrets.token_urlsafe(32)
     
     def add_message(self, user_id, username, color, message_text):

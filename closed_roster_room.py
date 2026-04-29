@@ -1,5 +1,11 @@
 """
 Closed-roster OpenPGP room state used by simple chat routes.
+
+This module manages immutable epoch-1 roster bootstrap and server-side envelope
+metadata validation for the alpha closed-roster flow. It intentionally does not
+perform OpenPGP cryptography; it validates room/epoch/sender/recipient metadata
+against the active room roster and normalizes accepted message records for
+`simple_chat_routes.ChatRoom` storage.
 """
 
 from __future__ import annotations
