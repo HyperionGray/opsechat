@@ -7,6 +7,7 @@ extracted from runserver.py to improve code organization.
 
 import os
 import secrets
+from datetime import datetime, timezone
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
 try:
@@ -25,6 +26,27 @@ def _env_flag(name: str, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def register_operational_routes(app):
+    """Register health/version/operational monitoring routes."""
+    from monitoring import get_health_status, get_chat_stats
+
+    @app.route('/health', methods=["GET"])
+    def health():
+        return jsonify(get_health_status())
+
+    @app.route('/version', methods=["GET"])
+    def version():
+        health_status = get_health_status()
+        return jsonify({
+            "version": health_status.get("version", "unknown"),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+
+    @app.route('/chat/stats', methods=["GET"])
+    def chat_stats():
+        return jsonify(get_chat_stats())
 
 
 def create_app():
@@ -148,16 +170,6 @@ def create_app():
     from mvp_routes import register_mvp_routes
     register_mvp_routes(app)
 
-    # Health check endpoint
-    from monitoring import get_health_status, get_chat_stats
-
-    @app.route('/health', methods=["GET"])
-    def health():
-        return jsonify(get_health_status())
-
-    # Operational stats endpoint for monitoring dashboards
-    @app.route('/chat/stats', methods=["GET"])
-    def chat_stats():
-        return jsonify(get_chat_stats())
+    register_operational_routes(app)
     
     return app
