@@ -122,7 +122,7 @@ class ChatRoom:
             return self.closed_roster.serialize()
 
     def get_room_key(self):
-        """Return a per-room key value retained for compatibility with existing tests."""
+        """Return immutable per-room key retained for compatibility with existing tests."""
         return self._room_key
 
     def add_encrypted_message(self, user_id, username, color, payload):

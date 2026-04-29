@@ -102,11 +102,11 @@ class ClosedRosterState:
         _ensure_unique([member.member_id for member in normalized], "member ids")
         _ensure_unique(
             [member.signing_fingerprint for member in normalized],
-            "signing fingerprints",
+            "signing_fingerprints",
         )
         _ensure_unique(
             [member.encryption_fingerprint for member in normalized],
-            "encryption fingerprints",
+            "encryption_fingerprints",
         )
         _ensure_unique(
             [member.encryption_key_id for member in normalized],
