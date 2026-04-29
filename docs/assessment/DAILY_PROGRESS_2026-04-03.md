@@ -40,19 +40,19 @@ Recent PR titles follow a pattern of adding missing daily progress artifacts and
 
 ## Suggested Next Improvements
 
-## Quick Wins (1-2 days)
+### Quick Wins (1-2 days)
 
 1. Add a `/version` endpoint (+ tests) to complement `/health` for deployment diagnostics.
 2. Document acceptance criteria for auth/key-management/dashboard TODO sections to reduce implementation ambiguity.
 3. Add a lightweight release smoke checklist for compose + core routes in docs.
 
-## Incremental Feature Progress (next 1-2 weeks)
+### Incremental Feature Progress (next 1-2 weeks)
 
 1. Create auth MVP skeleton (routes/templates/tests scaffold only).
 2. Add dashboard placeholder with navigation stubs to core surfaces.
 3. Add key-management UI placeholder page with explicit non-functional status and test scaffolding.
 
-## Follow-up Hardening (after MVP scaffolds)
+### Follow-up Hardening (after MVP scaffolds)
 
 1. Repository reorganization pass aligned to `TODO.md` merge-rule goals.
 2. Load-test baseline and threshold documentation.
