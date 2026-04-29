@@ -34,9 +34,12 @@ def test_version_endpoint_returns_version_from_file():
     app = create_app()
     client = app.test_client()
     response = client.get("/version")
+    version = get_version()
 
     assert response.status_code == 200
-    assert response.get_json() == {"version": get_version()}
+    assert isinstance(version, str)
+    assert version.strip() != ""
+    assert response.get_json() == {"version": version}
 
 
 def test_version_endpoint_includes_security_headers():
