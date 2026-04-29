@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpSecChat - Dashboard</title>
+    <link rel="stylesheet" href="/static/simple-chat-index.css">
+</head>
+<body>
+    <div class="container" role="main">
+        <h1>OpSecChat Dashboard</h1>
+
+        <div class="info-box" role="region" aria-label="Dashboard status">
+            <h2>Status</h2>
+            <p>Authentication and account-aware navigation are in active implementation.</p>
+            <p>This dashboard currently provides a stable entry point to existing services.</p>
+        </div>
+
+        <div class="info-box" role="navigation" aria-label="Dashboard links">
+            <h2>Services</h2>
+            <ul>
+                <li><a href="/chat">Secure Chat Rooms</a></li>
+                <li><a href="/keys">Key Management</a></li>
+                <li><a href="/health">Health Status (JSON)</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="footer">
+        OpSecChat {{ version|default('0.8.0-alpha') }} | <a href="https://github.com/HyperionGray/opsechat">GitHub</a> | MIT License
+    </div>
+</body>
+</html>

@@ -171,6 +171,29 @@ class TestChatRoutes:
         body = response.data.decode()
         assert "closed-roster OpenPGP".lower() in body.lower()
 
+    def test_chat_index_links_to_dashboard_and_keys(self, client):
+        response = client.get("/chat")
+        assert response.status_code == 200
+        body = response.data.decode()
+        assert 'href="/dashboard"' in body
+        assert 'href="/keys"' in body
+
+    def test_dashboard_page_returns_200(self, client):
+        response = client.get("/dashboard")
+        assert response.status_code == 200
+        body = response.data.decode()
+        assert "OpSecChat Dashboard" in body
+        assert 'href="/chat"' in body
+        assert 'href="/keys"' in body
+
+    def test_keys_page_returns_200(self, client):
+        response = client.get("/keys")
+        assert response.status_code == 200
+        body = response.data.decode()
+        assert "Key Management" in body
+        assert 'href="/dashboard"' in body
+        assert 'href="/chat"' in body
+
     def test_create_room_returns_success(self, client):
         response = client.post("/chat/create")
         assert response.status_code == 200
