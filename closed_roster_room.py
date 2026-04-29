@@ -8,7 +8,7 @@ posted OpenPGP envelope metadata against the initialized roster.
 from __future__ import annotations
 
 import hashlib
-from typing import Any, Dict, List
+from typing import Any
 
 
 OPENPGP_ENVELOPE_TYPE = "closed-roster-openpgp-v1"
@@ -20,15 +20,15 @@ class ClosedRosterState:
 
     def __init__(self, room_id: str):
         self.room_id = room_id
-        self._active_epoch: Dict[str, Any] | None = None
+        self._active_epoch: dict[str, Any] | None = None
 
-    def bootstrap(self, members: List[Dict]) -> Dict:
+    def bootstrap(self, members: list[dict[str, Any]]) -> dict[str, Any]:
         if self._active_epoch is not None:
             raise ValueError("Room roster already initialized")
         if not isinstance(members, list) or not members:
             raise ValueError("No roster members provided")
 
-        normalized_members: List[Dict] = []
+        normalized_members: list[dict[str, Any]] = []
         seen_member_ids = set()
         seen_signing_fps = set()
         seen_encryption_fps = set()
@@ -95,7 +95,7 @@ class ClosedRosterState:
         }
         return self.serialize()
 
-    def serialize(self) -> Dict:
+    def serialize(self) -> dict[str, Any]:
         return {
             "mode": OPENPGP_ENVELOPE_TYPE,
             "active_epoch": self._active_epoch,
@@ -105,7 +105,7 @@ class ClosedRosterState:
             },
         }
 
-    def validate_posted_envelope(self, payload: Dict) -> Dict:
+    def validate_posted_envelope(self, payload: dict[str, Any]) -> dict[str, Any]:
         if self._active_epoch is None:
             raise ValueError("Room roster not initialized")
         if not isinstance(payload, dict):
@@ -172,19 +172,20 @@ class ClosedRosterState:
 
     @staticmethod
     def _normalize_hex(
-        fingerprint_value: str | None, field_name: str, lengths=(40, 64)
+        hex_value: str | None, field_name: str, lengths=(40, 64)
     ) -> str:
         normalized = "".join(
-            ch for ch in str(fingerprint_value or "").upper() if ch in "0123456789ABCDEF"
+            ch for ch in str(hex_value or "").upper() if ch in "0123456789ABCDEF"
         )
         if len(normalized) not in lengths:
             if len(lengths) == 1:
                 raise ValueError(f"{field_name} must be {lengths[0]} hex characters")
-            raise ValueError(f"{field_name} must be 40 or 64 hex characters")
+            formatted_lengths = " or ".join(str(length) for length in lengths)
+            raise ValueError(f"{field_name} must be {formatted_lengths} hex characters")
         return normalized
 
     @staticmethod
-    def _hash_roster(members: List[Dict]) -> str:
+    def _hash_roster(members: list[dict[str, Any]]) -> str:
         digest = hashlib.sha256()
         digest.update(f"{ROSTER_HASH_DOMAIN}\n".encode("utf-8"))
         for member in members:
