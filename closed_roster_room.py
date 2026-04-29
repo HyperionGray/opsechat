@@ -1,5 +1,10 @@
 """
 Closed-roster room state helpers for simple_chat_routes.
+
+Closed-roster rooms lock membership at epoch 1 and require every posted
+envelope to match the active roster hash and recipient set. This module keeps
+that room state normalized for API responses and validates posted envelope
+metadata before messages are accepted into in-memory chat storage.
 """
 
 from __future__ import annotations
@@ -43,6 +48,11 @@ def _normalized_key_id(value: Any, field_name: str) -> str:
     return normalized
 
 
+def _ensure_unique(values: list[str], field_name: str) -> None:
+    if len(set(values)) != len(values):
+        raise ValueError(f"{field_name} must be unique")
+
+
 class ClosedRosterState:
     """Immutable epoch-1 roster state for the current room."""
 
@@ -59,7 +69,7 @@ class ClosedRosterState:
         if not isinstance(members, list):
             raise TypeError("members must be a list")
         if not members:
-            raise ValueError("members must contain at least one member")
+            raise ValueError("members list cannot be empty")
 
         normalized: list[_RosterMember] = []
         for entry in members:
@@ -89,14 +99,19 @@ class ClosedRosterState:
                 )
             )
 
-        if len({member.member_id for member in normalized}) != len(normalized):
-            raise ValueError("member ids must be unique")
-        if len({member.signing_fingerprint for member in normalized}) != len(normalized):
-            raise ValueError("signing fingerprints must be unique")
-        if len({member.encryption_fingerprint for member in normalized}) != len(normalized):
-            raise ValueError("encryption fingerprints must be unique")
-        if len({member.encryption_key_id for member in normalized}) != len(normalized):
-            raise ValueError("encryption key ids must be unique")
+        _ensure_unique([member.member_id for member in normalized], "member ids")
+        _ensure_unique(
+            [member.signing_fingerprint for member in normalized],
+            "signing fingerprints",
+        )
+        _ensure_unique(
+            [member.encryption_fingerprint for member in normalized],
+            "encryption fingerprints",
+        )
+        _ensure_unique(
+            [member.encryption_key_id for member in normalized],
+            "encryption key ids",
+        )
 
         return sorted(normalized, key=lambda member: member.member_id)
 
@@ -155,7 +170,9 @@ class ClosedRosterState:
 
         envelope_type = str(payload.get("envelope_type", "")).strip()
         if envelope_type != OPENPGP_ENVELOPE_TYPE:
-            raise ValueError("unsupported envelope type")
+            raise ValueError(
+                f"unsupported envelope type: expected {OPENPGP_ENVELOPE_TYPE}, got {envelope_type}"
+            )
         if str(payload.get("room_id", "")).strip() != self.room_id:
             raise ValueError("room id mismatch")
         if int(payload.get("epoch", 0)) != int(epoch["epoch"]):
@@ -217,5 +234,6 @@ class ClosedRosterState:
             ),
             "recipient_encryption_key_ids": sorted(self._expected_recipient_key_ids),
             "armored_message": armored_message,
+            # Legacy message rendering path still reads `message`.
             "message": armored_message,
         }
