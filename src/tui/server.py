@@ -2,11 +2,11 @@
 OpSecChat TUI Server
 
 A privacy-focused chat server that runs over Tor with a Terminal UI.
-All messages are stored in-memory only and burn after 4 minutes.
+All messages are stored in-memory only and burn after 3 minutes.
 
 Features:
 - In-memory only (zero disk writes)
-- Messages auto-delete after 4 minutes with overwriting
+- Messages auto-delete after 3 minutes with overwriting
 - Randomized usernames (no user choice)
 - Text-only (no images, videos, or b64 encoded data)
 - Tor hidden service integration

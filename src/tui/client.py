@@ -9,7 +9,7 @@ Features:
 - Real-time message updates
 - Randomized username (server-assigned)
 - Text-only interface (no images/video)
-- Messages auto-burn after 4 minutes
+- Messages auto-burn after 3 minutes
 - Tor/SOCKS proxy support for .onion addresses
 """
 
@@ -74,7 +74,7 @@ class ChatClient:
             urwid.Text([
                 ('title', 'OpSecChat TUI - Privacy First'),
                 ' | ',
-                ('info', 'Messages burn in 4 min'),
+                ('info', 'Messages burn in 3 min'),
                 ' | ',
                 ('warn', 'Text only - No images/video')
             ], align='center'),
