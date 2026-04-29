@@ -23,6 +23,11 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     def generate_room_username():
         number = secrets.randbelow(10000)
         return f"{secrets.choice(adjectives)}{secrets.choice(nouns)}{number:04d}"
+
+    def sanitize_xss_tokens(value):
+        value = re.sub(r'on[a-z]{2,32}\s*=', '', value, flags=re.IGNORECASE)
+        value = re.sub(r'javascript\s*:', '', value, flags=re.IGNORECASE)
+        return value
     
     def check_older_than(chat_dic, secs_to_live=180):
         """Check if a chat message is older than specified seconds"""
@@ -209,8 +214,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
                 message_text = request.form["dropdata"].strip()
                 message_text = filter_to_ascii(message_text)
                 message_text = sanitize_emojis(message_text)
-                message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
-                message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
+                message_text = sanitize_xss_tokens(message_text)
                 message_text = re.sub(r"[<>&\"']", '', message_text)
                 chat = {
                     "msg": message_text,
@@ -361,20 +365,17 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/chat', methods=["GET"])
     def chat_index():
         return '''
-            <html>
+            <html lang="en">
+              <head>
+                <meta charset="utf-8">
+                <title>OpSecChat Mock Chat Index</title>
+              </head>
               <body>
                 <h1>OpSecChat</h1>
                 <p>Closed-roster OpenPGP room bootstrap</p>
                 <button id="createRoomBtn">Create Room</button>
-                <script>
-                  document.getElementById('createRoomBtn').addEventListener('click', async () => {
-                    const response = await fetch('/chat/create', { method: 'POST' });
-                    const data = await response.json();
-                    if (data && data.room_url) {
-                      window.location.href = data.room_url;
-                    }
-                  });
-                </script>
+                <div id="createRoomStatus" role="status" aria-live="polite"></div>
+                <script src="/static/mock-chat-test.js"></script>
               </body>
             </html>
         ''', 200
@@ -382,7 +383,12 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/chat/create', methods=["POST"])
     def chat_create():
         room_id = id_generator(16)
-        chat_rooms[room_id] = {"messages": []}
+        chat_rooms[room_id] = {
+            "messages": [],
+            "mode": "closed_roster_openpgp_v1",
+            "roster_locked": False,
+            "members": [],
+        }
         return jsonify({
             "success": True,
             "room_id": room_id,
@@ -398,18 +404,28 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             session["username"] = generate_room_username()
             session["color"] = get_random_color()
         
-        return '''
-            <html>
+        return f'''
+            <html lang="en">
+              <head>
+                <meta charset="utf-8">
+                <title>Closed-Roster OpSecChat Room</title>
+              </head>
               <body>
                 <h1>Closed-Roster OpSecChat</h1>
-                <div id="securityWarning">warning</div>
-                <button id="acceptSecurityWarningBtn" onclick="document.getElementById('securityWarning').style.display='none'">Accept</button>
-                <input id="memberIdInput" />
-                <textarea id="privateKeyInput"></textarea>
-                <textarea id="peerPublicKeyInput"></textarea>
+                <div id="securityWarning" role="alert">Closed-roster warning: verify identities before messaging.</div>
+                <button id="acceptSecurityWarningBtn">Accept</button>
+                <label for="memberIdInput">Member ID</label>
+                <input id="memberIdInput" aria-label="Member ID" autocomplete="off" />
+                <label for="privateKeyInput">Private Key</label>
+                <textarea id="privateKeyInput" aria-label="Private Key" autocomplete="off"></textarea>
+                <label for="peerPublicKeyInput">Peer Public Key</label>
+                <textarea id="peerPublicKeyInput" aria-label="Peer Public Key" autocomplete="off"></textarea>
                 <button id="lockRosterBtn">Lock Roster</button>
-                <textarea id="messageInput" maxlength="500"></textarea>
+                <label for="messageInput">Message</label>
+                <textarea id="messageInput" maxlength="500" aria-label="Message"></textarea>
                 <button id="sendBtn" disabled>Send</button>
+                <input type="hidden" id="rosterLocked" value="{str(chat_rooms[room_id]['roster_locked']).lower()}" />
+                <script src="/static/mock-chat-test.js"></script>
               </body>
             </html>
         ''', 200
@@ -418,10 +434,13 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     def chat_room_state(room_id):
         if room_id not in chat_rooms:
             return jsonify({"error": "Room not found"}), 404
+        room = chat_rooms[room_id]
         return jsonify({
-            "mode": "closed_roster_openpgp_v1",
+            "mode": room["mode"],
             "policy": {"immutable_roster": True, "shared_room_keys_supported": False},
             "active_epoch": None,
+            "roster_locked": room["roster_locked"],
+            "member_count": len(room["members"]),
         }), 200
 
     @app.route('/chat/room/<string:room_id>/key', methods=["GET"])
@@ -451,8 +470,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
                 return jsonify({"error": "Empty message"}), 400
             message_text = filter_to_ascii(message_text)
             message_text = sanitize_emojis(message_text)
-            message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
-            message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
+            message_text = sanitize_xss_tokens(message_text)
             message_text = re.sub(r"[<>&\"']", '', message_text)
             chat_rooms[room_id]["messages"].append({
                 "message": message_text,
@@ -495,6 +513,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             if message_text:
                 message_text = filter_to_ascii(message_text)
                 message_text = sanitize_emojis(message_text)
+                message_text = sanitize_xss_tokens(message_text)
                 message_text = re.sub(r"[<>&\"']", '', message_text)
                 chat = {
                     "msg": message_text,
@@ -519,18 +538,17 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         if request.method == "POST":
             data = request.get_json()
             if data and "message" in data:
-                    message_text = data["message"].strip()
-                    if message_text:
-                        message_text = filter_to_ascii(message_text)
-                        message_text = sanitize_emojis(message_text)
-                        message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
-                        message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
-                        message_text = re.sub(r"[<>&\"']", '', message_text)
-                        chat = {
-                            "msg": message_text,
-                            "timestamp": datetime.datetime.now(),
-                            "username": session["_id"],
-                            "color": session["color"]
+                message_text = data["message"].strip()
+                if message_text:
+                    message_text = filter_to_ascii(message_text)
+                    message_text = sanitize_emojis(message_text)
+                    message_text = sanitize_xss_tokens(message_text)
+                    message_text = re.sub(r"[<>&\"']", '', message_text)
+                    chat = {
+                        "msg": message_text,
+                        "timestamp": datetime.datetime.now(),
+                        "username": session["_id"],
+                        "color": session["color"],
                     }
                     chatlines.append(chat)
         
