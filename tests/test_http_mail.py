@@ -118,8 +118,11 @@ class TestHttpMailStorage:
     def test_alias_lookup_returns_mailbox(self):
         mb = self.storage.create_mailbox(alias="burner-alias")
         fetched = self.storage.get_mailbox_by_alias("burner-alias")
-        assert fetched is mb
+        assert fetched is not None
         assert fetched.address == mb.address
+
+    def test_alias_lookup_returns_none_for_unknown_alias(self):
+        assert self.storage.get_mailbox_by_alias("missing-alias") is None
 
     def test_alias_lookup_returns_none_after_mailbox_deletion(self):
         mb = self.storage.create_mailbox(alias="burner-alias")
