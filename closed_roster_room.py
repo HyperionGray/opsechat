@@ -120,8 +120,11 @@ class ClosedRosterState:
         if recipient_fps != expected_recipients:
             raise ValueError("recipient set does not match the room roster")
 
-        intended_fps = self._normalized_set(payload.get("intended_recipient_fingerprints"))
-        if intended_fps and intended_fps != expected_recipients:
+        intended_fps = self._normalized_optional_set(
+            payload.get("intended_recipient_fingerprints"),
+            "intended_recipient_fingerprints",
+        )
+        if intended_fps is not None and intended_fps != expected_recipients:
             raise ValueError("intended recipient fingerprints do not match the room roster")
 
         recipient_key_ids = self._normalized_keyid_set(payload.get("recipient_encryption_key_ids"))
@@ -146,7 +149,9 @@ class ClosedRosterState:
             "sender_signing_fingerprint": sender.signing_fingerprint,
             "roster_hash": epoch.roster_hash,
             "recipient_encryption_fingerprints": sorted(recipient_fps),
-            "intended_recipient_fingerprints": sorted(intended_fps or expected_recipients),
+            "intended_recipient_fingerprints": sorted(
+                intended_fps if intended_fps is not None else expected_recipients
+            ),
             "recipient_encryption_key_ids": sorted(recipient_key_ids),
             "armored_message": armored_message,
         }
@@ -182,6 +187,14 @@ class ClosedRosterState:
     def _normalized_set(value) -> set[str]:
         if not isinstance(value, list) or not value:
             raise ValueError("recipient_encryption_fingerprints must be a non-empty list")
+        return {normalize_fingerprint(str(item)) for item in value}
+
+    @staticmethod
+    def _normalized_optional_set(value, field_name: str) -> set[str] | None:
+        if value is None:
+            return None
+        if not isinstance(value, list) or not value:
+            raise ValueError(f"{field_name} must be a non-empty list when provided")
         return {normalize_fingerprint(str(item)) for item in value}
 
     @staticmethod
