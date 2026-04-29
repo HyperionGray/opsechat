@@ -23,6 +23,7 @@ Comprehensive assessments and code reviews of the project.
 - [CI/CD Review Completion](assessment/CICD_REVIEW_COMPLETION.md) - CI/CD review completion summary
 - [Comprehensive Review](assessment/COMPREHENSIVE_REVIEW.md) - Full project review
 - [Global Review Summary](assessment/GLOBAL_REVIEW_SUMMARY.md) - Overall review
+- [Daily Progress 2026-03-12](assessment/DAILY_PROGRESS_2026-03-12.md) - Direction, quick wins, and prioritized tasks
 
 ### Setup & Deployment
 Installation and deployment guides for different environments.
