@@ -32,15 +32,15 @@ def register_operational_routes(app: Flask) -> None:
     from monitoring import get_health_status, get_chat_stats, get_version
 
     @app.route('/health', methods=["GET"])
-    def health():
+    def health_route():
         return jsonify(get_health_status())
 
     @app.route('/version', methods=["GET"])
-    def version():
+    def version_route():
         return jsonify({"version": get_version()})
 
     @app.route('/chat/stats', methods=["GET"])
-    def chat_stats():
+    def chat_stats_route():
         return jsonify(get_chat_stats())
 
 
