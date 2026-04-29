@@ -158,24 +158,30 @@ class ClosedRosterState:
         recipient_fps = payload.get("recipient_encryption_fingerprints")
         if not isinstance(recipient_fps, list):
             raise ValueError("recipient_encryption_fingerprints must be a list")
-        normalized_recipient_fps = {_as_non_empty_str(v, "recipient").upper()
-                                    for v in recipient_fps}
+        normalized_recipient_fps = {
+            _as_non_empty_str(v, "recipient").upper()
+            for v in recipient_fps
+        }
         if normalized_recipient_fps != expected_recipient_fps:
             raise ValueError("recipient set does not match roster")
 
         intended = payload.get("intended_recipient_fingerprints")
         if not isinstance(intended, list):
             raise ValueError("intended_recipient_fingerprints must be a list")
-        normalized_intended = {_as_non_empty_str(v, "recipient").upper()
-                               for v in intended}
+        normalized_intended = {
+            _as_non_empty_str(v, "recipient").upper()
+            for v in intended
+        }
         if normalized_intended != expected_recipient_fps:
             raise ValueError("recipient set does not match roster")
 
         recipient_key_ids = payload.get("recipient_encryption_key_ids")
         if not isinstance(recipient_key_ids, list):
             raise ValueError("recipient_encryption_key_ids must be a list")
-        normalized_key_ids = {_as_non_empty_str(v, "recipient_key_id").upper()
-                              for v in recipient_key_ids}
+        normalized_key_ids = {
+            _as_non_empty_str(v, "recipient_key_id").upper()
+            for v in recipient_key_ids
+        }
         if normalized_key_ids != expected_recipient_key_ids:
             raise ValueError("recipient encryption key ids do not match roster")
 
