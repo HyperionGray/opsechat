@@ -71,3 +71,13 @@ def test_validate_posted_envelope_rejects_key_id_mismatch():
 
     with pytest.raises(ValueError, match="recipient encryption key ids do not match"):
         room.validate_posted_envelope(payload)
+
+
+def test_validate_posted_envelope_rejects_anonymous_recipients():
+    room = ClosedRosterState("room-1")
+    state = room.bootstrap([_member("alice"), _member("bob")])
+    payload = _payload(state)
+    payload["anonymous_recipients"] = True
+
+    with pytest.raises(ValueError, match="anonymous recipients are forbidden"):
+        room.validate_posted_envelope(payload)

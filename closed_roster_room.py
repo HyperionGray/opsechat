@@ -189,6 +189,8 @@ class ClosedRosterState:
         }
         if posted_recipient_fps != expected_recipient_fps:
             raise ValueError("recipient set does not match the room roster")
+        if payload.get("anonymous_recipients"):
+            raise ValueError("anonymous recipients are forbidden")
 
         intended_recipients = payload.get("intended_recipient_fingerprints", [])
         if intended_recipients:
