@@ -8,6 +8,7 @@ extracted from mock_server.py for better organization and maintainability.
 import datetime
 import re
 from flask import render_template, session, request, jsonify, redirect
+from markupsafe import escape
 from utils import sanitize_emojis, filter_to_ascii
 import secrets
 
@@ -33,6 +34,15 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         diff = now - timestamp
         secs = diff.total_seconds()
         return secs >= secs_to_live
+
+    def sanitize_chat_message(message_text: str) -> str:
+        """Apply mock-server sanitation rules used by legacy and simple-chat routes."""
+        message_text = filter_to_ascii(message_text)
+        message_text = sanitize_emojis(message_text)
+        message_text = re.sub(r'onerror\s*=', '', message_text, flags=re.IGNORECASE)
+        message_text = re.sub(r'onload\s*=', '', message_text, flags=re.IGNORECASE)
+        message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
+        return re.sub(r"[<>&\"']", '', message_text)
     
     @app.route('/<string:url_addition>', methods=["GET"])
     def drop_landing(url_addition):
@@ -44,14 +54,15 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             chatters.append(session["_id"])
             session["color"] = get_random_color()
         
+        safe_path = escape(app.config["path"])
         return f'''
         <html>
         <head><title>opsechat</title></head>
         <body>
             <h1>Welcome to opsechat</h1>
-            <p>Path: {app.config["path"]}</p>
-            <a href="/{app.config["path"]}/script">Script mode</a>
-            <a href="/{app.config["path"]}/noscript">No-script mode</a>
+            <p>Path: {safe_path}</p>
+            <a href="/{safe_path}/script">Script mode</a>
+            <a href="/{safe_path}/noscript">No-script mode</a>
         </body>
         </html>
         ''', 200
@@ -140,12 +151,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             if request.form.get("dropdata", "").strip():
                 message_text = request.form["dropdata"].strip()
                 # Enforce ASCII-only and remove emojis
-                message_text = filter_to_ascii(message_text)
-                message_text = sanitize_emojis(message_text)
-                message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
-                message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
-                # Basic HTML sanitization
-                message_text = re.sub(r"[<>&\"']", '', message_text)
+                message_text = sanitize_chat_message(message_text)
                 chat = {
                     "msg": message_text,
                     "timestamp": datetime.datetime.now(),
@@ -197,11 +203,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         if request.method == "POST":
             if request.form.get("dropdata", "").strip():
                 message_text = request.form["dropdata"].strip()
-                message_text = filter_to_ascii(message_text)
-                message_text = sanitize_emojis(message_text)
-                message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
-                message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
-                message_text = re.sub(r"[<>&\"']", '', message_text)
+                message_text = sanitize_chat_message(message_text)
                 chat = {
                     "msg": message_text,
                     "timestamp": datetime.datetime.now().isoformat(),
@@ -372,6 +374,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/chat/create', methods=["POST"])
     def chat_create():
         room_id = secrets.token_urlsafe(32)
+        # active_epoch remains None until roster bootstrap is performed.
         chat_rooms[room_id] = {
             "messages": [],
             "active_epoch": None,
@@ -391,6 +394,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             session["username"] = generate_room_username()
             session["color"] = get_random_color()
         
+        safe_room_id = escape(room_id)
         return f'''<!doctype html>
 <html>
 <body>
@@ -406,6 +410,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
   <button id="lockRosterBtn" type="button">Lock Roster</button>
   <button id="sendBtn" type="button" disabled>Send</button>
   <script src="/static/openpgp.min.js"></script>
+  <input type="hidden" id="roomId" value="{safe_room_id}" />
   <script>
     (function () {{
       const warning = document.getElementById('securityWarning');
@@ -456,11 +461,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             message_text = data.get("message", "").strip()
             if not message_text:
                 return jsonify({"error": "Empty message"}), 400
-            message_text = filter_to_ascii(message_text)
-            message_text = sanitize_emojis(message_text)
-            message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
-            message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
-            message_text = re.sub(r"[<>&\"']", '', message_text)
+            message_text = sanitize_chat_message(message_text)
             chat_rooms[room_id]["messages"].append({
                 "message": message_text,
                 "user_id": session["_id"],
@@ -528,11 +529,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             if data and "message" in data:
                     message_text = data["message"].strip()
                     if message_text:
-                        message_text = filter_to_ascii(message_text)
-                        message_text = sanitize_emojis(message_text)
-                        message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
-                        message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
-                        message_text = re.sub(r"[<>&\"']", '', message_text)
+                        message_text = sanitize_chat_message(message_text)
                         chat = {
                             "msg": message_text,
                             "timestamp": datetime.datetime.now(),
