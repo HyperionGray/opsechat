@@ -174,6 +174,7 @@ def main():
                 return ""
 
             def send_response(self, code, message=None):
+                # Keep framework-level Server/Date headers blank for header-security tests.
                 self.log_request(code)
                 self.send_response_only(code, message)
                 self.send_header("Server", "")

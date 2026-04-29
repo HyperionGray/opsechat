@@ -217,5 +217,6 @@ class ClosedRosterState:
                 member["encryption_key_id"] for member in self.active_epoch["members"]
             ],
             "armored_message": armored_message,
+            # Keep `message` for compatibility with existing room/message serialization.
             "message": armored_message,
         }

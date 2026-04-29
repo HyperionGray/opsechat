@@ -27,7 +27,10 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         return f"{secrets.choice(adjectives)}{secrets.choice(nouns)}{number:04d}"
 
     def sanitize_xss_tokens(message_text: str) -> str:
-        """Strip common event-handler and javascript URL tokens from text input."""
+        """Strip common event-handler and javascript URL tokens from text input.
+
+        This is lightweight test-fixture sanitization, not a full HTML sanitizer.
+        """
         sanitized = re.sub(r"(?i)on[a-zA-Z]{1,32}\s*=", "", message_text)
         sanitized = re.sub(r"(?i)javascript:", "", sanitized)
         return sanitized
