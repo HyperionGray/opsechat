@@ -73,11 +73,16 @@ class ChatRoom:
     
     def __init__(self, room_id):
         self.room_id = room_id
+        self.room_key = secrets.token_urlsafe(32)
         self.messages = []
         self.users = {}
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
         self.closed_roster = ClosedRosterState(room_id)
+
+    def get_room_key(self):
+        """Return per-room legacy key material used by older internal tests."""
+        return self.room_key
     
     def add_message(self, user_id, username, color, message_text):
         """Add a legacy message record; retained for isolated unit tests."""

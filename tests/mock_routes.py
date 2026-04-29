@@ -10,11 +10,13 @@ import re
 from flask import render_template, session, request, jsonify, redirect
 from utils import sanitize_emojis, filter_to_ascii
 import secrets
+from closed_roster_room import ClosedRosterState, OPENPGP_ENVELOPE_TYPE
 
 
 def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_random_color):
     """Create and register mock route handlers"""
     chat_rooms = {}
+    chat_room_states = {}
     adjectives = ['Swift', 'Silent', 'Dark', 'Ghost', 'Shadow', 'Phantom', 
                   'Cipher', 'Echo', 'Rogue', 'Viper', 'Stealth', 'Void']
     nouns = ['Raven', 'Wolf', 'Fox', 'Hawk', 'Lynx', 'Owl', 'Cobra', 
@@ -209,6 +211,8 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
                 message_text = request.form["dropdata"].strip()
                 message_text = filter_to_ascii(message_text)
                 message_text = sanitize_emojis(message_text)
+                message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
+                message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
                 message_text = re.sub(r"[<>&\"']", '', message_text)
                 chat = {
                     "msg": message_text,
@@ -358,12 +362,13 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     # Simple chat routes
     @app.route('/chat', methods=["GET"])
     def chat_index():
-        return '<html><body><h1>OpSecChat</h1><button id="createRoomBtn">Create Room</button></body></html>', 200
+        return render_template("simple_chat_index.html", version="0.8.0-alpha"), 200
 
     @app.route('/chat/create', methods=["POST"])
     def chat_create():
         room_id = id_generator(16)
         chat_rooms[room_id] = []
+        chat_room_states[room_id] = ClosedRosterState(room_id)
         return jsonify({
             "success": True,
             "room_id": room_id,
@@ -373,13 +378,48 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/chat/room/<string:room_id>', methods=["GET"])
     def chat_room(room_id):
         if room_id not in chat_rooms:
-            return '<html><body><h1>Room not found or expired</h1></body></html>', 404
+            return render_template("simple_chat_error.html", error="Room not found or expired"), 404
         if "_id" not in session:
             session["_id"] = id_generator(16)
             session["username"] = generate_room_username()
             session["color"] = get_random_color()
-        
-        return f'<html><body><h1>OpSecChat Room {room_id}</h1></body></html>', 200
+        return render_template("simple_chat_room.html", room_id=room_id, max_message_length=500), 200
+
+    @app.route('/chat/room/<string:room_id>/state', methods=["GET"])
+    def chat_room_state(room_id):
+        state = chat_room_states.get(room_id)
+        if state is None:
+            return jsonify({"error": "Room not found"}), 404
+        return jsonify(state.serialize()), 200
+
+    @app.route('/chat/room/<string:room_id>/state/bootstrap', methods=["POST"])
+    def chat_room_state_bootstrap(room_id):
+        state = chat_room_states.get(room_id)
+        if state is None:
+            return jsonify({"error": "Room not found"}), 404
+        data = request.get_json(silent=True) or {}
+        members = data.get("members")
+        if not members:
+            return jsonify({"error": "No roster members provided"}), 400
+        try:
+            serialized = state.bootstrap(members)
+        except (TypeError, ValueError) as exc:
+            return jsonify({"error": str(exc)}), 400
+        return jsonify({"success": True, **serialized}), 200
+
+    @app.route('/chat/room/<string:room_id>/key', methods=["GET"])
+    def deprecated_room_key(room_id):
+        if room_id not in chat_rooms:
+            return jsonify({"error": "Room not found"}), 404
+        return jsonify({
+            "error": (
+                "The shared room-key endpoint is retired. "
+                "Use the closed-roster OpenPGP room bootstrap flow instead."
+            ),
+            "deprecated": True,
+            "replacement": f"/chat/room/{room_id}/state",
+            "mode": OPENPGP_ENVELOPE_TYPE,
+        }), 410
 
     @app.route('/chat/room/<string:room_id>/messages', methods=["GET", "POST"])
     def chat_room_messages(room_id):
@@ -392,21 +432,38 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         
         if request.method == "POST":
             data = request.get_json() or {}
-            message_text = data.get("message", "").strip()
-            if not message_text:
-                return jsonify({"error": "Empty message"}), 400
-            message_text = filter_to_ascii(message_text)
-            message_text = sanitize_emojis(message_text)
-            message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
-            message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
-            message_text = re.sub(r"[<>&\"']", '', message_text)
-            chat_rooms[room_id].append({
-                "message": message_text,
-                "user_id": session["_id"],
-                "username": session.get("username", "Anonymous"),
-                "color": session.get("color", "blue"),
-                "timestamp": datetime.datetime.now().isoformat()
-            })
+            if "envelope_type" in data:
+                state = chat_room_states.get(room_id)
+                if state is None:
+                    return jsonify({"error": "Room not found"}), 404
+                try:
+                    message_data = state.validate_posted_envelope(data)
+                except (TypeError, ValueError) as exc:
+                    return jsonify({"error": str(exc)}), 400
+                message_data.update({
+                    "user_id": session["_id"],
+                    "username": session.get("username", "Anonymous"),
+                    "color": session.get("color", "blue"),
+                    "timestamp": datetime.datetime.now().isoformat(),
+                })
+                chat_rooms[room_id].append(message_data)
+            else:
+                message_text = data.get("message", "").strip()
+                if not message_text:
+                    return jsonify({"error": "Empty message"}), 400
+                message_text = filter_to_ascii(message_text)
+                message_text = sanitize_emojis(message_text)
+                message_text = re.sub(r'on\w+\s*=', '', message_text, flags=re.IGNORECASE)
+                message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
+                message_text = re.sub(r"[<>&\"']", '', message_text)
+                chat_rooms[room_id].append({
+                    "message_type": "legacy_plaintext_test_only",
+                    "message": message_text,
+                    "user_id": session["_id"],
+                    "username": session.get("username", "Anonymous"),
+                    "color": session.get("color", "blue"),
+                    "timestamp": datetime.datetime.now().isoformat()
+                })
             return jsonify({"success": True})
         else:
             messages = chat_rooms.get(room_id, [])

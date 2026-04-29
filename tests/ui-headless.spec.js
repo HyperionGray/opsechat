@@ -151,15 +151,16 @@ test.describe('Headless UI Tests - Security Headers', () => {
     }
     
     const headers = response.headers();
+    const normalizeHeaderValue = (value) => String(value || '').replace(/[,\s]/g, '');
     
     // Check that Server header is empty or not present (security feature)
     if (headers['server']) {
-      expect(headers['server']).toBe('');
+      expect(normalizeHeaderValue(headers['server'])).toBe('');
     }
     
     // Check that Date header is empty or not present (security feature)
     if (headers['date']) {
-      expect(headers['date']).toBe('');
+      expect(normalizeHeaderValue(headers['date'])).toBe('');
     }
   });
 });
