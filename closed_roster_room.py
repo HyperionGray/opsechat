@@ -120,7 +120,7 @@ class ClosedRosterState:
                     ),
                     "encryption_key_id": encryption_key_id,
                     "public_key_armored": _normalize_text(
-                        raw.get("public_key_armored") or "UNAVAILABLE",
+                        raw.get("public_key_armored"),
                         "public_key_armored",
                     ),
                 }
