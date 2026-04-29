@@ -81,7 +81,7 @@ class ChatRoom:
         self.closed_roster = ClosedRosterState(room_id)
 
     def get_room_key(self):
-        """Return legacy room key for backward-compatible unit tests."""
+        """Return deprecated shared room key retained only for test compatibility."""
         return self._room_key
     
     def add_message(self, user_id, username, color, message_text):
