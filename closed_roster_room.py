@@ -144,8 +144,6 @@ class ClosedRosterState:
             raise ValueError("unsupported envelope type")
 
         epoch = self._active_epoch
-        if epoch is None:
-            raise ValueError("closed roster is not initialized")
 
         room_id = _normalize_required_string(payload.get("room_id", ""))
         if room_id != epoch.room_id:
