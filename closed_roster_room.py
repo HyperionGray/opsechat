@@ -46,6 +46,7 @@ class ClosedRosterState:
         self._members_by_id: dict[str, _RosterMember] = {}
 
     def serialize(self) -> dict[str, Any]:
+        """Return a JSON-serializable snapshot of room policy and active epoch."""
         active_epoch = None
         if self._active_epoch is not None:
             active_epoch = {
@@ -66,6 +67,14 @@ class ClosedRosterState:
         }
 
     def bootstrap(self, members: list[dict[str, Any]]) -> dict[str, Any]:
+        """
+        Initialize immutable epoch-1 roster state from posted member records.
+
+        Each member record must provide at least:
+        member_id, signing_fingerprint, encryption_fingerprint.
+        Optional fields: display_name, signing_key_id, encryption_key_id,
+        public_key_armored.
+        """
         if self._active_epoch is not None:
             raise ValueError("closed roster already initialized")
         if not isinstance(members, list) or not members:
@@ -155,6 +164,13 @@ class ClosedRosterState:
         return self.serialize()
 
     def validate_posted_envelope(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """
+        Validate and normalize a posted closed-roster OpenPGP envelope payload.
+
+        Requires strict match against room_id, epoch, roster hash, sender
+        identity, recipient roster fingerprints, recipient key IDs, and
+        armored message framing.
+        """
         if self._active_epoch is None:
             raise ValueError("closed roster is not initialized")
         if not isinstance(payload, dict):
