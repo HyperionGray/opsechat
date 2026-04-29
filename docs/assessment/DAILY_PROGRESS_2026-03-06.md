@@ -52,21 +52,21 @@ These are critical but should not be started without documented architectural de
 
 ## 3) Actionable Tasks Aligned to Project Goals
 
-## Quick Wins (1-2 days total)
+### Quick Wins (1-2 days total)
 
 - [ ] Add/verify regression tests for recently touched HTTP mail and admin-proxy routes
 - [ ] Ensure `run_tests.sh` output is reflected in docs (exact commands, skip conditions)
 - [ ] Add a concise "release smoke checklist" in `docs/implementation/` for repeatable PR validation
 - [ ] Validate all core docs links from `README.md` and `docs/README.md` still resolve
 
-## Incremental Stabilization (2-5 days)
+### Incremental Stabilization (2-5 days)
 
 - [ ] Add targeted tests for timeout/error branches in mailbox + proxy flows
 - [ ] Add lightweight route-level metrics/log markers for operator-critical paths
 - [ ] Normalize healthcheck behavior between compose and application endpoint responses
 - [ ] Audit and remove stale/duplicate scripts or move them into canonical folders
 
-## Strategic Blockers (parallel planning track)
+### Strategic Blockers (parallel planning track)
 
 - [ ] Document authentication decision in `docs/architecture/DECISIONS.md`
 - [ ] Document privacy/cooperation policy decision with rationale
