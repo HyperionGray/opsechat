@@ -166,6 +166,12 @@ The project includes comprehensive automated tests using Playwright. See [Testin
 Quick start:
 
 ```bash
+# Install Python dependencies
+pip install -r requirements.txt -r requirements-dev.txt
+
+# Fast local Python-only verification (canonical command)
+bash ./run_tests.sh --skip-e2e
+
 # Install test dependencies
 npm install
 npx playwright install
