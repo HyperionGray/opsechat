@@ -21,7 +21,9 @@ class ClosedRosterState:
 
     def bootstrap(self, members: List[dict]) -> dict:
         if self._active_epoch is not None:
-            raise ValueError("room roster is already initialized")
+            raise ValueError(
+                "cannot bootstrap: room roster is already initialized; create a new room for a different roster"
+            )
         if not isinstance(members, list) or not members:
             raise ValueError("members must be a non-empty list")
 
@@ -138,7 +140,7 @@ class ClosedRosterState:
 
         armored_message = payload.get("armored_message")
         if not isinstance(armored_message, str) or not armored_message.strip():
-            raise ValueError("armored_message is required")
+            raise ValueError("armored_message must be a non-empty string")
 
         return {
             "message_type": OPENPGP_ENVELOPE_TYPE,
