@@ -37,7 +37,7 @@ def _normalize_fingerprint_set(values: Iterable[str], field: str) -> Set[str]:
     return {_normalize_fingerprint(item, field) for item in values}
 
 
-def _normalize_epoch(value) -> int:
+def _normalize_epoch(value: object) -> int:
     try:
         epoch = int(value)
     except (TypeError, ValueError) as exc:
