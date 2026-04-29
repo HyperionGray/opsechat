@@ -153,8 +153,9 @@ class ClosedRosterState:
         if recipient_fingerprints != expected_fingerprints:
             raise ValueError("recipient set does not match the room roster")
 
-        # Intended-recipient fingerprints are optional in this alpha path.
-        # When present, fail closed and require an exact roster match.
+        # Intended-recipient fingerprints are optional in the current
+        # closed-roster wire payload, but when present we fail closed and
+        # require an exact roster match.
         intended_recipients_raw = payload.get("intended_recipient_fingerprints") or []
         if intended_recipients_raw:
             intended_fingerprints = {normalize_fingerprint(fp) for fp in intended_recipients_raw}
@@ -184,10 +185,10 @@ class ClosedRosterState:
             "roster_hash": str(active_epoch["roster_hash"]).upper(),
             "recipient_encryption_fingerprints": sorted(recipient_fingerprints),
             "intended_recipient_fingerprints": sorted(intended_fingerprints),
+            "recipient_encryption_key_ids": sorted(recipient_key_ids),
+            "armored_message": armored_message,
             # Compatibility field retained for legacy callers/tests that still
             # read `message` from stored records. Keep this mirrored to
             # `armored_message` until those consumers are migrated.
-            "recipient_encryption_key_ids": sorted(recipient_key_ids),
-            "armored_message": armored_message,
             "message": armored_message,
         }
