@@ -10,6 +10,7 @@ import secrets
 from datetime import datetime, timezone
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
+from monitoring import get_health_status, get_chat_stats, get_version
 try:
     from rate_limiter import init_limiter
 except ModuleNotFoundError:
@@ -30,7 +31,6 @@ def _env_flag(name: str, default: bool = False) -> bool:
 
 def register_operational_routes(app):
     """Register health/version/operational monitoring routes."""
-    from monitoring import get_health_status, get_chat_stats
 
     @app.route('/health', methods=["GET"])
     def health():
@@ -38,9 +38,8 @@ def register_operational_routes(app):
 
     @app.route('/version', methods=["GET"])
     def version():
-        health_status = get_health_status()
         return jsonify({
-            "version": health_status.get("version", "unknown"),
+            "version": get_version(),
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 

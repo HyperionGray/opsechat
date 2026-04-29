@@ -321,6 +321,11 @@ def _read_version() -> str:
         return 'unknown'
 
 
+def get_version() -> str:
+    """Return the current application version string."""
+    return _read_version()
+
+
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
     active_rooms = _get_active_room_count()

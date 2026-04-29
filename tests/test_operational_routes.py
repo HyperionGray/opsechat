@@ -43,3 +43,27 @@ def test_version_matches_health_version():
     version_data = client.get("/version").get_json()
     health_data = client.get("/health").get_json()
     assert version_data["version"] == health_data["version"]
+
+
+def test_health_endpoint_returns_expected_payload_shape():
+    client = _make_app().test_client()
+    response = client.get("/health")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data is not None
+    assert data["status"] == "healthy"
+    assert "version" in data
+    assert "checks" in data
+
+
+def test_chat_stats_endpoint_returns_expected_payload_shape():
+    client = _make_app().test_client()
+    response = client.get("/chat/stats")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data is not None
+    assert "active_rooms" in data
+    assert "total_messages" in data
+    assert "active_users" in data
+    assert "pending_dms" in data
+    assert "config" in data
