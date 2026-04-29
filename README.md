@@ -169,7 +169,7 @@ Quick start:
 # Install Python dependencies
 pip install -r requirements.txt -r requirements-dev.txt
 
-# Fast local Python-only verification (canonical command)
+# Fast local Python-only verification (canonical command, bash required)
 bash ./run_tests.sh --skip-e2e
 
 # Install test dependencies

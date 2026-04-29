@@ -70,7 +70,7 @@ def _roster_hash(room_id: str, epoch: int, members: List[Dict[str, str]]) -> str
         f"{member['member_id']}|{member['signing_fingerprint']}|{member['encryption_fingerprint']}"
         for member in sorted(members, key=lambda m: (m["member_id"], m["signing_fingerprint"]))
     ]
-    payload = f"opsechat-room-state-v1|{room_id}|{epoch}|" + "|".join(canonical_lines)
+    payload = f"opsechat-room-state-v1|{room_id}|{epoch}|{'|'.join(canonical_lines)}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest().upper()
 
 
@@ -84,6 +84,7 @@ class ClosedRosterState:
         self.active_epoch = None
 
     def serialize(self) -> dict:
+        # `message` mirrors `armored_message` for existing route/test consumers.
         return {
             "mode": OPENPGP_ENVELOPE_TYPE,
             "policy": {
