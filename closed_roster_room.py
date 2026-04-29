@@ -17,7 +17,8 @@ from openpgp_room_policy import RoomEpoch, RoomMember, canonicalize_roster
 OPENPGP_ENVELOPE_TYPE = "closed_roster_openpgp_v1"
 
 
-def _norm(value: str) -> str:
+def _normalize_required_string(value: str) -> str:
+    """Return a stripped non-empty string."""
     if not isinstance(value, str):
         raise TypeError("value must be a string")
     normalized = value.strip()
@@ -28,6 +29,8 @@ def _norm(value: str) -> str:
 
 @dataclass(frozen=True)
 class _MemberRecord:
+    """Internal canonical member details plus transport metadata."""
+
     member: RoomMember
     signing_key_id: str
     encryption_key_id: str
@@ -53,7 +56,7 @@ class ClosedRosterState:
     """Immutable closed-roster state for one room."""
 
     def __init__(self, room_id: str):
-        self._room_id = _norm(room_id)
+        self._room_id = _normalize_required_string(room_id)
         self._active_epoch: Optional[RoomEpoch] = None
         self._members: List[_MemberRecord] = []
         self._member_by_id: Dict[str, _MemberRecord] = {}
@@ -69,26 +72,30 @@ class ClosedRosterState:
             if not isinstance(raw_member, dict):
                 raise TypeError("member record must be an object")
             room_member = RoomMember(
-                member_id=_norm(raw_member.get("member_id", "")),
-                display_name=_norm(
+                member_id=_normalize_required_string(
+                    raw_member.get("member_id", "")
+                ),
+                display_name=_normalize_required_string(
                     raw_member.get("display_name")
                     or raw_member.get("member_id", "")
                 ),
-                signing_fingerprint=_norm(
+                signing_fingerprint=_normalize_required_string(
                     raw_member.get("signing_fingerprint", "")
                 ),
-                encryption_fingerprint=_norm(
+                encryption_fingerprint=_normalize_required_string(
                     raw_member.get("encryption_fingerprint", "")
                 ),
             )
             parsed_records.append(
                 _MemberRecord(
                     member=room_member,
-                    signing_key_id=_norm(raw_member.get("signing_key_id", "")),
-                    encryption_key_id=_norm(
+                    signing_key_id=_normalize_required_string(
+                        raw_member.get("signing_key_id", "")
+                    ),
+                    encryption_key_id=_normalize_required_string(
                         raw_member.get("encryption_key_id", "")
                     ),
-                    public_key_armored=_norm(
+                    public_key_armored=_normalize_required_string(
                         raw_member.get("public_key_armored", "")
                     ),
                 )
@@ -137,9 +144,10 @@ class ClosedRosterState:
             raise ValueError("unsupported envelope type")
 
         epoch = self._active_epoch
-        assert epoch is not None
+        if epoch is None:
+            raise ValueError("closed roster is not initialized")
 
-        room_id = _norm(payload.get("room_id", ""))
+        room_id = _normalize_required_string(payload.get("room_id", ""))
         if room_id != epoch.room_id:
             raise ValueError("room_id mismatch")
 
@@ -150,16 +158,20 @@ class ClosedRosterState:
         if message_epoch != epoch.epoch:
             raise ValueError("epoch mismatch")
 
-        roster_hash = _norm(payload.get("roster_hash", ""))
+        roster_hash = _normalize_required_string(
+            payload.get("roster_hash", "")
+        )
         if roster_hash != epoch.roster_hash:
             raise ValueError("roster hash mismatch")
 
-        sender_member_id = _norm(payload.get("sender_member_id", ""))
+        sender_member_id = _normalize_required_string(
+            payload.get("sender_member_id", "")
+        )
         sender = self._member_by_id.get(sender_member_id)
         if sender is None:
             raise ValueError("sender is not part of the roster")
 
-        sender_signing_fingerprint = _norm(
+        sender_signing_fingerprint = _normalize_required_string(
             payload.get("sender_signing_fingerprint", "")
         ).upper()
         if sender_signing_fingerprint != sender.member.signing_fingerprint:
@@ -169,7 +181,7 @@ class ClosedRosterState:
             member.member.encryption_fingerprint for member in self._members
         )
         posted_recipient_fps = sorted(
-            _norm(value).upper()
+            _normalize_required_string(value).upper()
             for value in payload.get("recipient_encryption_fingerprints", [])
         )
         if posted_recipient_fps != expected_recipient_fps:
@@ -178,7 +190,8 @@ class ClosedRosterState:
         posted_intended = payload.get("intended_recipient_fingerprints")
         if posted_intended is not None:
             normalized_intended = sorted(
-                _norm(value).upper() for value in posted_intended
+                _normalize_required_string(value).upper()
+                for value in posted_intended
             )
             if normalized_intended != expected_recipient_fps:
                 raise ValueError(
@@ -192,13 +205,15 @@ class ClosedRosterState:
             member.encryption_key_id.upper() for member in self._members
         )
         posted_key_ids = sorted(
-            _norm(value).upper()
+            _normalize_required_string(value).upper()
             for value in payload.get("recipient_encryption_key_ids", [])
         )
         if posted_key_ids != expected_key_ids:
             raise ValueError("recipient encryption key ids do not match")
 
-        armored_message = _norm(payload.get("armored_message", ""))
+        armored_message = _normalize_required_string(
+            payload.get("armored_message", "")
+        )
 
         return {
             "message_type": OPENPGP_ENVELOPE_TYPE,

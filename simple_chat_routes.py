@@ -81,6 +81,7 @@ class ChatRoom:
         self.closed_roster = ClosedRosterState(room_id)
 
     def get_room_key(self):
+        """Return this room's generated shared key (legacy compatibility)."""
         return self.room_key
     
     def add_message(self, user_id, username, color, message_text):
