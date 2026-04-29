@@ -147,6 +147,8 @@ class ClosedRosterState:
         if recipient_fingerprints != expected_fingerprints:
             raise ValueError("recipient set does not match the room roster")
 
+        # Intended-recipient fingerprints are optional in this alpha path.
+        # When present, fail closed and require an exact roster match.
         intended_recipients_raw = payload.get("intended_recipient_fingerprints") or []
         if intended_recipients_raw:
             intended_fingerprints = {normalize_fingerprint(fp) for fp in intended_recipients_raw}
@@ -178,5 +180,7 @@ class ClosedRosterState:
             "intended_recipient_fingerprints": sorted(intended_fingerprints),
             "recipient_encryption_key_ids": sorted(recipient_key_ids),
             "armored_message": armored_message,
+            # `simple_chat_routes` and existing tests expect `message` in each
+            # stored entry; for OpenPGP envelopes that value is the armored body.
             "message": armored_message,
         }

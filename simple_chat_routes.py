@@ -78,6 +78,8 @@ class ChatRoom:
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
         self.closed_roster = ClosedRosterState(room_id)
+        # Compatibility shim for legacy unit/integration tests that still call
+        # ChatRoom.get_room_key(); the HTTP room-key endpoint remains retired.
         self._legacy_room_key = secrets.token_urlsafe(32)
     
     def add_message(self, user_id, username, color, message_text):
