@@ -32,7 +32,7 @@ def register_mvp_routes(app):
                 "name": "health",
                 "label": "Operational health",
                 "href": "/health",
-                "api": ["/health", "/chat/stats"],
+                "api": ["/health", "/version", "/chat/stats"],
                 "constraints": {
                     "auth": "none",
                     "purpose": "monitoring and orchestration",
