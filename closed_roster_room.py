@@ -68,6 +68,7 @@ class ClosedRosterState:
         seen_member_ids = set()
         seen_signing_fps = set()
         seen_encryption_fps = set()
+        seen_signing_key_ids = set()
         seen_encryption_key_ids = set()
 
         for index, member in enumerate(members):
@@ -101,12 +102,15 @@ class ClosedRosterState:
                 raise ValueError("signing fingerprints must be unique")
             if encryption_fingerprint in seen_encryption_fps:
                 raise ValueError("encryption fingerprints must be unique")
+            if signing_key_id in seen_signing_key_ids:
+                raise ValueError("signing key ids must be unique")
             if encryption_key_id in seen_encryption_key_ids:
                 raise ValueError("encryption key ids must be unique")
 
             seen_member_ids.add(member_id)
             seen_signing_fps.add(signing_fingerprint)
             seen_encryption_fps.add(encryption_fingerprint)
+            seen_signing_key_ids.add(signing_key_id)
             seen_encryption_key_ids.add(encryption_key_id)
             parsed_members.append(
                 _RosterMemberRecord(
