@@ -133,9 +133,8 @@ class ChatRoom:
         The shared room-key flow is deprecated in the HTTP API, but unit tests
         still use an internal stable per-room token to assert uniqueness.
         """
-        digest = secrets.token_urlsafe(32)
         if not hasattr(self, "_room_key"):
-            self._room_key = digest
+            self._room_key = secrets.token_urlsafe(32)
         return self._room_key
     
     def cleanup_old_messages(self):
