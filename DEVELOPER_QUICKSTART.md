@@ -4,10 +4,10 @@
 
 - Python 3.12+
 - Node.js 20+ and npm
-- Tor available locally for full runtime testing
-- Podman (preferred) or Docker for container validation
+- Tor available locally for Tor-mode runtime checks
+- Podman or Docker for container validation
 
-## Local setup
+## Local Setup
 
 ```bash
 cd /path/to/opsechat
@@ -15,90 +15,85 @@ cd /path/to/opsechat
 python3 -m venv .venv
 source .venv/bin/activate
 
-python3 -m pip install -r requirements.txt
-python3 -m pip install -r requirements-dev.txt
-
+python -m pip install -r requirements.txt -r requirements-dev.txt
 npm ci
 ```
 
-## Fast validation loop
-
-Run the smallest checks first:
+## Fast Validation Loop
 
 ```bash
-cd /path/to/opsechat
+python -m pytest \
+  tests/test_openpgp_room_policy.py \
+  tests/test_chat_endpoints.py \
+  tests/test_simple_chat_routes.py \
+  tests/test_rate_limit_and_health.py
 
-python3 -m pytest tests/test_rate_limit_and_health.py tests/test_container_deployment.py
-npx playwright test tests/basic.spec.js
+python -m pytest \
+  tests/test_container_deployment.py \
+  tests/test_installer.py \
+  tests/test_mvp_console.py
 ```
 
-These cover:
+## Run The App Locally
 
-- `/health` contract and security headers
-- container and compose deployment configuration
-- basic endpoint smoke checks through the mock server
-
-## Run the app locally
-
-### Without Tor
+### Predictable local debug mode
 
 ```bash
-cd /path/to/opsechat
-python3 runserver.py test
+python runserver_refactored.py test
 ```
 
 Useful checks:
 
 ```bash
-curl -i http://127.0.0.1:5000/health
-curl -i http://127.0.0.1:5000/
+curl -i http://127.0.0.1:5001/health
+curl -i http://127.0.0.1:5001/
+curl -i http://127.0.0.1:5001/chat
 ```
 
-### With Tor
+### Simple web launcher
 
 ```bash
-cd /path/to/opsechat
-python3 runserver.py
+python chat-room.py
 ```
 
-The server prints the generated `.onion` URL and secret path at startup.
-
-## Container validation
+### Tor mode
 
 ```bash
-cd /path/to/opsechat
+tor --ControlPort 9051 --CookieAuthentication 1
+python chat-room.py --tor
+```
+
+## Container Validation
+
+```bash
 ./compose-up.sh
+./verify-setup.sh
 ./compose-down.sh
 ```
 
-The application container now includes a `/health` healthcheck, and the compose configuration also probes the same endpoint.
-
-## Full test commands already in the repo
+## Full Test Commands Already In The Repo
 
 ```bash
-cd /path/to/opsechat
-
-python3 -m pytest
+python -m pytest
 npx playwright test
-python3 pf-tasks/test.py --skip-e2e
+python pf-tasks/test.py --skip-e2e
 ```
 
-## Files to know
+## Files To Know
 
-- `runserver.py` - main runtime entrypoint
+- `chat-room.py` - simplest maintained web launcher
+- `runserver_refactored.py` - local debug/test entrypoint
 - `app_factory.py` - Flask app creation and route registration
+- `simple_chat_routes.py` - `/chat` endpoints and room lifecycle
+- `closed_roster_room.py` - immutable roster state and envelope validation
+- `mvp_routes.py` - `/` and `/console`
 - `monitoring.py` - `/health` payload generation
-- `container-compose.yml` - local container deployment (Podman-first)
-- `containers/Dockerfile` - container build and app healthcheck
-- `run_tests.sh` - unified test runner (pytest + Playwright basics)
-- `tests/test_rate_limit_and_health.py` - health endpoint and security header coverage
-- `tests/test_container_deployment.py` - deployment safety checks
-- `tests/basic.spec.js` - lightweight Playwright smoke tests
+- `container-compose.yml` - local multi-container deployment
+- `containers/Dockerfile` - container build and runtime command
 
-## Maintenance checklist
+## Maintenance Notes
 
 - Keep `/health` stable and lightweight; deployment checks rely on it.
-- When changing runtime wiring, update `tests/basic.spec.js`.
-- When changing container behavior, update `tests/test_container_deployment.py`.
-- Re-run Python tests and the basic Playwright smoke test before pushing.
-- Review `SECURITY.md`, `README.md`, and this file when setup or deployment steps change.
+- When changing room bootstrap or envelope validation, update the focused chat tests first.
+- When changing compose or container behavior, update `tests/test_container_deployment.py`.
+- Review `README.md`, `INSTALL.md`, and `QUICKSTART.md` whenever an entrypoint changes.

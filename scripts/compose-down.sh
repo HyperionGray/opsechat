@@ -12,17 +12,17 @@ fi
 COMPOSE_FILE="$REPO_ROOT/container-compose.yml"
 
 # Determine which compose tool is available
-if command -v podman-compose &> /dev/null; then
-    COMPOSE_CMD="podman-compose"
-    echo "[*] Using podman-compose"
-elif command -v docker-compose &> /dev/null; then
-    COMPOSE_CMD="docker-compose"
-    echo "[*] Using docker-compose"
-elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
+if command -v docker &> /dev/null && docker compose version &> /dev/null; then
     COMPOSE_CMD="docker compose"
     echo "[*] Using docker compose (plugin)"
+elif command -v docker-compose &> /dev/null && docker-compose version &> /dev/null; then
+    COMPOSE_CMD="docker-compose"
+    echo "[*] Using docker-compose"
+elif command -v podman-compose &> /dev/null && podman-compose version &> /dev/null; then
+    COMPOSE_CMD="podman-compose"
+    echo "[*] Using podman-compose"
 else
-    echo "[!] Error: Neither podman-compose nor docker-compose found."
+    echo "[!] Error: No working compose command found."
     exit 1
 fi
 
