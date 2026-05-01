@@ -219,12 +219,10 @@ test.describe('Product Release - Domain Management', () => {
   
   test('should have domain rotation CLI interface', async () => {
     try {
-      const { stdout } = await execAsync(
-        `cd ${projectRoot} && python3 -c "
-import domain_manager
-print(hasattr(domain_manager, 'DomainAPIClient'))
-"`,
-        { timeout: 5000 }
+      const { stdout } = await execFileAsync(
+        'python3',
+        ['-c', "import domain_manager\nprint(hasattr(domain_manager, 'DomainAPIClient'))"],
+        { cwd: projectRoot, timeout: 5000 }
       );
       expect(stdout.trim()).toBe('True');
     } catch (error) {
