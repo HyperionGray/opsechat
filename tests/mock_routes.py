@@ -422,7 +422,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/chat/room/<string:room_id>', methods=["GET"])
     def chat_room(room_id):
         if room_id not in chat_rooms:
-            return '<html><body><h1>Room not found or expired</h1></body></html>', 404
+            return render_template("simple_chat_error.html", error="Room not found or expired"), 404
         if "_id" not in session:
             session["_id"] = id_generator(16)
             session["username"] = generate_room_username()

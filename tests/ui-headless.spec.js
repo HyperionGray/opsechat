@@ -170,6 +170,8 @@ test.describe("Headless UI Tests - Security Headers", () => {
     }
 
     const headers = response.headers();
+    const normalizeHeaderValue = (value) =>
+      String(value || "").replace(/[,\s]/g, "");
 
     // Header may be absent (preferred) or present in mock/dev servers.
     if (headers["server"] !== undefined) {
