@@ -1,33 +1,82 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpSecChat - Dashboard</title>
-    <link rel="stylesheet" href="/static/simple-chat-index.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpSecChat Dashboard</title>
+  <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='mvp-console.css') }}">
 </head>
 <body>
-    <div class="container" role="main">
-        <h1>OpSecChat Dashboard</h1>
+  <main class="layout">
+    <header class="hero">
+      <p class="eyebrow">OpSecChat</p>
+      <h1>Dashboard</h1>
+      <p class="lede">
+        Operator overview: service status, active endpoints, and deployment profile
+        for <strong>{{ manifest.hostname }}</strong>.
+      </p>
+    </header>
 
-        <div class="info-box" role="region" aria-label="Dashboard status">
-            <h2>Status</h2>
-            <p>Authentication and account-aware navigation are in active implementation.</p>
-            <p>This dashboard currently provides a stable entry point to existing services.</p>
-        </div>
+    <section class="grid two-up">
+      <article class="panel">
+        <h2>Deployment</h2>
+        <dl class="facts">
+          <div>
+            <dt>Hostname</dt>
+            <dd>{{ manifest.hostname }}</dd>
+          </div>
+          <div>
+            <dt>Profile</dt>
+            <dd>{{ manifest.profile }}</dd>
+          </div>
+          <div>
+            <dt>Extended services</dt>
+            <dd>{{ 'Enabled (restricted)' if manifest.extended_services_enabled else 'Disabled' }}</dd>
+          </div>
+          <div>
+            <dt>Legacy chat</dt>
+            <dd>{{ 'Enabled (restricted)' if manifest.legacy_chat_enabled else 'Disabled' }}</dd>
+          </div>
+        </dl>
+      </article>
 
-        <div class="info-box" role="navigation" aria-label="Dashboard links">
-            <h2>Services</h2>
-            <ul>
-                <li><a href="/chat">Secure Chat Rooms</a></li>
-                <li><a href="/keys">Key Management</a></li>
-                <li><a href="/health">Health Status (JSON)</a></li>
-            </ul>
-        </div>
-    </div>
+      <article class="panel">
+        <h2>Quick links</h2>
+        <ul class="bullets">
+          <li><a href="/console">Operator Console</a></li>
+          <li><a href="/chat">Secure Chat Rooms</a></li>
+          <li><a href="/keys">Key Management</a></li>
+          <li><a href="/health">Health Status (JSON)</a></li>
+          <li><a href="/version">Version Info (JSON)</a></li>
+          <li><a href="/chat/stats">Chat Stats (JSON)</a></li>
+          <li><a href="/console/api">Service Manifest (JSON)</a></li>
+        </ul>
+      </article>
+    </section>
 
-    <div class="footer">
-        OpSecChat {{ version|default('0.8.0-alpha') }} | <a href="https://github.com/HyperionGray/opsechat">GitHub</a> | MIT License
-    </div>
+    <section class="panel">
+      <h2>Active services</h2>
+      <div class="cards">
+        {% for service in manifest.services %}
+        <article class="card">
+          <div class="card-header">
+            <h3>{{ service.label }}</h3>
+            {% if service.href %}
+            <a class="button" href="{{ service.href }}">Open</a>
+            {% else %}
+            <span class="button disabled">Restricted</span>
+            {% endif %}
+          </div>
+          <ul class="endpoint-list">
+            {% for endpoint in service.api %}
+            <li><code>{{ endpoint }}</code></li>
+            {% endfor %}
+          </ul>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+  </main>
 </body>
 </html>
