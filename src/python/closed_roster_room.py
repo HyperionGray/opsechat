@@ -185,7 +185,7 @@ class ClosedRosterState:
         }
         recipient_fingerprints = {
             normalize_fingerprint(fingerprint)
-            for fingerprint in payload.get("recipient_encryption_fingerprints", [])
+            for fingerprint in (payload.get("recipient_encryption_fingerprints") or [])
         }
         if recipient_fingerprints != expected_fingerprints:
             raise ValueError("recipient set does not match the room roster")
