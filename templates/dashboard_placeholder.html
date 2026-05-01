@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpSecChat Dashboard Placeholder</title>
+  <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+<body>
+  <main>
+    <h1>Dashboard Placeholder</h1>
+    <p>This route is a temporary operator dashboard entry point.</p>
+    <ul>
+      {% for link in links %}
+      <li><a href="{{ link.href }}">{{ link.label }}</a></li>
+      {% endfor %}
+    </ul>
+  </main>
+</body>
+</html>
