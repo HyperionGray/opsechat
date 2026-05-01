@@ -48,6 +48,22 @@ tests/
 
 ## Running Tests
 
+### Unified Test Runner
+
+Use the repository test runner for a quick baseline:
+
+```bash
+bash run_tests.sh
+```
+
+Useful modes:
+
+```bash
+bash run_tests.sh --python    # Python tests only
+bash run_tests.sh --skip-e2e  # Python tests, skip Playwright smoke test
+bash run_tests.sh --e2e       # Playwright smoke test only
+```
+
 ### Quick Start
 
 Run all tests:

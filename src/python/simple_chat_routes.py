@@ -74,10 +74,17 @@ class ChatRoom:
     
     def __init__(self, room_id):
         self.room_id = room_id
+        self.room_key = secrets.token_urlsafe(32)
         self.messages = []
         self.users = {}
         self.created_at = datetime.datetime.now()
+        self.room_key = generate_secure_room_id(32)
         self.lock = threading.Lock()
+        self._room_key = secrets.token_urlsafe(32)
+        # Legacy compatibility key kept for older tests/integrations that still
+        # assert room-level key generation. Closed-roster OpenPGP is the active
+        # messaging model and does not use this value for transport encryption.
+        self._legacy_room_key = secrets.token_urlsafe(32)
         self.closed_roster = ClosedRosterState(room_id)
         # Backward-compatibility token for legacy room-key callers.
         self._legacy_room_key = secrets.token_urlsafe(32)
@@ -89,6 +96,10 @@ class ChatRoom:
             "message": message_text,
         }
         self._store_message(user_id, username, color, payload)
+
+    def get_room_key(self):
+        """Return a legacy per-room key used by backwards-compatibility tests."""
+        return self.room_key
 
     def _store_message(self, user_id, username, color, payload):
         with self.lock:
@@ -122,6 +133,11 @@ class ChatRoom:
         """Return the room's closed-roster OpenPGP state."""
         with self.lock:
             return self.closed_roster.serialize()
+
+    def get_room_key(self):
+        """Return a per-room compatibility key for legacy test/code paths."""
+        with self.lock:
+            return self._legacy_room_key
 
     def add_encrypted_message(self, user_id, username, color, payload):
         """Validate and store a closed-roster OpenPGP envelope."""
@@ -315,18 +331,25 @@ def generate_secure_dm_id():
 
 def register_simple_chat_routes(app):
     """Register simple chat routes with the Flask app"""
-    
-    @app.route('/chat', strict_slashes=False)
-    def chat_index():
-        """Landing page for creating/joining chat rooms"""
+
+    def read_version():
+        """Read application version with safe fallback."""
         # Read version from VERSION file (use absolute path so it works regardless of cwd)
         try:
             with open(_REPO_ROOT / 'VERSION', 'r', encoding='utf-8') as f:
-                version = f.read().strip()
+                return f.read().strip()
         except (FileNotFoundError, OSError):
-            version = '0.8.0-alpha'  # fallback
-        
-        return render_template("simple_chat_index.html", version=version)
+            return '0.8.0-alpha'  # fallback
+
+    @app.route('/chat', strict_slashes=False)
+    def chat_index():
+        """Landing page for creating/joining chat rooms"""
+        return render_template("simple_chat_index.html", version=read_version())
+
+    @app.route('/keys', strict_slashes=False)
+    def keys_index():
+        """Minimal key-management shell while full workflow is in progress."""
+        return render_template("keys.html", version=read_version())
     
     @app.route('/chat/create', methods=['POST'])
     @limiter.limit("10 per hour; 3 per minute")

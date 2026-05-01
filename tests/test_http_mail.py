@@ -115,6 +115,21 @@ class TestHttpMailStorage:
         result = self.storage.delete_mailbox("nope", "key")
         assert result is False
 
+    def test_alias_lookup_returns_mailbox(self):
+        mb = self.storage.create_mailbox(alias="burner-alias")
+        fetched = self.storage.get_mailbox_by_alias("burner-alias")
+        assert fetched is not None
+        assert fetched.address == mb.address
+
+    def test_alias_lookup_returns_none_for_unknown_alias(self):
+        assert self.storage.get_mailbox_by_alias("missing-alias") is None
+
+    def test_alias_lookup_returns_none_after_mailbox_deletion(self):
+        mb = self.storage.create_mailbox(alias="burner-alias")
+        deleted = self.storage.delete_mailbox(mb.address, mb.read_key)
+        assert deleted is True
+        assert self.storage.get_mailbox_by_alias("burner-alias") is None
+
     def test_cleanup_empty_old_mailboxes(self):
         mb = self.storage.create_mailbox()
         # Backdate creation time to trigger cleanup

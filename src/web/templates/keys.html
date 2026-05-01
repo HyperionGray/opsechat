@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpSecChat - Key Management</title>
+    <link rel="stylesheet" href="/static/simple-chat-index.css">
+</head>
+<body>
+    <div class="container" role="main">
+        <h1>Key Management</h1>
+
+        <div class="info-box" role="region" aria-label="Key management overview">
+            <h2>Current State</h2>
+            <ul>
+                <li>This page is a safe shell for upcoming key workflows.</li>
+                <li>Keys are generated or imported locally in the browser during chat room setup.</li>
+                <li>Servers do not retain plaintext room messages on disk.</li>
+            </ul>
+        </div>
+
+        <div class="info-box" role="region" aria-label="Next key management actions">
+            <h2>Planned Next Actions</h2>
+            <ul>
+                <li>Add key generation helper flow</li>
+                <li>Add key import/export user interface</li>
+                <li>Add backup and verification guidance</li>
+            </ul>
+        </div>
+
+        <div class="info-box" role="navigation" aria-label="Navigation links">
+            <h2>Navigation</h2>
+            <ul>
+                <li><a href="/dashboard">Back to Dashboard</a></li>
+                <li><a href="/chat">Go to Chat</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="footer">
+        OpSecChat {{ version|default('0.8.0-alpha') }} | <a href="https://github.com/HyperionGray/opsechat">GitHub</a> | MIT License
+    </div>
+</body>
+</html>
