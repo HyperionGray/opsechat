@@ -90,6 +90,10 @@ class ChatRoom:
         }
         self._store_message(user_id, username, color, payload)
 
+    def get_room_key(self):
+        """Return a legacy per-room key used by backwards-compatibility tests."""
+        return self.room_key
+
     def _store_message(self, user_id, username, color, payload):
         with self.lock:
             msg = {
