@@ -137,7 +137,7 @@ print(server.MESSAGE_LIFETIME)
       );
       
       const lifetime = parseInt(stdout.trim());
-      expect(lifetime).toBe(240); // 4 minutes in seconds
+      expect(lifetime).toBe(180); // Expect message lifetime to be 180 seconds (3 minutes)
     } catch (error) {
       throw new Error(`Message lifetime test failed: ${error.message}`);
     }

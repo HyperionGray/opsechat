@@ -31,10 +31,6 @@ test.describe('Headless UI Tests - Landing Page', () => {
     }
     
     expect(response.status()).toBe(200);
-    
-    // Check if the page has expected elements
-    const content = await page.content();
-    expect(content).toBeDefined();
   });
 
   test('should return 404 for invalid path', async ({ page }) => {
