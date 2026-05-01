@@ -12,6 +12,7 @@ from tor_transport import (
     create_tor_connection,
     get_tor_control_endpoint,
     get_tor_socks_endpoint,
+    resolve_tor_control_endpoint,
     tor_ingress_required,
     tor_socks_proxy_url,
 )
@@ -41,6 +42,15 @@ def test_configure_requests_session_sets_tor_proxies(monkeypatch):
     assert session.trust_env is False
     assert session.proxies["http"] == "socks5h://tor:9050"
     assert session.proxies["https"] == "socks5h://tor:9050"
+
+
+@patch("tor_transport.socket.gethostbyname", return_value="172.18.0.2")
+def test_resolve_tor_control_endpoint_resolves_hostnames(mock_gethostbyname, monkeypatch):
+    monkeypatch.setenv("TOR_CONTROL_HOST", "tor")
+    monkeypatch.setenv("TOR_CONTROL_PORT", "9051")
+
+    assert resolve_tor_control_endpoint() == ("172.18.0.2", 9051)
+    mock_gethostbyname.assert_called_once_with("tor")
 
 
 @patch("tor_transport.socks.create_connection")
