@@ -155,6 +155,13 @@ def create_app():
     def health():
         return jsonify(get_health_status())
 
+    @app.route('/version', methods=["GET"])
+    def version():
+        health_data = get_health_status()
+        return jsonify({
+            "version": health_data.get("version", "unknown"),
+        })
+
     # Operational stats endpoint for monitoring dashboards
     @app.route('/chat/stats', methods=["GET"])
     def chat_stats():
