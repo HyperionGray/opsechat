@@ -5,13 +5,14 @@ Tests basic connectivity and message exchange without TUI
 """
 
 import sys
-import os
+from pathlib import Path
 import socket
 import json
 import time
 
-# Add parent directory's src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+# Add reorganized Python source tree to path.
+SRC_PYTHON = Path(__file__).resolve().parents[1] / "src" / "python"
+sys.path.insert(0, str(SRC_PYTHON))
 
 def test_client(host='127.0.0.1', port=5555):
     """Test basic client functionality"""

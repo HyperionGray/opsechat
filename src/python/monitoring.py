@@ -9,6 +9,7 @@ import time
 import sys
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, Any, Optional
 from functools import wraps
 import traceback
@@ -310,10 +311,13 @@ def monitor_performance(operation_name: str):
 # Global APM instance
 apm = ApplicationPerformanceMonitor()
 
+_PYTHON_SRC_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = _PYTHON_SRC_DIR.parents[1]
+
 # Health check endpoint data
 def _read_version() -> str:
     """Read version from VERSION file, falling back to 'unknown'"""
-    version_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'VERSION')
+    version_file = _REPO_ROOT / "VERSION"
     try:
         with open(version_file) as f:
             return f.read().strip()

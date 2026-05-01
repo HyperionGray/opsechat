@@ -3,7 +3,7 @@
 ## Overview
 
 OpSecChat supports automated domain rotation for burner email workflows.
-The implementation is centered on `DomainRotationManager` in `domain_manager.py`.
+The implementation is centered on `DomainRotationManager` in `src/python/domain_manager.py`.
 
 Current capabilities:
 
@@ -89,11 +89,11 @@ print(status)
 Use the built-in CLI wrapper:
 
 ```bash
-python domain_rotation_cli.py config
-python domain_rotation_cli.py status
-python domain_rotation_cli.py search
-python domain_rotation_cli.py rotate
-python domain_rotation_cli.py list
+python bin/domain-rotation.py config
+python bin/domain-rotation.py status
+python bin/domain-rotation.py search
+python bin/domain-rotation.py rotate
+python bin/domain-rotation.py list
 ```
 
 Notes:

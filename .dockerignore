@@ -59,7 +59,6 @@ include/
 pf-tasks/
 quadlets/
 scripts/
-src/
 
 # ---- Container/compose files (not needed inside container) ----
 container-compose.yml

@@ -1,11 +1,21 @@
 #!/usr/bin/env python3
 """
-Installation and Import Test Script for opsechat
-Tests all core modules can be imported successfully
+Installation and import test script for opsechat.
+
+The runtime modules now live under ``src/python``.
 """
 
 import sys
 import traceback
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+SRC_PYTHON = PROJECT_ROOT / "src" / "python"
+
+for candidate in (PROJECT_ROOT, SRC_PYTHON):
+    candidate_str = str(candidate)
+    if candidate_str not in sys.path:
+        sys.path.insert(0, candidate_str)
 
 def test_imports():
     """Test all core module imports"""

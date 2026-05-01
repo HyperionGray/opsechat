@@ -8,12 +8,8 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create a stable shared group for reading the Tor control cookie.
-RUN groupadd --gid 2000 tor-cookie
-
 # Create an unprivileged runtime user.
-RUN useradd --create-home --home-dir /home/opsechat --shell /usr/sbin/nologin opsechat \
-    && usermod --append --groups tor-cookie opsechat
+RUN useradd --create-home --home-dir /home/opsechat --shell /usr/sbin/nologin opsechat
 
 # Set working directory
 WORKDIR /app
@@ -30,38 +26,13 @@ RUN pip install --no-cache-dir -r requirements.txt || \
      echo "Attempting installation with --trusted-host (NOT RECOMMENDED FOR PRODUCTION)..." && \
      pip install --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt)
 
-# Copy application code
-COPY app_factory.py ./
-COPY burner_routes.py ./
-COPY chat_routes.py ./
-COPY domain_manager.py ./
-COPY email_routes.py ./
-COPY email_security_routes.py ./
-COPY email_security_tools.py ./
-COPY email_system.py ./
-COPY email_transport.py ./
-COPY http_mail_routes.py ./
-COPY http_mail_system.py ./
-COPY landing_routes.py ./
-COPY monitoring.py ./
-COPY mvp_routes.py ./
-COPY openpgp_room_policy.py ./
-COPY closed_roster_room.py ./
-COPY rate_limiter.py ./
-COPY review_routes.py ./
-COPY runserver.py ./
-COPY runserver_refactored.py ./
-COPY security_routes.py ./
-COPY simple_chat_routes.py ./
-COPY state_manager.py ./
-COPY tor_transport.py ./
-COPY utils.py ./
-COPY MANIFEST.in .
-COPY VERSION .
+# Copy application source
+COPY src/python/ ./src/python/
+COPY src/web/ ./src/web/
+COPY VERSION ./
 
-# Copy static files and templates
-COPY static/ static/
-COPY templates/ templates/
+# Keep Python source importable without extra environment setup.
+ENV PYTHONPATH=/app/src/python
 
 RUN chown -R opsechat:opsechat /app
 
@@ -75,8 +46,12 @@ ENV PYTHONDONTWRITEBYTECODE=1
 
 USER opsechat
 
+# Healthcheck: verify the Flask /health endpoint is responding
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl --fail --silent http://127.0.0.1:5000/health || exit 1
+
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=10 \
   CMD curl --fail --silent http://127.0.0.1:5000/health || exit 1
 
 # Run the application
-CMD ["python", "runserver_refactored.py"]
+CMD ["python", "/app/src/python/runserver.py"]

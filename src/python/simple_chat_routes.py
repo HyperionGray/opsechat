@@ -12,6 +12,7 @@ This module provides a simplified, security-focused chat system with:
 """
 
 import re
+from pathlib import Path
 import os
 import datetime
 import secrets
@@ -23,8 +24,8 @@ from closed_roster_room import (
     OPENPGP_ENVELOPE_TYPE,
 )
 
-# Absolute path to this file's directory (used for reliable VERSION lookup)
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Absolute path to the repository root (used for reliable metadata lookups)
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Configurable expiry times (seconds) via environment variables
 MESSAGE_EXPIRY_SECONDS = int(os.environ.get('MESSAGE_EXPIRY_SECONDS', 180))  # default 3 min
@@ -335,7 +336,7 @@ def register_simple_chat_routes(app):
         """Read application version with safe fallback."""
         # Read version from VERSION file (use absolute path so it works regardless of cwd)
         try:
-            with open(os.path.join(_BASE_DIR, 'VERSION'), 'r') as f:
+            with open(_REPO_ROOT / 'VERSION', 'r', encoding='utf-8') as f:
                 return f.read().strip()
         except (FileNotFoundError, OSError):
             return '0.8.0-alpha'  # fallback

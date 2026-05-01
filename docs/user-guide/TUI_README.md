@@ -35,7 +35,7 @@ sudo apt-get install tor  # or your package manager
 tor --ControlPort 9051 --CookieAuthentication 1
 
 # In another terminal, start server with Tor
-python tui-server.py --tor
+python bin/tui-server.py --tor
 
 # Output will show:
 # [*] Creating ephemeral hidden service...
@@ -48,26 +48,26 @@ python tui-server.py --tor
 
 ```bash
 # Local testing only
-python tui-server.py
+python bin/tui-server.py
 
 # Bind to all interfaces
-python tui-server.py --host 0.0.0.0 --port 5555
+python bin/tui-server.py --host 0.0.0.0 --port 5555
 ```
 
 ### 3. Connect with Client
 
 ```bash
 # Connect to local server (no Tor)
-python tui-client.py
+python bin/tui-client.py
 
 # Connect to Tor hidden service
-python tui-client.py --host abc123...xyz.onion --port 5555
+python bin/tui-client.py --host abc123...xyz.onion --port 5555
 
 # Connect via Tor SOCKS proxy (for .onion or extra privacy)
-python tui-client.py --host <server> --port 5555 --tor
+python bin/tui-client.py --host <server> --port 5555 --tor
 
 # Specify custom Tor SOCKS port
-python tui-client.py --host <server> --port 5555 --tor --tor-port 9050
+python bin/tui-client.py --host <server> --port 5555 --tor --tor-port 9050
 ```
 
 The client will automatically use Tor SOCKS proxy if:

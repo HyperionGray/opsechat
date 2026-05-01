@@ -5,6 +5,7 @@ This module handles Flask application creation and configuration,
 extracted from runserver.py to improve code organization.
 """
 
+from pathlib import Path
 import os
 import secrets
 from datetime import datetime, timezone
@@ -50,7 +51,12 @@ def register_operational_routes(app):
 
 def create_app():
     """Create and configure the Flask application"""
-    app = Flask(__name__)
+    web_root = Path(__file__).resolve().parents[1] / "web"
+    app = Flask(
+        __name__,
+        template_folder=str(web_root / "templates"),
+        static_folder=str(web_root / "static"),
+    )
     
     # Set secret key for sessions
     app.secret_key = os.environ.get("OPSECHAT_SECRET_KEY") or secrets.token_urlsafe(64)

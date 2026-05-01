@@ -13,19 +13,22 @@ import os
 import datetime
 import string
 import random
+from pathlib import Path
 
-# Add parent directory to Python path for imports
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
+# Add repository root and organized Python source to the import path.
+base_dir = Path(__file__).resolve().parents[1]
+src_python = base_dir / "src" / "python"
+for candidate in (base_dir, src_python):
+    candidate_str = str(candidate)
+    if candidate_str not in sys.path:
+        sys.path.insert(0, candidate_str)
 
 from flask import Flask, session
 from mock_routes import create_mock_routes
 
 # Create Flask app with absolute paths for better CI compatibility
-base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-template_dir = os.path.join(base_dir, 'templates')
-static_dir = os.path.join(base_dir, 'static')
+template_dir = str(base_dir / 'src' / 'web' / 'templates')
+static_dir = str(base_dir / 'src' / 'web' / 'static')
 
 # Verify directories exist and provide fallback
 if not os.path.exists(template_dir):
