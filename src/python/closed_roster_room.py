@@ -203,7 +203,7 @@ class ClosedRosterState:
         }
         recipient_key_ids = {
             _normalize_key_id(key_id, "recipient_encryption_key_ids")
-            for key_id in payload.get("recipient_encryption_key_ids", [])
+            for key_id in (payload.get("recipient_encryption_key_ids") or [])
         }
         if recipient_key_ids != expected_key_ids:
             raise ValueError("recipient encryption key ids do not match the room roster")
