@@ -4,5 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
-  window.location.replace(`/${targetPath}/yesscript`);
+  window.setTimeout(() => {
+    window.location.replace(`/${targetPath}/yesscript`);
+  }, 300);
 });

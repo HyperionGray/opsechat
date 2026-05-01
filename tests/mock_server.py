@@ -21,6 +21,7 @@ if parent_dir not in sys.path:
 
 from flask import Flask, session
 from mock_routes import create_mock_routes
+from werkzeug.serving import WSGIRequestHandler
 
 # Create Flask app with absolute paths for better CI compatibility
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -87,7 +88,6 @@ except ImportError as e:
 def remove_headers(response):
     # Strip framework-identifying headers and avoid version leakage
     response.headers.pop("Server", None)
-    response.headers["Server"] = "OpSecChat"
     response.headers["Date"] = ""
     return response
 
@@ -110,6 +110,11 @@ def health_check():
             'path': app.config.get('path')
         }
     }), 200
+
+
+@app.errorhandler(404)
+def not_found(_error):
+    return ("Not Found", 404)
 
 
 def main():
@@ -159,9 +164,29 @@ def main():
     
     print("Mock server starting on http://127.0.0.1:5001")
     print(f"Test path: http://127.0.0.1:5001/{app.config['path']}")
-    
+
     try:
-        app.run(host='127.0.0.1', port=5001, debug=False, threaded=True)
+        class QuietRequestHandler(WSGIRequestHandler):
+            server_version = ""
+            sys_version = ""
+
+            def version_string(self):
+                return ""
+
+            def send_response(self, code, message=None):
+                # Keep framework-level Server/Date headers blank for header-security tests.
+                self.log_request(code)
+                self.send_response_only(code, message)
+                self.send_header("Server", "")
+                self.send_header("Date", "")
+
+        app.run(
+            host='127.0.0.1',
+            port=5001,
+            debug=False,
+            threaded=True,
+            request_handler=QuietRequestHandler,
+        )
     except KeyboardInterrupt:
         print("\nMock server stopped")
     except Exception as e:

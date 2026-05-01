@@ -97,3 +97,14 @@ def register_mvp_routes(app):
     @app.route("/console/api", methods=["GET"])
     def mvp_console_api():
         return jsonify(_build_manifest())
+
+    @app.route("/dashboard", methods=["GET"])
+    def dashboard_placeholder():
+        links = [
+            {"label": "Operator Console", "href": "/console"},
+            {"label": "Secure Chat", "href": "/chat"},
+            {"label": "Health", "href": "/health"},
+            {"label": "Version", "href": "/version"},
+            {"label": "Chat Stats", "href": "/chat/stats"},
+        ]
+        return render_template("dashboard_placeholder.html", links=links)

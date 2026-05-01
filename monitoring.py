@@ -322,7 +322,7 @@ def _read_version() -> str:
 
 
 def get_version() -> str:
-    """Get application version from VERSION file with safe fallback."""
+    """Return the current application version string."""
     return _read_version()
 
 
