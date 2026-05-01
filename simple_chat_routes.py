@@ -324,18 +324,30 @@ def generate_secure_dm_id():
 
 def register_simple_chat_routes(app):
     """Register simple chat routes with the Flask app"""
-    
-    @app.route('/chat', strict_slashes=False)
-    def chat_index():
-        """Landing page for creating/joining chat rooms"""
+
+    def read_version():
+        """Read application version with safe fallback."""
         # Read version from VERSION file (use absolute path so it works regardless of cwd)
         try:
             with open(os.path.join(_BASE_DIR, 'VERSION'), 'r') as f:
-                version = f.read().strip()
+                return f.read().strip()
         except (FileNotFoundError, OSError):
-            version = '0.8.0-alpha'  # fallback
-        
-        return render_template("simple_chat_index.html", version=version)
+            return '0.8.0-alpha'  # fallback
+
+    @app.route('/chat', strict_slashes=False)
+    def chat_index():
+        """Landing page for creating/joining chat rooms"""
+        return render_template("simple_chat_index.html", version=read_version())
+
+    @app.route('/dashboard', strict_slashes=False)
+    def dashboard_index():
+        """Minimal dashboard shell for consolidated navigation."""
+        return render_template("dashboard.html", version=read_version())
+
+    @app.route('/keys', strict_slashes=False)
+    def keys_index():
+        """Minimal key-management shell while full workflow is in progress."""
+        return render_template("keys.html", version=read_version())
     
     @app.route('/chat/create', methods=['POST'])
     @limiter.limit("10 per hour; 3 per minute")
