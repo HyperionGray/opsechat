@@ -157,9 +157,9 @@ def create_app():
 
     @app.route('/version', methods=["GET"])
     def version():
+        health_data = get_health_status()
         return jsonify({
-            "service": "opsechat",
-            "version": get_version(),
+            "version": health_data.get("version", "unknown"),
         })
 
     # Operational stats endpoint for monitoring dashboards

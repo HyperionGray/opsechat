@@ -73,6 +73,7 @@ class ChatRoom:
     
     def __init__(self, room_id):
         self.room_id = room_id
+        self.room_key = secrets.token_urlsafe(32)
         self.messages = []
         self.users = {}
         self.created_at = datetime.datetime.now()
@@ -88,6 +89,10 @@ class ChatRoom:
             "message": message_text,
         }
         self._store_message(user_id, username, color, payload)
+
+    def get_room_key(self):
+        """Return a legacy per-room key used by backwards-compatibility tests."""
+        return self.room_key
 
     def _store_message(self, user_id, username, color, payload):
         with self.lock:
@@ -121,6 +126,11 @@ class ChatRoom:
         """Return the room's closed-roster OpenPGP state."""
         with self.lock:
             return self.closed_roster.serialize()
+
+    def get_room_key(self):
+        """Return a per-room compatibility key for legacy test/code paths."""
+        with self.lock:
+            return self._legacy_room_key
 
     def add_encrypted_message(self, user_id, username, color, payload):
         """Validate and store a closed-roster OpenPGP envelope."""

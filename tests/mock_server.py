@@ -88,10 +88,7 @@ except ImportError as e:
 def remove_headers(response):
     # Strip framework-identifying headers and avoid version leakage
     response.headers.pop("Server", None)
-    response.headers.pop("Date", None)
-    if response.status_code == 404 and not response.get_data():
-        response.set_data(b"Not Found")
-        response.mimetype = "text/plain"
+    response.headers["Date"] = ""
     return response
 
 
@@ -177,7 +174,7 @@ def main():
     
     print("Mock server starting on http://127.0.0.1:5001")
     print(f"Test path: http://127.0.0.1:5001/{app.config['path']}")
-    
+
     try:
         app.run(
             host='127.0.0.1',
