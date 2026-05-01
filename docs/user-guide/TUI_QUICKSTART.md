@@ -36,7 +36,7 @@ python -c "import urwid, socks, stem; print('✓ All dependencies installed')"
 ### Terminal 1: Start Server
 
 ```bash
-python tui-server.py
+python bin/tui-server.py
 ```
 
 You should see:
@@ -54,7 +54,7 @@ You should see:
 ### Terminal 2: Connect Client
 
 ```bash
-python tui-client.py
+python bin/tui-client.py
 ```
 
 You'll see the TUI interface:
@@ -102,7 +102,7 @@ Leave this running in the background.
 ### 2. Start Server with Tor
 
 ```bash
-python tui-server.py --tor
+python bin/tui-server.py --tor
 ```
 
 Output:
@@ -124,7 +124,7 @@ Output:
 Your contacts use:
 
 ```bash
-python tui-client.py --host abc123def456ghi789.onion --port 5555
+python bin/tui-client.py --host abc123def456ghi789.onion --port 5555
 ```
 
 The client automatically detects `.onion` and uses Tor SOCKS proxy.
@@ -197,7 +197,7 @@ pip install urwid>=2.1.0
 # Find process using port
 lsof -i :5555
 # Kill it or use different port
-python tui-server.py --port 5556
+python bin/tui-server.py --port 5556
 ```
 
 ## Advanced Usage
@@ -206,16 +206,16 @@ python tui-server.py --port 5556
 
 ```bash
 # Server
-python tui-server.py --port 6666
+python bin/tui-server.py --port 6666
 
 # Client
-python tui-client.py --port 6666
+python bin/tui-client.py --port 6666
 ```
 
 ### Bind to All Interfaces
 
 ```bash
-python tui-server.py --host 0.0.0.0 --port 5555
+python bin/tui-server.py --host 0.0.0.0 --port 5555
 ```
 
 **Warning:** Only do this if you understand the security implications!
@@ -224,14 +224,14 @@ python tui-server.py --host 0.0.0.0 --port 5555
 
 ```bash
 # Use Tor even for non-.onion addresses
-python tui-client.py --host <server-ip> --tor
+python bin/tui-client.py --host <server-ip> --tor
 ```
 
 ### Custom Tor SOCKS Port
 
 ```bash
 # If your Tor SOCKS is on different port
-python tui-client.py --host <server> --tor-port 9150
+python bin/tui-client.py --host <server> --tor-port 9150
 ```
 
 ## Testing
@@ -251,7 +251,7 @@ python tests/test-tui-client.py
 
 ### Manual Test
 
-1. Start server: `python tui-server.py`
+1. Start server: `python bin/tui-server.py`
 2. Open 3 terminals with clients
 3. Send messages from different clients
 4. Verify all clients see the messages
@@ -277,4 +277,4 @@ python tests/test-tui-client.py
 
 **Questions?** Check [TUI_README.md](TUI_README.md) or open an issue on GitHub.
 
-**Ready to chat?** Just run `python tui-server.py` and you're live!
+**Ready to chat?** Just run `python bin/tui-server.py` and you're live!

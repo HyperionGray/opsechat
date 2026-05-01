@@ -130,10 +130,10 @@ class TestInstallerScripts(unittest.TestCase):
                          f"install.sh should support {pm} package manager")
     
     def test_install_documentation_exists(self):
-        """Test that INSTALL.md documentation exists"""
-        install_doc = os.path.join(self.repo_root, 'INSTALL.md')
+        """Test that installation documentation exists under docs/setup"""
+        install_doc = os.path.join(self.repo_root, 'docs', 'setup', 'INSTALL.md')
         self.assertTrue(os.path.exists(install_doc),
-                       "INSTALL.md should exist in repository root")
+                       "docs/setup/INSTALL.md should exist")
     
     def test_readme_has_install_section(self):
         """Test that README.md references the installer"""

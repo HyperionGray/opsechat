@@ -18,14 +18,14 @@ Instead:
 ### Local server
 
 ```bash
-python chat-room.py
+python bin/chat-room.py
 ```
 
 ### Tor hidden service
 
 ```bash
 tor --ControlPort 9051 --CookieAuthentication 1
-python chat-room.py --tor
+python bin/chat-room.py --tor
 ```
 
 Then open `/chat`.

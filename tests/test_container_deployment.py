@@ -164,9 +164,9 @@ class TestDockerfile:
             content = f.read()
         
         # Key app files should be copied
-        assert 'runserver.py' in content
-        assert 'email_system.py' in content
-        assert 'templates/' in content
+        assert 'src/python/' in content
+        assert 'src/web/' in content
+        assert '/app/src/python/runserver.py' in content
 
 
 class TestTorConfig:
@@ -300,7 +300,7 @@ class TestReleaseSkeleton:
     """Test the requested release layout exists."""
 
     def test_release_directories_exist(self):
-        for directory in ['src', 'include', 'containers', 'quadlets', 'tests', 'docs']:
+        for directory in ['src', 'include', 'containers', 'quadlets', 'tests', 'docs', 'bin']:
             path = os.path.join(REPO_DIR, directory)
             assert os.path.isdir(path), f"{directory} should exist"
 

@@ -6,10 +6,10 @@ Launches the TUI-based chat server with optional Tor integration.
 """
 
 import sys
-import os
+from pathlib import Path
 
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+SRC_PYTHON = Path(__file__).resolve().parents[1] / "src" / "python"
+sys.path.insert(0, str(SRC_PYTHON))
 
 from tui.server import main
 

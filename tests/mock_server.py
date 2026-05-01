@@ -1,43 +1,48 @@
 #!/usr/bin/env python3
 """
-Refactored Mock Server for opsechat testing
+Refactored Mock Server for opsechat testing.
 
-This is a significantly simplified version of the original mock_server.py,
-using modular route handlers for better organization and maintainability.
-
-Original file was 501 lines, refactored to ~120 lines.
+This test fixture mirrors the organized repository layout by importing Python
+modules from ``src/python`` and loading Flask assets from ``src/web``.
 """
 
-import sys
-import os
-import datetime
-import string
-import random
+from __future__ import annotations
 
-# Add parent directory to Python path for imports
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
+import datetime
+import random
+import string
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SRC_PYTHON = REPO_ROOT / "src" / "python"
+SRC_WEB = REPO_ROOT / "src" / "web"
+
+for candidate in (REPO_ROOT, SRC_PYTHON):
+    candidate_str = str(candidate)
+    if candidate_str not in sys.path:
+        sys.path.insert(0, candidate_str)
 
 from flask import Flask, session
 from mock_routes import create_mock_routes
 
-# Create Flask app with absolute paths for better CI compatibility
-base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-template_dir = os.path.join(base_dir, 'templates')
-static_dir = os.path.join(base_dir, 'static')
+# Create Flask app with absolute paths for better CI compatibility.
+template_dir = SRC_WEB / "templates"
+static_dir = SRC_WEB / "static"
 
 # Verify directories exist and provide fallback
-if not os.path.exists(template_dir):
+if not template_dir.exists():
     print(f"Warning: Template directory not found: {template_dir}")
     template_dir = None
-if not os.path.exists(static_dir):
+if not static_dir.exists():
     print(f"Warning: Static directory not found: {static_dir}")
     static_dir = None
 
-app = Flask(__name__, 
-           template_folder=template_dir,
-           static_folder=static_dir)
+app = Flask(
+    __name__,
+    template_folder=str(template_dir) if template_dir else None,
+    static_folder=str(static_dir) if static_dir else None,
+)
 
 # Configure app
 app.secret_key = 'test-secret-key-for-mock-server'
@@ -173,24 +178,24 @@ if __name__ == '__main__':
     print("=" * 50)
     print("Starting mock server for testing...")
     print(f"Python version: {sys.version}")
-    print(f"Working directory: {os.getcwd()}")
-    print(f"Parent directory: {parent_dir}")
+    print(f"Working directory: {Path.cwd()}")
+    print(f"Repository root: {REPO_ROOT}")
     print(f"Template directory: {template_dir}")
     print(f"Static directory: {static_dir}")
     if template_dir:
-        print(f"Template directory exists: {os.path.exists(template_dir)}")
+        print(f"Template directory exists: {template_dir.exists()}")
     if static_dir:
-        print(f"Static directory exists: {os.path.exists(static_dir)}")
+        print(f"Static directory exists: {static_dir.exists()}")
     print(f"Test URL: http://127.0.0.1:5001/test-path-12345")
     print(f"Health check URL: http://127.0.0.1:5001/health")
     print("=" * 50)
     
     # Validate critical directories
-    if template_dir and not os.path.exists(template_dir):
+    if template_dir and not template_dir.exists():
         print(f"WARNING: Template directory not found: {template_dir}")
         print("Server may not render templates correctly")
     
-    if static_dir and not os.path.exists(static_dir):
+    if static_dir and not static_dir.exists():
         print(f"WARNING: Static directory not found: {static_dir}")
         print("Static files may not be served")
     

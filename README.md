@@ -38,10 +38,10 @@ OpSecChat now includes both **Web-Based Chat Rooms** and **Terminal UI (TUI)** f
 
 ```bash
 # Create a local chat room
-python chat-room.py
+python bin/chat-room.py
 
 # Create a Tor hidden service chat room
-python chat-room.py --tor
+python bin/chat-room.py --tor
 ```
 
 Access the chat at `/chat` to create rooms and share with your contacts.
@@ -58,10 +58,10 @@ Access the chat at `/chat` to create rooms and share with your contacts.
 
 ```bash
 # Terminal 1: Start server
-python tui-server.py
+python bin/tui-server.py
 
 # Terminal 2: Connect client
-python tui-client.py
+python bin/tui-client.py
 ```
 
 **With Tor:**
@@ -70,7 +70,7 @@ python tui-client.py
 tor --ControlPort 9051 --CookieAuthentication 1
 
 # Start server with Tor hidden service
-python tui-server.py --tor
+python bin/tui-server.py --tor
 ```
 
 Full TUI Guide: [TUI_README.md](docs/user-guide/TUI_README.md) | [Quick Start](docs/user-guide/TUI_QUICKSTART.md)
@@ -197,7 +197,7 @@ How it works
 You'll see this when it first loads up:
 
 ```
-(venv) alejandrocaceres@Alejandros-MacBook-Pro ~/o/d/dropchat (master) [1]> python runserver.py
+(venv) alejandrocaceres@Alejandros-MacBook-Pro ~/o/d/dropchat (master) [1]> python bin/runserver.py
 [*] Connecting to tor
 [*] Creating ephemeral hidden service, this may take a minute or two
 [*] Started a new hidden service with the address of l7k4f6ie2nr6nnfscxxh4e4wref5dgaelunx5mjctt66mhfyky4rv6id.onion
@@ -237,7 +237,7 @@ Features
 ========
 
 ### Chat System
-- **Simple Web Chat Rooms** - Create secure chat rooms with one command (`python chat-room.py`)
+- **Simple Web Chat Rooms** - Create secure chat rooms with one command (`python bin/chat-room.py`)
 - **Closed-Roster OpenPGP** - Explicit roster bootstrap, signed room messages, and encryption to the full roster
 - **Terminal-Style UI** - Clean, minimal interface focused on security over aesthetics
 - As chat happens inside the Tor network via ephemeral hidden services, everything is encrypted and attribution of chatters is virtually impossible
@@ -284,7 +284,7 @@ Features
 For Amazon Q setup instructions, see [Amazon Q Setup Guide](docs/setup/AMAZON_Q_SETUP_GUIDE.md).
 
 #### Getting Started with Email
-1. Start the server: `python runserver.py` or use deployment method above
+1. Start the server: `python bin/runserver.py` or use deployment method above
 2. Access email configuration: `http://yourservice.onion/{path}/email/config`
 3. Configure SMTP for sending (optional): Add your email server settings
 4. Configure IMAP for receiving (optional): Add your IMAP server settings
@@ -331,7 +331,7 @@ For detailed information, see:
 Security
 ========
 
-For security best practices and recommendations, please see [SECURITY.md](SECURITY.md) and [Security Assessment](docs/assessment/SECURITY_ASSESSMENT.md).
+For security best practices and recommendations, please see [docs/SECURITY.md](docs/SECURITY.md) and [Security Assessment](docs/assessment/SECURITY_ASSESSMENT.md).
 
 **Note on jQuery**: ✅ **RESOLVED** - The bundled jQuery has been updated to v3.7.1 to patch the previously known XSS vulnerabilities (CVE-2020-11023 and CVE-2020-11022). The security vulnerabilities have been addressed.
 
@@ -339,7 +339,7 @@ Examples
 ========
 
 ### Basic Chat Usage
-1. Start the server: `python runserver.py`
+1. Start the server: `python bin/runserver.py`
 2. Share the generated `.onion` URL with participants
 3. Open the URL in Tor Browser
 4. Start chatting anonymously

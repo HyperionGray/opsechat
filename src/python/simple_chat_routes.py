@@ -12,6 +12,7 @@ This module provides a simplified, security-focused chat system with:
 """
 
 import re
+from pathlib import Path
 import os
 import datetime
 import secrets
@@ -23,8 +24,8 @@ from closed_roster_room import (
     OPENPGP_ENVELOPE_TYPE,
 )
 
-# Absolute path to this file's directory (used for reliable VERSION lookup)
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Absolute path to the repository root (used for reliable metadata lookups)
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Configurable expiry times (seconds) via environment variables
 MESSAGE_EXPIRY_SECONDS = int(os.environ.get('MESSAGE_EXPIRY_SECONDS', 180))  # default 3 min
@@ -125,6 +126,17 @@ class ChatRoom:
         with self.lock:
             normalized = self.closed_roster.validate_posted_envelope(payload)
         self._store_message(user_id, username, color, normalized)
+
+    def get_room_key(self):
+        """Compatibility helper for older tests.
+
+        The shared room-key flow is deprecated in the HTTP API, but unit tests
+        still use an internal stable per-room token to assert uniqueness.
+        """
+        digest = secrets.token_urlsafe(32)
+        if not hasattr(self, "_room_key"):
+            self._room_key = digest
+        return self._room_key
     
     def cleanup_old_messages(self):
         """Remove messages older than 3 minutes and overwrite memory"""
@@ -314,7 +326,7 @@ def register_simple_chat_routes(app):
         """Landing page for creating/joining chat rooms"""
         # Read version from VERSION file (use absolute path so it works regardless of cwd)
         try:
-            with open(os.path.join(_BASE_DIR, 'VERSION'), 'r') as f:
+            with open(_REPO_ROOT / 'VERSION', 'r', encoding='utf-8') as f:
                 version = f.read().strip()
         except (FileNotFoundError, OSError):
             version = '0.8.0-alpha'  # fallback

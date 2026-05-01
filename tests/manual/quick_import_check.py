@@ -6,8 +6,11 @@ Quick import test without running the full application
 import sys
 import os
 
-# Add repository root to Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+# Add the organized Python source tree to the import path.
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+SRC_PYTHON = os.path.join(PROJECT_ROOT, 'src', 'python')
+if SRC_PYTHON not in sys.path:
+    sys.path.insert(0, SRC_PYTHON)
 
 def test_core_imports():
     """Test core module imports"""

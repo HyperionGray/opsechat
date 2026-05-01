@@ -26,33 +26,13 @@ RUN pip install --no-cache-dir -r requirements.txt || \
      echo "Attempting installation with --trusted-host (NOT RECOMMENDED FOR PRODUCTION)..." && \
      pip install --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt)
 
-# Copy application code
-COPY app_factory.py ./
-COPY burner_routes.py ./
-COPY chat_routes.py ./
-COPY domain_manager.py ./
-COPY email_routes.py ./
-COPY email_security_routes.py ./
-COPY email_security_tools.py ./
-COPY email_system.py ./
-COPY email_transport.py ./
-COPY http_mail_routes.py ./
-COPY http_mail_system.py ./
-COPY landing_routes.py ./
-COPY monitoring.py ./
-COPY rate_limiter.py ./
-COPY review_routes.py ./
-COPY runserver.py ./
-COPY security_routes.py ./
-COPY simple_chat_routes.py ./
-COPY state_manager.py ./
-COPY utils.py ./
-COPY MANIFEST.in .
-COPY VERSION .
+# Copy application source
+COPY src/python/ ./src/python/
+COPY src/web/ ./src/web/
+COPY VERSION ./
 
-# Copy static files and templates
-COPY static/ static/
-COPY templates/ templates/
+# Keep Python source importable without extra environment setup.
+ENV PYTHONPATH=/app/src/python
 
 RUN chown -R opsechat:opsechat /app
 
@@ -74,4 +54,4 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=10 \
   CMD curl --fail --silent http://127.0.0.1:5000/health || exit 1
 
 # Run the application
-CMD ["python", "runserver.py"]
+CMD ["python", "/app/src/python/runserver.py"]

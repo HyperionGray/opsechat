@@ -15,10 +15,10 @@ cd opsechat
 pip install -r requirements.txt
 
 # Create a chat room (local)
-python chat-room.py
+python bin/chat-room.py
 
 # OR create with Tor hidden service
-python chat-room.py --tor
+python bin/chat-room.py --tor
 ```
 
 **What you get:**
@@ -100,7 +100,7 @@ pip install -r requirements.txt
 
 # Start Tor Browser (must be running)
 # Then start OpSecChat
-python runserver.py
+python bin/runserver.py
 ```
 
 ## What You Get
@@ -157,7 +157,7 @@ sudo systemctl start tor
 sudo lsof -i :5000
 
 # Kill the process or choose different port
-PORT=5001 python runserver.py
+PORT=5001 python bin/runserver.py
 ```
 
 ### "Module Not Found"
@@ -209,7 +209,7 @@ Now that you have OpSecChat running, explore these features:
 
 - **Documentation**: [docs/README.md](docs/README.md)
 - **Full README**: [README.md](README.md)
-- **Security Info**: [SECURITY.md](SECURITY.md)
+- **Security Info**: [docs/SECURITY.md](docs/SECURITY.md)
 - **Report Issues**: [GitHub Issues](https://github.com/HyperionGray/opsechat/issues)
 
 ## Stopping the Server
@@ -220,7 +220,7 @@ Now that you have OpSecChat running, explore these features:
 ```
 
 ### Native
-Press `Ctrl+C` in the terminal running `runserver.py`
+Press `Ctrl+C` in the terminal running `bin/runserver.py`
 
 ---
 

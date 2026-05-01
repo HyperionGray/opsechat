@@ -44,7 +44,7 @@ These cover:
 
 ```bash
 cd /path/to/opsechat
-python3 runserver.py test
+python3 bin/runserver.py test
 ```
 
 Useful checks:
@@ -58,7 +58,7 @@ curl -i http://127.0.0.1:5000/
 
 ```bash
 cd /path/to/opsechat
-python3 runserver.py
+python3 bin/runserver.py
 ```
 
 The server prints the generated `.onion` URL and secret path at startup.
@@ -85,9 +85,10 @@ python3 pf-tasks/test.py --skip-e2e
 
 ## Files to know
 
-- `runserver.py` - main runtime entrypoint
-- `app_factory.py` - Flask app creation and route registration
-- `monitoring.py` - `/health` payload generation
+- `bin/runserver.py` - main runtime launcher
+- `src/python/app_factory.py` - Flask app creation and route registration
+- `src/python/monitoring.py` - `/health` payload generation
+- `src/web/` - Flask templates and static assets
 - `container-compose.yml` - local container deployment (Podman-first)
 - `containers/Dockerfile` - container build and app healthcheck
 - `run_tests.sh` - unified test runner (pytest + Playwright basics)
@@ -101,4 +102,4 @@ python3 pf-tasks/test.py --skip-e2e
 - When changing runtime wiring, update `tests/basic.spec.js`.
 - When changing container behavior, update `tests/test_container_deployment.py`.
 - Re-run Python tests and the basic Playwright smoke test before pushing.
-- Review `SECURITY.md`, `README.md`, and this file when setup or deployment steps change.
+- Review `docs/SECURITY.md`, `README.md`, and this file when setup or deployment steps change.

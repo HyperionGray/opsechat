@@ -11,9 +11,11 @@ import tempfile
 import json
 from datetime import datetime, timedelta
 
-# Add repository root to Python path
+# Add canonical Python source directory to Python path
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-sys.path.insert(0, PROJECT_ROOT)
+SRC_PYTHON = os.path.join(PROJECT_ROOT, "src", "python")
+sys.path.insert(0, SRC_PYTHON)
+WEB_ROOT = os.path.join(PROJECT_ROOT, "src", "web")
 
 def test_chat_functionality():
     """Test chat system functionality"""
@@ -275,7 +277,7 @@ def test_template_files():
     print("\n=== Testing Template Files ===")
     
     try:
-        template_dir = os.path.join(PROJECT_ROOT, "templates")
+        template_dir = os.path.join(WEB_ROOT, "templates")
         
         expected_templates = [
             "drop.html",
@@ -313,7 +315,7 @@ def test_static_files():
     print("\n=== Testing Static Files ===")
     
     try:
-        static_dir = os.path.join(PROJECT_ROOT, "static")
+        static_dir = os.path.join(WEB_ROOT, "static")
         
         expected_files = [
             "jquery.js",

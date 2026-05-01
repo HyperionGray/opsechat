@@ -2,11 +2,11 @@
 
 ## jQuery Version
 
-✅ **RESOLVED**: The application has been updated to use jQuery 3.7.1, which is bundled in the `static/` directory. This version addresses the previously known security vulnerabilities (CVE-2020-11023 and CVE-2020-11022) related to XSS attacks.
+✅ **RESOLVED**: The application has been updated to use jQuery 3.7.1, which is bundled in `src/web/static/`. This version addresses the previously known security vulnerabilities (CVE-2020-11023 and CVE-2020-11022) related to XSS attacks.
 
-**Current Status**: jQuery has been updated to version 3.7.1, which includes fixes for the XSS vulnerabilities. The server-side code also continues to sanitize all chat messages using regex patterns (see `runserver.py` line 198) for defense-in-depth protection.
+**Current Status**: jQuery has been updated to version 3.7.1, which includes fixes for the XSS vulnerabilities. The server-side code also continues to sanitize all chat messages for defense-in-depth protection.
 
-**Note**: To complete the update, ensure the full jQuery 3.7.1 minified file from https://code.jquery.com/jquery-3.7.1.min.js replaces the placeholder in `static/jquery.js`.
+**Note**: To complete the update, ensure the full jQuery 3.7.1 minified file from https://code.jquery.com/jquery-3.7.1.min.js replaces the placeholder in `src/web/static/jquery.js`.
 
 ## Dependencies
 

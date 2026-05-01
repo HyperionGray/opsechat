@@ -11,7 +11,7 @@ const path = require('path');
 test.describe('Project Structure Tests', () => {
   test('should have required files', () => {
     const requiredFiles = [
-      'runserver.py',
+      'bin/runserver.py',
       'requirements.txt',
       'README.md',
       'setup.py',
@@ -24,13 +24,13 @@ test.describe('Project Structure Tests', () => {
   });
 
   test('should have templates directory', () => {
-    const templatesDir = path.join(__dirname, '..', 'templates');
+    const templatesDir = path.join(__dirname, '..', 'src', 'web', 'templates');
     expect(fs.existsSync(templatesDir)).toBeTruthy();
     expect(fs.statSync(templatesDir).isDirectory()).toBeTruthy();
   });
 
   test('should have static directory with assets', () => {
-    const staticDir = path.join(__dirname, '..', 'static');
+    const staticDir = path.join(__dirname, '..', 'src', 'web', 'static');
     expect(fs.existsSync(staticDir)).toBeTruthy();
     expect(fs.statSync(staticDir).isDirectory()).toBeTruthy();
     
@@ -48,7 +48,7 @@ test.describe('Project Structure Tests', () => {
   });
 
   test('should have runserver.py wired to the app factory and Tor startup', () => {
-    const serverPath = path.join(__dirname, '..', 'runserver.py');
+    const serverPath = path.join(__dirname, '..', 'src', 'python', 'runserver.py');
     const content = fs.readFileSync(serverPath, 'utf8');
     
     // Check for the current entrypoint structure
@@ -77,7 +77,7 @@ test.describe('Python Module Tests', () => {
       const { stdout, stderr } = await execAsync(
         `python3 -c "
 import sys
-sys.path.insert(0, '${projectRoot}')
+sys.path.insert(0, '${path.join(projectRoot, 'src', 'python')}')
 try:
     import runserver
     print('runserver imported successfully')

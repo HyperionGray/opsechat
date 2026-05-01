@@ -27,10 +27,10 @@ test.describe('Product Release - Core Requirements', () => {
   
   test('should have TUI chat client files', () => {
     const tuiFiles = [
-      'tui-server.py',
-      'tui-client.py',
-      'src/tui/server.py',
-      'src/tui/client.py',
+      'bin/tui-server.py',
+      'bin/tui-client.py',
+      'src/python/tui/server.py',
+      'src/python/tui/client.py',
     ];
     
     tuiFiles.forEach(file => {
@@ -41,8 +41,8 @@ test.describe('Product Release - Core Requirements', () => {
   
   test('should have single-command startup scripts', () => {
     const startupFiles = [
-      'tui-server.py',
-      'runserver.py',
+      'bin/tui-server.py',
+      'bin/runserver.py',
     ];
     
     startupFiles.forEach(file => {
@@ -60,8 +60,8 @@ test.describe('Product Release - Core Requirements', () => {
     expect(fs.existsSync(tuiReadme)).toBeTruthy();
     
     const content = fs.readFileSync(tuiReadme, 'utf8');
-    expect(content).toContain('python tui-server.py');
-    expect(content).toContain('python tui-client.py');
+    expect(content).toContain('python bin/tui-server.py');
+    expect(content).toContain('python bin/tui-client.py');
     expect(content).toContain('--tor');
   });
 });
@@ -70,7 +70,7 @@ test.describe('Product Release - TUI Server Functionality', () => {
   
   test('TUI server should import without errors', async () => {
     try {
-      const pythonCode = "import sys; sys.path.insert(0, 'src'); from tui.server import ChatServer; print('OK')";
+      const pythonCode = "import sys; sys.path.insert(0, 'src/python'); from tui.server import ChatServer; print('OK')";
       const { stdout } = await execFileAsync(
         'python3',
         ['-c', pythonCode],
@@ -87,7 +87,7 @@ test.describe('Product Release - TUI Server Functionality', () => {
       const { stdout } = await execAsync(
         `cd ${projectRoot} && python3 -c "
 import sys
-sys.path.insert(0, 'src')
+sys.path.insert(0, 'src/python')
 from tui.server import ChatServer
 server = ChatServer()
 username1 = server.generate_username()
@@ -113,7 +113,7 @@ print('DIFFERENT' if username1 != username2 else 'SAME')
   });
   
   test('TUI server should support Tor hidden service setup', async () => {
-    const serverFile = path.join(projectRoot, 'src/tui/server.py');
+    const serverFile = path.join(projectRoot, 'src/python/tui/server.py');
     const content = fs.readFileSync(serverFile, 'utf8');
     
     // Check for Tor integration
@@ -128,7 +128,7 @@ print('DIFFERENT' if username1 != username2 else 'SAME')
       const { stdout } = await execAsync(
         `cd ${projectRoot} && python3 -c "
 import sys
-sys.path.insert(0, 'src')
+sys.path.insert(0, 'src/python')
 from tui.server import ChatServer
 server = ChatServer()
 print(server.MESSAGE_LIFETIME)
@@ -144,7 +144,7 @@ print(server.MESSAGE_LIFETIME)
   });
   
   test('TUI server should enforce text-only (no images/video)', async () => {
-    const serverFile = path.join(projectRoot, 'src/tui/server.py');
+    const serverFile = path.join(projectRoot, 'src/python/tui/server.py');
     const content = fs.readFileSync(serverFile, 'utf8');
     
     // Check for message validation
@@ -160,9 +160,9 @@ test.describe('Product Release - Email System', () => {
   
   test('should have burner email system files', () => {
     const emailFiles = [
-      'email_system.py',
-      'burner_routes.py',
-      'email_routes.py',
+      'src/python/email_system.py',
+      'src/python/burner_routes.py',
+      'src/python/email_routes.py',
     ];
     
     emailFiles.forEach(file => {
@@ -200,7 +200,7 @@ print('BurnerManager' in dir(email_system))
 test.describe('Product Release - Domain Management', () => {
   
   test('should have domain manager implementation', () => {
-    const domainManager = path.join(projectRoot, 'domain_manager.py');
+    const domainManager = path.join(projectRoot, 'src', 'python', 'domain_manager.py');
     expect(fs.existsSync(domainManager)).toBeTruthy();
     
     const content = fs.readFileSync(domainManager, 'utf8');
@@ -209,7 +209,7 @@ test.describe('Product Release - Domain Management', () => {
   });
   
   test('domain manager should support purchasing and rotation', () => {
-    const domainManager = path.join(projectRoot, 'domain_manager.py');
+    const domainManager = path.join(projectRoot, 'src', 'python', 'domain_manager.py');
     const content = fs.readFileSync(domainManager, 'utf8');
     
     expect(content).toContain('purchase_domain');
@@ -236,7 +236,7 @@ print(hasattr(domain_manager, 'DomainAPIClient'))
 test.describe('Product Release - Security Features', () => {
   
   test('should enforce randomized usernames (no user choice)', async () => {
-    const serverFile = path.join(projectRoot, 'src/tui/server.py');
+    const serverFile = path.join(projectRoot, 'src/python/tui/server.py');
     const content = fs.readFileSync(serverFile, 'utf8');
     
     // Ensure usernames are server-generated, not user-provided
@@ -245,7 +245,7 @@ test.describe('Product Release - Security Features', () => {
   });
   
   test('should have in-memory storage only (no disk writes)', () => {
-    const serverFile = path.join(projectRoot, 'src/tui/server.py');
+    const serverFile = path.join(projectRoot, 'src/python/tui/server.py');
     const content = fs.readFileSync(serverFile, 'utf8');
     
     // Check for in-memory mentions (case insensitive)
@@ -256,7 +256,7 @@ test.describe('Product Release - Security Features', () => {
   });
   
   test('should have message overwriting before deletion', () => {
-    const serverFile = path.join(projectRoot, 'src/tui/server.py');
+    const serverFile = path.join(projectRoot, 'src/python/tui/server.py');
     const content = fs.readFileSync(serverFile, 'utf8');
     
     // Check for secure deletion (overwrite before remove)
@@ -287,8 +287,8 @@ test.describe('Product Release - UX Requirements', () => {
     const tuiReadme = path.join(projectRoot, 'docs', 'user-guide', 'TUI_README.md');
     const content = fs.readFileSync(tuiReadme, 'utf8');
     
-    expect(content).toContain('python tui-server.py');
-    expect(content).toContain('python tui-client.py');
+    expect(content).toContain('python bin/tui-server.py');
+    expect(content).toContain('python bin/tui-client.py');
   });
   
   test('should document terminal-based UX', () => {
@@ -304,7 +304,7 @@ test.describe('Product Release - UX Requirements', () => {
 test.describe('Product Release - API Endpoints', () => {
   
   test('should have chat routes defined', () => {
-    const chatRoutes = path.join(projectRoot, 'chat_routes.py');
+    const chatRoutes = path.join(projectRoot, 'src', 'python', 'chat_routes.py');
     expect(fs.existsSync(chatRoutes)).toBeTruthy();
     
     const content = fs.readFileSync(chatRoutes, 'utf8');
@@ -313,7 +313,7 @@ test.describe('Product Release - API Endpoints', () => {
   });
   
   test('should have email routes defined', () => {
-    const emailRoutes = path.join(projectRoot, 'email_routes.py');
+    const emailRoutes = path.join(projectRoot, 'src', 'python', 'email_routes.py');
     expect(fs.existsSync(emailRoutes)).toBeTruthy();
     
     const content = fs.readFileSync(emailRoutes, 'utf8');
@@ -322,7 +322,7 @@ test.describe('Product Release - API Endpoints', () => {
   });
   
   test('should have burner email routes defined', () => {
-    const burnerRoutes = path.join(projectRoot, 'burner_routes.py');
+    const burnerRoutes = path.join(projectRoot, 'src', 'python', 'burner_routes.py');
     expect(fs.existsSync(burnerRoutes)).toBeTruthy();
     
     const content = fs.readFileSync(burnerRoutes, 'utf8');
@@ -331,7 +331,7 @@ test.describe('Product Release - API Endpoints', () => {
   });
   
   test('should have security routes defined', () => {
-    const securityRoutes = path.join(projectRoot, 'email_security_routes.py');
+    const securityRoutes = path.join(projectRoot, 'src', 'python', 'email_security_routes.py');
     expect(fs.existsSync(securityRoutes)).toBeTruthy();
     
     const content = fs.readFileSync(securityRoutes, 'utf8');
@@ -408,7 +408,7 @@ test.describe('Product Release - Documentation', () => {
   });
   
   test('should have security documentation', () => {
-    const security = path.join(projectRoot, 'SECURITY.md');
+    const security = path.join(projectRoot, 'docs', 'SECURITY.md');
     expect(fs.existsSync(security)).toBeTruthy();
   });
 });
