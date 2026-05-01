@@ -52,7 +52,8 @@ dist/
 # ---- Directories not needed in image ----
 aws/
 bak/
-containers/
+containers/*
+!containers/Caddyfile
 docs/
 include/
 pf-tasks/
