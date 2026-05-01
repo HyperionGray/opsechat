@@ -1,18 +1,22 @@
 # Tor configuration for opsechat
 # Enables control port for stem to create ephemeral hidden services
 
-# Control port configuration - only accessible within container
-ControlPort 9051
+# Control/SOCKS ports must listen on the container network interface so the
+# app container can reach them via the compose service name `tor`.
+ControlPort 0.0.0.0:9051
 CookieAuthentication 1
+CookieAuthFile /var/lib/tor/control_auth_cookie
+CookieAuthFileGroupReadable 1
 
 # Data directory
 DataDirectory /var/lib/tor
+DataDirectoryGroupReadable 1
 
 # Log to stdout for container visibility
 Log notice stdout
 
-# Network configuration - only accessible within container
-SocksPort 9050
+# Network configuration - only accessible within the private compose network
+SocksPort 0.0.0.0:9050
 
 # Security settings
 # DisableDebuggerAttachment: Set to 1 in production to prevent debugger attachment
