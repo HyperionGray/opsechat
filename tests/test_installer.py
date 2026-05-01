@@ -131,7 +131,7 @@ class TestInstallerScripts(unittest.TestCase):
     
     def test_install_documentation_exists(self):
         """Test that installation documentation exists under docs/setup"""
-        install_doc = os.path.join(self.repo_root, 'docs', 'setup', 'INSTALL.md')
+        install_doc = os.path.join(self.repo_root, 'docs', 'setup', 'PROFILES.md')
         self.assertTrue(os.path.exists(install_doc),
                        "docs/setup/INSTALL.md should exist")
     
