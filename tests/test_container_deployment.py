@@ -97,6 +97,13 @@ class TestDockerComposeConfig:
         proxy_ports = config['services']['admin-proxy']['ports']
         assert proxy_ports == ['127.0.0.1:8080:8080']
 
+    def test_compose_admin_proxy_waits_for_app_health(self):
+        compose_path = self.get_compose_path()
+        with open(compose_path) as f:
+            config = yaml.safe_load(f)
+
+        assert config['services']['admin-proxy']['depends_on']['opsechat']['condition'] == 'service_healthy'
+
     def test_compose_app_healthcheck_targets_local_health_endpoint(self):
         compose_path = os.path.join(REPO_DIR, 'docker-compose.yml')
         with open(compose_path) as f:
@@ -157,6 +164,24 @@ class TestDockerfile:
     def test_tor_dockerfile_exists(self):
         path = os.path.join(REPO_DIR, 'containers', 'tor.Dockerfile')
         assert os.path.exists(path)
+
+    def test_app_dockerfile_joins_shared_tor_cookie_group(self):
+        dockerfile_path = self.get_dockerfile_path()
+        with open(dockerfile_path) as f:
+            content = f.read()
+
+        assert 'groupadd --gid 2000 tor-cookie' in content
+        assert 'usermod --append --groups tor-cookie opsechat' in content
+
+    def test_tor_dockerfile_uses_shared_tor_cookie_group(self):
+        path = os.path.join(REPO_DIR, 'containers', 'tor.Dockerfile')
+        with open(path) as f:
+            content = f.read()
+
+        assert 'groupadd --gid 2000 tor-cookie' in content
+        assert 'usermod --gid tor-cookie debian-tor' in content
+        assert 'chown -R debian-tor:tor-cookie /var/lib/tor' in content
+        assert 'chmod 2750 /var/lib/tor' in content
     
     def test_dockerfile_copies_app_files(self):
         dockerfile_path = self.get_dockerfile_path()
@@ -165,8 +190,35 @@ class TestDockerfile:
         
         # Key app files should be copied
         assert 'runserver.py' in content
+        assert 'runserver_refactored.py' in content
+        assert 'closed_roster_room.py' in content
+        assert 'openpgp_room_policy.py' in content
+        assert 'mvp_routes.py' in content
         assert 'email_system.py' in content
         assert 'templates/' in content
+
+    def test_caddyfile_binds_all_container_interfaces(self):
+        caddyfile_path = os.path.join(REPO_DIR, 'containers', 'Caddyfile')
+        with open(caddyfile_path) as f:
+            content = f.read()
+
+        assert ':8080 {' in content
+        assert 'bind 127.0.0.1' not in content
+
+    def test_dockerignore_keeps_caddyfile_in_build_context(self):
+        dockerignore_path = os.path.join(REPO_DIR, '.dockerignore')
+        with open(dockerignore_path) as f:
+            content = f.read()
+
+        assert 'containers/*' in content
+        assert '!containers/Caddyfile' in content
+
+    def test_proxy_dockerfile_strips_unused_caddy_file_capability(self):
+        path = os.path.join(REPO_DIR, 'containers', 'proxy.Dockerfile')
+        with open(path) as f:
+            content = f.read()
+
+        assert 'setcap -r /usr/bin/caddy' in content
 
 
 class TestTorConfig:
@@ -186,7 +238,16 @@ class TestTorConfig:
         with open(torrc_path) as f:
             content = f.read()
         
-        assert 'ControlPort 9051' in content
+        assert 'ControlPort' in content
+        assert '9051' in content
+
+    def test_torrc_exposes_control_and_socks_ports_to_compose_network(self):
+        torrc_path = self.get_torrc_path()
+        with open(torrc_path) as f:
+            content = f.read()
+
+        assert 'ControlPort 0.0.0.0:9051' in content
+        assert 'SocksPort 0.0.0.0:9050' in content
     
     def test_torrc_has_cookie_auth(self):
         torrc_path = self.get_torrc_path()
@@ -194,6 +255,15 @@ class TestTorConfig:
             content = f.read()
         
         assert 'CookieAuthentication' in content
+
+    def test_torrc_allows_group_readable_cookie_and_data_directory(self):
+        torrc_path = self.get_torrc_path()
+        with open(torrc_path) as f:
+            content = f.read()
+
+        assert 'CookieAuthFile /var/lib/tor/control_auth_cookie' in content
+        assert 'CookieAuthFileGroupReadable 1' in content
+        assert 'DataDirectoryGroupReadable 1' in content
 
 
 class TestQuadletFiles:
@@ -305,7 +375,7 @@ class TestReleaseSkeleton:
             assert os.path.isdir(path), f"{directory} should exist"
 
     def test_release_files_exist(self):
-        for filename in ['container-compose.yml', 'install.sh', 'Pfyfile.pf']:
+        for filename in ['container-compose.yml', 'INSTALL.md', 'QUICKSTART.md', 'Pfyfile.pf']:
             path = os.path.join(REPO_DIR, filename)
             assert os.path.exists(path), f"{filename} should exist"
 
