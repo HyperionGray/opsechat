@@ -56,13 +56,14 @@ def test_console_api_returns_service_manifest():
     assert not any(service["name"] == "burner-receive" for service in data["services"])
 
 
-def test_dashboard_placeholder_route_returns_links():
+def test_dashboard_route_returns_real_dashboard():
     client = _app_with_path().test_client()
     response = client.get("/dashboard")
     assert response.status_code == 200
     body = response.data.decode()
-    assert "Dashboard Placeholder" in body
+    assert "Dashboard" in body
+    assert "Dashboard Placeholder" not in body
     assert "/console" in body
     assert "/chat" in body
     assert "/health" in body
-    assert "/version" in body
+    assert "consolehost" in body

@@ -345,11 +345,6 @@ def register_simple_chat_routes(app):
         """Landing page for creating/joining chat rooms"""
         return render_template("simple_chat_index.html", version=read_version())
 
-    @app.route('/dashboard', strict_slashes=False)
-    def dashboard_index():
-        """Minimal dashboard shell for consolidated navigation."""
-        return render_template("dashboard.html", version=read_version())
-
     @app.route('/keys', strict_slashes=False)
     def keys_index():
         """Minimal key-management shell while full workflow is in progress."""
