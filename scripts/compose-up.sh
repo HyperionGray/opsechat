@@ -1,5 +1,6 @@
 #!/bin/bash
-# Script to start opsechat services with podman-compose or docker-compose
+# Script to start opsechat services with podman-compose, docker-compose,
+# or the docker compose plugin.
 
 set -e
 
@@ -12,8 +13,19 @@ fi
 COMPOSE_FILE="$REPO_ROOT/container-compose.yml"
 
 # Determine which compose tool is available
-COMPOSE_CMD="docker compose"
-echo "[*] Using docker compose (plugin)"
+if command -v docker &> /dev/null && docker compose version &> /dev/null; then
+    COMPOSE_CMD="docker compose"
+    echo "[*] Using docker compose (plugin)"
+elif command -v docker-compose &> /dev/null && docker-compose version &> /dev/null; then
+    COMPOSE_CMD="docker-compose"
+    echo "[*] Using docker-compose"
+elif command -v podman-compose &> /dev/null && podman-compose version &> /dev/null; then
+    COMPOSE_CMD="podman-compose"
+    echo "[*] Using podman-compose"
+else
+    echo "[!] Error: No working compose command found."
+    exit 1
+fi
 
 echo "[*] Starting opsechat services..."
 $COMPOSE_CMD -f "$COMPOSE_FILE" up -d --build
@@ -39,15 +51,16 @@ fi
 echo ""
 echo "[*] To view the onion address, run:"
 echo "    $COMPOSE_CMD -f $COMPOSE_FILE logs opsechat"
-echo "[*] Once you have the onion URL, open /console on that service for the MVP entry page."
+echo "[*] Once you have the onion URL, open / for the operator console or /chat for rooms."
 echo "[*] Localhost admin proxy (for operator access only) is available at:"
 echo "    http://127.0.0.1:8080/"
+echo "    http://127.0.0.1:8080/chat"
 echo ""
 echo "[*] To verify the setup is working, run:"
 echo "    ./verify-setup.sh"
 echo ""
 echo "[*] To view all logs in real-time, run:"
-echo "    $COMPOSE_CMD logs -f"
+echo "    $COMPOSE_CMD -f $COMPOSE_FILE logs -f"
 echo ""
 echo "[*] To stop services, run:"
 echo "    ./compose-down.sh"

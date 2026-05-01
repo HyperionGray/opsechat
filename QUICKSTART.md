@@ -1,235 +1,116 @@
-# OpSecChat Quick Start Guide
+# Quick Start
 
-Get started with OpSecChat in 5 minutes! This guide covers the fastest path to running your first secure, anonymous chat session.
+This is the shortest path from clone to a running room.
 
-## 🆕 NEW: Simple Chat Rooms (Fastest Start!)
-
-**The quickest way to get started:**
+## 1. Local Web Mode
 
 ```bash
-# Clone and enter directory
-git clone https://github.com/HyperionGray/opsechat.git
-cd opsechat
+cd /path/to/opsechat
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Create a chat room (local)
-python chat-room.py
-
-# OR create with Tor hidden service
-python chat-room.py --tor
-```
-
-**What you get:**
-- ✅ Simple web interface at `/chat`
-- ✅ Create rooms with one click
-- ✅ Messages auto-delete after 3 minutes
-- ✅ Optional E2E encryption (Web Crypto API)
-- ✅ Randomized usernames with colors
-- ✅ Text-only, no media
-- ✅ In-memory only (no disk writes)
-- ✅ Rate limiting: 30 messages/min, 10 room creates/min, 5 DMs/min per session
-
-Access at `http://localhost:5000/chat` or your `.onion` address.
-
-### Verify the server is healthy
-
-```bash
-curl http://localhost:5000/health
-# {"active_rooms":0,"status":"healthy","version":"0.8.0-alpha"}
-```
-
----
-
-## Prerequisites
-
-- Linux machine (any distribution)
-- Tor Browser installed
-- Docker/Podman installed (recommended) OR Python 3.8+
-
-## Quick Start (Recommended: Docker/Podman)
-
-### Step 1: Clone and Start
-
-```bash
-# Clone the repository
-git clone https://github.com/HyperionGray/opsechat.git
-cd opsechat
-
-# Start with one command!
-./compose-up.sh
-```
-
-That's it! The script will:
-- Build the container
-- Start Tor daemon
-- Launch OpSecChat server
-- Display your unique .onion URL
-
-### Step 2: Access Your Chat
-
-Look for output like this:
-```
-[*] Started a new hidden service with the address of:
-    abc123def456ghi789jkl.onion/secret-path-xyz123
-```
-
-### Step 3: Share and Chat
-
-1. Open **Tor Browser**
-2. Navigate to your `.onion` URL
-3. Share the URL with your chat partners
-4. Start chatting securely and anonymously!
-
-## Alternative: Native Installation
-
-If you prefer running without containers:
-
-```bash
-# Clone repository
-git clone https://github.com/HyperionGray/opsechat.git
-cd opsechat
-
-# Create virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Start Tor Browser (must be running)
-# Then start OpSecChat
-python runserver.py
+python -m pip install -r requirements.txt -r requirements-dev.txt
+python chat-room.py
 ```
 
-## What You Get
+Open:
 
-✅ **Anonymous Chat** - Your identity is hidden via Tor  
-✅ **Ephemeral Service** - New .onion address every run  
-✅ **Encrypted Communication** - All traffic encrypted via Tor  
-✅ **No Persistence** - Messages disappear after 3 minutes  
-✅ **PGP Support** - Optional end-to-end encryption (see below)
+- `http://127.0.0.1:5000/`
+- `http://127.0.0.1:5000/chat`
 
-## Using PGP Encryption (Optional)
+What to do next:
 
-For maximum security, enable PGP encryption:
+1. open `/chat`
+2. create a room
+3. generate or import your OpenPGP identity
+4. add every member before locking the roster
+5. use the room URL with your contacts
 
-1. Enable JavaScript in Tor Browser (for your .onion only)
-2. Visit Settings → NoScript → Whitelist your .onion address
-3. Click "Enable Encryption" in the chat interface
-4. Generate a new key or import existing key
-5. Share your public key with chat partners
+## 2. Tor Web Mode
 
-See [PGP Usage Guide](docs/user-guide/PGP_USAGE.md) for detailed instructions.
-
-## Using Email Features
-
-OpSecChat includes a secure email system:
-
-1. Navigate to `/email` on your .onion URL
-2. Configure SMTP/IMAP (optional) at `/email/config`
-3. Generate burner emails at `/email/burner`
-4. Send encrypted emails with PGP support
-
-See [Email Quick Start](docs/user-guide/EMAIL_QUICKSTART.md) for more details.
-
-## Common Issues
-
-### "Tor Connection Failed"
-
-**Solution:** Ensure Tor Browser is running or Tor daemon is accessible on port 9051.
+Start a Tor daemon with a control port:
 
 ```bash
-# Check if Tor is running
-ps aux | grep tor
-
-# Start Tor daemon if needed
-sudo systemctl start tor
+tor --ControlPort 9051 --CookieAuthentication 1
 ```
 
-### "Port Already in Use"
-
-**Solution:** Another service is using port 5000 or the Tor port.
-
-```bash
-# Find what's using port 5000
-sudo lsof -i :5000
-
-# Kill the process or choose different port
-PORT=5001 python runserver.py
-```
-
-### "Module Not Found"
-
-**Solution:** Install dependencies in virtual environment.
+Then:
 
 ```bash
 source .venv/bin/activate
-pip install -r requirements.txt
+python chat-room.py --tor
 ```
 
-### Container Won't Start
+The launcher prints onion URLs for the operator console and the room UI.
 
-**Solution:** Check Docker/Podman is running and you have permissions.
+## 3. Local Debug/Test Mode
+
+Use this when you want a predictable local port for tests or route checks:
 
 ```bash
-# For Podman
-systemctl --user start podman
-podman ps
-
-# For Docker
-sudo systemctl start docker
-sudo docker ps
+source .venv/bin/activate
+python runserver_refactored.py test
 ```
 
-## Next Steps
+Current debug URLs:
 
-Now that you have OpSecChat running, explore these features:
+- `http://127.0.0.1:5001/`
+- `http://127.0.0.1:5001/chat`
+- `http://127.0.0.1:5001/health`
 
-- **[Email System](docs/user-guide/EMAIL_SYSTEM.md)** - Send secure, anonymous emails
-- **[Burner Emails](docs/user-guide/EMAIL_SYSTEM.md#burner-email-system)** - Generate temporary email addresses
-- **[PGP Encryption](docs/user-guide/PGP_USAGE.md)** - Advanced end-to-end encryption
-- **[Testing](docs/user-guide/TESTING.md)** - Run the test suite
-- **[AWS Deployment](docs/setup/AWS_DEPLOYMENT.md)** - Deploy to the cloud
-- **[Contributing](docs/development/CONTRIBUTING.md)** - Help improve OpSecChat
+## 4. Container Mode
 
-## Security Reminders
-
-⚠️ **Important Security Notes:**
-
-- **No Persistent Storage** - Messages are deleted after 3 minutes
-- **Ephemeral Services** - New .onion address each time you run the server
-- **Share Carefully** - Only share your .onion URL with trusted contacts
-- **Use Tor Browser** - Always access via Tor Browser for anonymity
-- **Backup Keys** - If using PGP, backup your private keys securely
-- **No Nefarious Use** - See [Acceptable Use Policy](docs/legal/ACCEPTABLE_USE_POLICY.md)
-
-## Need Help?
-
-- **Documentation**: [docs/README.md](docs/README.md)
-- **Full README**: [README.md](README.md)
-- **Security Info**: [SECURITY.md](SECURITY.md)
-- **Report Issues**: [GitHub Issues](https://github.com/HyperionGray/opsechat/issues)
-
-## Stopping the Server
-
-### Docker/Podman
 ```bash
-./compose-down.sh
+./compose-up.sh
 ```
 
-### Native
-Press `Ctrl+C` in the terminal running `runserver.py`
+Local operator access:
 
----
+- `http://127.0.0.1:8080/`
+- `http://127.0.0.1:8080/chat`
 
-**That's it!** You now have a secure, anonymous chat server running on the Tor network. 🎉
+To fetch the onion URL from logs:
 
-For more advanced features and configuration options, see the [full documentation](docs/README.md).
+```bash
+docker compose -f container-compose.yml logs opsechat
+```
 
----
+Or use the helper:
 
-**Version:** 0.8.0-alpha  
-**Last Updated:** February 23, 2026  
-**License:** MIT
+```bash
+./verify-setup.sh
+```
+
+## 5. TUI Mode
+
+Server:
+
+```bash
+source .venv/bin/activate
+python tui-server.py
+```
+
+Client:
+
+```bash
+source .venv/bin/activate
+python tui-client.py
+```
+
+## Common Flags
+
+`chat-room.py`:
+
+- `--host 0.0.0.0`
+- `--port 8080`
+- `--tor`
+
+## Current Defaults
+
+- operator console: `/`
+- room UI: `/chat`
+- health: `/health`
+- message expiry: 3 minutes
+- DMs: 60 seconds
+- storage: in-memory only
