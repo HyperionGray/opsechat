@@ -123,6 +123,11 @@ class ChatRoom:
         with self.lock:
             return self.closed_roster.serialize()
 
+    def get_room_key(self):
+        """Return a per-room compatibility key for legacy test/code paths."""
+        with self.lock:
+            return self._legacy_room_key
+
     def add_encrypted_message(self, user_id, username, color, payload):
         """Validate and store a closed-roster OpenPGP envelope."""
         with self.lock:
