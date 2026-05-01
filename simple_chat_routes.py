@@ -73,6 +73,7 @@ class ChatRoom:
     
     def __init__(self, room_id):
         self.room_id = room_id
+        self.room_key = secrets.token_urlsafe(32)
         self.messages = []
         self.users = {}
         self.created_at = datetime.datetime.now()
