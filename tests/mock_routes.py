@@ -9,6 +9,7 @@ import datetime
 import html
 import re
 from flask import render_template, session, request, jsonify, redirect
+from markupsafe import escape
 from utils import sanitize_emojis, filter_to_ascii
 import secrets
 from closed_roster_room import OPENPGP_ENVELOPE_TYPE
@@ -44,6 +45,15 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         diff = now - timestamp
         secs = diff.total_seconds()
         return secs >= secs_to_live
+
+    def sanitize_chat_message(message_text: str) -> str:
+        """Apply mock-server sanitation rules used by legacy and simple-chat routes."""
+        message_text = filter_to_ascii(message_text)
+        message_text = sanitize_emojis(message_text)
+        message_text = re.sub(r'onerror\s*=', '', message_text, flags=re.IGNORECASE)
+        message_text = re.sub(r'onload\s*=', '', message_text, flags=re.IGNORECASE)
+        message_text = re.sub(r'javascript:', '', message_text, flags=re.IGNORECASE)
+        return re.sub(r"[<>&\"']", '', message_text)
     
     @app.route('/<string:url_addition>', methods=["GET"])
     def drop_landing(url_addition):
@@ -489,7 +499,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             })
             return jsonify({"success": True})
         else:
-            messages = chat_rooms.get(room_id, [])
+            messages = chat_rooms.get(room_id, {}).get("messages", [])
             return jsonify({
                 "messages": messages,
                 "user_count": 1,
