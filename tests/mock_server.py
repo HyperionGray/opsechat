@@ -164,7 +164,7 @@ def main():
     
     print("Mock server starting on http://127.0.0.1:5001")
     print(f"Test path: http://127.0.0.1:5001/{app.config['path']}")
-    
+
     try:
         class QuietRequestHandler(WSGIRequestHandler):
             server_version = ""

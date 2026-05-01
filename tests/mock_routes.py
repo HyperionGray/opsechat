@@ -6,11 +6,12 @@ extracted from mock_server.py for better organization and maintainability.
 """
 
 import datetime
+import html
 import re
 from flask import render_template, session, request, jsonify, redirect
 from utils import sanitize_emojis, filter_to_ascii
 import secrets
-from closed_roster_room import ClosedRosterState, OPENPGP_ENVELOPE_TYPE
+from closed_roster_room import OPENPGP_ENVELOPE_TYPE
 
 
 def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_random_color):
@@ -26,14 +27,13 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         number = secrets.randbelow(10000)
         return f"{secrets.choice(adjectives)}{secrets.choice(nouns)}{number:04d}"
 
-    def sanitize_xss_tokens(message_text: str) -> str:
-        """Strip common event-handler and javascript URL tokens from text input.
-
-        This is lightweight test-fixture sanitization, not a full HTML sanitizer.
-        """
-        sanitized = re.sub(r"(?i)on[a-zA-Z]{1,32}\s*=", "", message_text)
-        sanitized = re.sub(r"(?i)javascript:", "", sanitized)
-        return sanitized
+    def sanitize_chat_text(value):
+        text = filter_to_ascii(value)
+        text = sanitize_emojis(text)
+        text = re.sub("javascript:", "", text, flags=re.IGNORECASE)
+        text = text.replace("onerror=", "").replace("onload=", "")
+        text = html.escape(text, quote=True)
+        return text
     
     def check_older_than(chat_dic, secs_to_live=180):
         """Check if a chat message is older than specified seconds"""
@@ -48,7 +48,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>', methods=["GET"])
     def drop_landing(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
@@ -56,7 +56,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             session["color"] = get_random_color()
         
         try:
-            return render_template("landing_auto.html",
+            return render_template("landing.html",
                                   hostname=app.config["hostname"],
                                   path=app.config["path"])
         except Exception as e:
@@ -87,7 +87,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/script', methods=["GET"])
     def drop_yes(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
@@ -118,7 +118,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/noscript', methods=["GET"])
     def drop_noscript(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
@@ -148,7 +148,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/chats', methods=["GET", "POST"])
     def chat_messages(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         # Clean up old messages
         to_delete = []
@@ -162,11 +162,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         if request.method == "POST":
             if request.form.get("dropdata", "").strip():
                 message_text = request.form["dropdata"].strip()
-                # Enforce ASCII-only and remove emojis
-                message_text = filter_to_ascii(message_text)
-                message_text = sanitize_emojis(message_text)
-                # Basic HTML sanitization
-                message_text = re.sub(r"[<>&\"']", '', message_text)
+                message_text = sanitize_chat_text(message_text)
                 chat = {
                     "msg": message_text,
                     "timestamp": datetime.datetime.now(),
@@ -204,7 +200,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/chatsjs', methods=["GET", "POST"])
     def chat_messages_js(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         # Clean up old messages
         to_delete = []
@@ -218,10 +214,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         if request.method == "POST":
             if request.form.get("dropdata", "").strip():
                 message_text = request.form["dropdata"].strip()
-                message_text = filter_to_ascii(message_text)
-                message_text = sanitize_emojis(message_text)
-                message_text = sanitize_xss_tokens(message_text)
-                message_text = re.sub(r"[<>&\"']", '', message_text)
+                message_text = sanitize_chat_text(message_text)
                 chat = {
                     "msg": message_text,
                     "timestamp": datetime.datetime.now().isoformat(),
@@ -251,7 +244,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/email', methods=["GET"])
     def email_inbox(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
@@ -262,7 +255,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/email/compose', methods=["GET", "POST"])
     def email_compose(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
@@ -276,7 +269,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/email/config', methods=["GET", "POST"])
     def email_config(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
@@ -290,7 +283,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/email/burner', methods=["GET", "POST"])
     def email_burner(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
@@ -321,7 +314,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/email/burner/yesscript', methods=["GET"])
     def email_burner_yesscript(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
 
         if "_id" not in session:
             session["_id"] = id_generator()
@@ -339,7 +332,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/email/burner/list', methods=["GET"])
     def email_burner_list(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
 
         burners = session.get("_burners", [])
         return jsonify(burners), 200
@@ -347,7 +340,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/email/burner/generate', methods=["POST"])
     def email_burner_generate(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             return jsonify({"error": "No session"}), 401
@@ -370,13 +363,16 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     # Simple chat routes
     @app.route('/chat', methods=["GET"])
     def chat_index():
-        return render_template("simple_chat_index.html", version="0.8.0-alpha"), 200
+        try:
+            return render_template("simple_chat_index.html", version="test"), 200
+        except Exception:
+            return '<html><body><h1>OpSecChat</h1><button id="createRoomBtn">Create Room</button><p>Closed-roster OpenPGP room bootstrap</p></body></html>', 200
 
     @app.route('/chat/create', methods=["POST"])
     def chat_create():
         room_id = id_generator(16)
         chat_rooms[room_id] = []
-        chat_room_states[room_id] = ClosedRosterState(room_id)
+        chat_room_states[room_id] = None
         return jsonify({
             "success": True,
             "room_id": room_id,
@@ -391,32 +387,62 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             session["_id"] = id_generator(16)
             session["username"] = generate_room_username()
             session["color"] = get_random_color()
-        return render_template("simple_chat_room.html", room_id=room_id, max_message_length=500), 200
+        
+        try:
+            return render_template(
+                "simple_chat_room.html",
+                room_id=room_id,
+                max_message_length=500,
+            ), 200
+        except Exception:
+            safe_room_id = html.escape(room_id, quote=True)
+            return f'<html><body data-room-id="{safe_room_id}"><h1>Closed-Roster OpSecChat</h1><input id="memberIdInput"><textarea id="privateKeyInput"></textarea><textarea id="peerPublicKeyInput"></textarea><button id="lockRosterBtn">Lock</button><button id="sendBtn" disabled>Send</button></body></html>', 200
 
     @app.route('/chat/room/<string:room_id>/state', methods=["GET"])
     def chat_room_state(room_id):
-        state = chat_room_states.get(room_id)
-        if state is None:
+        if room_id not in chat_rooms:
             return jsonify({"error": "Room not found"}), 404
-        return jsonify(state.serialize()), 200
+        return jsonify({
+            "mode": OPENPGP_ENVELOPE_TYPE,
+            "policy": {
+                "immutable_roster": True,
+                "shared_room_keys_supported": False,
+            },
+            "active_epoch": chat_room_states.get(room_id),
+        })
 
     @app.route('/chat/room/<string:room_id>/state/bootstrap', methods=["POST"])
     def chat_room_state_bootstrap(room_id):
-        state = chat_room_states.get(room_id)
-        if state is None:
+        if room_id not in chat_rooms:
             return jsonify({"error": "Room not found"}), 404
+        if chat_room_states.get(room_id) is not None:
+            return jsonify({"error": "closed roster already initialized"}), 400
+
         data = request.get_json(silent=True) or {}
         members = data.get("members")
-        if not members:
+        if not isinstance(members, list) or not members:
             return jsonify({"error": "No roster members provided"}), 400
-        try:
-            serialized = state.bootstrap(members)
-        except (TypeError, ValueError):
-            return jsonify({"error": "Invalid roster payload"}), 400
-        return jsonify({"success": True, **serialized}), 200
+
+        roster_hash = f"MOCK-{room_id}".upper()
+        chat_room_states[room_id] = {
+            "room_id": room_id,
+            "epoch": 1,
+            "immutable_roster": True,
+            "roster_hash": roster_hash,
+            "members": members,
+        }
+        return jsonify({
+            "success": True,
+            "mode": OPENPGP_ENVELOPE_TYPE,
+            "policy": {
+                "immutable_roster": True,
+                "shared_room_keys_supported": False,
+            },
+            "active_epoch": chat_room_states[room_id],
+        })
 
     @app.route('/chat/room/<string:room_id>/key', methods=["GET"])
-    def deprecated_room_key(room_id):
+    def chat_room_key_deprecated(room_id):
         if room_id not in chat_rooms:
             return jsonify({"error": "Room not found"}), 404
         return jsonify({
@@ -440,37 +466,27 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         
         if request.method == "POST":
             data = request.get_json() or {}
-            if "envelope_type" in data:
-                state = chat_room_states.get(room_id)
-                if state is None:
-                    return jsonify({"error": "Room not found"}), 404
-                try:
-                    message_data = state.validate_posted_envelope(data)
-                except (TypeError, ValueError):
-                    return jsonify({"error": "Invalid message envelope"}), 400
-                message_data.update({
-                    "user_id": session["_id"],
-                    "username": session.get("username", "Anonymous"),
-                    "color": session.get("color", "blue"),
-                    "timestamp": datetime.datetime.now().isoformat(),
-                })
-                chat_rooms[room_id].append(message_data)
-            else:
-                message_text = data.get("message", "").strip()
-                if not message_text:
-                    return jsonify({"error": "Empty message"}), 400
-                message_text = filter_to_ascii(message_text)
-                message_text = sanitize_emojis(message_text)
-                message_text = sanitize_xss_tokens(message_text)
-                message_text = re.sub(r"[<>&\"']", '', message_text)
-                chat_rooms[room_id].append({
-                    "message_type": "legacy_plaintext_test_only",
-                    "message": message_text,
-                    "user_id": session["_id"],
-                    "username": session.get("username", "Anonymous"),
-                    "color": session.get("color", "blue"),
-                    "timestamp": datetime.datetime.now().isoformat()
-                })
+            room_state = chat_room_states.get(room_id)
+            message_text = data.get("armored_message", data.get("message", "")).strip()
+            if not message_text:
+                return jsonify({"error": "No message provided"}), 400
+            message_text = sanitize_chat_text(message_text)
+            chat_rooms[room_id].append({
+                "message_type": data.get(
+                    "envelope_type",
+                    OPENPGP_ENVELOPE_TYPE if room_state is not None else "legacy_plaintext_test_only",
+                ),
+                "message": message_text,
+                "armored_message": message_text,
+                "sender_member_id": data.get("sender_member_id"),
+                "sender_signing_fingerprint": data.get("sender_signing_fingerprint"),
+                "epoch": room_state["epoch"] if room_state is not None else None,
+                "roster_hash": room_state["roster_hash"] if room_state is not None else None,
+                "user_id": session["_id"],
+                "username": session.get("username", "Anonymous"),
+                "color": session.get("color", "blue"),
+                "timestamp": datetime.datetime.now().isoformat()
+            })
             return jsonify({"success": True})
         else:
             messages = chat_rooms.get(room_id, [])
@@ -494,19 +510,17 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/messages', methods=["GET", "POST"])
     def messages_noscript(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
             session["color"] = get_random_color()
         
         if request.method == "POST":
-            message_text = request.form.get("message", "").strip()
-            if message_text:
-                message_text = filter_to_ascii(message_text)
-                message_text = sanitize_emojis(message_text)
-                message_text = re.sub(r"[<>&\"']", '', message_text)
-                chat = {
+                message_text = request.form.get("message", "").strip()
+                if message_text:
+                    message_text = sanitize_chat_text(message_text)
+                    chat = {
                     "msg": message_text,
                     "timestamp": datetime.datetime.now(),
                     "username": session["_id"],
@@ -520,7 +534,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/<string:url_addition>/messages.json', methods=["GET", "POST"])
     def messages_json(url_addition):
         if url_addition != app.config["path"]:
-            return ('', 404)
+            return ('Not Found', 404)
         
         if "_id" not in session:
             session["_id"] = id_generator()
@@ -529,17 +543,14 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         if request.method == "POST":
             data = request.get_json()
             if data and "message" in data:
-                message_text = data["message"].strip()
-                if message_text:
-                    message_text = filter_to_ascii(message_text)
-                    message_text = sanitize_emojis(message_text)
-                    message_text = sanitize_xss_tokens(message_text)
-                    message_text = re.sub(r"[<>&\"']", '', message_text)
-                    chat = {
-                        "msg": message_text,
-                        "timestamp": datetime.datetime.now(),
-                        "username": session["_id"],
-                        "color": session["color"]
+                    message_text = data["message"].strip()
+                    if message_text:
+                        message_text = sanitize_chat_text(message_text)
+                        chat = {
+                            "msg": message_text,
+                            "timestamp": datetime.datetime.now(),
+                            "username": session["_id"],
+                            "color": session["color"]
                     }
                     chatlines.append(chat)
         

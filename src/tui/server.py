@@ -25,7 +25,6 @@ from typing import Dict, List, Any, Optional
 # Message storage (in-memory only)
 class ChatServer:
     MAX_MESSAGE_LENGTH = 1000  # Prevent b64 encoded images
-    # Keep 4 minutes to match release policy/tests and avoid behavior drift.
     MESSAGE_LIFETIME = 240  # 4 minutes in seconds
     
     def __init__(self, host='127.0.0.1', port=5555):
