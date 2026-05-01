@@ -208,6 +208,9 @@ class ClosedRosterState:
         if recipient_key_ids != expected_key_ids:
             raise ValueError("recipient encryption key ids do not match the room roster")
 
+        if payload.get("anonymous_recipients"):
+            raise ValueError("anonymous recipients are forbidden")
+
         return {
             "message_type": OPENPGP_ENVELOPE_TYPE,
             "message": armored_message,
