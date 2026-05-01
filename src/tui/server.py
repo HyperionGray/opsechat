@@ -113,7 +113,7 @@ class ChatServer:
             welcome = {
                 'type': 'welcome',
                 'username': username,
-                'message': f'Welcome! You are {username}. Messages burn in 3 minutes.'
+                'message': f'Welcome! You are {username}. Messages burn in 4 minutes.'
             }
             client_socket.send((json.dumps(welcome) + '\n').encode())
             

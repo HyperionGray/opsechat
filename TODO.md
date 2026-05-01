@@ -70,6 +70,8 @@
 - [ ] Implement plan/tier selection (free tier first)
 - [ ] Add user onboarding tutorial
 - [ ] Test all navigation paths
+- [ ] Remove `ChatRoom.get_room_key()` legacy compatibility path once all tests and callers use closed-roster state APIs only
+- [ ] Remove duplicate `message` alias in closed-roster envelope payloads after legacy rendering paths consume `armored_message` directly
 **Estimated:** 5-7 days
 
 ### 5. Legal Document Integration

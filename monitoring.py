@@ -322,7 +322,7 @@ def _read_version() -> str:
 
 
 def get_version() -> str:
-    """Return the current application version."""
+    """Return the current application version string."""
     return _read_version()
 
 

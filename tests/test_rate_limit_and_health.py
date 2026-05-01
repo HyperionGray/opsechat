@@ -10,6 +10,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app_factory import create_app
+from monitoring import get_version
 from simple_chat_routes import check_rate_limit, _rate_limit_store, _rate_limit_lock
 
 # Shared test Flask app (avoids importing all of runserver.py)
@@ -166,3 +167,25 @@ def test_health_endpoint_date_header_is_blank():
     response = client.get("/health")
 
     assert response.headers["Date"] == ""
+
+
+def test_version_endpoint_returns_expected_payload():
+    client = _test_app.test_client()
+    response = client.get("/version")
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data is not None
+    assert data["service"] == "opsechat"
+    assert data["version"] == get_version()
+
+
+def test_version_endpoint_sets_security_headers():
+    client = _test_app.test_client()
+    response = client.get("/version")
+
+    assert response.content_type == "application/json"
+    assert response.headers["Content-Security-Policy"].startswith("default-src 'self';")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "no-referrer"

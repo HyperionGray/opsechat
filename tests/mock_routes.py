@@ -9,9 +9,12 @@ import datetime
 import html
 import re
 from flask import render_template, session, request, jsonify, redirect
+from markupsafe import escape
 from utils import sanitize_emojis, filter_to_ascii
 import secrets
 from closed_roster_room import OPENPGP_ENVELOPE_TYPE
+
+NOT_FOUND_RESPONSE = ("Not Found", 404)
 
 
 def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_random_color):
@@ -44,6 +47,51 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         diff = now - timestamp
         secs = diff.total_seconds()
         return secs >= secs_to_live
+
+    def _strip_case_insensitive(value: str, needle: str) -> str:
+        """Remove all case-insensitive occurrences of `needle` from `value`."""
+        lowered = value.lower()
+        target = needle.lower()
+        while True:
+            idx = lowered.find(target)
+            if idx == -1:
+                return value
+            end = idx + len(target)
+            value = value[:idx] + value[end:]
+            lowered = value.lower()
+
+    def _sanitize_user_message(message_text: str, *, strict: bool = False) -> str:
+        """Sanitize user message content.
+
+        strict=True additionally strips script-style payload tokens commonly used
+        in browser XSS vectors for API/JSON endpoints.
+        """
+        message_text = filter_to_ascii(message_text)
+        message_text = sanitize_emojis(message_text)
+        if strict:
+            for token in ("javascript:", "onerror=", "onload=", "onclick=", "onfocus=", "onsubmit="):
+                message_text = _strip_case_insensitive(message_text, token)
+        message_text = message_text.translate(str.maketrans("", "", '<>&"\''))
+        if "-----BEGIN PGP MESSAGE-----" not in message_text:
+            allowed = set(" .?!:)(*")
+            message_text = "".join(
+                ch for ch in message_text if (ch.isalnum() or ch.isspace() or ch in allowed)
+            )
+        return message_text
+
+    def _default_room_record() -> dict:
+        """Return the default closed-roster room container for mock chat routes."""
+        return {
+            "messages": [],
+            "state": {
+                "mode": "closed_roster_openpgp_v1",
+                "active_epoch": None,
+                "policy": {
+                    "immutable_roster": True,
+                    "shared_room_keys_supported": False,
+                },
+            },
+        }
     
     @app.route('/<string:url_addition>', methods=["GET"])
     def drop_landing(url_addition):
@@ -170,10 +218,6 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
                     "color": session.get("color", "black")
                 }
                 
-                # Don't sanitize PGP messages
-                if "-----BEGIN PGP MESSAGE-----" not in chat["msg"]:
-                    chat["msg"] = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', chat["msg"])
-                
                 chatlines.append(chat)
                 chatlines[:] = chatlines[-13:]  # Keep only last 13 messages
             
@@ -222,10 +266,6 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
                     "color": [255, 0, 0],  # Mock color as RGB tuple
                     "num_people": len(chatters)
                 }
-                
-                # Don't sanitize PGP messages
-                if "-----BEGIN PGP MESSAGE-----" not in chat["msg"]:
-                    chat["msg"] = re.sub(r'([^\s\w\.\?\!\:\)\(\*]|_)+', '', chat["msg"])
                 
                 chatlines.append(chat)
                 chatlines[:] = chatlines[-13:]  # Keep only last 13 messages
@@ -382,7 +422,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     @app.route('/chat/room/<string:room_id>', methods=["GET"])
     def chat_room(room_id):
         if room_id not in chat_rooms:
-            return '<html><body><h1>Room not found or expired</h1></body></html>', 404
+            return render_template("simple_chat_error.html", error="Room not found or expired"), 404
         if "_id" not in session:
             session["_id"] = id_generator(16)
             session["username"] = generate_room_username()
@@ -489,7 +529,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             })
             return jsonify({"success": True})
         else:
-            messages = chat_rooms.get(room_id, [])
+            messages = chat_rooms.get(room_id, {}).get("messages", [])
             return jsonify({
                 "messages": messages,
                 "user_count": 1,

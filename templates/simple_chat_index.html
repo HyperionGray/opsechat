@@ -16,7 +16,7 @@
                 <li>Messages disappear after 3 minutes</li>
                 <li>In-memory only - no disk storage</li>
                 <li>Memory overwritten on message deletion</li>
-                <li>Explicit closed-roster OpenPGP room bootstrap</li>
+                <li>Closed-roster OpenPGP room bootstrap</li>
                 <li>Signed and encrypted room messages to the full roster</li>
                 <li>Local verification states for known, changed, and verified keys</li>
                 <li>Text-only - no media or file sharing</li>
@@ -38,6 +38,14 @@
         <div class="create-room">
             <button id="createRoomBtn" aria-label="Create a new secure chat room">Create New Chat Room</button>
             <div id="status" class="status" role="status" aria-live="polite"></div>
+        </div>
+
+        <div class="info-box" role="navigation" aria-label="Product navigation">
+            <h2>Navigation</h2>
+            <ul>
+                <li><a href="/dashboard">Open Dashboard</a></li>
+                <li><a href="/keys">Open Key Management</a></li>
+            </ul>
         </div>
         
         <div class="info-box" role="region" aria-label="Security reminder">
