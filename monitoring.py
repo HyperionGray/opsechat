@@ -333,7 +333,7 @@ def get_health_status() -> Dict[str, Any]:
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
-        'version': _read_version(),
+        'version': get_version(),
         'active_rooms': active_rooms,
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status

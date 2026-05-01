@@ -77,6 +77,7 @@ class ChatRoom:
         self.messages = []
         self.users = {}
         self.created_at = datetime.datetime.now()
+        self.room_key = generate_secure_room_id(32)
         self.lock = threading.Lock()
         self._room_key = secrets.token_urlsafe(32)
         # Legacy compatibility key kept for older tests/integrations that still
