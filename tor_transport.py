@@ -12,6 +12,7 @@ Egress:
 
 import imaplib
 import os
+import socket
 import smtplib
 from typing import Dict, Tuple
 
@@ -43,6 +44,17 @@ def get_tor_control_endpoint() -> Tuple[str, int]:
     host = os.environ.get("TOR_CONTROL_HOST", "127.0.0.1")
     port = int(os.environ.get("TOR_CONTROL_PORT", "9051"))
     return host, port
+
+
+def resolve_tor_control_endpoint() -> Tuple[str, int]:
+    """
+    Return the Tor control endpoint with the host resolved to an IPv4 address.
+
+    `stem.Controller.from_port()` rejects Docker-style service names such as
+    `tor`, so the server entrypoints must resolve them before connecting.
+    """
+    host, port = get_tor_control_endpoint()
+    return socket.gethostbyname(host), port
 
 
 def get_tor_socks_endpoint() -> Tuple[str, int]:

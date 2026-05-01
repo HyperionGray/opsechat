@@ -14,7 +14,10 @@ Usage:
 import sys
 import argparse
 from app_factory import create_app
-from tor_transport import get_tor_control_endpoint, tor_ingress_required
+from tor_transport import (
+    resolve_tor_control_endpoint,
+    tor_ingress_required,
+)
 from utils import id_generator
 
 
@@ -79,8 +82,8 @@ Security Features:
             print('[*] Connecting to Tor...')
             print('[*] Creating ephemeral hidden service, this may take a minute or two')
             
-            tor_host, tor_port = get_tor_control_endpoint()
-            with Controller.from_port(address=tor_host, port=tor_port) as controller:
+            control_host, control_port = resolve_tor_control_endpoint()
+            with Controller.from_port(address=control_host, port=control_port) as controller:
                 controller.authenticate()
                 
                 result = controller.create_ephemeral_hidden_service(
@@ -110,7 +113,7 @@ Security Features:
                     finally:
                         print("\n[*] Shutting down hidden service...")
                         try:
-                            with Controller.from_port(address=tor_host, port=tor_port) as ctrl:
+                            with Controller.from_port(address=control_host, port=control_port) as ctrl:
                                 ctrl.authenticate()
                                 ctrl.remove_ephemeral_hidden_service(result.service_id)
                         except Exception as e:

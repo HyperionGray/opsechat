@@ -1,309 +1,88 @@
-# Podman / Docker Containerization
+# Container Runtime
 
-This document describes how to run opsechat using containers with Podman (preferred) or Docker.
+This guide covers the current compose-based container flow.
 
-## Overview
+## What It Starts
 
-The containerized MVP setup includes:
-- **Tor daemon container**: Runs the Tor service with control port enabled
-- **Opsechat application container**: Runs the Flask application with chat, HTTP mail, burner email, and the MVP operator console
+- `tor` container
+- `opsechat` app container
+- `admin-proxy` bound to `127.0.0.1:8080`
 
-The operator entry point is `/console`, which also links to the JSON service
-manifest at `/console/api`.
-
-The compose file is `container-compose.yml` (a `docker-compose.yml` symlink exists for backward compatibility).
-
-## Prerequisites
-
-You need either:
-- **Podman** and **podman-compose** (recommended -- rootless, daemonless)
-  - Install: https://podman.io/getting-started/installation
-  - Podman-compose: `pip install podman-compose`
-
-OR
-
-- **Docker** and **docker-compose** (fallback)
-  - Install: https://docs.docker.com/get-docker/
+The compose file is [`container-compose.yml`](../../container-compose.yml).
 
 ## Quick Start
 
-### Starting Services
-
-Simply run:
-
 ```bash
+cd /path/to/opsechat
 ./compose-up.sh
 ```
 
-This script will:
-1. Detect whether you have podman-compose or docker-compose
-2. Build the opsechat, Tor, and admin proxy images
-3. Start the Tor daemon
-4. Start the opsechat application
-5. Start the localhost-only admin proxy
-6. Display status and instructions
+The helper script auto-detects:
 
-### Viewing the Onion Address
+- `podman-compose`
+- `docker-compose`
+- `docker compose`
 
-After services start, view the logs to get your onion service URL:
+## Access Points
+
+Local operator access:
+
+- `http://127.0.0.1:8080/`
+- `http://127.0.0.1:8080/chat`
+
+The app inside the container uses the current refactored runtime, so the
+onion-service web paths are also `/` and `/chat`.
+
+## Find The Onion URL
 
 ```bash
-# For podman-compose
-podman-compose -f container-compose.yml logs opsechat
-
-# For docker-compose
-docker-compose -f container-compose.yml logs opsechat
+docker compose -f container-compose.yml logs opsechat
 ```
 
-Look for a line like:
-```
-[*] Your service is available at: abc123...xyz.onion/randompath
-```
-
-The onion service now defaults to the operator console at:
-
-```
-http://abc123...xyz.onion/randompath/console
-```
-
-### Localhost Admin Access
-
-The compose stack also exposes a localhost-only reverse proxy for operator use:
-
-```text
-http://127.0.0.1:8080/
-```
-
-This proxy is intended for admin and debugging workflows on the host itself. It
-is not published beyond localhost.
-
-### Verifying the Setup
-
-Run the verification script to check that everything is working:
+Or use:
 
 ```bash
 ./verify-setup.sh
 ```
 
-This will check:
-- Container status
-- Tor service health
-- Network connectivity
-- Hidden service address
-
-### Viewing Logs
-
-Watch logs in real-time:
-
-```bash
-# For podman-compose
-podman-compose -f container-compose.yml logs -f
-
-# For docker-compose
-docker-compose -f container-compose.yml logs -f
-```
-
-### Stopping Services
-
-Run:
+## Useful Commands
 
 ```bash
 ./compose-down.sh
+docker compose -f container-compose.yml logs -f
+docker compose -f container-compose.yml ps
 ```
 
-To also remove persistent data (Tor keys):
+If you use Podman or legacy docker-compose, the helper scripts select the right
+command automatically.
 
-```bash
-# For podman-compose
-podman-compose -f container-compose.yml down -v
+## Direct Host-Port Debugging
 
-# For docker-compose
-docker-compose -f container-compose.yml down -v
-```
+If you temporarily uncomment the app port mapping in `container-compose.yml`,
+the app will answer directly on:
 
-## Manual Usage
+- `http://127.0.0.1:5000/`
+- `http://127.0.0.1:5000/chat`
+- `http://127.0.0.1:5000/health`
 
-If you prefer to run compose commands directly:
-
-```bash
-# Start services
-podman-compose -f container-compose.yml up -d
-# or
-docker-compose -f container-compose.yml up -d
-
-# View logs
-podman-compose -f container-compose.yml logs -f
-# or
-docker-compose -f container-compose.yml logs -f
-
-# Stop services
-podman-compose -f container-compose.yml down
-# or
-docker-compose -f container-compose.yml down
-```
-
-## Architecture
-
-### Network Configuration
-
-- All three services run in an isolated `opsechat-network` bridge network
-- The opsechat app connects to the Tor daemon via the control port (9051)
-- The app mounts the Tor cookie volume read-only so `stem` can authenticate to
-  the control port without weakening Tor auth
-- A localhost-only reverse proxy publishes `127.0.0.1:8080` for operator access
-- Public access is still intended to happen through the Tor hidden service
-- For debugging/development, you can uncomment the port mapping in docker-compose.yml
-
-### Security Considerations
-
-1. **Minimal Host Exposure**: The app itself exposes no host ports by default. Only the localhost-bound admin proxy publishes a port, and it is restricted to `127.0.0.1`.
-2. **Cookie Authentication**: Tor uses cookie authentication instead of password authentication, and the cookie file is shared read-only with the app container.
-3. **Isolated Network**: Containers communicate via a dedicated bridge network, isolated from the host.
-4. **Internal-Only Ports**: Tor control port and SOCKS proxy are only accessible within the container network.
-5. **No Disk Storage**: The opsechat app stores nothing on disk (in-memory only).
-6. **Ephemeral Hidden Services**: Services are created dynamically and destroyed on shutdown.
-
-## Configuration
-
-### Environment Variables
-
-You can customize the setup by setting environment variables in `container-compose.yml`:
-
-- `TOR_CONTROL_HOST`: Hostname of Tor daemon (default: `tor`)
-- `TOR_CONTROL_PORT`: Control port (default: `9051`)
-- `FLASK_DEBUG`: Enable Flask debug mode (default: `0`)
-
-### Custom Tor Configuration
-
-Edit `containers/torrc` to customize Tor settings. After changes, rebuild:
-
-```bash
-podman-compose -f container-compose.yml up -d --build
-# or
-docker-compose -f container-compose.yml up -d --build
-```
-
-### Development/Debugging Mode
-
-For local development and debugging, you may want to expose Flask directly:
-
-1. Edit `container-compose.yml` and uncomment the ports section under `opsechat`:
-   ```yaml
-   ports:
-     - "5000:5000"
-   ```
-
-2. Restart services:
-   ```bash
-   ./compose-down.sh
-   ./compose-up.sh
-   ```
-
-3. Access directly at `http://localhost:5000/{path}`
-
-**⚠️ WARNING**: Only use this for development. Never expose Flask directly in production as it bypasses Tor anonymity.
+Use that only for local debugging.
 
 ## Troubleshooting
 
-### Services won't start
+### No onion URL yet
 
-Check logs for errors:
-```bash
-podman-compose logs
-```
+- wait 10-30 seconds for Tor publication
+- inspect logs with `./verify-setup.sh` or the compose logs command
 
-### Can't connect to Tor
+### Admin proxy is up but chat is not
 
-Verify Tor is running:
-```bash
-podman-compose ps
-```
+- check `docker compose -f container-compose.yml logs opsechat`
+- confirm the app container can answer `GET /health`
 
-Check Tor logs:
-```bash
-podman-compose logs tor
-```
+### Compose command not found
 
-### Opsechat can't create hidden service
+Install one of:
 
-This usually means:
-1. Tor isn't fully started yet (wait 10-30 seconds)
-2. Control port authentication failed (check torrc configuration)
-3. Network connectivity issues between containers
-
-Restart services:
-```bash
-./compose-down.sh
-./compose-up.sh
-```
-
-### Permission denied errors (Podman only)
-
-If running rootless Podman and getting permission errors:
-```bash
-podman unshare chown -R 0:0 /path/to/opsechat
-```
-
-## Development
-
-### Rebuilding Containers
-
-After code changes:
-```bash
-podman-compose -f container-compose.yml up -d --build
-# or
-docker-compose -f container-compose.yml up -d --build
-```
-
-### Running Tests
-
-Tests should be run outside containers on the host:
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-PYTHONPATH=. pytest tests/
-```
-
-### Accessing Container Shell
-
-```bash
-# Opsechat app
-podman exec -it opsechat-app /bin/bash
-# or
-docker exec -it opsechat-app /bin/bash
-
-# Tor daemon
-podman exec -it opsechat-tor /bin/sh
-# or
-docker exec -it opsechat-tor /bin/sh
-```
-
-## Production Considerations
-
-While this setup provides good isolation, for production use consider:
-
-1. **Use a reverse proxy** (nginx, traefik) in front of Flask
-2. **Use a production WSGI server** (gunicorn, uwsgi) instead of Flask's dev server
-3. **Set up monitoring** and health checks
-4. **Regular security updates** of container images
-5. **Backup Tor keys** if you need persistent onion addresses (not recommended for this use case)
-6. **Resource limits** via docker-compose constraints
-
-## Differences from Native Setup
-
-Containerized vs. native:
-- **Isolation**: Better process isolation and resource management
-- **Dependencies**: All dependencies bundled, no system conflicts
-- **Portability**: Easy to deploy on any Docker/Podman host
-- **Overhead**: Slight performance overhead from containerization
-- **Networking**: Additional network layer between components
-
-## Support
-
-For issues specific to containerization, check:
-1. Container logs: `podman-compose -f container-compose.yml logs` or `docker-compose -f container-compose.yml logs`
-2. Container status: `podman-compose -f container-compose.yml ps` or `docker-compose -f container-compose.yml ps`
-3. Network connectivity: `podman network inspect opsechat-network`
-
-For general opsechat issues, see the main [README.md](README.md).
+- `podman-compose`
+- `docker-compose`
+- Docker with the `compose` plugin
