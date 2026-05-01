@@ -122,6 +122,9 @@ def health_check():
 
 def main():
     """Main entry point for mock server"""
+    WSGIRequestHandler.server_version = "OpSecChat"
+    WSGIRequestHandler.sys_version = ""
+
     # Set up mock configuration
     app.config["hostname"] = "localhost"
     app.config["path"] = "test-path-12345"
