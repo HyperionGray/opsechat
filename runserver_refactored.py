@@ -14,7 +14,10 @@ import logging
 from stem.control import Controller
 from stem import SocketError
 from app_factory import create_app
-from tor_transport import get_tor_control_endpoint, tor_ingress_required
+from tor_transport import (
+    resolve_tor_control_endpoint,
+    tor_ingress_required,
+)
 from utils import id_generator
 
 # Configure logging
@@ -25,8 +28,8 @@ log.setLevel(logging.ERROR)
 def setup_tor_configuration():
     """Setup Tor hidden service configuration"""
     try:
-        tor_host, tor_port = get_tor_control_endpoint()
-        with Controller.from_port(address=tor_host, port=tor_port) as controller:
+        control_host, control_port = resolve_tor_control_endpoint()
+        with Controller.from_port(address=control_host, port=control_port) as controller:
             controller.authenticate()
             
             # Create ephemeral hidden service
@@ -101,8 +104,8 @@ def main():
         if service_id:
             print(" * Shutting down our hidden service")
             try:
-                tor_host, tor_port = get_tor_control_endpoint()
-                with Controller.from_port(address=tor_host, port=tor_port) as controller:
+                control_host, control_port = resolve_tor_control_endpoint()
+                with Controller.from_port(address=control_host, port=control_port) as controller:
                     controller.authenticate()
                     controller.remove_ephemeral_hidden_service(service_id)
             except Exception as e:

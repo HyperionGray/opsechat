@@ -78,10 +78,7 @@ class ChatRoom:
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
         self.closed_roster = ClosedRosterState(room_id)
-        # Compatibility shim for legacy unit/integration tests that still call
-        # ChatRoom.get_room_key() (tests/test_chatroom.py, tests/test_new_features.py).
-        # The HTTP /chat/room/<room_id>/key endpoint remains retired; remove this
-        # shim only after those tests and remaining legacy callers are migrated.
+        # Backward-compatibility token for legacy room-key callers.
         self._legacy_room_key = secrets.token_urlsafe(32)
     
     def add_message(self, user_id, username, color, message_text):
@@ -132,7 +129,7 @@ class ChatRoom:
         self._store_message(user_id, username, color, normalized)
 
     def get_room_key(self):
-        """Return legacy room key for compatibility with existing tests."""
+        """Return the backward-compatible legacy room key token."""
         return self._legacy_room_key
     
     def cleanup_old_messages(self):
