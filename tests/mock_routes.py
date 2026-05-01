@@ -6,15 +6,18 @@ extracted from mock_server.py for better organization and maintainability.
 """
 
 import datetime
+import html
 import re
 from flask import render_template, session, request, jsonify, redirect
 from utils import sanitize_emojis, filter_to_ascii
 import secrets
+from closed_roster_room import OPENPGP_ENVELOPE_TYPE
 
 
 def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_random_color):
     """Create and register mock route handlers"""
     chat_rooms = {}
+    chat_room_states = {}
     adjectives = ['Swift', 'Silent', 'Dark', 'Ghost', 'Shadow', 'Phantom', 
                   'Cipher', 'Echo', 'Rogue', 'Viper', 'Stealth', 'Void']
     nouns = ['Raven', 'Wolf', 'Fox', 'Hawk', 'Lynx', 'Owl', 'Cobra', 
@@ -24,10 +27,13 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         number = secrets.randbelow(10000)
         return f"{secrets.choice(adjectives)}{secrets.choice(nouns)}{number:04d}"
 
-    def sanitize_xss_tokens(value):
-        value = re.sub(r'on[a-z]{2,32}\s*=', '', value, flags=re.IGNORECASE)
-        value = re.sub(r'javascript\s*:', '', value, flags=re.IGNORECASE)
-        return value
+    def sanitize_chat_text(value):
+        text = filter_to_ascii(value)
+        text = sanitize_emojis(text)
+        text = re.sub("javascript:", "", text, flags=re.IGNORECASE)
+        text = text.replace("onerror=", "").replace("onload=", "")
+        text = html.escape(text, quote=True)
+        return text
     
     def check_older_than(chat_dic, secs_to_live=180):
         """Check if a chat message is older than specified seconds"""
@@ -50,7 +56,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             session["color"] = get_random_color()
         
         try:
-            return render_template("landing_auto.html",
+            return render_template("landing.html",
                                   hostname=app.config["hostname"],
                                   path=app.config["path"])
         except Exception as e:
@@ -156,11 +162,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         if request.method == "POST":
             if request.form.get("dropdata", "").strip():
                 message_text = request.form["dropdata"].strip()
-                # Enforce ASCII-only and remove emojis
-                message_text = filter_to_ascii(message_text)
-                message_text = sanitize_emojis(message_text)
-                # Basic HTML sanitization
-                message_text = re.sub(r"[<>&\"']", '', message_text)
+                message_text = sanitize_chat_text(message_text)
                 chat = {
                     "msg": message_text,
                     "timestamp": datetime.datetime.now(),
@@ -212,10 +214,7 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         if request.method == "POST":
             if request.form.get("dropdata", "").strip():
                 message_text = request.form["dropdata"].strip()
-                message_text = filter_to_ascii(message_text)
-                message_text = sanitize_emojis(message_text)
-                message_text = sanitize_xss_tokens(message_text)
-                message_text = re.sub(r"[<>&\"']", '', message_text)
+                message_text = sanitize_chat_text(message_text)
                 chat = {
                     "msg": message_text,
                     "timestamp": datetime.datetime.now().isoformat(),
@@ -364,31 +363,16 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
     # Simple chat routes
     @app.route('/chat', methods=["GET"])
     def chat_index():
-        return '''
-            <html lang="en">
-              <head>
-                <meta charset="utf-8">
-                <title>OpSecChat Mock Chat Index</title>
-              </head>
-              <body>
-                <h1>OpSecChat</h1>
-                <p>Closed-roster OpenPGP room bootstrap</p>
-                <button id="createRoomBtn">Create Room</button>
-                <div id="createRoomStatus" role="status" aria-live="polite"></div>
-                <script src="/static/mock-chat-test.js"></script>
-              </body>
-            </html>
-        ''', 200
+        try:
+            return render_template("simple_chat_index.html", version="test"), 200
+        except Exception:
+            return '<html><body><h1>OpSecChat</h1><button id="createRoomBtn">Create Room</button><p>Closed-roster OpenPGP room bootstrap</p></body></html>', 200
 
     @app.route('/chat/create', methods=["POST"])
     def chat_create():
         room_id = id_generator(16)
-        chat_rooms[room_id] = {
-            "messages": [],
-            "mode": "closed_roster_openpgp_v1",
-            "roster_locked": False,
-            "members": [],
-        }
+        chat_rooms[room_id] = []
+        chat_room_states[room_id] = None
         return jsonify({
             "success": True,
             "room_id": room_id,
@@ -404,54 +388,71 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             session["username"] = generate_room_username()
             session["color"] = get_random_color()
         
-        return f'''
-            <html lang="en">
-              <head>
-                <meta charset="utf-8">
-                <title>Closed-Roster OpSecChat Room</title>
-              </head>
-              <body>
-                <h1>Closed-Roster OpSecChat</h1>
-                <div id="securityWarning" role="alert">Closed-roster warning: verify identities before messaging.</div>
-                <button id="acceptSecurityWarningBtn">Accept</button>
-                <label for="memberIdInput">Member ID</label>
-                <input id="memberIdInput" aria-label="Member ID" autocomplete="off" />
-                <label for="privateKeyInput">Private Key</label>
-                <textarea id="privateKeyInput" aria-label="Private Key" autocomplete="off"></textarea>
-                <label for="peerPublicKeyInput">Peer Public Key</label>
-                <textarea id="peerPublicKeyInput" aria-label="Peer Public Key" autocomplete="off"></textarea>
-                <button id="lockRosterBtn">Lock Roster</button>
-                <label for="messageInput">Message</label>
-                <textarea id="messageInput" maxlength="500" aria-label="Message"></textarea>
-                <button id="sendBtn" disabled>Send</button>
-                <input type="hidden" id="rosterLocked" value="{str(chat_rooms[room_id]['roster_locked']).lower()}" />
-                <script src="/static/mock-chat-test.js"></script>
-              </body>
-            </html>
-        ''', 200
+        try:
+            return render_template(
+                "simple_chat_room.html",
+                room_id=room_id,
+                max_message_length=500,
+            ), 200
+        except Exception:
+            safe_room_id = html.escape(room_id, quote=True)
+            return f'<html><body data-room-id="{safe_room_id}"><h1>Closed-Roster OpSecChat</h1><input id="memberIdInput"><textarea id="privateKeyInput"></textarea><textarea id="peerPublicKeyInput"></textarea><button id="lockRosterBtn">Lock</button><button id="sendBtn" disabled>Send</button></body></html>', 200
 
     @app.route('/chat/room/<string:room_id>/state', methods=["GET"])
     def chat_room_state(room_id):
         if room_id not in chat_rooms:
             return jsonify({"error": "Room not found"}), 404
-        room = chat_rooms[room_id]
         return jsonify({
-            "mode": room["mode"],
-            "policy": {"immutable_roster": True, "shared_room_keys_supported": False},
-            "active_epoch": None,
-            "roster_locked": room["roster_locked"],
-            "member_count": len(room["members"]),
-        }), 200
+            "mode": OPENPGP_ENVELOPE_TYPE,
+            "policy": {
+                "immutable_roster": True,
+                "shared_room_keys_supported": False,
+            },
+            "active_epoch": chat_room_states.get(room_id),
+        })
+
+    @app.route('/chat/room/<string:room_id>/state/bootstrap', methods=["POST"])
+    def chat_room_state_bootstrap(room_id):
+        if room_id not in chat_rooms:
+            return jsonify({"error": "Room not found"}), 404
+        if chat_room_states.get(room_id) is not None:
+            return jsonify({"error": "closed roster already initialized"}), 400
+
+        data = request.get_json(silent=True) or {}
+        members = data.get("members")
+        if not isinstance(members, list) or not members:
+            return jsonify({"error": "No roster members provided"}), 400
+
+        roster_hash = f"MOCK-{room_id}".upper()
+        chat_room_states[room_id] = {
+            "room_id": room_id,
+            "epoch": 1,
+            "immutable_roster": True,
+            "roster_hash": roster_hash,
+            "members": members,
+        }
+        return jsonify({
+            "success": True,
+            "mode": OPENPGP_ENVELOPE_TYPE,
+            "policy": {
+                "immutable_roster": True,
+                "shared_room_keys_supported": False,
+            },
+            "active_epoch": chat_room_states[room_id],
+        })
 
     @app.route('/chat/room/<string:room_id>/key', methods=["GET"])
-    def chat_room_key(room_id):
+    def chat_room_key_deprecated(room_id):
         if room_id not in chat_rooms:
             return jsonify({"error": "Room not found"}), 404
         return jsonify({
-            "error": "The shared room-key endpoint is retired.",
+            "error": (
+                "The shared room-key endpoint is retired. "
+                "Use the closed-roster OpenPGP room bootstrap flow instead."
+            ),
             "deprecated": True,
             "replacement": f"/chat/room/{room_id}/state",
-            "mode": "closed_roster_openpgp_v1",
+            "mode": OPENPGP_ENVELOPE_TYPE,
         }), 410
 
     @app.route('/chat/room/<string:room_id>/messages', methods=["GET", "POST"])
@@ -465,15 +466,22 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         
         if request.method == "POST":
             data = request.get_json() or {}
-            message_text = data.get("message", "").strip()
+            room_state = chat_room_states.get(room_id)
+            message_text = data.get("armored_message", data.get("message", "")).strip()
             if not message_text:
-                return jsonify({"error": "Empty message"}), 400
-            message_text = filter_to_ascii(message_text)
-            message_text = sanitize_emojis(message_text)
-            message_text = sanitize_xss_tokens(message_text)
-            message_text = re.sub(r"[<>&\"']", '', message_text)
-            chat_rooms[room_id]["messages"].append({
+                return jsonify({"error": "No message provided"}), 400
+            message_text = sanitize_chat_text(message_text)
+            chat_rooms[room_id].append({
+                "message_type": data.get(
+                    "envelope_type",
+                    OPENPGP_ENVELOPE_TYPE if room_state is not None else "legacy_plaintext_test_only",
+                ),
                 "message": message_text,
+                "armored_message": message_text,
+                "sender_member_id": data.get("sender_member_id"),
+                "sender_signing_fingerprint": data.get("sender_signing_fingerprint"),
+                "epoch": room_state["epoch"] if room_state is not None else None,
+                "roster_hash": room_state["roster_hash"] if room_state is not None else None,
                 "user_id": session["_id"],
                 "username": session.get("username", "Anonymous"),
                 "color": session.get("color", "blue"),
@@ -509,13 +517,10 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
             session["color"] = get_random_color()
         
         if request.method == "POST":
-            message_text = request.form.get("message", "").strip()
-            if message_text:
-                message_text = filter_to_ascii(message_text)
-                message_text = sanitize_emojis(message_text)
-                message_text = sanitize_xss_tokens(message_text)
-                message_text = re.sub(r"[<>&\"']", '', message_text)
-                chat = {
+                message_text = request.form.get("message", "").strip()
+                if message_text:
+                    message_text = sanitize_chat_text(message_text)
+                    chat = {
                     "msg": message_text,
                     "timestamp": datetime.datetime.now(),
                     "username": session["_id"],
@@ -538,17 +543,14 @@ def create_mock_routes(app, chatters, chatlines, reviews, id_generator, get_rand
         if request.method == "POST":
             data = request.get_json()
             if data and "message" in data:
-                message_text = data["message"].strip()
-                if message_text:
-                    message_text = filter_to_ascii(message_text)
-                    message_text = sanitize_emojis(message_text)
-                    message_text = sanitize_xss_tokens(message_text)
-                    message_text = re.sub(r"[<>&\"']", '', message_text)
-                    chat = {
-                        "msg": message_text,
-                        "timestamp": datetime.datetime.now(),
-                        "username": session["_id"],
-                        "color": session["color"],
+                    message_text = data["message"].strip()
+                    if message_text:
+                        message_text = sanitize_chat_text(message_text)
+                        chat = {
+                            "msg": message_text,
+                            "timestamp": datetime.datetime.now(),
+                            "username": session["_id"],
+                            "color": session["color"]
                     }
                     chatlines.append(chat)
         
