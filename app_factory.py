@@ -170,7 +170,7 @@ def create_app():
     register_mvp_routes(app)
 
     # Health check endpoint
-    from monitoring import get_health_status, get_chat_stats, get_version
+    from monitoring import get_health_status, get_chat_stats, get_version_info
 
     @app.route('/health', methods=["GET"])
     def health():
@@ -178,10 +178,7 @@ def create_app():
 
     @app.route('/version', methods=["GET"])
     def version():
-        health_data = get_health_status()
-        return jsonify({
-            "version": health_data.get("version", "unknown"),
-        })
+        return jsonify(get_version_info())
 
     # Operational stats endpoint for monitoring dashboards
     @app.route('/chat/stats', methods=["GET"])

@@ -79,6 +79,10 @@ class ChatRoom:
         self.created_at = datetime.datetime.now()
         self.lock = threading.Lock()
         self._room_key = secrets.token_urlsafe(32)
+        # Legacy compatibility key kept for older tests/integrations that still
+        # assert room-level key generation. Closed-roster OpenPGP is the active
+        # messaging model and does not use this value for transport encryption.
+        self._legacy_room_key = secrets.token_urlsafe(32)
         self.closed_roster = ClosedRosterState(room_id)
         # Backward-compatibility token for legacy room-key callers.
         self._legacy_room_key = secrets.token_urlsafe(32)

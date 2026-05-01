@@ -343,6 +343,11 @@ def get_health_status() -> Dict[str, Any]:
     }
 
 
+def get_version_info() -> Dict[str, str]:
+    """Return the current service version payload."""
+    return {'version': _read_version()}
+
+
 def _get_active_room_count() -> int:
     """Return the number of active chat rooms from simple_chat_routes.
 
