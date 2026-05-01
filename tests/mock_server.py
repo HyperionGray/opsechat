@@ -92,11 +92,18 @@ def remove_headers(response):
     return response
 
 
-class _NoServerHeaderRequestHandler(WSGIRequestHandler):
+class CustomRequestHandler(WSGIRequestHandler):
+    """Suppress default server/date fingerprints in mock HTTP responses."""
+
     server_version = ""
     sys_version = ""
 
     def version_string(self):
+        """Return an empty server banner string."""
+        return ""
+
+    def date_time_string(self, timestamp=None):
+        """Return an empty HTTP date string."""
         return ""
 
 
@@ -177,7 +184,7 @@ def main():
             port=5001,
             debug=False,
             threaded=True,
-            request_handler=_NoServerHeaderRequestHandler,
+            request_handler=CustomRequestHandler,
         )
     except KeyboardInterrupt:
         print("\nMock server stopped")
