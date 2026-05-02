@@ -97,6 +97,17 @@ class TestDockerComposeConfig:
         proxy_ports = config['services']['admin-proxy']['ports']
         assert proxy_ports == ['127.0.0.1:8080:8080']
 
+    def test_compose_proxy_build_uses_repo_root_context(self):
+        compose_path = self.get_compose_path()
+        with open(compose_path) as f:
+            config = yaml.safe_load(f)
+
+        proxy_build = config['services']['admin-proxy']['build']
+        assert proxy_build == {
+            'context': '.',
+            'dockerfile': 'containers/proxy.Dockerfile',
+        }
+
     def test_compose_app_healthcheck_targets_local_health_endpoint(self):
         compose_path = os.path.join(REPO_DIR, 'docker-compose.yml')
         with open(compose_path) as f:
@@ -167,6 +178,25 @@ class TestDockerfile:
         assert 'src/python/' in content
         assert 'src/web/' in content
         assert '/app/src/python/runserver.py' in content
+
+
+class TestDockerIgnore:
+    """Test Docker build context exclusions."""
+
+    def test_dockerignore_excludes_containers_except_caddyfile(self):
+        path = os.path.join(REPO_DIR, '.dockerignore')
+        with open(path) as f:
+            entries = {line.strip() for line in f if line.strip() and not line.startswith('#')}
+
+        assert 'containers/*' in entries
+        assert '!containers/Caddyfile' in entries
+
+    def test_proxy_dockerfile_copies_caddyfile_from_build_context(self):
+        path = os.path.join(REPO_DIR, 'containers', 'proxy.Dockerfile')
+        with open(path) as f:
+            content = f.read()
+
+        assert 'COPY containers/Caddyfile /etc/caddy/Caddyfile' in content
 
 
 class TestTorConfig:
