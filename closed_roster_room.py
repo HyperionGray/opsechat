@@ -1,253 +1,304 @@
 """
-Closed-roster room state management for OpenPGP-based secure chat.
+Closed-roster OpenPGP room state for simple chat rooms.
 
-This module provides a small state container for immutable epoch-1 room roster
-bootstrap and payload validation for OpenPGP envelope metadata.
+The server does not decrypt room traffic. Its job is to:
+
+- freeze an immutable epoch-1 roster for a room
+- expose that roster to the browser UI
+- reject uploaded envelope metadata that does not match the active roster
+
+Actual OpenPGP encryption, decryption, and signature verification happen in the
+browser via `static/chat-room.js`.
 """
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
-from typing import Any
+from typing import Iterable
 
-from openpgp_room_policy import normalize_fingerprint
-
-
-OPENPGP_ENVELOPE_TYPE = "opsechat.closed-roster-openpgp-envelope.v1"
+from openpgp_room_policy import RoomEpoch, RoomMember, normalize_fingerprint
 
 
-def _normalize_key_id(value: str) -> str:
+OPENPGP_ENVELOPE_TYPE = "closed_roster_openpgp_v1"
+
+_HEX = set("0123456789ABCDEF")
+_KEY_ID_LENGTHS = {16}
+_PGP_MESSAGE_BEGIN = "-----BEGIN PGP MESSAGE-----"
+_PGP_MESSAGE_END = "-----END PGP MESSAGE-----"
+_PGP_PUBLIC_KEY_BEGIN = "-----BEGIN PGP PUBLIC KEY BLOCK-----"
+_PGP_PUBLIC_KEY_END = "-----END PGP PUBLIC KEY BLOCK-----"
+
+
+def _normalize_key_id(value: str, field_name: str) -> str:
+    """Normalize an OpenPGP key id to uppercase hex."""
     if not isinstance(value, str):
-        raise TypeError("key id must be a string")
-    normalized = "".join(ch for ch in value.upper() if ch in "0123456789ABCDEF")
-    if len(normalized) < 8:
-        raise ValueError("key id must contain at least 8 hex characters")
+        raise TypeError(f"{field_name} must be a string")
+
+    normalized = "".join(ch for ch in value.upper() if ch in _HEX)
+    if len(normalized) not in _KEY_ID_LENGTHS:
+        raise ValueError(f"{field_name} must be 16 hex characters after normalization")
+    return normalized
+
+
+def _normalize_non_empty_string(value: str, field_name: str) -> str:
+    if not isinstance(value, str):
+        raise TypeError(f"{field_name} must be a string")
+
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError(f"{field_name} must be non-empty")
+    return normalized
+
+
+def _normalize_room_id(value: str) -> str:
+    return _normalize_non_empty_string(value, "room_id")
+
+
+def _normalize_member_id(value: str) -> str:
+    return _normalize_non_empty_string(value, "member_id")
+
+
+def _normalize_display_name(value, fallback: str) -> str:
+    if value is None:
+        return fallback
+    if not isinstance(value, str):
+        raise TypeError("display_name must be a string")
+    normalized = value.strip()
+    return normalized or fallback
+
+
+def _normalize_public_key(value) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("public_key_armored must be a non-empty string")
+
+    normalized = value.strip()
+    if _PGP_PUBLIC_KEY_BEGIN not in normalized or _PGP_PUBLIC_KEY_END not in normalized:
+        raise ValueError("public_key_armored must be an ASCII-armored PGP public key")
+    return normalized
+
+
+def _normalize_fingerprint_list(values, field_name: str) -> frozenset[str]:
+    if not isinstance(values, list):
+        raise TypeError(f"{field_name} must be a list")
+    return frozenset(normalize_fingerprint(value) for value in values)
+
+
+def _normalize_key_id_list(values, field_name: str) -> frozenset[str]:
+    if not isinstance(values, list):
+        raise TypeError(f"{field_name} must be a list")
+    return frozenset(_normalize_key_id(value, field_name) for value in values)
+
+
+def _validate_armored_message(value) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("armored_message must be a non-empty string")
+
+    normalized = value.strip()
+    if _PGP_MESSAGE_BEGIN not in normalized or _PGP_MESSAGE_END not in normalized:
+        raise ValueError("armored_message must be an ASCII-armored PGP message")
     return normalized
 
 
 @dataclass(frozen=True)
-class _RosterMember:
-    member_id: str
-    display_name: str
-    signing_fingerprint: str
-    encryption_fingerprint: str
+class ClosedRosterMemberRecord:
+    """Full roster record exposed to the UI for one room member."""
+
+    room_member: RoomMember
     signing_key_id: str
     encryption_key_id: str
     public_key_armored: str
 
+    @classmethod
+    def from_payload(cls, payload: dict) -> "ClosedRosterMemberRecord":
+        if not isinstance(payload, dict):
+            raise TypeError("roster member must be an object")
+
+        member_id = _normalize_member_id(payload.get("member_id"))
+        display_name = _normalize_display_name(payload.get("display_name"), member_id)
+        member = RoomMember(
+            member_id=member_id,
+            signing_fingerprint=payload.get("signing_fingerprint"),
+            encryption_fingerprint=payload.get("encryption_fingerprint"),
+            display_name=display_name,
+        )
+
+        signing_key_id = payload.get("signing_key_id") or member.signing_fingerprint[:16]
+        encryption_key_id = (
+            payload.get("encryption_key_id") or member.encryption_fingerprint[:16]
+        )
+
+        return cls(
+            room_member=member,
+            signing_key_id=_normalize_key_id(signing_key_id, "signing_key_id"),
+            encryption_key_id=_normalize_key_id(
+                encryption_key_id, "encryption_key_id"
+            ),
+            public_key_armored=_normalize_public_key(payload.get("public_key_armored")),
+        )
+
+    @property
+    def member_id(self) -> str:
+        return self.room_member.member_id
+
+    def to_response(self) -> dict:
+        return {
+            "member_id": self.room_member.member_id,
+            "display_name": self.room_member.display_name,
+            "signing_fingerprint": self.room_member.signing_fingerprint,
+            "encryption_fingerprint": self.room_member.encryption_fingerprint,
+            "signing_key_id": self.signing_key_id,
+            "encryption_key_id": self.encryption_key_id,
+            "public_key_armored": self.public_key_armored,
+        }
+
 
 class ClosedRosterState:
-    """Per-room immutable roster state for closed-roster OpenPGP chat."""
+    """Immutable epoch-1 roster state for a simple chat room."""
 
     def __init__(self, room_id: str):
-        self.room_id = room_id
-        self._active_epoch: dict[str, Any] | None = None
-        self._members_by_id: dict[str, _RosterMember] = {}
+        self.room_id = _normalize_room_id(room_id)
+        self.active_epoch: RoomEpoch | None = None
+        self._member_records: dict[str, ClosedRosterMemberRecord] = {}
 
-    def serialize(self) -> dict[str, Any]:
-        """Return a JSON-serializable snapshot of room policy and active epoch."""
-        active_epoch = None
-        if self._active_epoch is not None:
-            active_epoch = {
-                "room_id": self._active_epoch["room_id"],
-                "epoch": self._active_epoch["epoch"],
-                "roster_hash": self._active_epoch["roster_hash"],
-                "immutable_roster": self._active_epoch["immutable_roster"],
-                "members": [member.copy() for member in self._active_epoch["members"]],
-            }
+    def _serialize_active_epoch(self) -> dict | None:
+        if self.active_epoch is None:
+            return None
+
+        members: list[dict] = []
+        for member in self.active_epoch.members:
+            record = self._member_records[member.member_id]
+            members.append(record.to_response())
 
         return {
+            "room_id": self.active_epoch.room_id,
+            "epoch": self.active_epoch.epoch,
+            "immutable_roster": True,
+            "roster_hash": self.active_epoch.roster_hash,
+            "members": members,
+        }
+
+    def serialize(self) -> dict:
+        return {
             "mode": OPENPGP_ENVELOPE_TYPE,
-            "active_epoch": active_epoch,
+            "room_id": self.room_id,
+            "active_epoch": self._serialize_active_epoch(),
             "policy": {
                 "immutable_roster": True,
                 "shared_room_keys_supported": False,
             },
         }
 
-    def bootstrap(self, members: list[dict[str, Any]]) -> dict[str, Any]:
-        """
-        Initialize immutable epoch-1 roster state from posted member records.
+    def bootstrap(self, members: Iterable[dict]) -> dict:
+        if self.active_epoch is not None:
+            raise ValueError("room roster already initialized")
 
-        Each member record must provide at least:
-        member_id, signing_fingerprint, encryption_fingerprint.
-        Optional fields: display_name, signing_key_id, encryption_key_id,
-        public_key_armored.
-        """
-        if self._active_epoch is not None:
-            raise ValueError("closed roster already initialized")
-        if not isinstance(members, list) or not members:
-            raise ValueError("members must be a non-empty list")
+        records = [ClosedRosterMemberRecord.from_payload(member) for member in members]
+        if not records:
+            raise ValueError("roster must contain at least one member")
 
-        parsed_members: list[_RosterMember] = []
-        member_ids_seen: set[str] = set()
-        signing_fps_seen: set[str] = set()
-        encryption_fps_seen: set[str] = set()
+        member_by_id = {record.member_id: record for record in records}
+        if len(member_by_id) != len(records):
+            raise ValueError("member_id values must be unique within a roster")
 
-        for raw in members:
-            if not isinstance(raw, dict):
-                raise TypeError("each member must be an object")
-
-            member_id = str(raw.get("member_id", "")).strip()
-            if not member_id:
-                raise ValueError("member_id must be non-empty")
-            if member_id in member_ids_seen:
-                raise ValueError("member_id values must be unique")
-            member_ids_seen.add(member_id)
-
-            signing_fp = normalize_fingerprint(raw.get("signing_fingerprint", ""))
-            encryption_fp = normalize_fingerprint(raw.get("encryption_fingerprint", ""))
-
-            if signing_fp in signing_fps_seen:
-                raise ValueError("signing fingerprints must be unique")
-            if encryption_fp in encryption_fps_seen:
-                raise ValueError("encryption fingerprints must be unique")
-            signing_fps_seen.add(signing_fp)
-            encryption_fps_seen.add(encryption_fp)
-
-            signing_key_id = _normalize_key_id(
-                str(raw.get("signing_key_id") or signing_fp[:16])
-            )
-            encryption_key_id = _normalize_key_id(
-                str(raw.get("encryption_key_id") or encryption_fp[:16])
-            )
-
-            parsed_members.append(
-                _RosterMember(
-                    member_id=member_id,
-                    display_name=str(raw.get("display_name") or member_id),
-                    signing_fingerprint=signing_fp,
-                    encryption_fingerprint=encryption_fp,
-                    signing_key_id=signing_key_id,
-                    encryption_key_id=encryption_key_id,
-                    public_key_armored=str(raw.get("public_key_armored") or ""),
-                )
-            )
-
-        canonical_members = sorted(
-            parsed_members,
-            key=lambda member: (
-                member.signing_fingerprint,
-                member.encryption_fingerprint,
-                member.member_id,
-            ),
-        )
-        roster_payload = "\n".join(
-            f"{m.member_id}|{m.signing_fingerprint}|{m.encryption_fingerprint}"
-            for m in canonical_members
+        epoch = RoomEpoch(
+            room_id=self.room_id,
+            epoch=1,
+            members=tuple(record.room_member for record in records),
         )
 
-        roster_hash = hashlib.sha256(
-            f"opsechat-roster-v1\n{roster_payload}".encode("utf-8")
-        ).hexdigest().upper()
-
-        self._members_by_id = {member.member_id: member for member in canonical_members}
-        self._active_epoch = {
-            "room_id": self.room_id,
-            "epoch": 1,
-            "roster_hash": roster_hash,
-            "immutable_roster": True,
-            "members": [
-                {
-                    "member_id": member.member_id,
-                    "display_name": member.display_name,
-                    "signing_fingerprint": member.signing_fingerprint,
-                    "encryption_fingerprint": member.encryption_fingerprint,
-                    "signing_key_id": member.signing_key_id,
-                    "encryption_key_id": member.encryption_key_id,
-                    "public_key_armored": member.public_key_armored,
-                }
-                for member in canonical_members
-            ],
-        }
+        self.active_epoch = epoch
+        self._member_records = member_by_id
         return self.serialize()
 
-    def validate_posted_envelope(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """
-        Validate and normalize a posted closed-roster OpenPGP envelope payload.
-
-        Requires strict match against room_id, epoch, roster hash, sender
-        identity, recipient roster fingerprints, recipient key IDs, and
-        armored message framing.
-        """
-        if self._active_epoch is None:
-            raise ValueError("closed roster is not initialized")
+    def validate_posted_envelope(self, payload: dict) -> dict:
+        if self.active_epoch is None:
+            raise ValueError("room roster is not initialized")
         if not isinstance(payload, dict):
-            raise TypeError("payload must be an object")
+            raise TypeError("message payload must be an object")
 
         envelope_type = payload.get("envelope_type")
         if envelope_type != OPENPGP_ENVELOPE_TYPE:
-            raise ValueError("invalid envelope_type")
+            raise ValueError(
+                f"unsupported envelope type: expected {OPENPGP_ENVELOPE_TYPE}"
+            )
 
-        if payload.get("room_id") != self._active_epoch["room_id"]:
+        room_id = _normalize_room_id(payload.get("room_id"))
+        if room_id != self.active_epoch.room_id:
             raise ValueError("room_id mismatch")
-        if payload.get("epoch") != self._active_epoch["epoch"]:
-            raise ValueError("epoch mismatch")
-        if payload.get("roster_hash") != self._active_epoch["roster_hash"]:
-            raise ValueError("roster hash mismatch")
 
-        sender_member_id = str(payload.get("sender_member_id", "")).strip()
-        sender_member = self._members_by_id.get(sender_member_id)
-        if not sender_member:
+        try:
+            epoch = int(payload.get("epoch"))
+        except (TypeError, ValueError):
+            raise ValueError("epoch must be an integer") from None
+        if epoch != self.active_epoch.epoch:
+            raise ValueError("epoch mismatch")
+
+        sender_member_id = payload.get("sender_member_id")
+        if not isinstance(sender_member_id, str) or not sender_member_id.strip():
+            raise ValueError("sender_member_id must be a non-empty string")
+        sender_member_id = sender_member_id.strip()
+
+        sender_record = self._member_records.get(sender_member_id)
+        if sender_record is None:
             raise ValueError("sender is not part of the roster")
 
-        sender_fp = normalize_fingerprint(payload.get("sender_signing_fingerprint", ""))
-        if sender_fp != sender_member.signing_fingerprint:
+        sender_signing_fingerprint = normalize_fingerprint(
+            payload.get("sender_signing_fingerprint")
+        )
+        if sender_signing_fingerprint != sender_record.room_member.signing_fingerprint:
             raise ValueError("sender signing fingerprint mismatch")
 
-        expected_recipient_fps = {
-            member.encryption_fingerprint for member in self._members_by_id.values()
-        }
-        posted_recipient_fps = {
-            normalize_fingerprint(fp)
-            for fp in payload.get("recipient_encryption_fingerprints", [])
-        }
-        if posted_recipient_fps != expected_recipient_fps:
-            raise ValueError("recipient set does not match the room roster")
-        if payload.get("anonymous_recipients"):
-            raise ValueError("anonymous recipients are forbidden")
+        roster_hash = str(payload.get("roster_hash", "")).strip().upper()
+        if roster_hash != self.active_epoch.roster_hash:
+            raise ValueError("roster hash mismatch")
 
-        intended_recipients = payload.get("intended_recipient_fingerprints", [])
-        if intended_recipients:
-            posted_intended_fps = {
-                normalize_fingerprint(fp) for fp in intended_recipients
-            }
-            if posted_intended_fps != expected_recipient_fps:
+        recipient_fingerprints = _normalize_fingerprint_list(
+            payload.get("recipient_encryption_fingerprints"),
+            "recipient_encryption_fingerprints",
+        )
+        expected_recipient_fingerprints = self.active_epoch.encryption_fingerprints()
+        if recipient_fingerprints != expected_recipient_fingerprints:
+            raise ValueError("recipient set does not match the room roster")
+
+        intended_recipient_fingerprints = payload.get("intended_recipient_fingerprints")
+        normalized_intended_recipients = expected_recipient_fingerprints
+        if intended_recipient_fingerprints:
+            normalized_intended_recipients = _normalize_fingerprint_list(
+                intended_recipient_fingerprints,
+                "intended_recipient_fingerprints",
+            )
+            if normalized_intended_recipients != expected_recipient_fingerprints:
                 raise ValueError(
                     "intended recipient fingerprints do not match the room roster"
                 )
 
-        expected_recipient_key_ids = {
-            member.encryption_key_id for member in self._members_by_id.values()
-        }
-        posted_recipient_key_ids = {
-            _normalize_key_id(key_id)
-            for key_id in payload.get("recipient_encryption_key_ids", [])
-        }
-        if posted_recipient_key_ids != expected_recipient_key_ids:
-            raise ValueError("recipient encryption key ids do not match")
+        recipient_key_ids = _normalize_key_id_list(
+            payload.get("recipient_encryption_key_ids"),
+            "recipient_encryption_key_ids",
+        )
+        expected_recipient_key_ids = frozenset(
+            self._member_records[member.member_id].encryption_key_id
+            for member in self.active_epoch.members
+        )
+        if recipient_key_ids != expected_recipient_key_ids:
+            raise ValueError("recipient encryption key ids do not match the room roster")
 
-        armored_message = payload.get("armored_message")
-        if not isinstance(armored_message, str) or not armored_message.strip():
-            raise ValueError("armored_message is required")
-        if (
-            "-----BEGIN PGP MESSAGE-----" not in armored_message
-            or "-----END PGP MESSAGE-----" not in armored_message
-        ):
-            raise ValueError("armored_message must be an ASCII-armored PGP message")
+        if payload.get("anonymous_recipients"):
+            raise ValueError("anonymous recipients are forbidden")
+
+        armored_message = _validate_armored_message(payload.get("armored_message"))
 
         return {
             "message_type": OPENPGP_ENVELOPE_TYPE,
-            "room_id": self._active_epoch["room_id"],
-            "epoch": self._active_epoch["epoch"],
-            "sender_member_id": sender_member.member_id,
-            "sender_display_name": sender_member.display_name,
-            "sender_signing_fingerprint": sender_member.signing_fingerprint,
-            "roster_hash": self._active_epoch["roster_hash"],
-            "recipient_encryption_fingerprints": sorted(expected_recipient_fps),
-            "intended_recipient_fingerprints": sorted(expected_recipient_fps),
-            "recipient_encryption_key_ids": sorted(expected_recipient_key_ids),
-            "armored_message": armored_message.strip(),
+            "room_id": self.active_epoch.room_id,
+            "epoch": self.active_epoch.epoch,
+            "sender_member_id": sender_member_id,
+            "sender_display_name": sender_record.room_member.display_name,
+            "sender_signing_fingerprint": sender_record.room_member.signing_fingerprint,
+            "roster_hash": self.active_epoch.roster_hash,
+            "recipient_encryption_fingerprints": sorted(recipient_fingerprints),
+            "intended_recipient_fingerprints": sorted(normalized_intended_recipients),
+            "recipient_encryption_key_ids": sorted(recipient_key_ids),
+            "armored_message": armored_message,
             "anonymous_recipients": False,
         }

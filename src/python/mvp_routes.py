@@ -32,7 +32,7 @@ def register_mvp_routes(app):
                 "name": "health",
                 "label": "Operational health",
                 "href": "/health",
-                "api": ["/health", "/chat/stats"],
+                "api": ["/health", "/version", "/chat/stats"],
                 "constraints": {
                     "auth": "none",
                     "purpose": "monitoring and orchestration",
@@ -97,3 +97,8 @@ def register_mvp_routes(app):
     @app.route("/console/api", methods=["GET"])
     def mvp_console_api():
         return jsonify(_build_manifest())
+
+    @app.route("/dashboard", methods=["GET"])
+    def dashboard():
+        manifest = _build_manifest()
+        return render_template("dashboard.html", manifest=manifest)

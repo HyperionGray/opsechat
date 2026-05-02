@@ -146,6 +146,19 @@ class TestClosedRosterBootstrapAndMessages:
         assert response.status_code == 400
         assert "already initialized" in response.get_json()["error"]
 
+    def test_bootstrap_rejects_duplicate_signing_key_id(self):
+        bob = _member_record("bob")
+        bob["signing_key_id"] = _member_record("alice")["signing_key_id"]
+        response = self.client.post(
+            f"/chat/room/{self.room_id}/state/bootstrap",
+            json={
+                "creator_member_id": "alice",
+                "members": [_member_record("alice"), bob],
+            },
+        )
+        assert response.status_code == 400
+        assert "signing key ids must be unique" in response.get_json()["error"]
+
     def test_messages_reject_plaintext_before_bootstrap(self):
         response = self.client.post(
             f"/chat/room/{self.room_id}/messages",

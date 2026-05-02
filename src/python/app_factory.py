@@ -8,8 +8,10 @@ extracted from runserver.py to improve code organization.
 from pathlib import Path
 import os
 import secrets
+from datetime import datetime, timezone
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
+from monitoring import get_health_status, get_chat_stats, get_version
 try:
     from rate_limiter import init_limiter
 except ModuleNotFoundError:
@@ -26,6 +28,25 @@ def _env_flag(name: str, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def register_operational_routes(app):
+    """Register health/version/operational monitoring routes."""
+
+    @app.route('/health', methods=["GET"])
+    def health():
+        return jsonify(get_health_status())
+
+    @app.route('/version', methods=["GET"])
+    def version():
+        return jsonify({
+            "version": get_version(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+
+    @app.route('/chat/stats', methods=["GET"])
+    def chat_stats():
+        return jsonify(get_chat_stats())
 
 
 def create_app():
@@ -155,11 +176,15 @@ def create_app():
     register_mvp_routes(app)
 
     # Health check endpoint
-    from monitoring import get_health_status, get_chat_stats
+    from monitoring import get_health_status, get_chat_stats, get_version
 
     @app.route('/health', methods=["GET"])
     def health():
         return jsonify(get_health_status())
+
+    @app.route('/version', methods=["GET"])
+    def version():
+        return jsonify(get_version_info())
 
     # Operational stats endpoint for monitoring dashboards
     @app.route('/chat/stats', methods=["GET"])

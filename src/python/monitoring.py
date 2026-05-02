@@ -325,6 +325,11 @@ def _read_version() -> str:
         return 'unknown'
 
 
+def get_version() -> str:
+    """Return the current application version string."""
+    return _read_version()
+
+
 def get_health_status() -> Dict[str, Any]:
     """Get application health status"""
     active_rooms = _get_active_room_count()
@@ -332,7 +337,7 @@ def get_health_status() -> Dict[str, Any]:
         'status': 'healthy',
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'uptime_seconds': time.time() - apm.metrics['system']['start_time'],
-        'version': _read_version(),
+        'version': get_version(),
         'active_rooms': active_rooms,
         'checks': {
             'tor_connection': 'unknown',  # Would need to check actual Tor status
@@ -340,6 +345,11 @@ def get_health_status() -> Dict[str, Any]:
             'disk_space': 'ok'
         }
     }
+
+
+def get_version_info() -> Dict[str, str]:
+    """Return the current service version payload."""
+    return {'version': _read_version()}
 
 
 def _get_active_room_count() -> int:
