@@ -46,10 +46,9 @@ ENV PYTHONDONTWRITEBYTECODE=1
 
 USER opsechat
 
-# Healthcheck: verify the Flask /health endpoint is responding
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl --fail --silent http://127.0.0.1:5000/health || exit 1
-
+# Healthcheck: verify the Flask /health endpoint is responding.
+# Flask binds immediately on startup (Tor setup runs in a background thread),
+# so a 20 s start_period is sufficient.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=10 \
   CMD curl --fail --silent http://127.0.0.1:5000/health || exit 1
 
