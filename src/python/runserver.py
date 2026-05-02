@@ -9,8 +9,11 @@ All route handlers have been moved to appropriate blueprint modules.
 Original file was 906 lines, refactored to ~70 lines for better maintainability.
 """
 
+import os
+import signal
 import sys
 import logging
+import threading
 from stem.control import Controller
 from stem import SocketError
 from app_factory import create_app
@@ -31,7 +34,11 @@ def setup_tor_configuration():
         with Controller.from_port(address=control_host, port=control_port) as controller:
             controller.authenticate()
             
-            # Create ephemeral hidden service
+            # Create ephemeral hidden service.
+            # await_publication=True blocks until the HS descriptors are published
+            # to HSDir nodes (~60-120 s).  Flask is already serving at this point
+            # (Tor setup runs in a background thread), so the health-check endpoint
+            # remains reachable throughout.
             print('[*] Creating ephemeral hidden service, this may take a minute or two')
             result = controller.create_ephemeral_hidden_service(
                 {80: 5000}, await_publication=True
@@ -76,24 +83,48 @@ def main():
         app.run(host='127.0.0.1', port=5001, debug=False)
         return
     
-    # Production mode with Tor
-    try:
-        hostname, service_id = setup_tor_configuration()
-    except RuntimeError as exc:
-        print(f"[!] {exc}")
-        sys.exit(1)
-    
-    # Configure application
+    # Set provisional config so Flask can answer health checks before Tor is ready.
     app.config['path'] = path
-    app.config['hostname'] = hostname.replace('.onion', '') if hostname.endswith('.onion') else hostname
-    app.config['full_path'] = f"{hostname}/{path}"
-    
-    print(f"[*] Your service is available at: http://{app.config['full_path']}")
+    app.config['hostname'] = "localhost"
+    app.config['full_path'] = f"localhost/{path}"
+
+    # Mutable containers shared with the background thread.
+    _service_id = [None]
+
+    def _tor_setup_worker():
+        """Run Tor hidden-service setup in the background.
+
+        Flask starts (and the /health endpoint becomes reachable) before this
+        function is called, so container health checks always succeed even when
+        Tor publication takes 60-120 s.
+        """
+        try:
+            hostname, service_id = setup_tor_configuration()
+        except RuntimeError as exc:
+            print(f"[!] {exc}")
+            # Tor is required but unavailable – stop the whole process.
+            # sys.exit() only exits the current thread; os.kill(SIGTERM) signals
+            # the main thread, which triggers Flask's graceful shutdown handler.
+            os.kill(os.getpid(), signal.SIGTERM)
+            return
+
+        _service_id[0] = service_id
+        app.config['hostname'] = (
+            hostname.replace('.onion', '') if hostname.endswith('.onion') else hostname
+        )
+        app.config['full_path'] = f"{hostname}/{path}"
+        print(f"[*] Your service is available at: http://{app.config['full_path']}")
+
+    # Start Tor setup in the background so Flask can bind immediately.
+    tor_thread = threading.Thread(target=_tor_setup_worker, daemon=True, name="tor-setup")
+    tor_thread.start()
+
     print("Press Ctrl+C to quit")
     
     try:
         app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
     finally:
+        service_id = _service_id[0]
         if service_id:
             print(" * Shutting down our hidden service")
             try:
