@@ -3,6 +3,7 @@ import string
 from types import SimpleNamespace
 
 from flask import session
+from stem.connection import AuthenticationFailure
 
 import runserver
 from utils import id_generator, check_older_than, process_chat
@@ -75,7 +76,7 @@ def test_setup_tor_configuration_retries_transient_startup_errors(monkeypatch):
         def authenticate(self):
             attempts["count"] += 1
             if attempts["count"] < 3:
-                raise RuntimeError("control_auth_cookie missing")
+                raise AuthenticationFailure("control_auth_cookie missing")
 
         def create_ephemeral_hidden_service(self, ports, await_publication):
             assert ports == {80: 5000}

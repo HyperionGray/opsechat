@@ -16,7 +16,8 @@ import logging
 import threading
 import time
 from stem.control import Controller
-from stem import SocketError
+from stem import ControllerError, SocketError
+from stem.connection import AuthenticationFailure
 from app_factory import create_app
 from tor_transport import (
     resolve_tor_control_endpoint,
@@ -64,7 +65,7 @@ def setup_tor_configuration():
 
                 print("[*] Unable to determine our ephemeral service's hostname")
                 return "localhost", None
-        except (SocketError, Exception) as e:
+        except (AuthenticationFailure, ControllerError, OSError, SocketError) as e:
             last_error = e
             if time.monotonic() >= deadline:
                 break
