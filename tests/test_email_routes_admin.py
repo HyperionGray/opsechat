@@ -5,6 +5,7 @@ Integration tests for registered email/admin routes in the real app runtime.
 import os
 import sys
 from unittest.mock import Mock
+from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -209,6 +210,73 @@ class TestEmailAdminRoutes:
         payload = response.get_json()
         assert payload["success"] is True
         assert burner_manager.get_custom_domain() == "fresh-example.xyz"
+
+    def test_email_config_search_domains_renders_candidates(self, monkeypatch):
+        self._login()
+        monkeypatch.setattr(
+            domain_rotation_manager,
+            "search_cheap_domains",
+            Mock(return_value=[
+                {"domain": "cheap-one.xyz", "price": 1.49, "tld": "xyz"},
+                {"domain": "cheap-two.club", "price": 2.19, "tld": "club"},
+            ]),
+        )
+        domain_rotation_manager.api_client = Mock()
+
+        response = self.client.post(
+            "/secpath/email/config",
+            data={"action": "search_domains", "max_price": "3", "search_limit": "2"},
+        )
+
+        assert response.status_code == 200
+        body = response.data.decode()
+        assert "cheap-one.xyz" in body
+        assert "cheap-two.club" in body
+        assert "Found 2 available domain candidates" in body
+
+    def test_email_config_purchase_domain_sets_custom_domain(self, monkeypatch):
+        self._login()
+        monkeypatch.setattr(
+            domain_rotation_manager,
+            "purchase_available_domain",
+            Mock(return_value={
+                "success": True,
+                "domain": "pool-buy.xyz",
+                "active_domain": "pool-buy.xyz",
+                "message": "Domain purchased successfully and activated",
+            }),
+        )
+
+        response = self.client.post(
+            "/secpath/email/config",
+            data={
+                "action": "purchase_domain",
+                "domain": "pool-buy.xyz",
+                "activate_after_purchase": "true",
+            },
+        )
+
+        assert response.status_code == 200
+        assert b"Domain purchased successfully and activated" in response.data
+        assert burner_manager.get_custom_domain() == "pool-buy.xyz"
+
+    def test_email_config_activate_owned_domain_sets_custom_domain(self):
+        self._login()
+        domain_rotation_manager.owned_domains = [{
+            "domain": "owned-pool.xyz",
+            "price": 1.25,
+            "purchased_at": datetime.now(),
+            "expires_at": datetime.now() + timedelta(days=365),
+        }]
+
+        response = self.client.post(
+            "/secpath/email/config",
+            data={"action": "activate_domain", "domain": "owned-pool.xyz"},
+        )
+
+        assert response.status_code == 200
+        assert b"Active burner domain updated" in response.data
+        assert burner_manager.get_custom_domain() == "owned-pool.xyz"
 
     def test_spoof_test_detect_flow_renders_results(self):
         self._login()

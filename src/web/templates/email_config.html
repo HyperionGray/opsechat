@@ -119,6 +119,44 @@
             height: 100%;
             background-color: #00ff00;
         }
+        .domain-grid {
+            display: grid;
+            gap: 12px;
+            margin-top: 15px;
+        }
+        .domain-card {
+            border: 1px solid #00ff00;
+            padding: 12px;
+            background-color: #050505;
+        }
+        .domain-card.active {
+            border-color: #00ccff;
+            box-shadow: inset 0 0 0 1px #00ccff;
+        }
+        .domain-name {
+            font-size: 18px;
+            color: #00ccff;
+            margin-bottom: 6px;
+        }
+        .domain-meta {
+            color: #99ff99;
+            margin: 6px 0;
+            line-height: 1.5;
+        }
+        .button-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .inline-form {
+            display: inline-block;
+            margin: 0;
+        }
+        .inline-form button {
+            margin-top: 0;
+        }
     </style>
 </head>
 <body>
@@ -236,6 +274,10 @@
             <br>Get API keys from: <a href="https://porkbun.com/account/api" style="color: #00ff00;">https://porkbun.com/account/api</a>
         </div>
 
+        <div class="info-box">
+            <strong>Burner domain workflow:</strong> configure the registrar, search for cheap domains, buy extras into your pool, then activate whichever owned domain should be used for newly generated burner inboxes.
+        </div>
+
         {% if active_domain %}
         <div class="budget-info">
             <strong>Active Domain:</strong> {{ active_domain }}
@@ -278,6 +320,83 @@
         <form method="POST" action="/{{ path }}/email/domain/rotate" style="margin-top: 20px;">
             <button type="submit">🔄 Rotate to New Domain</button>
         </form>
+
+        <div class="config-form">
+            <h3>Search cheap available domains</h3>
+            <form method="POST">
+                <input type="hidden" name="action" value="search_domains">
+
+                <div class="form-group">
+                    <label>Maximum price (USD):</label>
+                    <input type="number" name="max_price" value="5" step="0.01" min="0">
+                </div>
+
+                <div class="form-group">
+                    <label>How many results to return:</label>
+                    <input type="number" name="search_limit" value="5" min="1" max="10">
+                </div>
+
+                <button type="submit">🔎 Search Domain Candidates</button>
+            </form>
+        </div>
+
+        {% if domain_search_results %}
+        <div class="domain-grid">
+            {% for candidate in domain_search_results %}
+            <div class="domain-card">
+                <div class="domain-name">{{ candidate.domain }}</div>
+                <div class="domain-meta">
+                    Estimated price: ${{ "%.2f"|format(candidate.price) }}<br>
+                    TLD: .{{ candidate.tld }}
+                </div>
+                <div class="button-row">
+                    <form method="POST" class="inline-form">
+                        <input type="hidden" name="action" value="purchase_domain">
+                        <input type="hidden" name="domain" value="{{ candidate.domain }}">
+                        <input type="hidden" name="activate_after_purchase" value="true">
+                        <button type="submit">🛒 Buy & Activate</button>
+                    </form>
+                    <form method="POST" class="inline-form">
+                        <input type="hidden" name="action" value="purchase_domain">
+                        <input type="hidden" name="domain" value="{{ candidate.domain }}">
+                        <button type="submit">➕ Buy for Pool</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="config-form">
+            <h3>Owned burner domains</h3>
+            {% if owned_domains %}
+            <div class="domain-grid">
+                {% for domain in owned_domains %}
+                <div class="domain-card {% if domain.domain == active_domain %}active{% endif %}">
+                    <div class="domain-name">{{ domain.domain }}</div>
+                    <div class="domain-meta">
+                        Purchase price: ${{ "%.2f"|format(domain.price) }}<br>
+                        Purchased: {{ domain.purchased_at.strftime('%Y-%m-%d %H:%M') }}<br>
+                        Expires: {{ domain.expires_at.strftime('%Y-%m-%d') }}
+                    </div>
+                    <div class="button-row">
+                        {% if domain.domain == active_domain %}
+                        <span class="status configured">✓ Active for new burners</span>
+                        {% else %}
+                        <form method="POST" class="inline-form">
+                            <input type="hidden" name="action" value="activate_domain">
+                            <input type="hidden" name="domain" value="{{ domain.domain }}">
+                            <button type="submit">✅ Activate for Burners</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p>No domains owned yet. Rotate to a new domain or search and buy one for the pool.</p>
+            {% endif %}
+        </div>
     </div>
 
     <!-- Quick Actions -->
