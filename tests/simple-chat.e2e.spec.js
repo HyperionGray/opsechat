@@ -6,6 +6,25 @@
 
 const { test, expect } = require('@playwright/test');
 
+const randomIdentityAdjectives = [
+  'Swift', 'Silent', 'Dark', 'Ghost', 'Shadow', 'Phantom',
+  'Cipher', 'Echo', 'Rogue', 'Viper', 'Stealth', 'Void',
+];
+
+const randomIdentityNouns = [
+  'Raven', 'Wolf', 'Fox', 'Hawk', 'Lynx', 'Owl',
+  'Cobra', 'Tiger', 'Falcon', 'Spider', 'Serpent', 'Dragon',
+];
+
+const randomIdentityDisplayPattern = new RegExp(
+  `^(${randomIdentityAdjectives.join('|')}) (${randomIdentityNouns.join('|')}) \\d{4}$`
+);
+
+const randomIdentityMemberIdPattern = new RegExp(
+  `^(${randomIdentityAdjectives.map((value) => value.toLowerCase()).join('|')})-` +
+  `(${randomIdentityNouns.map((value) => value.toLowerCase()).join('|')})-\\d{4}$`
+);
+
 test.describe('Simple Chat Room Tests', () => {
   let baseURL;
 
@@ -27,8 +46,8 @@ test.describe('Simple Chat Room Tests', () => {
 
     await expect(page.locator('h1')).toContainText('Closed-Roster OpSecChat');
     await expect(page.locator('#memberIdInput')).toBeVisible();
-    await expect(page.locator('#memberIdInput')).toHaveValue(/[a-z]+-[a-z]+-\d{4}/);
-    await expect(page.locator('#displayNameInput')).toHaveValue(/[A-Z][a-z]+ [A-Z][a-z]+ \d{4}/);
+    await expect(page.locator('#memberIdInput')).toHaveValue(randomIdentityMemberIdPattern);
+    await expect(page.locator('#displayNameInput')).toHaveValue(randomIdentityDisplayPattern);
     await expect(page.locator('#privateKeyInput')).toBeVisible();
     await expect(page.locator('#peerPublicKeyInput')).toBeVisible();
     await expect(page.locator('#lockRosterBtn')).toBeVisible();

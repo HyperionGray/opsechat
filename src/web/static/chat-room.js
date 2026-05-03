@@ -122,12 +122,12 @@ function clearSessionJson(key) {
 }
 
 function getRandomUint32() {
-    if (window.crypto && typeof window.crypto.getRandomValues === "function") {
-        const values = new Uint32Array(1);
-        window.crypto.getRandomValues(values);
-        return values[0];
+    if (!window.crypto || typeof window.crypto.getRandomValues !== "function") {
+        throw new Error("Secure randomness is unavailable in this browser");
     }
-    return Math.floor(Math.random() * 0x100000000);
+    const values = new Uint32Array(1);
+    window.crypto.getRandomValues(values);
+    return values[0];
 }
 
 function chooseRandom(list) {
@@ -137,11 +137,11 @@ function chooseRandom(list) {
 function generateRandomIdentitySuggestion() {
     const adjective = chooseRandom(RANDOM_IDENTITY_ADJECTIVES);
     const noun = chooseRandom(RANDOM_IDENTITY_NOUNS);
-    const number = String(getRandomUint32() % 10000).padStart(4, "0");
+    const numericSuffix = String(getRandomUint32() % 10000).padStart(4, "0");
 
     return {
-        memberId: `${adjective}-${noun}-${number}`.toLowerCase(),
-        displayName: `${adjective} ${noun} ${number}`,
+        memberId: `${adjective}-${noun}-${numericSuffix}`.toLowerCase(),
+        displayName: `${adjective} ${noun} ${numericSuffix}`,
     };
 }
 
@@ -354,17 +354,23 @@ function prepopulateIdentityInputs() {
         return;
     }
 
-    const memberId = String(dom.memberIdInput.value || "").trim();
-    const displayName = String(dom.displayNameInput.value || "").trim();
-    if (memberId && displayName) {
+    const existingMemberId = String(dom.memberIdInput.value || "").trim();
+    const existingDisplayName = String(dom.displayNameInput.value || "").trim();
+    if (existingMemberId && existingDisplayName) {
         return;
     }
 
-    const suggestion = generateRandomIdentitySuggestion();
-    if (!memberId) {
+    let suggestion;
+    try {
+        suggestion = generateRandomIdentitySuggestion();
+    } catch (error) {
+        showStatus(`Could not prepopulate identity fields: ${error.message}`, 7000);
+        return;
+    }
+    if (!existingMemberId) {
         dom.memberIdInput.value = suggestion.memberId;
     }
-    if (!displayName) {
+    if (!existingDisplayName) {
         dom.displayNameInput.value = suggestion.displayName;
     }
 }
