@@ -94,7 +94,7 @@ def test_setup_tor_configuration_retries_transient_startup_errors(monkeypatch):
     monkeypatch.setattr(runserver.time, "sleep", sleeps.append)
     monkeypatch.setattr(runserver.os, "environ", {
         "OPSECHAT_TOR_STARTUP_TIMEOUT": "5",
-        "OPSECHAT_TOR_RETRY_DELAY": "0.01",
+        "OPSECHAT_TOR_RETRY_DELAY": "0.2",
     })
 
     hostname, service_id = runserver.setup_tor_configuration()
@@ -102,4 +102,4 @@ def test_setup_tor_configuration_retries_transient_startup_errors(monkeypatch):
     assert hostname == "example-service.onion"
     assert service_id == "example-service"
     assert attempts["count"] == 3
-    assert sleeps == [0.01, 0.01]
+    assert sleeps == [0.2, 0.2]

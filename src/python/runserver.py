@@ -30,9 +30,15 @@ log.setLevel(logging.ERROR)
 
 def setup_tor_configuration():
     """Setup Tor hidden service configuration"""
-    timeout_seconds = float(os.environ.get("OPSECHAT_TOR_STARTUP_TIMEOUT", "30"))
-    retry_delay_seconds = float(os.environ.get("OPSECHAT_TOR_RETRY_DELAY", "1"))
-    deadline = time.monotonic() + max(timeout_seconds, 0)
+    timeout_seconds = max(
+        float(os.environ.get("OPSECHAT_TOR_STARTUP_TIMEOUT", "30")),
+        1.0,
+    )
+    retry_delay_seconds = max(
+        float(os.environ.get("OPSECHAT_TOR_RETRY_DELAY", "1")),
+        0.1,
+    )
+    deadline = time.monotonic() + timeout_seconds
     last_error = None
 
     while True:
@@ -62,7 +68,7 @@ def setup_tor_configuration():
             last_error = e
             if time.monotonic() >= deadline:
                 break
-            time.sleep(max(retry_delay_seconds, 0))
+            time.sleep(retry_delay_seconds)
 
     if isinstance(last_error, SocketError):
         print(f"[!] Tor proxy or Control Port are not running: {last_error}")
