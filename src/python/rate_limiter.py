@@ -10,6 +10,13 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import secrets
 
+
+def _is_http_mail_request() -> bool:
+    """Return True for the sessionless HTTP mail surface."""
+    segments = [segment for segment in request.path.split("/") if segment]
+    return "mail" in segments
+
+
 def _get_client_identifier():
     """
     Return a stable per-client identifier for rate limiting.
@@ -18,7 +25,7 @@ def _get_client_identifier():
     the same proxy (e.g., Tor) are not rate-limited as a single client.
     Fall back to the remote address when no session is available.
     """
-    if "/mail" in request.path:
+    if _is_http_mail_request():
         return get_remote_address()
 
     client_id = session.get("client_id")
@@ -47,7 +54,7 @@ def init_limiter(app):
         rate limiting. This avoids grouping all users behind a single
         proxy (such as a Tor hidden service) under the same limit.
         """
-        if "/mail" in request.path:
+        if _is_http_mail_request():
             return
 
         if "client_id" not in session:

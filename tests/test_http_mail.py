@@ -9,6 +9,7 @@ Covers:
 
 import datetime
 import os
+import re
 import sys
 
 import pytest
@@ -51,7 +52,7 @@ def _fresh_app():
     return app
 
 
-def _ciphertext_payload(label="Test"):
+def _mock_encrypted_payload(label="Test"):
     return (
         '{"version":"shared-secret-v1","salt":"c2FsdA==",'
         f'"sender":{{"iv":"aXY=","ciphertext":"{label}-sender"}},'
@@ -169,7 +170,7 @@ class TestHttpMailbox:
 
     def test_get_messages_correct_key(self):
         self.mailbox.add_message("Subj", "Body", "alice")
-        msgs = self.mailbox.get_messages("secretkey123456789012345678901")
+        msgs = self.mailbox.get_messages()
         assert msgs is not None
         assert len(msgs) == 1
         assert msgs[0]["subject"] == "Subj"
@@ -178,26 +179,26 @@ class TestHttpMailbox:
 
     def test_get_messages_wrong_key_returns_none(self):
         self.mailbox.add_message("Subj", "Body", "alice")
-        msgs = self.mailbox.get_messages("wrongkey")
+        msgs = self.mailbox.get_messages()
         assert msgs is not None
         assert len(msgs) == 1
 
     def test_get_messages_empty_key_returns_none(self):
-        msgs = self.mailbox.get_messages("")
+        msgs = self.mailbox.get_messages()
         assert msgs == []
 
     def test_delete_message_correct_key(self):
         msg_id = self.mailbox.add_message("Subj", "Body", "alice")
         result = self.mailbox.delete_message("secretkey123456789012345678901", msg_id)
         assert result is True
-        msgs = self.mailbox.get_messages("secretkey123456789012345678901")
+        msgs = self.mailbox.get_messages()
         assert len(msgs) == 0
 
     def test_delete_message_wrong_key(self):
         msg_id = self.mailbox.add_message("Subj", "Body", "alice")
         result = self.mailbox.delete_message("wrongkey", msg_id)
         assert result is False
-        msgs = self.mailbox.get_messages("secretkey123456789012345678901")
+        msgs = self.mailbox.get_messages()
         assert len(msgs) == 1
 
     def test_delete_nonexistent_message(self):
@@ -210,7 +211,7 @@ class TestHttpMailbox:
         self.mailbox.messages[0].timestamp = (
             datetime.datetime.now() - datetime.timedelta(hours=25)
         )
-        msgs = self.mailbox.get_messages("secretkey123456789012345678901")
+        msgs = self.mailbox.get_messages()
         assert msgs == []
 
     def test_message_count(self):
@@ -220,7 +221,7 @@ class TestHttpMailbox:
 
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
-        msgs = self.mailbox.get_messages("secretkey123456789012345678901")
+        msgs = self.mailbox.get_messages()
         m = msgs[0]
         assert "id" in m
         assert "subject" in m
@@ -229,7 +230,9 @@ class TestHttpMailbox:
         assert "timestamp" in m
 
     def test_add_encrypted_message_marks_payload(self):
-        msg_id = self.mailbox.add_encrypted_message(_ciphertext_payload("Encrypted"))
+        msg_id = self.mailbox.add_encrypted_message(
+            _mock_encrypted_payload("Encrypted")
+        )
         msgs = self.mailbox.get_messages()
         assert msgs[0]["id"] == msg_id
         assert msgs[0]["encrypted"] is True
@@ -273,7 +276,7 @@ class TestHttpMailRoutes:
         assert "address" in data
         assert "username" in data
         assert "read_key" in data
-        assert data["address"].count("-") == 2
+        assert re.fullmatch(r"[a-z]+-[a-z]+-\d{4}", data["address"])
 
     def test_create_mailbox_returns_send_and_inbox_urls(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -303,7 +306,7 @@ class TestHttpMailRoutes:
 
         r = self.client.post(
             f"/{self.path}/mail/{addr}/send",
-            json={"ciphertext": _ciphertext_payload("Hi")},
+            json={"ciphertext": _mock_encrypted_payload("Hi")},
         )
         assert r.status_code == 200
         data = r.get_json()
@@ -320,7 +323,7 @@ class TestHttpMailRoutes:
             f"/{self.path}/mail/send",
             data={
                 "_address_override": addr,
-                "ciphertext": _ciphertext_payload("Generic"),
+                "ciphertext": _mock_encrypted_payload("Generic"),
             },
         )
         assert send_response.status_code == 200
@@ -332,7 +335,10 @@ class TestHttpMailRoutes:
         )
         assert inbox.status_code == 200
         assert inbox.get_json()["messages"][0]["encrypted"] is True
-        assert inbox.get_json()["messages"][0]["ciphertext"] == _ciphertext_payload("Generic")
+        assert (
+            inbox.get_json()["messages"][0]["ciphertext"]
+            == _mock_encrypted_payload("Generic")
+        )
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -346,7 +352,7 @@ class TestHttpMailRoutes:
     def test_send_to_nonexistent_mailbox(self):
         r = self.client.post(
             f"/{self.path}/mail/doesnotexist/send",
-            json={"ciphertext": _ciphertext_payload("Missing")},
+            json={"ciphertext": _mock_encrypted_payload("Missing")},
         )
         assert r.status_code == 404
 
@@ -356,7 +362,7 @@ class TestHttpMailRoutes:
 
         self.client.post(
             f"/{self.path}/mail/{addr}/send",
-            json={"ciphertext": _ciphertext_payload("Read")},
+            json={"ciphertext": _mock_encrypted_payload("Read")},
         )
 
         r = self.client.get(
@@ -385,7 +391,7 @@ class TestHttpMailRoutes:
         addr = r.get_json()["address"]
         self.client.post(
             f"/{self.path}/mail/{addr}/send",
-            json={"ciphertext": _ciphertext_payload("Locked")},
+            json={"ciphertext": _mock_encrypted_payload("Locked")},
         )
 
         r = self.client.get(
@@ -400,7 +406,7 @@ class TestHttpMailRoutes:
         addr = r.get_json()["address"]
         self.client.post(
             f"/{self.path}/mail/{addr}/send",
-            json={"ciphertext": _ciphertext_payload("NoKey")},
+            json={"ciphertext": _mock_encrypted_payload("NoKey")},
         )
 
         r = self.client.get(
@@ -424,7 +430,7 @@ class TestHttpMailRoutes:
 
         self.client.post(
             f"/{self.path}/mail/{addr}/send",
-            json={"ciphertext": _ciphertext_payload("Del")},
+            json={"ciphertext": _mock_encrypted_payload("Del")},
         )
 
         r = self.client.get(
@@ -455,7 +461,7 @@ class TestHttpMailRoutes:
 
         self.client.post(
             f"/{self.path}/mail/{addr}/send",
-            json={"ciphertext": _ciphertext_payload("WrongDelete")},
+            json={"ciphertext": _mock_encrypted_payload("WrongDelete")},
         )
 
         r = self.client.get(
@@ -498,7 +504,7 @@ class TestHttpMailRoutes:
     def test_inbox_returns_ciphertext_only_payload(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
-        ciphertext = _ciphertext_payload("CipherOnly")
+        ciphertext = _mock_encrypted_payload("CipherOnly")
 
         self.client.post(
             f"/{self.path}/mail/{addr}/send",

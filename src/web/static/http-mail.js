@@ -16,6 +16,8 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+const PBKDF2_ITERATIONS = 310000;
+
 function toBase64(bytes) {
   let binary = '';
   bytes.forEach((byte) => {
@@ -48,7 +50,7 @@ async function deriveMessageKey(passphrase, saltBytes) {
       name: 'PBKDF2',
       hash: 'SHA-256',
       salt: saltBytes,
-      iterations: 120000,
+      iterations: PBKDF2_ITERATIONS,
     },
     baseKey,
     { name: 'AES-GCM', length: 256 },

@@ -2,21 +2,21 @@
 HTTP Mail System for opsechat
 
 Provides email-like functionality over HTTP with no SMTP/IMAP dependencies.
-Messages are posted to mailboxes and read back using a secret read_key.
-Default deny: without the read_key, nobody can read the inbox.
+Messages are posted to named inboxes and read back as ciphertext for
+browser-side decryption.
 
 Design:
-- Mailbox has a public address (short token, safe to share with senders)
-- Mailbox has a private read_key (long token, only owner knows it)
+- Mailbox has a public address (internal token) plus an optional
+  shareable alias
+- Mailbox has a private read_key for destructive actions
 - Anyone can POST a message to a mailbox address
-- Only the holder of read_key can GET the inbox
+- Inbox reads return ciphertext; the browser decrypts with the user key
 - Messages auto-expire after 24 hours (in-memory only)
 - Memory is overwritten on deletion (security)
 """
 
 import datetime
 import secrets
-import string
 import threading
 from typing import Dict, List, Optional
 
@@ -38,12 +38,24 @@ MAILBOX_ALIAS_NOUNS = (
 )
 
 
+ENCRYPTED_SUBJECT_PLACEHOLDER = "(encrypted message)"
+ENCRYPTED_BODY_PLACEHOLDER = (
+    "Ciphertext only. Decrypt in your browser with the correct inbox key."
+)
+
+
 class HttpMessage:
     """A single in-memory HTTP mail message."""
 
-    def __init__(self, msg_id: str, subject: str, body: str,
-                 sender_handle: str, timestamp: datetime.datetime,
-                 encrypted_payload: Optional[str] = None):
+    def __init__(
+        self,
+        msg_id: str,
+        subject: str,
+        body: str,
+        sender_handle: str,
+        timestamp: datetime.datetime,
+        encrypted_payload: Optional[str] = None,
+    ):
         self.msg_id = msg_id
         self.subject = subject
         self.body = body
@@ -78,8 +90,13 @@ class HttpMessage:
 class HttpMailbox:
     """A single HTTP mailbox identified by address with a private read_key."""
 
-    def __init__(self, address: str, read_key: str, owner_id: Optional[str] = None,
-                 alias: Optional[str] = None):
+    def __init__(
+        self,
+        address: str,
+        read_key: str,
+        owner_id: Optional[str] = None,
+        alias: Optional[str] = None,
+    ):
         self.address = address
         self.read_key = read_key
         self.owner_id = owner_id
@@ -112,8 +129,8 @@ class HttpMailbox:
         msg_id = _generate_id(12)
         msg = HttpMessage(
             msg_id=msg_id,
-            subject="(encrypted message)",
-            body="Ciphertext only. Decrypt in your browser with the correct inbox key.",
+            subject=ENCRYPTED_SUBJECT_PLACEHOLDER,
+            body=ENCRYPTED_BODY_PLACEHOLDER,
             sender_handle="encrypted",
             timestamp=datetime.datetime.now(),
             encrypted_payload=encrypted_payload,
@@ -122,14 +139,14 @@ class HttpMailbox:
             self.messages.append(msg)
         return msg_id
 
-    def get_messages(self, read_key: Optional[str] = None) -> Optional[List[Dict]]:
+    def get_messages(self) -> List[Dict]:
         """Return mailbox contents. The browser handles decryption locally."""
         self._expire_old_messages()
         with self.lock:
             return [m.to_dict() for m in self.messages]
 
     def delete_message(self, read_key: str, msg_id: str) -> bool:
-        """Delete a message by ID after verifying read_key. Returns True on success."""
+        """Delete a message by ID after verifying read_key."""
         if not secrets.compare_digest(read_key, self.read_key):
             return False
         with self.lock:
@@ -142,7 +159,10 @@ class HttpMailbox:
 
     def _expire_old_messages(self) -> None:
         """Remove messages older than MAIL_EXPIRY_HOURS."""
-        cutoff = datetime.datetime.now() - datetime.timedelta(hours=MAIL_EXPIRY_HOURS)
+        cutoff = (
+            datetime.datetime.now()
+            - datetime.timedelta(hours=MAIL_EXPIRY_HOURS)
+        )
         with self.lock:
             surviving = []
             for msg in self.messages:
@@ -166,10 +186,13 @@ class HttpMailStorage:
         self._aliases: Dict[str, str] = {}  # alias -> address
         self._lock = threading.Lock()
 
-    def create_mailbox(self, address: Optional[str] = None,
-                       owner_id: Optional[str] = None,
-                       alias: Optional[str] = None) -> HttpMailbox:
-        """Create a new mailbox; returns the mailbox object (contains address + read_key)."""
+    def create_mailbox(
+        self,
+        address: Optional[str] = None,
+        owner_id: Optional[str] = None,
+        alias: Optional[str] = None,
+    ) -> HttpMailbox:
+        """Create a new mailbox."""
         read_key = _generate_id(24)  # 24 bytes → 32 URL-safe chars
 
         with self._lock:
@@ -208,7 +231,10 @@ class HttpMailStorage:
                 return None
             return self._mailboxes.get(address)
 
-    def get_mailboxes_for_owner(self, owner_id: str) -> Dict[str, HttpMailbox]:
+    def get_mailboxes_for_owner(
+        self,
+        owner_id: str,
+    ) -> Dict[str, HttpMailbox]:
         """Return burner aliases mapped to mailboxes for a given owner."""
         with self._lock:
             owned_mailboxes = {}
@@ -225,9 +251,6 @@ class HttpMailStorage:
         - We then overwrite and clear messages under the per-mailbox lock
           to avoid races with concurrent send/add operations.
 
-        Checklist (follow-ups outside this class):
-        - [ ] Ensure HttpMailbox exposes a `lock` used by all writers.
-        - [ ] Ensure add_message (or equivalent) checks a `destroyed` flag.
         """
         # First, look up and authenticate the mailbox under the global lock.
         with self._lock:
@@ -266,6 +289,7 @@ class HttpMailStorage:
             setattr(mailbox, "destroyed", True)
 
         return True
+
     def cleanup_empty_old_mailboxes(self) -> None:
         """Remove mailboxes with no messages that are older than 48 hours."""
         cutoff = datetime.datetime.now() - datetime.timedelta(hours=48)
