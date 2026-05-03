@@ -31,6 +31,8 @@ npm ci
 Runtime note:
 
 - `bin/*.py` are thin launchers for normal operator workflows.
+- For example, `bin/chat-room.py` launches the app while the core logic stays in
+  `src/python/`.
 - The implementation modules live under `src/python/`.
 
 Sanity checks:
