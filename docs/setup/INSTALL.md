@@ -30,10 +30,9 @@ npm ci
 
 Runtime note:
 
-- `bin/*.py` are thin launchers for normal operator workflows.
-- For example, `bin/chat-room.py` launches the app while the core logic stays in
+- `bin/*.py` are thin launchers for normal operator workflows; for example,
+  `bin/chat-room.py` launches the app while the core modules live in
   `src/python/`.
-- The implementation modules live under `src/python/`.
 
 Sanity checks:
 
@@ -62,7 +61,8 @@ That starts the app on `127.0.0.1:5000` by default.
 
 ## Tor Runtime
 
-`bin/chat-room.py --tor` and `src/python/runserver_refactored.py` both expect a reachable Tor
+The operator-facing `bin/chat-room.py --tor` launcher and the lower-level
+`src/python/runserver_refactored.py` runtime both expect a reachable Tor
 control port.
 
 Example local Tor daemon:
