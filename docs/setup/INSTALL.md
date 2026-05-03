@@ -63,9 +63,9 @@ That starts the app on `127.0.0.1:5000` by default.
 
 ## Tor Runtime
 
-The operator-facing `bin/chat-room.py --tor` launcher and the lower-level
-`src/python/runserver_refactored.py` runtime both expect a reachable Tor
-control port.
+Most operators should use the `bin/chat-room.py --tor` launcher. The
+lower-level `src/python/runserver_refactored.py` runtime is for advanced
+strict-Tor deployment checks and also expects a reachable Tor control port.
 
 Example local Tor daemon:
 
@@ -80,7 +80,7 @@ source .venv/bin/activate
 python bin/chat-room.py --tor
 ```
 
-If you need strict Tor-only ingress/egress in the refactored runtime:
+If you need the advanced strict Tor-only ingress/egress runtime:
 
 ```bash
 export OPSECHAT_REQUIRE_TOR=1
