@@ -345,7 +345,7 @@ class TestHttpMailRoutes:
         addr = r.get_json()["address"]
         r = self.client.post(
             f"/{self.path}/mail/{addr}/send",
-            json={"body": "", "sender": "bob"},
+            json={},
         )
         assert r.status_code == 400
 
