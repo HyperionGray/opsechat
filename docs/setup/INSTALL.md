@@ -28,6 +28,11 @@ Optional frontend test dependencies:
 npm ci
 ```
 
+Runtime note:
+
+- `bin/*.py` are thin launchers for normal operator workflows.
+- The implementation modules live under `src/python/`.
+
 Sanity checks:
 
 ```bash
