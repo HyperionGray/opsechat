@@ -666,7 +666,7 @@ See `CONTRIBUTING.md` for detailed guidelines.
 
 **Before Coding**:
 - `README.md` - Feature overview
-- `INSTALL.md` - Deployment options
+- `docs/setup/INSTALL.md` - Deployment options
 - `SECURITY.md` - Security model and limitations
 - `TESTING.md` - How to run tests
 
