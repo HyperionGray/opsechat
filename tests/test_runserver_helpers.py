@@ -93,10 +93,8 @@ def test_setup_tor_configuration_retries_transient_startup_errors(monkeypatch):
     monkeypatch.setattr(runserver, "Controller", FakeControllerFactory)
     monkeypatch.setattr(runserver, "resolve_tor_control_endpoint", lambda: ("127.0.0.1", 9051))
     monkeypatch.setattr(runserver.time, "sleep", sleeps.append)
-    monkeypatch.setattr(runserver.os, "environ", {
-        "OPSECHAT_TOR_STARTUP_TIMEOUT": "5",
-        "OPSECHAT_TOR_RETRY_DELAY": "0.2",
-    })
+    monkeypatch.setenv("OPSECHAT_TOR_STARTUP_TIMEOUT", "5")
+    monkeypatch.setenv("OPSECHAT_TOR_RETRY_DELAY", "0.2")
 
     hostname, service_id = runserver.setup_tor_configuration()
 

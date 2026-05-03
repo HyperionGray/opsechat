@@ -29,20 +29,32 @@ from utils import id_generator
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
+
+def _get_positive_float_env(name, default, minimum):
+    """Read a float env var and clamp it to a safe minimum."""
+    raw_value = os.environ.get(name, str(default))
+    try:
+        return max(float(raw_value), minimum)
+    except ValueError as exc:
+        raise RuntimeError(f"{name} must be a float, got {raw_value!r}") from exc
+
+
 def setup_tor_configuration():
     """Setup Tor hidden service configuration"""
-    timeout_seconds = max(
-        float(os.environ.get("OPSECHAT_TOR_STARTUP_TIMEOUT", "30")),
+    timeout_seconds = _get_positive_float_env(
+        "OPSECHAT_TOR_STARTUP_TIMEOUT",
+        30,
         1.0,
     )
-    retry_delay_seconds = max(
-        float(os.environ.get("OPSECHAT_TOR_RETRY_DELAY", "1")),
+    retry_delay_seconds = _get_positive_float_env(
+        "OPSECHAT_TOR_RETRY_DELAY",
+        1,
         0.1,
     )
     deadline = time.monotonic() + timeout_seconds
     last_error = None
 
-    while True:
+    while time.monotonic() < deadline:
         try:
             control_host, control_port = resolve_tor_control_endpoint()
             with Controller.from_port(address=control_host, port=control_port) as controller:
@@ -67,9 +79,10 @@ def setup_tor_configuration():
                 return "localhost", None
         except (AuthenticationFailure, ControllerError, OSError, SocketError) as e:
             last_error = e
-            if time.monotonic() >= deadline:
-                break
             time.sleep(retry_delay_seconds)
+
+    if last_error is None:
+        raise RuntimeError("Tor startup retry loop exited without attempting configuration")
 
     if isinstance(last_error, SocketError):
         print(f"[!] Tor proxy or Control Port are not running: {last_error}")
