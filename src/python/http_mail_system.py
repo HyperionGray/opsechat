@@ -27,26 +27,43 @@ MAX_MAIL_MESSAGE_LENGTH = 2000
 # Message expiry (24 hours)
 MAIL_EXPIRY_HOURS = 24
 
+MAILBOX_ALIAS_ADJECTIVES = (
+    "amber", "ashen", "brisk", "cipher", "covert", "ember",
+    "ghost", "ivory", "lunar", "misty", "silent", "velvet",
+)
+
+MAILBOX_ALIAS_NOUNS = (
+    "badger", "falcon", "harbor", "lantern", "otter", "raven",
+    "signal", "sparrow", "thistle", "vector", "willow", "wren",
+)
+
 
 class HttpMessage:
     """A single in-memory HTTP mail message."""
 
     def __init__(self, msg_id: str, subject: str, body: str,
-                 sender_handle: str, timestamp: datetime.datetime):
+                 sender_handle: str, timestamp: datetime.datetime,
+                 encrypted_payload: Optional[str] = None):
         self.msg_id = msg_id
         self.subject = subject
         self.body = body
         self.sender_handle = sender_handle
         self.timestamp = timestamp
+        self.encrypted_payload = encrypted_payload
 
     def to_dict(self) -> Dict:
-        return {
+        payload = {
             "id": self.msg_id,
             "subject": self.subject,
             "body": self.body,
             "sender": self.sender_handle,
             "timestamp": self.timestamp.isoformat(),
+            "encrypted": bool(self.encrypted_payload),
         }
+        if self.encrypted_payload is not None:
+            payload["ciphertext"] = self.encrypted_payload
+            payload["cipher_mode"] = "shared-secret-v1"
+        return payload
 
     def overwrite(self) -> None:
         """Overwrite message content in memory before deletion."""
@@ -54,6 +71,8 @@ class HttpMessage:
         self.body = "X" * length
         self.subject = "X" * len(self.subject)
         self.sender_handle = "X" * len(self.sender_handle)
+        if self.encrypted_payload is not None:
+            self.encrypted_payload = "X" * len(self.encrypted_payload)
 
 
 class HttpMailbox:
@@ -86,10 +105,25 @@ class HttpMailbox:
             self.messages.append(msg)
         return msg_id
 
-    def get_messages(self, read_key: str) -> Optional[List[Dict]]:
-        """Return messages if read_key matches, else None (default deny)."""
-        if not secrets.compare_digest(read_key, self.read_key):
-            return None
+    def add_encrypted_message(self, encrypted_payload: str) -> str:
+        """Add a browser-encrypted message bundle."""
+        if self.destroyed:
+            raise RuntimeError("Mailbox has been destroyed")
+        msg_id = _generate_id(12)
+        msg = HttpMessage(
+            msg_id=msg_id,
+            subject="(encrypted message)",
+            body="Ciphertext only. Decrypt in your browser with the correct inbox key.",
+            sender_handle="encrypted",
+            timestamp=datetime.datetime.now(),
+            encrypted_payload=encrypted_payload,
+        )
+        with self.lock:
+            self.messages.append(msg)
+        return msg_id
+
+    def get_messages(self, read_key: Optional[str] = None) -> Optional[List[Dict]]:
+        """Return mailbox contents. The browser handles decryption locally."""
         self._expire_old_messages()
         with self.lock:
             return [m.to_dict() for m in self.messages]
@@ -260,6 +294,14 @@ def _generate_id(nbytes: int) -> str:
       24 bytes → 32 chars
     """
     return secrets.token_urlsafe(nbytes)
+
+
+def generate_mailbox_alias() -> str:
+    """Generate a human-shareable mailbox username."""
+    adjective = secrets.choice(MAILBOX_ALIAS_ADJECTIVES)
+    noun = secrets.choice(MAILBOX_ALIAS_NOUNS)
+    suffix = f"{secrets.randbelow(10000):04d}"
+    return f"{adjective}-{noun}-{suffix}"
 
 
 # Global singleton

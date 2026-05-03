@@ -5,7 +5,7 @@ Configures Flask-Limiter to protect API endpoints from abuse.
 Limits are applied per client session (falling back to client IP).
 """
 
-from flask import session
+from flask import request, session
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import secrets
@@ -18,6 +18,9 @@ def _get_client_identifier():
     the same proxy (e.g., Tor) are not rate-limited as a single client.
     Fall back to the remote address when no session is available.
     """
+    if "/mail" in request.path:
+        return get_remote_address()
+
     client_id = session.get("client_id")
     if client_id:
         return client_id
@@ -44,6 +47,9 @@ def init_limiter(app):
         rate limiting. This avoids grouping all users behind a single
         proxy (such as a Tor hidden service) under the same limit.
         """
+        if "/mail" in request.path:
+            return
+
         if "client_id" not in session:
             # Use a cryptographically secure, URL-safe token.
             session["client_id"] = secrets.token_urlsafe(16)

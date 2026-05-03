@@ -15,7 +15,7 @@ from http_mail_system import http_mail_storage
 
 def _fresh_client():
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    app = Flask(__name__, template_folder=os.path.join(repo_root, "templates"))
+    app = Flask(__name__, template_folder=os.path.join(repo_root, "src", "web", "templates"))
     app.config["TESTING"] = True
     app.config["SECRET_KEY"] = "pytest-secret"
     app.config["path"] = "secpath"
@@ -42,17 +42,17 @@ def test_generic_send_requires_mailbox_address():
     client = _fresh_client()
     response = client.post(
         "/secpath/mail/send",
-        data={"subject": "hello", "body": "world", "sender": "alice"},
+        data={"ciphertext": '{"version":"shared-secret-v1"}'},
     )
     assert response.status_code == 400
     assert b"Recipient mailbox address is required" in response.data
 
 
-def test_open_inbox_helper_requires_address_and_key():
+def test_open_inbox_helper_requires_address():
     client = _fresh_client()
-    response = client.get("/secpath/mail/open?address=mailbox-only")
+    response = client.get("/secpath/mail/open")
     assert response.status_code == 400
-    assert b"Mailbox address and read key are required" in response.data
+    assert b"Inbox username is required" in response.data
 
 
 def test_open_inbox_helper_accepts_fallback_query_keys():
@@ -64,5 +64,5 @@ def test_open_inbox_helper_accepts_fallback_query_keys():
     )
     assert response.status_code == 302
     assert response.headers["Location"].endswith(
-        f"/secpath/mail/{mailbox.address}/inbox?key={mailbox.read_key}"
+        f"/secpath/mail/{mailbox.address}/inbox"
     )

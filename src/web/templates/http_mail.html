@@ -96,10 +96,11 @@
 <body
   data-path="{{ path }}"
   data-initial-section="{{ initial_section or ('read' if messages is defined else ('compose' if compose_address else 'create')) }}"
+  data-max-message-length="{{ max_message_length or 2000 }}"
 >
 <div class="header">
   <h1>📨 HTTP Mail</h1>
-  <p style="color:#888; font-size:13px;">Secure email over HTTP — no SMTP, no IMAP, default deny</p>
+  <p style="color:#888; font-size:13px;">Sessionless inboxes with browser-side encryption and ciphertext-only storage</p>
 </div>
 
 <div class="nav">
@@ -122,46 +123,46 @@
 
 <div class="info">
   <strong>How HTTP Mail works:</strong><br>
-  1. Create a mailbox — you get a public <em>address</em> and a private <em>read key</em>.<br>
-  2. Share the <em>address</em> with anyone who should be able to send you messages.<br>
-  3. Keep the <em>read key</em> secret — only you can read your inbox.<br>
-  4. Messages expire after 24 hours. Nothing touches disk.
+  1. Create an inbox — you get a randomized <em>username</em> and a private <em>inbox key</em>.<br>
+  2. Share both values only with people you trust to send encrypted text.<br>
+  3. Your inbox key never needs to leave your browser to decrypt stored ciphertext.<br>
+  4. There is no mailbox session state. Messages expire after 24 hours and stay in memory only.
 </div>
 
 <!-- ======================================================= -->
 <!--  Section controls                                       -->
 <!-- ======================================================= -->
 <div class="section-toggle">
-  <button type="button" data-section-target="create">➕ Create New Mailbox</button>
-  <button type="button" data-section-target="compose">✉️ Send a Message</button>
-  <button type="button" data-section-target="read">📬 Read My Inbox</button>
+  <button type="button" data-mail-section="create">➕ Create New Inbox</button>
+  <button type="button" data-mail-section="compose">✉️ Send a Message</button>
+  <button type="button" data-mail-section="read">📬 Read My Inbox</button>
 </div>
 
 <!-- ======================================================= -->
 <!--  Create mailbox                                         -->
 <!-- ======================================================= -->
 <div id="create-section" class="panel">
-  <h2>Create a New Mailbox</h2>
+  <h2>Create a New Inbox</h2>
   <p style="color:#888; margin-bottom:15px;">
-    A unique address and secret read key will be generated.
-    <strong>Save your read key</strong> — it is shown only once.
+    A randomized username and secret inbox key will be generated.
+    <strong>Save your inbox key</strong> — it is shown only once.
   </p>
-  <button type="button" id="create-btn">Create Mailbox</button>
+  <button type="button" id="create-btn">Create Inbox</button>
 
   <div id="new-mailbox-result" {% if not created_mailbox %}style="display:none;"{% endif %}>
     <div class="warn">
       ⚠️ <strong>Save these values now.</strong>
-      The read key will not be shown again after you leave this page.
+      The inbox key will not be shown again after you leave this page.
     </div>
     <div class="form-group">
-      <div class="token-label">Your Mailbox Address (share with senders)</div>
-      <div class="token-box" id="result-address"></div>
-      <button type="button" data-copy-target="result-address">📋 Copy Address</button>
+      <div class="token-label">Your Inbox Username (share with senders)</div>
+      <div class="token-box" id="result-address">{% if created_mailbox %}{{ created_mailbox.address }}{% endif %}</div>
+      <button type="button" data-copy-target="result-address">📋 Copy Username</button>
     </div>
     <div class="form-group">
-      <div class="token-label">Your Read Key (keep secret — required to read messages)</div>
-      <div class="token-box" id="result-read-key"></div>
-      <button type="button" data-copy-target="result-read-key">📋 Copy Read Key</button>
+      <div class="token-label">Your Inbox Key (keep secret — used to decrypt and manage messages)</div>
+      <div class="token-box" id="result-read-key">{% if created_mailbox %}{{ created_mailbox.read_key }}{% endif %}</div>
+      <button type="button" data-copy-target="result-read-key">📋 Copy Inbox Key</button>
     </div>
     <div class="form-group">
       <div class="token-label">Send URL (share this link with senders)</div>
@@ -170,7 +171,7 @@
       </div>
     </div>
     <p class="hint" style="margin-top:10px;">
-      To read your inbox: use the "Read My Inbox" section below with your address + read key.
+      To read your inbox: use the "Read My Inbox" section below with your username + inbox key.
     </p>
   </div>
 </div>
@@ -181,26 +182,32 @@
 <div id="compose-section" class="panel">
   <h2>Send a Message</h2>
   <p style="color:#888; margin-bottom:15px;">
-    You need the recipient's <em>mailbox address</em>.
-    No account or authentication required to send.
+    You need the recipient's <em>inbox username</em> and shared <em>inbox key</em>.
+    Encryption happens in your browser before anything is sent.
   </p>
 
   {% if compose_address %}
-  <div class="info">Sending to mailbox: <strong>{{ compose_address }}</strong></div>
+  <div class="info">Sending to inbox: <strong>{{ compose_address }}</strong></div>
   {% endif %}
 
   <form method="POST"
         action="/{{ path }}/mail/send"
         id="compose-form">
     <div class="form-group">
-      <label for="compose-address-input">Recipient Mailbox Address:</label>
+      <label for="compose-address-input">Recipient Inbox Username:</label>
       <input type="text" id="compose-address-input" name="_address_override"
-             value="{{ compose_address or '' }}"
-             placeholder="e.g. aBcDeFgHiJkL">
-      <p class="hint">This is the short address the recipient shared with you.</p>
+              value="{{ compose_address or '' }}"
+             placeholder="e.g. silent-raven-4821">
+      <p class="hint">This is the randomized username the recipient shared with you.</p>
     </div>
     <div class="form-group">
-      <label for="compose-sender">Your Handle (optional, shown to recipient):</label>
+      <label for="compose-key">Recipient Inbox Key:</label>
+      <input type="text" id="compose-key" name="compose_key"
+             placeholder="Shared secret used for browser-side encryption">
+      <p class="hint">This key is used locally to encrypt sender, subject, and message text.</p>
+    </div>
+    <div class="form-group">
+      <label for="compose-sender">Your Handle (optional, encrypted before upload):</label>
       <input type="text" id="compose-sender" name="sender"
              placeholder="anonymous" maxlength="64">
     </div>
@@ -214,10 +221,12 @@
       <textarea id="compose-body" name="body"
                 placeholder="Your message here..."
                 maxlength="{{ max_message_length or 2000 }}"></textarea>
-      <p class="hint">Max {{ max_message_length or 2000 }} characters. Plain text only.</p>
+      <p class="hint">Max {{ max_message_length or 2000 }} characters. Text only. The browser encrypts it before upload.</p>
     </div>
-    <button type="submit">Send Message</button>
+    <input type="hidden" id="compose-ciphertext" name="ciphertext" value="">
+    <button type="submit">Encrypt &amp; Send</button>
   </form>
+  <div id="js-compose-status" style="margin-top:15px;"></div>
 </div>
 
 <!-- ======================================================= -->
@@ -226,22 +235,22 @@
 <div id="read-section" class="panel">
   <h2>Read My Inbox</h2>
   <p style="color:#888; margin-bottom:15px;">
-    Enter your mailbox address and read key.
-    Without the correct read key, no messages are revealed (default deny).
+    Enter your inbox username and key.
+    The key stays in your browser and is used to decrypt ciphertext after retrieval.
   </p>
 
   <form method="GET" action="/{{ path }}/mail/open" id="read-form">
     <div class="form-group">
-      <label for="read-address">Mailbox Address:</label>
+      <label for="read-address">Inbox Username:</label>
       <input type="text" id="read-address" name="address"
              value="{{ inbox_address or '' }}"
-             placeholder="e.g. aBcDeFgHiJkL">
+             placeholder="e.g. silent-raven-4821">
     </div>
     <div class="form-group">
-      <label for="read-key-input">Read Key:</label>
+      <label for="read-key-input">Inbox Key:</label>
       <input type="text" id="read-key-input" name="key"
              value="{{ inbox_read_key or '' }}"
-             placeholder="Your private read key">
+             placeholder="Your private inbox key">
     </div>
     <button type="button" id="open-inbox-btn">Open Inbox</button>
   </form>
@@ -255,14 +264,22 @@
     {% else %}
     {% for msg in messages %}
     <div class="msg-card">
-      <div class="msg-meta">
-        From: {{ msg.sender }} &nbsp;|&nbsp;
-        {{ msg.timestamp }}
-      </div>
-      <div class="msg-subject">{{ msg.subject }}</div>
-      <div class="msg-body">{{ msg.body }}</div>
-      <div class="msg-actions">
-        <form method="POST"
+        <div class="msg-meta">
+          From: {{ msg.sender }} &nbsp;|&nbsp;
+          {{ msg.timestamp }}
+        </div>
+        <div class="msg-subject">{{ msg.subject }}</div>
+        {% if msg.encrypted %}
+        <div class="msg-body">Ciphertext stored. Use JavaScript with the correct inbox key to decrypt this message locally.</div>
+        <details style="margin-top:10px;">
+          <summary style="cursor:pointer;color:#888;">Show stored ciphertext</summary>
+          <div class="token-box">{{ msg.ciphertext }}</div>
+        </details>
+        {% else %}
+        <div class="msg-body">{{ msg.body }}</div>
+        {% endif %}
+        <div class="msg-actions">
+          <form method="POST"
               action="/{{ path }}/mail/{{ inbox_address }}/delete/{{ msg.id }}">
           <input type="hidden" name="read_key" value="{{ inbox_read_key }}">
           <button type="submit" class="danger js-server-delete-message">🗑 Delete</button>
@@ -290,197 +307,5 @@
 </div>
 
 <script src="{{ url_for('static', filename='http-mail.js') }}"></script>
-<script>
-  window.httpMailConfig = {
-    path: "{{ path }}",
-    initialSection: "{% if messages is defined %}read{% elif compose_address %}compose{% else %}create{% endif %}"
-  };
-</script>
-<script>
-  // Show/hide sections
-  function showSection(name) {
-    ['create', 'compose', 'read'].forEach(function(s) {
-      var el = document.getElementById(s + '-section');
-      if (el) el.style.display = (s === name) ? 'block' : 'none';
-    });
-  }
-
-  // Auto-open section based on server context
-  (function() {
-    {% if messages is defined %}
-      showSection('read');
-    {% elif compose_address %}
-      showSection('compose');
-    {% else %}
-      showSection('create');
-    {% endif %}
-  })();
-
-  // Create mailbox via fetch
-  function createMailbox() {
-    var btn = document.getElementById('create-btn');
-    btn.disabled = true;
-    btn.textContent = 'Creating...';
-
-    fetch('/{{ path }}/mail/new', {
-      method: 'POST',
-      headers: {'Accept': 'application/json'}
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.success) {
-        document.getElementById('result-address').textContent = data.address;
-        document.getElementById('result-read-key').textContent = data.read_key;
-        document.getElementById('result-send-url').textContent =
-          window.location.origin + data.send_url;
-        document.getElementById('new-mailbox-result').style.display = 'block';
-      } else {
-        alert('Error: ' + (data.error || 'Unknown error'));
-      }
-      btn.disabled = false;
-      btn.textContent = 'Create Another Mailbox';
-    })
-    .catch(function(err) {
-      alert('Request failed: ' + err);
-      btn.disabled = false;
-      btn.textContent = 'Create Mailbox';
-    });
-  }
-
-  // Update compose form action when address changes
-  function updateComposeAction() {
-    var addr = document.getElementById('compose-address-input').value.trim();
-    var form = document.getElementById('compose-form');
-    if (addr) {
-      form.action = '/{{ path }}/mail/' + encodeURIComponent(addr) + '/send';
-    }
-  }
-
-  // Fetch inbox via JS
-  function fetchInbox() {
-    var address = document.getElementById('read-address').value.trim();
-    var readKey = document.getElementById('read-key-input').value.trim();
-
-    if (!address || !readKey) {
-      alert('Please enter both mailbox address and read key.');
-      return;
-    }
-
-    var url = '/{{ path }}/mail/' + encodeURIComponent(address) +
-              '/inbox?key=' + encodeURIComponent(readKey);
-
-    fetch(url, {headers: {'Accept': 'application/json'}})
-    .then(function(r) {
-      if (r.status === 403) throw new Error('Invalid read key — access denied');
-      if (r.status === 404) throw new Error('Mailbox not found');
-      return r.json();
-    })
-    .then(function(data) {
-      renderInbox(data.messages, address, readKey);
-    })
-    .catch(function(err) {
-      document.getElementById('js-inbox-messages').innerHTML =
-        '<div class="error-box">⚠️ ' + err.message + '</div>';
-    });
-  }
-
-  function renderInbox(messages, address, readKey) {
-    var container = document.getElementById('js-inbox-messages');
-    if (messages.length === 0) {
-      container.innerHTML = '<p style="color:#888;margin-top:10px;">No messages in this mailbox.</p>';
-      return;
-    }
-    var html = '<h3 style="margin-top:20px;">Messages (' + messages.length + ')</h3>';
-    messages.forEach(function(msg) {
-      html += '<div class="msg-card">' +
-        '<div class="msg-meta">From: ' + esc(msg.sender) + ' &nbsp;|&nbsp; ' + esc(msg.timestamp) + '</div>' +
-        '<div class="msg-subject">' + esc(msg.subject) + '</div>' +
-        '<div class="msg-body">' + esc(msg.body) + '</div>' +
-        '<div class="msg-actions">' +
-          '<button class="danger js-delete-msg"' +
-            ' data-address="' + esc(address) + '"' +
-            ' data-msg-id="' + esc(msg.id) + '"' +
-            ' data-read-key="' + esc(readKey) + '">🗑 Delete</button>' +
-        '</div></div>';
-    });
-    html += '<div style="margin-top:30px;border-top:1px solid #333;padding-top:15px;">' +
-      '<h3 style="color:#f00;">Danger Zone</h3>' +
-      '<button class="danger js-destroy-mailbox"' +
-        ' data-address="' + esc(address) + '"' +
-        ' data-read-key="' + esc(readKey) + '">💣 Destroy Mailbox</button></div>';
-    container.innerHTML = html;
-
-    // Attach event listeners after injecting HTML (avoids inline handler issues)
-    container.querySelectorAll('.js-delete-msg').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        if (!confirm('Delete this message?')) return;
-        deleteMsg(btn.dataset.address, btn.dataset.msgId, btn.dataset.readKey);
-      });
-    });
-    container.querySelectorAll('.js-destroy-mailbox').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        if (!confirm('Destroy mailbox and ALL messages permanently?')) return;
-        destroyMailbox(btn.dataset.address, btn.dataset.readKey);
-      });
-    });
-  }
-
-  function deleteMsg(address, msgId, readKey) {
-    fetch('/{{ path }}/mail/' + encodeURIComponent(address) + '/delete/' + encodeURIComponent(msgId), {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-      body: JSON.stringify({read_key: readKey})
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (d.success) fetchInbox();
-      else alert('Error: ' + (d.error || 'Could not delete'));
-    });
-  }
-
-  function destroyMailbox(address, readKey) {
-    fetch('/{{ path }}/mail/' + encodeURIComponent(address) + '/destroy', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-      body: JSON.stringify({read_key: readKey})
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (d.success) {
-        document.getElementById('js-inbox-messages').innerHTML =
-          '<div class="success-box">✅ Mailbox destroyed.</div>';
-      } else {
-        alert('Error: ' + (d.error || 'Could not destroy mailbox'));
-      }
-    });
-  }
-
-  function copyText(elementId) {
-    var text = document.getElementById(elementId).textContent;
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(text).then(function() {
-        alert('Copied!');
-      });
-    } else {
-      var ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.left = '-9999px';
-      document.body.appendChild(ta);
-      ta.select();
-      try { document.execCommand('copy'); alert('Copied!'); } catch (e) {}
-      document.body.removeChild(ta);
-    }
-  }
-
-  function esc(s) {
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#x27;');
-  }
-</script>
 </body>
 </html>
