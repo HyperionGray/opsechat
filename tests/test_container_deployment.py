@@ -165,6 +165,14 @@ class TestDockerfile:
         assert 'HEALTHCHECK' in content
         assert '/health' in content
 
+    def test_dockerfile_adds_app_user_to_tor_cookie_group(self):
+        dockerfile_path = self.get_dockerfile_path()
+        with open(dockerfile_path) as f:
+            content = f.read()
+
+        assert 'groupadd --gid 2000 tor-cookie' in content
+        assert '--groups tor-cookie opsechat' in content
+
     def test_tor_dockerfile_exists(self):
         path = os.path.join(REPO_DIR, 'containers', 'tor.Dockerfile')
         assert os.path.exists(path)

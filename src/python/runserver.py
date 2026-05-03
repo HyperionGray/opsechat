@@ -14,6 +14,7 @@ import signal
 import sys
 import logging
 import threading
+import time
 from stem.control import Controller
 from stem import SocketError
 from app_factory import create_app
@@ -29,40 +30,49 @@ log.setLevel(logging.ERROR)
 
 def setup_tor_configuration():
     """Setup Tor hidden service configuration"""
-    try:
-        control_host, control_port = resolve_tor_control_endpoint()
-        with Controller.from_port(address=control_host, port=control_port) as controller:
-            controller.authenticate()
-            
-            # Create ephemeral hidden service.
-            # await_publication=True blocks until the HS descriptors are published
-            # to HSDir nodes (~60-120 s).  Flask is already serving at this point
-            # (Tor setup runs in a background thread), so the health-check endpoint
-            # remains reachable throughout.
-            print('[*] Creating ephemeral hidden service, this may take a minute or two')
-            result = controller.create_ephemeral_hidden_service(
-                {80: 5000}, await_publication=True
-            )
-            
-            if result.service_id:
-                hostname = result.service_id + ".onion"
-                print(f"[*] Started a new hidden service with the address of {hostname}")
-                return hostname, result.service_id
-            else:
+    timeout_seconds = float(os.environ.get("OPSECHAT_TOR_STARTUP_TIMEOUT", "30"))
+    retry_delay_seconds = float(os.environ.get("OPSECHAT_TOR_RETRY_DELAY", "1"))
+    deadline = time.monotonic() + max(timeout_seconds, 0)
+    last_error = None
+
+    while True:
+        try:
+            control_host, control_port = resolve_tor_control_endpoint()
+            with Controller.from_port(address=control_host, port=control_port) as controller:
+                controller.authenticate()
+
+                # Create ephemeral hidden service.
+                # await_publication=True blocks until the HS descriptors are published
+                # to HSDir nodes (~60-120 s).  Flask is already serving at this point
+                # (Tor setup runs in a background thread), so the health-check endpoint
+                # remains reachable throughout.
+                print('[*] Creating ephemeral hidden service, this may take a minute or two')
+                result = controller.create_ephemeral_hidden_service(
+                    {80: 5000}, await_publication=True
+                )
+
+                if result.service_id:
+                    hostname = result.service_id + ".onion"
+                    print(f"[*] Started a new hidden service with the address of {hostname}")
+                    return hostname, result.service_id
+
                 print("[*] Unable to determine our ephemeral service's hostname")
                 return "localhost", None
-                
-    except SocketError as e:
-        print(f"[!] Tor proxy or Control Port are not running: {e}")
+        except (SocketError, Exception) as e:
+            last_error = e
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(max(retry_delay_seconds, 0))
+
+    if isinstance(last_error, SocketError):
+        print(f"[!] Tor proxy or Control Port are not running: {last_error}")
         print("Try starting the Tor Browser or Tor daemon and ensure the ControlPort is open.")
-        if tor_ingress_required():
-            raise RuntimeError("Tor ingress is required but the hidden service could not be created") from e
-        return "localhost", None
-    except Exception as e:
-        print(f"Warning: Tor configuration error: {e}")
-        if tor_ingress_required():
-            raise RuntimeError("Tor ingress is required but the hidden service could not be created") from e
-        return "localhost", None
+    else:
+        print(f"Warning: Tor configuration error: {last_error}")
+
+    if tor_ingress_required():
+        raise RuntimeError("Tor ingress is required but the hidden service could not be created") from last_error
+    return "localhost", None
 
 
 def main():
