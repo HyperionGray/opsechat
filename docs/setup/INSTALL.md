@@ -30,9 +30,9 @@ npm ci
 
 Runtime note:
 
-- `bin/*.py` are thin launchers for normal operator workflows; for example,
-  `bin/chat-room.py` launches the app while the core modules live in
-  `src/python/`.
+`bin/*.py` are thin launchers for normal operator workflows; for example,
+`bin/chat-room.py` launches the app while the core modules live in
+`src/python/`.
 
 Sanity checks:
 
