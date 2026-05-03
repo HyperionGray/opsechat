@@ -460,7 +460,7 @@ class DomainRotationManager:
             "message": "Active burner domain updated",
             "budget_status": self.get_budget_status(),
         }
-    
+
     def rotate_domain(self) -> Dict:
         """
         Rotate to a new domain
