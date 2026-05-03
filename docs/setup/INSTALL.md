@@ -33,6 +33,8 @@ Runtime note:
 `bin/*.py` are thin launchers for normal operator workflows; for example,
 `bin/chat-room.py` launches the app while the core modules live in
 `src/python/`.
+For normal operator use, prefer the `bin/` launchers; use direct
+`src/python/` entrypoints only for testing or advanced runtime checks.
 
 Sanity checks:
 
