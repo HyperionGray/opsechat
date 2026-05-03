@@ -27,6 +27,8 @@ test.describe('Simple Chat Room Tests', () => {
 
     await expect(page.locator('h1')).toContainText('Closed-Roster OpSecChat');
     await expect(page.locator('#memberIdInput')).toBeVisible();
+    await expect(page.locator('#memberIdInput')).toHaveValue(/[a-z]+-[a-z]+-\d{4}/);
+    await expect(page.locator('#displayNameInput')).toHaveValue(/[A-Z][a-z]+ [A-Z][a-z]+ \d{4}/);
     await expect(page.locator('#privateKeyInput')).toBeVisible();
     await expect(page.locator('#peerPublicKeyInput')).toBeVisible();
     await expect(page.locator('#lockRosterBtn')).toBeVisible();

@@ -57,6 +57,36 @@ const state = {
     trustStore: loadSessionJson(STORAGE_KEYS.trust, { identities: {} }),
 };
 
+const RANDOM_IDENTITY_ADJECTIVES = [
+    "Swift",
+    "Silent",
+    "Dark",
+    "Ghost",
+    "Shadow",
+    "Phantom",
+    "Cipher",
+    "Echo",
+    "Rogue",
+    "Viper",
+    "Stealth",
+    "Void",
+];
+
+const RANDOM_IDENTITY_NOUNS = [
+    "Raven",
+    "Wolf",
+    "Fox",
+    "Hawk",
+    "Lynx",
+    "Owl",
+    "Cobra",
+    "Tiger",
+    "Falcon",
+    "Spider",
+    "Serpent",
+    "Dragon",
+];
+
 if (!Array.isArray(state.draftMembers)) {
     state.draftMembers = [];
 }
@@ -89,6 +119,30 @@ function saveSessionJson(key, value) {
 
 function clearSessionJson(key) {
     sessionStorage.removeItem(key);
+}
+
+function getRandomUint32() {
+    if (window.crypto && typeof window.crypto.getRandomValues === "function") {
+        const values = new Uint32Array(1);
+        window.crypto.getRandomValues(values);
+        return values[0];
+    }
+    return Math.floor(Math.random() * 0x100000000);
+}
+
+function chooseRandom(list) {
+    return list[getRandomUint32() % list.length];
+}
+
+function generateRandomIdentitySuggestion() {
+    const adjective = chooseRandom(RANDOM_IDENTITY_ADJECTIVES);
+    const noun = chooseRandom(RANDOM_IDENTITY_NOUNS);
+    const number = String(getRandomUint32() % 10000).padStart(4, "0");
+
+    return {
+        memberId: `${adjective}-${noun}-${number}`.toLowerCase(),
+        displayName: `${adjective} ${noun} ${number}`,
+    };
 }
 
 function saveTrustStore() {
@@ -292,6 +346,27 @@ function syncIdentityInputs() {
     dom.memberIdInput.value = state.localIdentity.member_id || "";
     dom.displayNameInput.value = state.localIdentity.display_name || "";
     dom.publicKeyOutput.value = state.localIdentity.public_key_armored || "";
+}
+
+function prepopulateIdentityInputs() {
+    if (state.localIdentity) {
+        syncIdentityInputs();
+        return;
+    }
+
+    const memberId = String(dom.memberIdInput.value || "").trim();
+    const displayName = String(dom.displayNameInput.value || "").trim();
+    if (memberId && displayName) {
+        return;
+    }
+
+    const suggestion = generateRandomIdentitySuggestion();
+    if (!memberId) {
+        dom.memberIdInput.value = suggestion.memberId;
+    }
+    if (!displayName) {
+        dom.displayNameInput.value = suggestion.displayName;
+    }
 }
 
 function renderIdentitySummary() {
@@ -1547,7 +1622,7 @@ function wireEvents() {
 }
 
 async function init() {
-    syncIdentityInputs();
+    prepopulateIdentityInputs();
     renderAll();
     showSecurityWarning();
     await refreshLoop();
