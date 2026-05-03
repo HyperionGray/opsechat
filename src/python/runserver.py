@@ -79,10 +79,10 @@ def setup_tor_configuration():
                 return "localhost", None
         except (AuthenticationFailure, ControllerError, OSError, SocketError) as e:
             last_error = e
-            time.sleep(retry_delay_seconds)
-
-    if last_error is None:
-        raise RuntimeError("Tor startup retry loop exited without attempting configuration")
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            time.sleep(min(retry_delay_seconds, remaining))
 
     if isinstance(last_error, SocketError):
         print(f"[!] Tor proxy or Control Port are not running: {last_error}")
