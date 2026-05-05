@@ -76,6 +76,8 @@ def setup_tor_configuration():
                     return hostname, result.service_id
 
                 print("[*] Unable to determine our ephemeral service's hostname")
+                if tor_ingress_required():
+                    raise RuntimeError("Tor ingress is required but the hidden service could not be created")
                 return "localhost", None
         except (AuthenticationFailure, ControllerError, OSError, SocketError) as e:
             last_error = e
