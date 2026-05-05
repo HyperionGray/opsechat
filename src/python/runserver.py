@@ -81,7 +81,7 @@ def setup_tor_configuration():
                 if tor_ingress_required():
                     raise RuntimeError("Tor ingress is required but the hidden service ID could not be determined")
                 return "localhost", None
-        except (AuthenticationFailure, ControllerError, OSError, SocketError) as e:
+        except (ControllerError, OSError) as e:
             last_error = e
             remaining = deadline - time.monotonic()
             if remaining <= 0:
