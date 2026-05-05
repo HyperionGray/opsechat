@@ -1,5 +1,5 @@
 **Version:** 0.8.0-alpha  
-**Documentation:** [INSTALL.md](INSTALL.md), [QUICKSTART.md](QUICKSTART.md), [docs/README.md](docs/README.md)  
+**Documentation:** [docs/setup/INSTALL.md](docs/setup/INSTALL.md), [QUICKSTART.md](QUICKSTART.md), [docs/README.md](docs/README.md)  
 **License:** MIT
 
 ## 🆕 NEW: Enhanced Security & Production Ready
