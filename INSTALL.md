@@ -85,7 +85,9 @@ python runserver_refactored.py
 
 ## Container Install
 
-Use this when you want Tor and the app isolated in containers.
+Use this when you want a dedicated Tor container for the app runtime. The
+compose stack also exposes a localhost-only admin proxy for operator access,
+and that proxy stays off the Tor network.
 
 ```bash
 ./compose-up.sh
@@ -95,6 +97,12 @@ Current access points:
 
 - `http://127.0.0.1:8080/`
 - `http://127.0.0.1:8080/chat`
+
+Current container topology:
+
+- `tor` and `opsechat` share the backend `opsechat-network`
+- `admin-proxy` and `opsechat` share the frontend `admin-network`
+- `admin-proxy` does not join the Tor backend network
 
 Current helper commands:
 

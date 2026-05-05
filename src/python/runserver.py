@@ -9,10 +9,11 @@ All route handlers have been moved to appropriate blueprint modules.
 Original file was 906 lines, refactored to ~70 lines for better maintainability.
 """
 
+import logging
+import math
 import os
 import signal
 import sys
-import logging
 import threading
 import time
 from stem.control import Controller
@@ -34,9 +35,12 @@ def _get_positive_float_env(name, default, minimum):
     """Read a float env var and clamp it to a safe minimum."""
     raw_value = os.environ.get(name, str(default))
     try:
-        return max(float(raw_value), minimum)
+        value = float(raw_value)
     except ValueError as exc:
         raise RuntimeError(f"{name} must be a float, got {raw_value!r}") from exc
+    if not math.isfinite(value):
+        raise RuntimeError(f"{name} must be finite, got {raw_value!r}")
+    return max(value, minimum)
 
 
 def setup_tor_configuration():
@@ -77,11 +81,12 @@ def setup_tor_configuration():
 
                 print("[*] Unable to determine our ephemeral service's hostname")
                 if tor_ingress_required():
-                print("[*] Unable to determine our ephemeral service's hostname")
-                if tor_ingress_required():
                     raise RuntimeError("Tor ingress is required but the hidden service ID could not be determined")
                 return "localhost", None
-        except (ControllerError, OSError) as e:
+        except ValueError as e:
+            last_error = e
+            break
+        except (AuthenticationFailure, ControllerError, OSError) as e:
             last_error = e
             remaining = deadline - time.monotonic()
             if remaining <= 0:

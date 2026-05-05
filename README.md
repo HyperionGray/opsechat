@@ -120,7 +120,8 @@ This provides the best integration with systemd, automatic startup, and native s
 
 ## Option 3: Docker/Podman Compose (Recommended for Development)
 
-For the easiest setup with full isolation, use containers:
+For the easiest setup with a dedicated Tor container and localhost-only admin
+access, use containers:
 
 ```bash
 $ git clone git@github.com:HyperionGray/opsechat.git
