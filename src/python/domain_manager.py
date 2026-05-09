@@ -372,7 +372,95 @@ class DomainRotationManager:
                 "message": result.get("message", "Failed to purchase domain"),
                 "budget_status": self.get_budget_status(),
             }
-    
+
+    def purchase_available_domain(self, domain: str, activate: bool = False) -> Dict:
+        """
+        Search for a specific domain and purchase it when available.
+
+        The current registrar state is re-checked server-side so callers do not
+        have to trust a client-supplied price.
+        """
+        candidate = (domain or "").strip().lower()
+        if not candidate:
+            return {
+                "success": False,
+                "domain": candidate,
+                "message": "Domain name is required",
+                "budget_status": self.get_budget_status(),
+            }
+
+        if any(item.get("domain") == candidate for item in self.owned_domains):
+            return {
+                "success": False,
+                "domain": candidate,
+                "message": "Domain is already owned",
+                "active_domain": self.active_domain,
+                "budget_status": self.get_budget_status(),
+            }
+
+        if not self.api_client:
+            logger.error("No API client configured")
+            return {
+                "success": False,
+                "domain": candidate,
+                "message": "No API client configured",
+                "budget_status": self.get_budget_status(),
+            }
+
+        lookup = self.api_client.search_domain(candidate)
+        if not lookup.get("available"):
+            return {
+                "success": False,
+                "domain": candidate,
+                "message": "Domain is not available",
+                "budget_status": self.get_budget_status(),
+            }
+
+        price = self._normalize_price(lookup.get("price"))
+        if price is None:
+            return {
+                "success": False,
+                "domain": candidate,
+                "message": "Domain price is unavailable",
+                "budget_status": self.get_budget_status(),
+            }
+
+        result = self.purchase_domain_if_budget_allows(candidate, price)
+        if result.get("success") and activate:
+            self.active_domain = candidate
+            result["active_domain"] = candidate
+            result["message"] = "Domain purchased successfully and activated"
+        return result
+
+    def activate_domain(self, domain: str) -> Dict:
+        """Mark an owned domain as the active burner domain."""
+        candidate = (domain or "").strip().lower()
+        if not candidate:
+            return {
+                "success": False,
+                "message": "Domain name is required",
+                "active_domain": self.active_domain,
+                "budget_status": self.get_budget_status(),
+            }
+
+        if not any(item.get("domain") == candidate for item in self.owned_domains):
+            return {
+                "success": False,
+                "domain": candidate,
+                "message": "Domain is not in the owned domain list",
+                "active_domain": self.active_domain,
+                "budget_status": self.get_budget_status(),
+            }
+
+        self.active_domain = candidate
+        return {
+            "success": True,
+            "domain": candidate,
+            "active_domain": self.active_domain,
+            "message": "Active burner domain updated",
+            "budget_status": self.get_budget_status(),
+        }
+
     def rotate_domain(self) -> Dict:
         """
         Rotate to a new domain
