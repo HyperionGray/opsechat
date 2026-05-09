@@ -60,8 +60,12 @@ async function deriveMessageKey(passphrase, saltBytes) {
 }
 
 async function encryptText(passphrase, saltBytes, plaintext) {
-  const iv = window.crypto.getRandomValues(new Uint8Array(12));
   const key = await deriveMessageKey(passphrase, saltBytes);
+  return encryptTextWithKey(key, plaintext);
+}
+
+async function encryptTextWithKey(key, plaintext) {
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
   const encoded = new TextEncoder().encode(plaintext);
   const ciphertext = await window.crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
@@ -76,9 +80,13 @@ async function encryptText(passphrase, saltBytes, plaintext) {
 }
 
 async function decryptText(passphrase, saltBytes, payload) {
+  const key = await deriveMessageKey(passphrase, saltBytes);
+  return decryptTextWithKey(key, payload);
+}
+
+async function decryptTextWithKey(key, payload) {
   const iv = fromBase64(payload.iv);
   const ciphertext = fromBase64(payload.ciphertext);
-  const key = await deriveMessageKey(passphrase, saltBytes);
   const plaintext = await window.crypto.subtle.decrypt(
     { name: 'AES-GCM', iv },
     key,
@@ -113,12 +121,13 @@ async function buildEncryptedPayload() {
   }
 
   const salt = window.crypto.getRandomValues(new Uint8Array(16));
+  const key = await deriveMessageKey(inboxKey, salt);
   const payload = {
     version: 'shared-secret-v1',
     salt: toBase64(salt),
-    sender: await encryptText(inboxKey, salt, sender),
-    subject: await encryptText(inboxKey, salt, subject),
-    body: await encryptText(inboxKey, salt, body),
+    sender: await encryptTextWithKey(key, sender),
+    subject: await encryptTextWithKey(key, subject),
+    body: await encryptTextWithKey(key, body),
   };
 
   return {
@@ -233,10 +242,11 @@ async function decryptInboxMessage(message, inboxKey) {
     }
 
     const saltBytes = fromBase64(payload.salt);
+    const key = await deriveMessageKey(inboxKey, saltBytes);
     return {
-      sender: await decryptText(inboxKey, saltBytes, payload.sender),
-      subject: await decryptText(inboxKey, saltBytes, payload.subject),
-      body: await decryptText(inboxKey, saltBytes, payload.body),
+      sender: await decryptTextWithKey(key, payload.sender),
+      subject: await decryptTextWithKey(key, payload.subject),
+      body: await decryptTextWithKey(key, payload.body),
       decrypted: true,
     };
   } catch (error) {

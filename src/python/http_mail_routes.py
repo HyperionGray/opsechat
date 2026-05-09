@@ -63,11 +63,17 @@ def register_http_mail_routes(app):
     def http_mail_create(url_addition):
         if url_addition != app.config["path"]:
             return ('', 404)
-        alias = generate_mailbox_alias()
-        while _resolve_mailbox(alias) is not None:
+        while True:
             alias = generate_mailbox_alias()
-
-        mailbox = http_mail_storage.create_mailbox(alias=alias)
+            if _resolve_mailbox(alias) is not None:
+                continue
+            try:
+                mailbox = http_mail_storage.create_mailbox(alias=alias)
+                break
+            except ValueError as error:
+                if str(error) != "Mailbox alias already exists":
+                    raise
+                continue
         response_payload = {
             "success": True,
             "address": alias,
@@ -194,13 +200,18 @@ def register_http_mail_routes(app):
                 initial_section="read",
             ), 400
 
-        return redirect(
-            url_for(
-                "http_mail_inbox",
-                url_addition=url_addition,
-                address=address,
-            )
+        inbox_args = {
+            "url_addition": url_addition,
+            "address": address,
+        }
+        read_key = (
+            request.args.get("key", "").strip()
+            or request.args.get("_read_key", "").strip()
         )
+        if read_key:
+            inbox_args["key"] = read_key
+
+        return redirect(url_for("http_mail_inbox", **inbox_args))
 
     # ------------------------------------------------------------------
     # Read inbox ciphertext (decryption stays in the browser)
@@ -229,6 +240,7 @@ def register_http_mail_routes(app):
 
         return _render_http_mail(
             inbox_address=address,
+            inbox_read_key=request.args.get("key", "").strip(),
             messages=messages,
             initial_section="read",
         )
@@ -282,6 +294,7 @@ def register_http_mail_routes(app):
                 "http_mail_inbox",
                 url_addition=url_addition,
                 address=address,
+                key=read_key,
             )
         )
 
