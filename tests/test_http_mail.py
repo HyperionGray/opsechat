@@ -9,6 +9,7 @@ Covers:
 
 import datetime
 import os
+import re
 import sys
 
 import pytest
@@ -49,6 +50,15 @@ def _fresh_app():
     app.config["TESTING"] = True
     app.config["SECRET_KEY"] = "pytest-secret"
     return app
+
+
+def _mock_encrypted_payload(label="Test"):
+    return (
+        '{"version":"shared-secret-v1","salt":"c2FsdA==",'
+        f'"sender":{{"iv":"aXY=","ciphertext":"{label}-sender"}},'
+        f'"subject":{{"iv":"aXY=","ciphertext":"{label}-subject"}},'
+        f'"body":{{"iv":"aXY=","ciphertext":"{label}-body"}}}}'
+    )
 
 
 # ===========================================================================
@@ -160,7 +170,7 @@ class TestHttpMailbox:
 
     def test_get_messages_correct_key(self):
         self.mailbox.add_message("Subj", "Body", "alice")
-        msgs = self.mailbox.get_messages("secretkey123456789012345678901")
+        msgs = self.mailbox.get_messages()
         assert msgs is not None
         assert len(msgs) == 1
         assert msgs[0]["subject"] == "Subj"
@@ -169,25 +179,26 @@ class TestHttpMailbox:
 
     def test_get_messages_wrong_key_returns_none(self):
         self.mailbox.add_message("Subj", "Body", "alice")
-        msgs = self.mailbox.get_messages("wrongkey")
-        assert msgs is None
+        msgs = self.mailbox.get_messages()
+        assert msgs is not None
+        assert len(msgs) == 1
 
     def test_get_messages_empty_key_returns_none(self):
-        msgs = self.mailbox.get_messages("")
-        assert msgs is None
+        msgs = self.mailbox.get_messages()
+        assert msgs == []
 
     def test_delete_message_correct_key(self):
         msg_id = self.mailbox.add_message("Subj", "Body", "alice")
         result = self.mailbox.delete_message("secretkey123456789012345678901", msg_id)
         assert result is True
-        msgs = self.mailbox.get_messages("secretkey123456789012345678901")
+        msgs = self.mailbox.get_messages()
         assert len(msgs) == 0
 
     def test_delete_message_wrong_key(self):
         msg_id = self.mailbox.add_message("Subj", "Body", "alice")
         result = self.mailbox.delete_message("wrongkey", msg_id)
         assert result is False
-        msgs = self.mailbox.get_messages("secretkey123456789012345678901")
+        msgs = self.mailbox.get_messages()
         assert len(msgs) == 1
 
     def test_delete_nonexistent_message(self):
@@ -200,7 +211,7 @@ class TestHttpMailbox:
         self.mailbox.messages[0].timestamp = (
             datetime.datetime.now() - datetime.timedelta(hours=25)
         )
-        msgs = self.mailbox.get_messages("secretkey123456789012345678901")
+        msgs = self.mailbox.get_messages()
         assert msgs == []
 
     def test_message_count(self):
@@ -210,13 +221,22 @@ class TestHttpMailbox:
 
     def test_message_to_dict_has_required_fields(self):
         self.mailbox.add_message("Subject", "Body", "sender")
-        msgs = self.mailbox.get_messages("secretkey123456789012345678901")
+        msgs = self.mailbox.get_messages()
         m = msgs[0]
         assert "id" in m
         assert "subject" in m
         assert "body" in m
         assert "sender" in m
         assert "timestamp" in m
+
+    def test_add_encrypted_message_marks_payload(self):
+        msg_id = self.mailbox.add_encrypted_message(
+            _mock_encrypted_payload("Encrypted")
+        )
+        msgs = self.mailbox.get_messages()
+        assert msgs[0]["id"] == msg_id
+        assert msgs[0]["encrypted"] is True
+        assert "ciphertext" in msgs[0]
 
     def test_overwrite_clears_content(self):
         msg = HttpMessage("id1", "Secret Subject", "Secret Body", "Alice",
@@ -254,7 +274,9 @@ class TestHttpMailRoutes:
         data = r.get_json()
         assert data["success"] is True
         assert "address" in data
+        assert "username" in data
         assert "read_key" in data
+        assert re.fullmatch(r"[a-z]+-[a-z]+-\d{4}", data["address"])
 
     def test_create_mailbox_returns_send_and_inbox_urls(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -271,7 +293,12 @@ class TestHttpMailRoutes:
         )
         assert r.status_code == 200
         assert b"Save these values now" in r.data
-        assert b"Your Read Key" in r.data
+        assert b"Your Inbox Key" in r.data
+
+    def test_create_mailbox_does_not_set_session_cookie(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        assert r.status_code == 200
+        assert r.headers.get("Set-Cookie") is None
 
     def test_send_message_json(self):
         r = self.client.post(f"/{self.path}/mail/new")
@@ -279,7 +306,7 @@ class TestHttpMailRoutes:
 
         r = self.client.post(
             f"/{self.path}/mail/{addr}/send",
-            json={"subject": "Hi", "body": "Hello there", "sender": "bob"},
+            json={"ciphertext": _mock_encrypted_payload("Hi")},
         )
         assert r.status_code == 200
         data = r.get_json()
@@ -296,88 +323,98 @@ class TestHttpMailRoutes:
             f"/{self.path}/mail/send",
             data={
                 "_address_override": addr,
-                "subject": "Generic route",
-                "body": "Form delivery works",
-                "sender": "bob",
+                "ciphertext": _mock_encrypted_payload("Generic"),
             },
         )
         assert send_response.status_code == 200
         assert b"Message sent." in send_response.data
 
         inbox = self.client.get(
-            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            f"/{self.path}/mail/{addr}/inbox",
             headers={"Accept": "application/json"},
         )
         assert inbox.status_code == 200
-        assert inbox.get_json()["messages"][0]["subject"] == "Generic route"
+        assert inbox.get_json()["messages"][0]["encrypted"] is True
+        assert (
+            inbox.get_json()["messages"][0]["ciphertext"]
+            == _mock_encrypted_payload("Generic")
+        )
 
     def test_send_message_empty_body_fails(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
         r = self.client.post(
             f"/{self.path}/mail/{addr}/send",
-            json={"subject": "X", "body": "", "sender": "bob"},
+            json={},
         )
         assert r.status_code == 400
 
     def test_send_to_nonexistent_mailbox(self):
         r = self.client.post(
             f"/{self.path}/mail/doesnotexist/send",
-            json={"subject": "X", "body": "Y", "sender": "bob"},
+            json={"ciphertext": _mock_encrypted_payload("Missing")},
         )
         assert r.status_code == 404
 
     def test_read_inbox_correct_key(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
-        read_key = r.get_json()["read_key"]
 
         self.client.post(
             f"/{self.path}/mail/{addr}/send",
-            json={"subject": "Test", "body": "Hello", "sender": "alice"},
+            json={"ciphertext": _mock_encrypted_payload("Read")},
         )
-
-        r = self.client.get(
-            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
-            headers={"Accept": "application/json"},
-        )
-        assert r.status_code == 200
-        data = r.get_json()
-        assert len(data["messages"]) == 1
-        assert data["messages"][0]["subject"] == "Test"
-
-    def test_open_inbox_helper_redirects_to_canonical_route(self):
-        r = self.client.post(f"/{self.path}/mail/new")
-        addr = r.get_json()["address"]
-        read_key = r.get_json()["read_key"]
-
-        redirect_response = self.client.get(
-            f"/{self.path}/mail/open?address={addr}&key={read_key}"
-        )
-        assert redirect_response.status_code == 302
-        assert redirect_response.headers["Location"].endswith(
-            f"/{self.path}/mail/{addr}/inbox?key={read_key}"
-        )
-
-    def test_read_inbox_wrong_key_is_denied(self):
-        r = self.client.post(f"/{self.path}/mail/new")
-        addr = r.get_json()["address"]
-
-        r = self.client.get(
-            f"/{self.path}/mail/{addr}/inbox?key=wrongkey",
-            headers={"Accept": "application/json"},
-        )
-        assert r.status_code == 403
-
-    def test_read_inbox_no_key_is_denied(self):
-        r = self.client.post(f"/{self.path}/mail/new")
-        addr = r.get_json()["address"]
 
         r = self.client.get(
             f"/{self.path}/mail/{addr}/inbox",
             headers={"Accept": "application/json"},
         )
-        assert r.status_code == 403
+        assert r.status_code == 200
+        data = r.get_json()
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["encrypted"] is True
+
+    def test_open_inbox_helper_redirects_to_canonical_route(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+
+        redirect_response = self.client.get(
+            f"/{self.path}/mail/open?address={addr}"
+        )
+        assert redirect_response.status_code == 302
+        assert redirect_response.headers["Location"].endswith(
+            f"/{self.path}/mail/{addr}/inbox"
+        )
+
+    def test_read_inbox_wrong_key_still_returns_ciphertext(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"ciphertext": _mock_encrypted_payload("Locked")},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox?key=wrongkey",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        assert r.get_json()["messages"][0]["encrypted"] is True
+
+    def test_read_inbox_no_key_returns_ciphertext(self):
+        r = self.client.post(f"/{self.path}/mail/new")
+        addr = r.get_json()["address"]
+        self.client.post(
+            f"/{self.path}/mail/{addr}/send",
+            json={"ciphertext": _mock_encrypted_payload("NoKey")},
+        )
+
+        r = self.client.get(
+            f"/{self.path}/mail/{addr}/inbox",
+            headers={"Accept": "application/json"},
+        )
+        assert r.status_code == 200
+        assert r.get_json()["messages"][0]["encrypted"] is True
 
     def test_read_inbox_nonexistent_mailbox(self):
         r = self.client.get(
@@ -393,11 +430,11 @@ class TestHttpMailRoutes:
 
         self.client.post(
             f"/{self.path}/mail/{addr}/send",
-            json={"subject": "Del", "body": "Body", "sender": "x"},
+            json={"ciphertext": _mock_encrypted_payload("Del")},
         )
 
         r = self.client.get(
-            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            f"/{self.path}/mail/{addr}/inbox",
             headers={"Accept": "application/json"},
         )
         msg_id = r.get_json()["messages"][0]["id"]
@@ -412,7 +449,7 @@ class TestHttpMailRoutes:
 
         # Verify deleted
         r = self.client.get(
-            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            f"/{self.path}/mail/{addr}/inbox",
             headers={"Accept": "application/json"},
         )
         assert len(r.get_json()["messages"]) == 0
@@ -424,11 +461,11 @@ class TestHttpMailRoutes:
 
         self.client.post(
             f"/{self.path}/mail/{addr}/send",
-            json={"body": "Body", "sender": "x"},
+            json={"ciphertext": _mock_encrypted_payload("WrongDelete")},
         )
 
         r = self.client.get(
-            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            f"/{self.path}/mail/{addr}/inbox",
             headers={"Accept": "application/json"},
         )
         msg_id = r.get_json()["messages"][0]["id"]
@@ -464,39 +501,29 @@ class TestHttpMailRoutes:
         )
         assert r.status_code == 403
 
-    def test_message_body_sanitized(self):
+    def test_inbox_returns_ciphertext_only_payload(self):
         r = self.client.post(f"/{self.path}/mail/new")
         addr = r.get_json()["address"]
-        read_key = r.get_json()["read_key"]
+        ciphertext = _mock_encrypted_payload("CipherOnly")
 
         self.client.post(
             f"/{self.path}/mail/{addr}/send",
-            json={"subject": "<script>alert(1)</script>", "body": "<b>bold</b>", "sender": "x"},
+            json={"ciphertext": ciphertext},
         )
 
         r = self.client.get(
-            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
+            f"/{self.path}/mail/{addr}/inbox",
             headers={"Accept": "application/json"},
         )
         msgs = r.get_json()["messages"]
-        assert "<script>" not in msgs[0]["subject"]
-        assert "<b>" not in msgs[0]["body"]
+        assert msgs[0]["subject"] == "(encrypted message)"
+        assert "Decrypt in your browser" in msgs[0]["body"]
+        assert msgs[0]["ciphertext"] == ciphertext
 
-    def test_empty_sender_defaults_to_anonymous(self):
-        r = self.client.post(f"/{self.path}/mail/new")
-        addr = r.get_json()["address"]
-        read_key = r.get_json()["read_key"]
-
-        self.client.post(
-            f"/{self.path}/mail/{addr}/send",
-            json={"body": "Hi", "sender": ""},
-        )
-
-        r = self.client.get(
-            f"/{self.path}/mail/{addr}/inbox?key={read_key}",
-            headers={"Accept": "application/json"},
-        )
-        assert r.get_json()["messages"][0]["sender"] == "anonymous"
+    def test_mail_index_does_not_create_session_cookie(self):
+        r = self.client.get(f"/{self.path}/mail")
+        assert r.status_code == 200
+        assert r.headers.get("Set-Cookie") is None
 
 
 # ===========================================================================

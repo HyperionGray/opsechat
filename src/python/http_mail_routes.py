@@ -1,22 +1,26 @@
 """
 HTTP Mail Routes for opsechat
 
-Email-over-HTTP: no SMTP, no IMAP — messages are posted to in-memory mailboxes
-and read back using a private read_key (default deny).
+Email-over-HTTP: no SMTP, no IMAP — messages are posted to inboxes keyed by a
+shareable username and decrypted in the browser with a private inbox key.
 
 Routes registered under /<path>/mail/:
   GET  /<path>/mail                        - Main UI (create mailbox form)
   POST /<path>/mail/new                    - Create a new mailbox
-  POST /<path>/mail/<address>/send         - Send a message to a mailbox (no auth)
-  GET  /<path>/mail/<address>/inbox        - Read inbox (requires ?key=<read_key>)
-  POST /<path>/mail/<address>/delete/<id>  - Delete a message (requires read_key in form)
-  POST /<path>/mail/<address>/destroy      - Delete entire mailbox (requires read_key in form)
+  POST /<path>/mail/<address>/send        - Send a message to a mailbox
+  GET  /<path>/mail/<address>/inbox       - Read inbox ciphertext
+  POST /<path>/mail/<address>/delete/<id> - Delete a message
+  POST /<path>/mail/<address>/destroy     - Delete entire mailbox
 """
 
-import re
-from flask import render_template, request, session, jsonify, redirect, url_for
-from http_mail_system import http_mail_storage, MAX_MAIL_MESSAGE_LENGTH
-from utils import id_generator, get_random_color
+from flask import render_template, request, jsonify, redirect, url_for
+from http_mail_system import (
+    http_mail_storage,
+    MAX_MAIL_MESSAGE_LENGTH,
+    generate_mailbox_alias,
+)
+
+CIPHERTEXT_STORAGE_MULTIPLIER = 10
 
 
 def register_http_mail_routes(app):
@@ -26,18 +30,11 @@ def register_http_mail_routes(app):
     # Helpers
     # ------------------------------------------------------------------
 
-    def _ensure_session():
-        if "_id" not in session:
-            session["_id"] = id_generator()
-            session["color"] = get_random_color()
-
-    def _sanitize(text: str, max_len: int) -> str:
-        """Strip dangerous characters and enforce length."""
-        text = re.sub(r'[<>&"\']', '', text)
-        return text[:max_len]
-
     def _resolve_mailbox(address: str):
-        return http_mail_storage.get_mailbox(address) or http_mail_storage.get_mailbox_by_alias(address)
+        return (
+            http_mail_storage.get_mailbox(address)
+            or http_mail_storage.get_mailbox_by_alias(address)
+        )
 
     def _render_http_mail(**kwargs):
         defaults = {
@@ -56,7 +53,6 @@ def register_http_mail_routes(app):
     def http_mail_index(url_addition):
         if url_addition != app.config["path"]:
             return ('', 404)
-        _ensure_session()
         return _render_http_mail()
 
     # ------------------------------------------------------------------
@@ -67,14 +63,24 @@ def register_http_mail_routes(app):
     def http_mail_create(url_addition):
         if url_addition != app.config["path"]:
             return ('', 404)
-        _ensure_session()
-        mailbox = http_mail_storage.create_mailbox()
+        while True:
+            alias = generate_mailbox_alias()
+            if _resolve_mailbox(alias) is not None:
+                continue
+            try:
+                mailbox = http_mail_storage.create_mailbox(alias=alias)
+                break
+            except ValueError as error:
+                if str(error) != "Mailbox alias already exists":
+                    raise
+                continue
         response_payload = {
             "success": True,
-            "address": mailbox.address,
+            "address": alias,
+            "username": alias,
             "read_key": mailbox.read_key,
-            "send_url": f"/{url_addition}/mail/{mailbox.address}/send",
-            "inbox_url": f"/{url_addition}/mail/{mailbox.address}/inbox",
+            "send_url": f"/{url_addition}/mail/{alias}/send",
+            "inbox_url": f"/{url_addition}/mail/{alias}/inbox",
         }
 
         response_mode = request.form.get("response_mode", "").strip().lower()
@@ -83,7 +89,10 @@ def register_http_mail_routes(app):
             return jsonify(response_payload)
 
         return _render_http_mail(
-            success="Mailbox created. Save the read key before leaving this page.",
+            success=(
+                "Inbox created. Save the username and inbox key before "
+                "leaving this page."
+            ),
             created_mailbox=response_payload,
         )
 
@@ -93,7 +102,10 @@ def register_http_mail_routes(app):
         if url_addition != app.config["path"]:
             return ('', 404)
 
-        address = request.form.get("_address_override", "").strip() or request.form.get("address", "").strip()
+        address = (
+            request.form.get("_address_override", "").strip()
+            or request.form.get("address", "").strip()
+        )
         if not address:
             return _render_http_mail(
                 error="Recipient mailbox address is required",
@@ -106,11 +118,13 @@ def register_http_mail_routes(app):
     # Send a message to a mailbox (no authentication required)
     # ------------------------------------------------------------------
 
-    @app.route('/<string:url_addition>/mail/<string:address>/send', methods=["POST"])
+    @app.route(
+        '/<string:url_addition>/mail/<string:address>/send',
+        methods=["POST"],
+    )
     def http_mail_send(url_addition, address):
         if url_addition != app.config["path"]:
             return ('', 404)
-        _ensure_session()
 
         mailbox = _resolve_mailbox(address)
         if mailbox is None:
@@ -122,30 +136,43 @@ def register_http_mail_routes(app):
                 initial_section="compose",
             ), 404
 
-        # Accept JSON or form data
+        # Accept JSON or form data, but only store browser-encrypted payloads.
         if request.is_json:
             data = request.get_json() or {}
-            subject = data.get("subject", "").strip()
-            body = data.get("body", "").strip()
-            sender = data.get("sender", "anonymous").strip()
+            ciphertext = (data.get("ciphertext") or "").strip()
         else:
-            subject = request.form.get("subject", "").strip()
-            body = request.form.get("body", "").strip()
-            sender = request.form.get("sender", "anonymous").strip()
+            ciphertext = request.form.get("ciphertext", "").strip()
 
-        if not body:
+        if not ciphertext:
             if request.is_json:
-                return jsonify({"error": "Message body is required"}), 400
+                return jsonify(
+                    {"error": "Browser-side encrypted ciphertext is required"}
+                ), 400
             return _render_http_mail(
-                error="Message body is required",
+                error="Browser-side encrypted ciphertext is required",
                 compose_address=address,
+                initial_section="compose",
             ), 400
 
-        subject = _sanitize(subject, 200) or "(no subject)"
-        body = _sanitize(body, MAX_MAIL_MESSAGE_LENGTH)
-        sender = _sanitize(sender, 64) or "anonymous"
+        max_ciphertext_length = (
+            MAX_MAIL_MESSAGE_LENGTH * CIPHERTEXT_STORAGE_MULTIPLIER
+        )
+        if len(ciphertext) > max_ciphertext_length:
+            error_message = (
+                "Encrypted payload is too large to store safely. "
+                "Shorten the message and try again."
+            )
+            if request.is_json:
+                return jsonify({"error": error_message}), 400
+            return _render_http_mail(
+                error=error_message,
+                compose_address=address,
+                initial_section="compose",
+            ), 400
 
-        msg_id = mailbox.add_message(subject=subject, body=body, sender_handle=sender)
+        msg_id = mailbox.add_encrypted_message(
+            ciphertext
+        )
 
         if request.is_json:
             return jsonify({"success": True, "msg_id": msg_id})
@@ -157,58 +184,63 @@ def register_http_mail_routes(app):
 
     @app.route('/<string:url_addition>/mail/open', methods=["GET"])
     def http_mail_open(url_addition):
-        """No-JavaScript helper that redirects to the authenticated inbox URL."""
+        """Helper that redirects to the username-scoped inbox route."""
         if url_addition != app.config["path"]:
             return ('', 404)
 
-        _ensure_session()
+        address = (
+            request.args.get("address", "").strip()
+            or request.args.get("_read_address", "").strip()
+        )
 
-        address = request.args.get("address", "").strip() or request.args.get("_read_address", "").strip()
-        read_key = request.args.get("key", "").strip() or request.args.get("_read_key", "").strip()
-
-        if not address or not read_key:
+        if not address:
             return _render_http_mail(
-                error="Mailbox address and read key are required",
+                error="Inbox username is required",
                 inbox_address=address,
-                inbox_read_key=read_key,
                 initial_section="read",
             ), 400
 
-        return redirect(url_for("http_mail_inbox",
-                                url_addition=url_addition,
-                                address=address,
-                                key=read_key))
+        inbox_args = {
+            "url_addition": url_addition,
+            "address": address,
+        }
+        read_key = (
+            request.args.get("key", "").strip()
+            or request.args.get("_read_key", "").strip()
+        )
+        if read_key:
+            inbox_args["key"] = read_key
+
+        return redirect(url_for("http_mail_inbox", **inbox_args))
 
     # ------------------------------------------------------------------
-    # Read inbox (requires read_key)
+    # Read inbox ciphertext (decryption stays in the browser)
     # ------------------------------------------------------------------
 
-    @app.route('/<string:url_addition>/mail/<string:address>/inbox', methods=["GET"])
+    @app.route(
+        '/<string:url_addition>/mail/<string:address>/inbox',
+        methods=["GET"],
+    )
     def http_mail_inbox(url_addition, address):
         if url_addition != app.config["path"]:
             return ('', 404)
-        _ensure_session()
 
         mailbox = _resolve_mailbox(address)
         if mailbox is None:
-            if request.headers.get("Accept", "").startswith("application/json"):
+            if request.headers.get("Accept", "").startswith(
+                "application/json"
+            ):
                 return jsonify({"error": "Mailbox not found"}), 404
             return _render_http_mail(error="Mailbox not found"), 404
 
-        read_key = request.args.get("key", "")
-        messages = mailbox.get_messages(read_key)
-
-        if messages is None:
-            if request.headers.get("Accept", "").startswith("application/json"):
-                return jsonify({"error": "Invalid read key"}), 403
-            return _render_http_mail(error="Invalid read key — access denied"), 403
+        messages = mailbox.get_messages()
 
         if request.headers.get("Accept", "").startswith("application/json"):
             return jsonify({"address": address, "messages": messages})
 
         return _render_http_mail(
             inbox_address=address,
-            inbox_read_key=read_key,
+            inbox_read_key=request.args.get("key", "").strip(),
             messages=messages,
             initial_section="read",
         )
@@ -217,12 +249,13 @@ def register_http_mail_routes(app):
     # Delete a single message (requires read_key in POST body)
     # ------------------------------------------------------------------
 
-    @app.route('/<string:url_addition>/mail/<string:address>/delete/<string:msg_id>',
-               methods=["POST"])
+    @app.route(
+        '/<string:url_addition>/mail/<string:address>/delete/<string:msg_id>',
+        methods=["POST"],
+    )
     def http_mail_delete_message(url_addition, address, msg_id):
         if url_addition != app.config["path"]:
             return ('', 404)
-        _ensure_session()
         mailbox = _resolve_mailbox(address)
         if mailbox is None:
             if request.is_json:
@@ -243,7 +276,9 @@ def register_http_mail_routes(app):
 
         if not deleted:
             if request.is_json:
-                return jsonify({"error": "Invalid read key or message not found"}), 403
+                return jsonify(
+                    {"error": "Invalid read key or message not found"}
+                ), 403
             return _render_http_mail(
                 error="Invalid read key or message not found",
                 inbox_address=address,
@@ -254,20 +289,26 @@ def register_http_mail_routes(app):
         if request.is_json:
             return jsonify({"success": True})
 
-        return redirect(url_for("http_mail_inbox",
-                                url_addition=url_addition,
-                                address=address,
-                                key=read_key))
+        return redirect(
+            url_for(
+                "http_mail_inbox",
+                url_addition=url_addition,
+                address=address,
+                key=read_key,
+            )
+        )
 
     # ------------------------------------------------------------------
     # Destroy entire mailbox (requires read_key in POST body)
     # ------------------------------------------------------------------
 
-    @app.route('/<string:url_addition>/mail/<string:address>/destroy', methods=["POST"])
+    @app.route(
+        '/<string:url_addition>/mail/<string:address>/destroy',
+        methods=["POST"],
+    )
     def http_mail_destroy(url_addition, address):
         if url_addition != app.config["path"]:
             return ('', 404)
-        _ensure_session()
 
         if request.is_json:
             read_key = (request.get_json() or {}).get("read_key", "")
@@ -289,7 +330,9 @@ def register_http_mail_routes(app):
 
         if not deleted:
             if request.is_json:
-                return jsonify({"error": "Invalid read key or mailbox not found"}), 403
+                return jsonify(
+                    {"error": "Invalid read key or mailbox not found"}
+                ), 403
             return _render_http_mail(
                 error="Invalid read key or mailbox not found",
                 inbox_address=address,
