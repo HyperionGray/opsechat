@@ -1,32 +1,30 @@
-# Overall Instructions
-
-- Don't leave any code with TODO items - instead put it into a TODO.md where the code would be and include it in the markup, explaining what there is todo
-- DO NOT exaggerate what is done and what is not, please be straightforward, if there was not time for something or it did not get done I need to know.
-- Please summarize your work in the comments and always leave behind a checklist of things that you see as left to do in the comments.
-- If I ask you to clean up, you may absolutely move files and folders to a bak/ folder in any directory. If it does not exist you can create one. Don't leave trash behind out of fear of not wanting to change my repo. I want my repo changed, that's why I'm coming to you for help.
-- Code *should not* exceed a few hundred lines. If it does, please split it up into logical files with includes. This is especially true of files with complex logic. It is NOT an excuse to say the "code is complex and therefore long", if it is complex that's even more reason to split it into logical pieces.
-- **DO NOT** duplicate filenames and directories, if you need a file or dir from somewhere else and it needs to be in both places, use a symlink.
-- Always use the last few minutes of your time to CLEAN UP, that means mark any TODO items as listed above (in a file called TODO.md) and do not leave any unfinished code silently behind.
-- please keep the repository logically organized, ALWAYS check where you are coding- does it make sense to be there? if not move it and work there.
-- The end state of a repo should be reasonable:
+- All files with source code are to be kept under approximately 600-700 lines. If some module, file, concept, etc. needs to exceed that, split it up into logical modules/includes
+- When i say "test" something - it means build an automated but *user realistic* test. Not just checking if something parses, not some weak automated test. The test should
+  verify that when an actual user is going to perform an action it works.
+- When i say "test" something - it also means to try it in an actual deployment in your environment and go through the flow as the user.
+- All tests are to be reported back in comments. Lack of this will get a PR rejected outright.
+- Projects should be organized and semi-standardized. Examples: a python project should look something like 
 
 ```
-include/
-build/
-src/
-QUICKSTART.md
-README.md
-docs/    <---- ALL OTHER DOCS GO HERE
-bak/
+src/{logical_module_1,logical_module_2...} etc.
+docs/         # all docs go in here except for a base README.me, QUICKSTART.md, USER_DOCS.md, DEVELOPER_DOCS.md
+tests/        # all tests go in here, see above for test guidelines
+scripts/      # helper scripts go in here. These should NOT be base source code, they should be helpers for common actions the user or I might need to take often
+build/        # if needed, mainly for C code but use if needed for any code.
+bin/          # for any binaries that are built
+Makefile/<some sort of build file>    # this can be a makefile, CMake stuff, a .pf file for building
 ```
 
-- You may add to the above but you must logically categorize it in a directory. For example having a src/python-lib and src/c-lib is reasonable, same for varoius topics or business logic like src/transfer  src/compute  for example are valid. But the repo should stay clean at absolutely all times. Otherwise the PR does not get merged in.
+The above is the basic example shape of a logical project. Some projects are large, if that is the case here then those directories may be repeated several times
+in intuitively named directories that make up the project. For example:
 
+```
+pfs-sdk/memhub-sdk/<structure outlined above>
+pfs-sdk/other-sdk/<structure outlined above>
+```
 
+If additional directories are needed besides those above, please make or look for another directory that is intuitively named and part of an important separate
+category of object that is needed.
 
-# Preferences
-
-- Podman over docker
-- python for anything that is not performance critical
-- C or Rust for anything performance critical
-- Typescript with React for any web UI stuff or if appropriate
+- Keep code clean, modular, relatively small functions or objects, and logically separated. I should be able to read your code and understand what it does by
+  seeing the flow, order things are written in, naming, and structure.
