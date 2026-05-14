@@ -160,18 +160,24 @@ curl http://localhost:5000/<secret-path>/email/config
 
 ## Network Isolation Tests
 
-### Test 9: Verify Internal Network
+### Test 9: Verify Split Container Networks
 
 ```bash
-# Check containers are on same network
+# Check backend network contains only Tor and the app
 docker network inspect opsechat_opsechat-network
 # or
 podman network inspect opsechat_opsechat-network
+
+# Check admin network contains only the app and localhost proxy
+docker network inspect opsechat_admin-network
+# or
+podman network inspect opsechat_admin-network
 ```
 
 **Expected Result:**
-- Both containers listed in network
-- Containers can communicate with each other
+- `opsechat-network` lists `tor` and `opsechat`
+- `admin-network` lists `admin-proxy` and `opsechat`
+- `admin-proxy` does not join the Tor backend network
 
 ### Test 10: Verify Tor Connectivity from App
 
@@ -254,7 +260,7 @@ podman volume ls | grep tor-data
 
 ### Test 15: Verify No Port Exposure (Production Mode)
 
-Ensure ports are commented out in `docker-compose.yml`:
+Ensure the app port is commented out in `docker-compose.yml`:
 
 ```bash
 # Check no ports exposed to host
@@ -264,8 +270,9 @@ podman-compose ps
 ```
 
 **Expected Result:**
-- No ports listed in PORTS column
-- Access only via Tor
+- `opsechat` and `tor` have no host ports
+- `admin-proxy` exposes only `127.0.0.1:8080`
+- Anonymous ingress still uses the onion service
 
 ### Test 16: Verify Tor Hidden Service
 

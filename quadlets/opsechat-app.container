@@ -6,7 +6,8 @@
 # - Email service (SMTP/IMAP integration)
 # - Burner email management
 # - PGP encryption support
-# All traffic goes through Tor for anonymity.
+# Tor ingress is required and outbound traffic is routed through the Tor SOCKS
+# proxy when the runtime supports it.
 
 [Unit]
 Description=Opsechat Application (Chat & Email via Tor)
@@ -25,6 +26,10 @@ ContainerName=opsechat-app
 # Environment variables
 Environment=TOR_CONTROL_PORT=9051
 Environment=TOR_CONTROL_HOST=opsechat-tor
+Environment=TOR_SOCKS_PORT=9050
+Environment=TOR_SOCKS_HOST=opsechat-tor
+Environment=OPSECHAT_REQUIRE_TOR=1
+Environment=OPSECHAT_FORCE_TOR_EGRESS=1
 Environment=FLASK_DEBUG=0
 Environment=PYTHONUNBUFFERED=1
 

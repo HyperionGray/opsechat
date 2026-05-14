@@ -9,13 +9,16 @@ All route handlers have been moved to appropriate blueprint modules.
 Original file was 906 lines, refactored to ~70 lines for better maintainability.
 """
 
+import logging
+import math
 import os
 import signal
 import sys
-import logging
 import threading
+import time
 from stem.control import Controller
-from stem import SocketError
+from stem import ControllerError, SocketError
+from stem.connection import AuthenticationFailure
 from app_factory import create_app
 from tor_transport import (
     resolve_tor_control_endpoint,
@@ -27,42 +30,78 @@ from utils import id_generator
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
+
+def _get_positive_float_env(name, default, minimum):
+    """Read a float env var and clamp it to a safe minimum."""
+    raw_value = os.environ.get(name, str(default))
+    try:
+        value = float(raw_value)
+    except ValueError as exc:
+        raise RuntimeError(f"{name} must be a float, got {raw_value!r}") from exc
+    if not math.isfinite(value):
+        raise RuntimeError(f"{name} must be finite, got {raw_value!r}")
+    return max(value, minimum)
+
+
 def setup_tor_configuration():
     """Setup Tor hidden service configuration"""
-    try:
-        control_host, control_port = resolve_tor_control_endpoint()
-        with Controller.from_port(address=control_host, port=control_port) as controller:
-            controller.authenticate()
-            
-            # Create ephemeral hidden service.
-            # await_publication=True blocks until the HS descriptors are published
-            # to HSDir nodes (~60-120 s).  Flask is already serving at this point
-            # (Tor setup runs in a background thread), so the health-check endpoint
-            # remains reachable throughout.
-            print('[*] Creating ephemeral hidden service, this may take a minute or two')
-            result = controller.create_ephemeral_hidden_service(
-                {80: 5000}, await_publication=True
-            )
-            
-            if result.service_id:
-                hostname = result.service_id + ".onion"
-                print(f"[*] Started a new hidden service with the address of {hostname}")
-                return hostname, result.service_id
-            else:
+    timeout_seconds = _get_positive_float_env(
+        "OPSECHAT_TOR_STARTUP_TIMEOUT",
+        30,
+        1.0,
+    )
+    retry_delay_seconds = _get_positive_float_env(
+        "OPSECHAT_TOR_RETRY_DELAY",
+        1,
+        0.1,
+    )
+    deadline = time.monotonic() + timeout_seconds
+    last_error = None
+
+    while time.monotonic() < deadline:
+        try:
+            control_host, control_port = resolve_tor_control_endpoint()
+            with Controller.from_port(address=control_host, port=control_port) as controller:
+                controller.authenticate()
+
+                # Create ephemeral hidden service.
+                # await_publication=True blocks until the HS descriptors are published
+                # to HSDir nodes (~60-120 s).  Flask is already serving at this point
+                # (Tor setup runs in a background thread), so the health-check endpoint
+                # remains reachable throughout.
+                print('[*] Creating ephemeral hidden service, this may take a minute or two')
+                result = controller.create_ephemeral_hidden_service(
+                    {80: 5000}, await_publication=True
+                )
+
+                if result.service_id:
+                    hostname = result.service_id + ".onion"
+                    print(f"[*] Started a new hidden service with the address of {hostname}")
+                    return hostname, result.service_id
+
                 print("[*] Unable to determine our ephemeral service's hostname")
+                if tor_ingress_required():
+                    raise RuntimeError("Tor ingress is required but the hidden service ID could not be determined")
                 return "localhost", None
-                
-    except SocketError as e:
-        print(f"[!] Tor proxy or Control Port are not running: {e}")
+        except ValueError as e:
+            last_error = e
+            break
+        except (AuthenticationFailure, ControllerError, OSError) as e:
+            last_error = e
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            time.sleep(min(retry_delay_seconds, remaining))
+
+    if isinstance(last_error, SocketError):
+        print(f"[!] Tor proxy or Control Port are not running: {last_error}")
         print("Try starting the Tor Browser or Tor daemon and ensure the ControlPort is open.")
-        if tor_ingress_required():
-            raise RuntimeError("Tor ingress is required but the hidden service could not be created") from e
-        return "localhost", None
-    except Exception as e:
-        print(f"Warning: Tor configuration error: {e}")
-        if tor_ingress_required():
-            raise RuntimeError("Tor ingress is required but the hidden service could not be created") from e
-        return "localhost", None
+    else:
+        print(f"Warning: Tor configuration error: {last_error}")
+
+    if tor_ingress_required():
+        raise RuntimeError("Tor ingress is required but the hidden service could not be created") from last_error
+    return "localhost", None
 
 
 def main():
