@@ -13,7 +13,7 @@ from flask import render_template, request, session, jsonify, redirect, url_for
 from email_system import email_storage, burner_manager, EmailComposer, EmailValidator
 from email_security_tools import spoofing_tester, phishing_simulator
 from email_transport import transport_manager
-from domain_manager import domain_rotation_manager, PorkbunAPIClient
+from domain_manager import domain_rotation_manager
 from http_mail_system import http_mail_storage
 
 
@@ -47,7 +47,7 @@ def register_email_routes(app, id_generator, get_random_color):
 
         return enriched
 
-    def _template_email_config(message=None):
+    def _template_email_config(message=None, domain_search_results=None):
         return render_template(
             "email_config.html",
             hostname=app.config["hostname"],
@@ -58,6 +58,8 @@ def register_email_routes(app, id_generator, get_random_color):
             active_domain=domain_rotation_manager.get_active_domain(),
             transport_config=transport_manager.get_config(),
             domain_config=domain_rotation_manager.get_config(),
+            owned_domains=domain_rotation_manager.get_owned_domains(),
+            domain_search_results=domain_search_results or [],
         )
 
     def _template_compose(**kwargs):
@@ -122,6 +124,7 @@ def register_email_routes(app, id_generator, get_random_color):
             hostname=app.config["hostname"],
             path=app.config["path"],
             active_burners=active_burners,
+            active_domain=burner_manager.get_custom_domain() or "opsecmail.onion",
             script_enabled=False,
         )
 
@@ -140,6 +143,7 @@ def register_email_routes(app, id_generator, get_random_color):
             hostname=app.config["hostname"],
             path=app.config["path"],
             active_burners=active_burners,
+            active_domain=burner_manager.get_custom_domain() or "opsecmail.onion",
             script_enabled=True,
         )
 
@@ -166,6 +170,7 @@ def register_email_routes(app, id_generator, get_random_color):
 
         _ensure_session()
         message = None
+        domain_search_results = []
 
         if request.method == "POST":
             action = request.form.get("action", "").strip()
@@ -208,8 +213,53 @@ def register_email_routes(app, id_generator, get_random_color):
                     message = {"type": "success", "text": "Domain API configuration saved successfully"}
                 else:
                     message = {"type": "error", "text": "Domain API key and secret are required"}
+            elif action == "search_domains":
+                if not domain_rotation_manager.get_config()["configured"]:
+                    message = {"type": "error", "text": "Configure the domain API before searching"}
+                else:
+                    max_price_raw = request.form.get("max_price", "5").strip()
+                    limit_raw = request.form.get("search_limit", "5").strip()
+                    try:
+                        max_price = float(max_price_raw) if max_price_raw else 5.0
+                    except ValueError:
+                        max_price = 5.0
+                    limit = int(limit_raw) if limit_raw.isdigit() else 5
+                    limit = min(max(limit, 1), 10)
+                    domain_search_results = domain_rotation_manager.search_cheap_domains(
+                        max_price=max(0.0, max_price),
+                        limit=limit,
+                        max_attempts=max(limit * 5, 10),
+                    )
+                    message = {
+                        "type": "success" if domain_search_results else "error",
+                        "text": (
+                            f"Found {len(domain_search_results)} available domain candidates"
+                            if domain_search_results else
+                            "No cheap domains found in this search window"
+                        ),
+                    }
+            elif action == "purchase_domain":
+                activate_after_purchase = request.form.get("activate_after_purchase") in {"true", "on"}
+                result = domain_rotation_manager.purchase_available_domain(
+                    request.form.get("domain", ""),
+                    activate=activate_after_purchase,
+                )
+                if result.get("success") and result.get("active_domain"):
+                    burner_manager.set_custom_domain(result["active_domain"])
+                message = {
+                    "type": "success" if result.get("success") else "error",
+                    "text": result.get("message", "Domain purchase completed"),
+                }
+            elif action == "activate_domain":
+                result = domain_rotation_manager.activate_domain(request.form.get("domain", ""))
+                if result.get("success") and result.get("active_domain"):
+                    burner_manager.set_custom_domain(result["active_domain"])
+                message = {
+                    "type": "success" if result.get("success") else "error",
+                    "text": result.get("message", "Domain activation completed"),
+                }
 
-        return _template_email_config(message=message)
+        return _template_email_config(message=message, domain_search_results=domain_search_results)
 
     @app.route('/<string:url_addition>/email/compose', methods=["GET", "POST"])
     def email_compose(url_addition):

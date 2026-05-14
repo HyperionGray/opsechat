@@ -229,3 +229,34 @@ class TestDomainRotationManager:
         assert switched is True
         assert manager.api_client is backup
         assert manager.active_provider == "backup"
+
+    def test_purchase_available_domain_rechecks_search_and_can_activate(self):
+        """Test purchasing a specific searched domain and activating it."""
+        mock_client = Mock(spec=DomainAPIClient)
+        mock_client.search_domain.return_value = {
+            "available": True,
+            "price": "2.49",
+        }
+        mock_client.purchase_domain.return_value = {
+            "success": True,
+            "domain": "managed.xyz",
+        }
+        manager = DomainRotationManager(mock_client, monthly_budget=50.0)
+        manager.active_domain = "current.xyz"
+
+        result = manager.purchase_available_domain("managed.xyz", activate=True)
+
+        assert result["success"] is True
+        assert manager.active_domain == "managed.xyz"
+        assert manager.owned_domains[0]["domain"] == "managed.xyz"
+        assert manager.current_spending == 2.49
+
+    def test_activate_domain_requires_owned_domain(self):
+        """Test activating a domain that is already in the owned pool."""
+        manager = DomainRotationManager()
+        manager.owned_domains = [{"domain": "pool-one.xyz", "price": 1.99}]
+
+        result = manager.activate_domain("pool-one.xyz")
+
+        assert result["success"] is True
+        assert manager.active_domain == "pool-one.xyz"

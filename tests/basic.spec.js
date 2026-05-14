@@ -12,6 +12,7 @@ test.describe('Project Structure Tests', () => {
   test('should have required files', () => {
     const requiredFiles = [
       'bin/runserver.py',
+      'docs/setup/INSTALL.md',
       'requirements.txt',
       'README.md',
       'setup.py',
@@ -21,6 +22,9 @@ test.describe('Project Structure Tests', () => {
       const filePath = path.join(__dirname, '..', file);
       expect(fs.existsSync(filePath)).toBeTruthy();
     });
+
+    const legacyInstallDoc = path.join(__dirname, '..', 'INSTALL.md');
+    expect(fs.existsSync(legacyInstallDoc)).toBeFalsy();
   });
 
   test('should have templates directory', () => {
@@ -57,6 +61,15 @@ test.describe('Project Structure Tests', () => {
     expect(content).toContain('def setup_tor_configuration():');
     expect(content).toContain('def main():');
     expect(content).toContain('app = create_app()');
+  });
+
+  test('should keep python source in src/python without a duplicate root module', () => {
+    const repoRoot = path.join(__dirname, '..');
+    const srcModule = path.join(repoRoot, 'src', 'python', 'closed_roster_room.py');
+    const rootModule = path.join(repoRoot, 'closed_roster_room.py');
+
+    expect(fs.existsSync(srcModule)).toBeTruthy();
+    expect(fs.existsSync(rootModule)).toBeFalsy();
   });
 });
 

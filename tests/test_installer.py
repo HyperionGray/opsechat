@@ -21,13 +21,14 @@ class TestInstallEntryPoints(unittest.TestCase):
             self.repo_root, 'scripts', 'bootstrap-dev-environment.sh'
         )
         self.uninstall_script = os.path.join(self.repo_root, 'uninstall.sh')
-        self.install_doc = os.path.join(self.repo_root, 'INSTALL.md')
+        self.install_doc = os.path.join(self.repo_root, 'docs', 'setup', 'INSTALL.md')
         self.quickstart_doc = os.path.join(self.repo_root, 'QUICKSTART.md')
         self.readme = os.path.join(self.repo_root, 'README.md')
 
     def test_install_documentation_exists(self):
         self.assertTrue(os.path.exists(self.install_doc))
         self.assertTrue(os.path.exists(self.quickstart_doc))
+        self.assertFalse(os.path.exists(os.path.join(self.repo_root, 'INSTALL.md')))
 
     def test_bootstrap_script_exists(self):
         self.assertTrue(os.path.exists(self.bootstrap_script))
@@ -68,17 +69,17 @@ class TestInstallEntryPoints(unittest.TestCase):
             content = f.read()
 
         self.assertIn('There is no supported `install.sh`', content)
-        self.assertIn('python chat-room.py', content)
-        self.assertIn('python runserver_refactored.py test', content)
+        self.assertIn('python bin/chat-room.py', content)
+        self.assertIn('python src/python/runserver_refactored.py test', content)
         self.assertIn('./compose-up.sh', content)
 
     def test_readme_points_to_current_setup_paths(self):
         with open(self.readme, 'r') as f:
             content = f.read()
 
-        self.assertIn('INSTALL.md', content)
+        self.assertIn('docs/setup/INSTALL.md', content)
         self.assertIn('QUICKSTART.md', content)
-        self.assertIn('chat-room.py', content)
+        self.assertIn('bin/chat-room.py', content)
         self.assertNotIn('./install.sh', content.lower())
 
 
