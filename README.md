@@ -1,38 +1,38 @@
 **Version:** 0.8.0-alpha  
-**Documentation:** [INSTALL.md](INSTALL.md), [QUICKSTART.md](QUICKSTART.md), [docs/README.md](docs/README.md)  
+**Documentation:** [docs/setup/INSTALL.md](docs/setup/INSTALL.md), [QUICKSTART.md](QUICKSTART.md), [docs/README.md](docs/README.md)  
 **License:** MIT
 
 ## 🆕 NEW: Enhanced Security & Production Ready
 
 **Latest Updates (v0.8.0):**
-- 🔐 **Closed-Roster OpenPGP Rooms** - Explicit roster bootstrap with signed and encrypted room messages
-- 💬 **Direct Messages** - Ephemeral DM feature for sharing room IDs (1-min expiry)
-- 🔒 **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
-- 🌐 **Domain Rotation CLI** - Easy burner email domain management
-- 📧 **Email Rate Limiting** - 10 emails/hour to prevent abuse
-- ⚠️ **Strong Security Warnings** - Clear messaging about acceptable use
-- 🚀 **Production Deployment** - Robust systemd units with auto-restart
+- **Closed-Roster OpenPGP Rooms** - Explicit roster bootstrap with signed and encrypted room messages
+- **Direct Messages** - Ephemeral DM feature for sharing room IDs (1-min expiry)
+- **Non-Discoverable Room IDs** - Cryptographically secure 256-bit tokens
+- **Domain Rotation CLI** - Easy burner email domain management
+- **Email Rate Limiting** - 10 emails/hour to prevent abuse
+- **Strong Security Warnings** - Clear messaging about acceptable use
+- **Production Deployment** - Robust systemd units with auto-restart
 
 Full Details: [New Features Guide](docs/user-guide/NEW_FEATURES.md)
 
 ---
 
-## 🆕 Simple Web-Based Chat Rooms
+## Simple Web-Based Chat Rooms
 
 **Secure, ephemeral chat rooms with one command - Web or TUI.**
 
 OpSecChat now includes both **Web-Based Chat Rooms** and **Terminal UI (TUI)** for maximum flexibility:
 
 ### Web Chat Rooms
-- ✅ **Simple Room Creation** - One command to create a secure chat room
-- ✅ **Closed-Roster OpenPGP** - Explicit roster bootstrap with signed+encrypted room messages
-- ✅ **Terminal-Style UI** - Clean, minimal interface with no flashy elements
-- ✅ **Messages Burn** - Auto-delete after 3 minutes with memory overwriting
-- ✅ **Local Trust States** - `new`, `known`, `changed`, and `verified` key states
-- ✅ **Text Only** - No images, videos, or media sharing (500 char limit)
-- ✅ **In-Memory Only** - Zero disk writes
-- ✅ **Tor Ready** - Works seamlessly with Tor hidden services
-- ✅ **Direct Messages** - Share room IDs securely (1-minute expiry)
+- **Simple Room Creation** - One command to create a secure chat room
+- **Closed-Roster OpenPGP** - Explicit roster bootstrap with signed+encrypted room messages
+- **Terminal-Style UI** - Clean, minimal interface with no flashy elements
+- **Messages Burn** - Auto-delete after 3 minutes with memory overwriting
+- **Local Trust States** - `new`, `known`, `changed`, and `verified` key states
+- **Text Only** - No images, videos, or media sharing (500 char limit)
+- **In-Memory Only** - Zero disk writes
+- **Tor Ready** - Works seamlessly with Tor hidden services
+- **Direct Messages** - Share room IDs securely (1-minute expiry)
 
 ### Quick Start (Web Chat)
 
@@ -47,12 +47,12 @@ python bin/chat-room.py --tor
 Access the chat at `/chat` to create rooms and share with your contacts.
 
 ### Terminal UI (TUI)
-- ✅ **TUI Only** - No web browser required
-- ✅ **Tor Integration** - Built-in Tor hidden service support
-- ✅ **Messages Burn** - Auto-delete after 3 minutes with overwriting
-- ✅ **Randomized Usernames** - Server-assigned, no reuse
-- ✅ **Text Only** - No images, videos, or encoded data
-- ✅ **In-Memory Only** - Zero disk writes
+- **TUI Only** - No web browser required
+- **Tor Integration** - Built-in Tor hidden service support
+- **Messages Burn** - Auto-delete after 3 minutes with overwriting
+- **Randomized Usernames** - Server-assigned, no reuse
+- **Text Only** - No images, videos, or encoded data
+- **In-Memory Only** - Zero disk writes
 
 ### Quick Start (TUI)
 
