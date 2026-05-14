@@ -9,7 +9,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Create an unprivileged runtime user.
-RUN useradd --create-home --home-dir /home/opsechat --shell /usr/sbin/nologin opsechat
+# Match the Tor container's shared group so the app can read the control cookie
+# from the shared tor-data volume.
+RUN groupadd --gid 2000 tor-cookie \
+    && useradd --create-home --home-dir /home/opsechat --shell /usr/sbin/nologin --groups tor-cookie opsechat
 
 # Set working directory
 WORKDIR /app

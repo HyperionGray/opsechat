@@ -130,7 +130,9 @@ opsechat-app.service
 
 ### Container Network
 
-All containers run on the `opsechat-network` bridge network, providing isolation while allowing inter-container communication.
+The quadlet deployment currently uses one dedicated `opsechat-network` bridge
+for the Tor daemon and the app container. This keeps host ports closed by
+default, but it is not a full Whonix-style workstation/gateway split.
 
 ### Volume Mounts
 
@@ -145,11 +147,11 @@ All containers run on the `opsechat-network` bridge network, providing isolation
 ### Network Isolation
 - Containers communicate only via dedicated bridge network
 - No host ports exposed (Tor-only access)
-- Internal network traffic only
+- The app requires Tor ingress and routes supported egress through the Tor SOCKS proxy
 
 ### Service Isolation
 - Each container runs with minimal privileges
-- Tor daemon isolated from application
+- Tor daemon runs in its own container
 - Health checks ensure service reliability
 
 ### Automatic Updates

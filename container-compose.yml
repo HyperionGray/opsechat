@@ -13,7 +13,7 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     networks:
-      - opsechat-network
+      - admin-network
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -78,6 +78,7 @@ services:
       - /tmp:size=64m,mode=1777
     read_only: true
     networks:
+      - admin-network
       - opsechat-network
     restart: on-failure
     healthcheck:
@@ -90,6 +91,8 @@ services:
     tty: true
 
 networks:
+  admin-network:
+    driver: bridge
   opsechat-network:
     driver: bridge
 

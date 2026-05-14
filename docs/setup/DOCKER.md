@@ -2,11 +2,22 @@
 
 This guide covers the current compose-based container flow.
 
+The compose stack uses a dedicated `tor` container and keeps the localhost-only
+admin proxy off the Tor control/SOCKS network. That reduces the blast radius for
+the browser-facing container, but it is not a full Whonix-style gateway/workstation
+split yet.
+
 ## What It Starts
 
 - `tor` container
 - `opsechat` app container
 - `admin-proxy` bound to `127.0.0.1:8080`
+
+Network layout:
+
+- `tor` and `opsechat` share a private backend network for Tor control/SOCKS
+- `admin-proxy` and `opsechat` share a separate localhost-only admin network
+- `admin-proxy` does not join the Tor backend network
 
 The compose file is [`container-compose.yml`](../../container-compose.yml).
 
@@ -32,6 +43,9 @@ Local operator access:
 
 The app inside the container uses the current refactored runtime, so the
 onion-service web paths are also `/` and `/chat`.
+
+The localhost admin proxy is for local operator access only; the onion service
+remains the primary anonymous ingress path.
 
 ## Find The Onion URL
 

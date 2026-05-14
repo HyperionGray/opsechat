@@ -62,18 +62,23 @@ class TestDockerComposeConfig:
         assert 'networks' in admin_proxy_service
     
     def test_compose_network_isolation(self):
-        """Verify services use isolated network"""
+        """Verify services use separate frontend/backend networks."""
         compose_path = self.get_compose_path()
         with open(compose_path) as f:
             config = yaml.safe_load(f)
         
         assert 'networks' in config
         assert 'opsechat-network' in config['networks']
+        assert 'admin-network' in config['networks']
         
-        # Both services should use the same network
+        # Tor and app share the backend network.
         assert 'opsechat-network' in config['services']['tor']['networks']
         assert 'opsechat-network' in config['services']['opsechat']['networks']
-        assert 'opsechat-network' in config['services']['admin-proxy']['networks']
+        # The browser-facing proxy stays off the Tor network.
+        assert 'opsechat-network' not in config['services']['admin-proxy']['networks']
+        assert config['services']['admin-proxy']['networks'] == ['admin-network']
+        # The app bridges the internal Tor network and the localhost-only admin network.
+        assert sorted(config['services']['opsechat']['networks']) == ['admin-network', 'opsechat-network']
     
     def test_compose_no_ports_exposed_by_default(self):
         """Verify no ports are exposed to host by default"""
@@ -96,6 +101,14 @@ class TestDockerComposeConfig:
 
         proxy_ports = config['services']['admin-proxy']['ports']
         assert proxy_ports == ['127.0.0.1:8080:8080']
+
+    def test_compose_admin_proxy_only_reaches_app_on_admin_network(self):
+        compose_path = self.get_compose_path()
+        with open(compose_path) as f:
+            config = yaml.safe_load(f)
+
+        assert config['services']['admin-proxy']['networks'] == ['admin-network']
+        assert 'admin-network' in config['services']['opsechat']['networks']
 
     def test_compose_proxy_build_uses_repo_root_context(self):
         compose_path = self.get_compose_path()
@@ -164,6 +177,14 @@ class TestDockerfile:
 
         assert 'HEALTHCHECK' in content
         assert '/health' in content
+
+    def test_dockerfile_adds_app_user_to_tor_cookie_group(self):
+        dockerfile_path = self.get_dockerfile_path()
+        with open(dockerfile_path) as f:
+            content = f.read()
+
+        assert 'groupadd --gid 2000 tor-cookie' in content
+        assert '--groups tor-cookie opsechat' in content
 
     def test_tor_dockerfile_exists(self):
         path = os.path.join(REPO_DIR, 'containers', 'tor.Dockerfile')
@@ -281,6 +302,16 @@ class TestQuadletFiles:
         
         assert 'After=opsechat-tor' in content
         assert 'Requires=opsechat-tor' in content
+
+    def test_app_container_enforces_tor_ingress_and_egress(self):
+        path = self.get_quadlet_path('opsechat-app.container')
+        with open(path) as f:
+            content = f.read()
+
+        assert 'Environment=TOR_SOCKS_HOST=opsechat-tor' in content
+        assert 'Environment=TOR_SOCKS_PORT=9050' in content
+        assert 'Environment=OPSECHAT_REQUIRE_TOR=1' in content
+        assert 'Environment=OPSECHAT_FORCE_TOR_EGRESS=1' in content
     
     def test_containers_use_same_network(self):
         for quadlet in ['opsechat-tor.container', 'opsechat-app.container']:

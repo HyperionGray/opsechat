@@ -96,7 +96,7 @@ sudo systemctl enable opsechat-app
 
 ### opsechat.network
 
-Defines the private bridge network for container communication.
+Defines the private bridge network shared by the Tor and app containers.
 
 ```ini
 [Network]
@@ -129,8 +129,8 @@ Runs the Flask application with all features.
 
 Key settings:
 - Connects to Tor via internal network
-- No ports exposed to host (Tor-only access)
-- Environment variables for Tor connection
+- No ports exposed to host by default (onion-service access unless you opt into debug publishing)
+- Environment variables require Tor ingress and route egress through the Tor SOCKS proxy
 - Depends on Tor container being healthy
 
 ## Managing Services
