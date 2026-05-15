@@ -13,8 +13,10 @@ import sys
 from werkzeug.serving import WSGIRequestHandler
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if BASE_DIR not in sys.path:
-    sys.path.insert(0, BASE_DIR)
+SRC_PYTHON = os.path.join(BASE_DIR, "src", "python")
+for candidate in (BASE_DIR, SRC_PYTHON):
+    if candidate not in sys.path:
+        sys.path.insert(0, candidate)
 
 from app_factory import create_app
 

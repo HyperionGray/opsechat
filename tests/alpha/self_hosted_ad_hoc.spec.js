@@ -23,7 +23,9 @@ test.describe('Self-hosted ad-hoc persona', () => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Operator Console' })).toBeVisible();
     await expect(page.getByText('Deployment profile')).toBeVisible();
-    await expect(page.getByText('core')).toBeVisible();
+    // Profile string lives in a <dd> next to the "Deployment profile" <dt>.
+    const profileDd = page.locator('dt:has-text("Deployment profile") + dd');
+    await expect(profileDd).toContainText('core');
   });
 
   test('chat index renders with the create-room button', async ({ page }) => {

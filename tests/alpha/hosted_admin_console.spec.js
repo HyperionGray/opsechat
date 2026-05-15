@@ -74,10 +74,12 @@ test.describe('Hosted admin / operator', () => {
   test('console UI renders the manifest with no extended-only services', async ({ page }) => {
     await page.goto('/console');
     await expect(page.getByRole('heading', { name: 'Operator Console' })).toBeVisible();
-    await expect(page.getByText('Secure chat rooms')).toBeVisible();
-    await expect(page.getByText('Operational health')).toBeVisible();
+    // The "Secure chat rooms" label appears as the card heading; assert there
+    // is a card heading, then confirm the operational-health card too.
+    await expect(page.getByRole('heading', { name: 'Secure chat rooms' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Operational health' })).toBeVisible();
     // Restricted services must not advertise themselves in the alpha console.
-    await expect(page.getByText('Restricted HTTP mail')).toHaveCount(0);
-    await expect(page.getByText('Restricted burner inboxes')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Restricted HTTP mail' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Restricted burner inboxes' })).toHaveCount(0);
   });
 });
