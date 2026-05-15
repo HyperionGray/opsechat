@@ -1,80 +1,80 @@
-#!/bin/bash
-# Unified test runner for opsechat
-# Runs Python unit tests and (optionally) Playwright smoke tests.
+#!/usr/bin/env bash
+# Unified alpha test runner for OpSecChat.
+#
+# Default: runs the Python alpha test suite (pytest) and the Playwright
+# alpha smoke (basic + tests/alpha/*.spec.js, headless across chromium /
+# firefox / webkit).
 #
 # Usage:
-#   ./run_tests.sh            # run all available tests
-#   ./run_tests.sh --python   # python tests only
-#   ./run_tests.sh --e2e      # playwright smoke tests only
-#   ./run_tests.sh --skip-e2e # python tests, skip playwright
+#   ./run_tests.sh             # full alpha suite (python + playwright)
+#   ./run_tests.sh --python    # python only
+#   ./run_tests.sh --e2e       # playwright only
+#   ./run_tests.sh --skip-e2e  # python only (alias)
+#   ./run_tests.sh --legacy    # legacy playwright suite (out-of-alpha)
+#   ./run_tests.sh --compose   # container-up-to-container-down E2E
 
-set -e
+set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FAILED=0
 
-# ---------------------------------------------------------------------------
-# Argument parsing
-# ---------------------------------------------------------------------------
 RUN_PYTHON=true
 RUN_E2E=true
+RUN_LEGACY=false
+RUN_COMPOSE=false
 
 for arg in "$@"; do
   case "$arg" in
-    --python)   RUN_PYTHON=true; RUN_E2E=false ;;
+    --python)   RUN_PYTHON=true;  RUN_E2E=false ;;
     --e2e)      RUN_PYTHON=false; RUN_E2E=true ;;
     --skip-e2e) RUN_E2E=false ;;
+    --legacy)   RUN_PYTHON=false; RUN_E2E=false; RUN_LEGACY=true ;;
+    --compose)  RUN_PYTHON=false; RUN_E2E=false; RUN_COMPOSE=true ;;
     -h|--help)
-      echo "Usage: $0 [--python|--e2e|--skip-e2e]"
+      sed -n '2,15p' "$0" | sed 's/^# //; s/^#//'
       exit 0
+      ;;
+    *)
+      echo "Unknown argument: $arg" >&2
+      exit 2
       ;;
   esac
 done
 
-# ---------------------------------------------------------------------------
-# Python tests (pytest)
-# ---------------------------------------------------------------------------
-if $RUN_PYTHON; then
-  echo "=== Python tests (pytest) ==="
-
-  if command -v python3 &>/dev/null; then
-    PYTHON=python3
-  elif command -v python &>/dev/null; then
-    PYTHON=python
+if [ "$RUN_PYTHON" = true ]; then
+  echo "=== Python alpha tests (pytest) ==="
+  if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+  if "$PY" -m pytest --version >/dev/null 2>&1; then
+    "$PY" -m pytest "$REPO_ROOT/tests" -q --no-header || FAILED=1
   else
-    echo "[!] python not found -- skipping Python tests"
-    PYTHON=""
-  fi
-
-  if [ -n "$PYTHON" ]; then
-    # Prefer venv if activated, otherwise try system pytest
-    if $PYTHON -m pytest --version &>/dev/null; then
-      $PYTHON -m pytest "$REPO_ROOT/tests" --tb=short -q || FAILED=1
-    else
-      echo "[!] pytest not installed -- run: pip install -r requirements-dev.txt"
-      FAILED=1
-    fi
+    echo "[!] pytest not installed -- run: pip install -r requirements-dev.txt" >&2
+    FAILED=1
   fi
 fi
 
-# ---------------------------------------------------------------------------
-# Playwright smoke tests
-# ---------------------------------------------------------------------------
-if $RUN_E2E; then
-  echo ""
-  echo "=== Playwright smoke tests ==="
-
-  if command -v npx &>/dev/null && [ -d "$REPO_ROOT/node_modules" ]; then
-    npx playwright test "$REPO_ROOT/tests/basic.spec.js" --reporter=line || FAILED=1
+if [ "$RUN_E2E" = true ]; then
+  echo
+  echo "=== Playwright alpha tests ==="
+  if command -v npx >/dev/null 2>&1 && [ -d "$REPO_ROOT/node_modules" ]; then
+    npx playwright test --reporter=line || FAILED=1
   else
-    echo "[*] Playwright not available -- skipping (run: npm ci && npx playwright install)"
+    echo "[*] Playwright not available -- run: npm ci && npx playwright install" >&2
   fi
 fi
 
-# ---------------------------------------------------------------------------
-# Summary
-# ---------------------------------------------------------------------------
-echo ""
+if [ "$RUN_LEGACY" = true ]; then
+  echo
+  echo "=== Playwright LEGACY tests (off-by-default) ==="
+  npx playwright test --config=playwright-legacy.config.js --reporter=line || FAILED=1
+fi
+
+if [ "$RUN_COMPOSE" = true ]; then
+  echo
+  echo "=== Compose container-up-to-container-down E2E ==="
+  bash "$REPO_ROOT/scripts/test-compose-e2e.sh" || FAILED=1
+fi
+
+echo
 if [ "$FAILED" -eq 0 ]; then
   echo "=== All executed tests passed ==="
   exit 0

@@ -1,20 +1,28 @@
 {
   "name": "opsechat",
-  "version": "1.0.0",
-  "description": "Platform ========",
+  "version": "0.8.0-alpha",
+  "description": "OpSecChat - closed-roster OpenPGP chat over Tor hidden services. See README.md.",
   "main": "index.js",
   "scripts": {
-    "test": "playwright test",
-    "test:headless": "playwright test --project=chromium-headless --project=firefox-headless --project=webkit-headless",
-    "test:headed": "playwright test --project=chromium-headed --project=firefox-headed --headed",
-    "test:basic": "playwright test tests/basic.spec.js",
-    "test:e2e": "playwright test tests/e2e.spec.js",
-    "test:ui": "playwright test tests/ui-headless.spec.js && if [ \"$CI\" != \"true\" ]; then playwright test tests/ui-headed.spec.js; fi",
-    "test:report": "playwright show-report"
+    "test:alpha": "playwright test",
+    "test:alpha:headless": "playwright test --project=chromium-headless --project=firefox-headless --project=webkit-headless",
+    "test:alpha:headed": "playwright test --project=chromium-headed",
+    "test:alpha:slowmo": "playwright test --project=chromium-headed-slowmo",
+    "test:alpha:basic": "playwright test tests/basic.spec.js",
+    "test:legacy": "playwright test --config=playwright-legacy.config.js",
+    "test:compose": "playwright test --config=playwright-compose.config.js",
+    "test:report": "playwright show-report",
+    "test": "playwright test"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "tor",
+    "openpgp",
+    "anonymous",
+    "ephemeral",
+    "chat"
+  ],
+  "author": "Hyperion Gray",
+  "license": "MIT",
   "devDependencies": {
     "@playwright/test": "^1.56.1",
     "playwright": "^1.56.1"

@@ -1,82 +1,90 @@
 // @ts-check
+/**
+ * Playwright configuration for the OpSecChat alpha test suite.
+ *
+ * Default suite drives the *real* Flask app (`tests/real_app_server.py`)
+ * across chromium/firefox/webkit headless. Headed and slow-mo projects are
+ * available locally; CI auto-skips them.
+ *
+ * Legacy specs (mock-server based, non-alpha surface) live in tests/legacy/
+ * and are run via `playwright-legacy.config.js`.
+ */
 const { defineConfig, devices } = require('@playwright/test');
 
-/**
- * @see https://playwright.dev/docs/test-configuration
- */
-module.exports = defineConfig({
-  testDir: './tests',
-  /* Run tests in files in parallel */
-  fullyParallel: true,
-  /* Fail the build on CI if you accidentally left test.only in the source code. */
-  forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
-  /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
-  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: 'html',
-  /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
-  use: {
-    /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: 'http://127.0.0.1:5001',
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
-  },
+const PORT = Number(process.env.OPSECHAT_PLAYWRIGHT_PORT || 5111);
+const BASE_URL = process.env.OPSECHAT_BASE_URL || `http://127.0.0.1:${PORT}`;
 
-  /* Configure projects for major browsers */
-  projects: [
-    // Only headless browsers in CI environment
-    {
-      name: 'chromium-headless',
-      use: { 
-        ...devices['Desktop Chrome'],
-        headless: true,
-      },
-    },
-
-    {
-      name: 'firefox-headless',
-      use: { 
-        ...devices['Desktop Firefox'],
-        headless: true,
-      },
-    },
-
-    {
-      name: 'webkit-headless',
-      use: { 
-        ...devices['Desktop Safari'],
-        headless: true,
-      },
-    },
-
-    /* Headed browser configurations for manual testing/debugging - only run locally, not in CI */
-    ...(process.env.CI ? [] : [
+const HEADED_PROJECTS = process.env.CI
+  ? []
+  : [
       {
         name: 'chromium-headed',
-        use: { 
+        testMatch: ['**/*.spec.js'],
+        use: {
           ...devices['Desktop Chrome'],
           headless: false,
         },
       },
-
       {
-        name: 'firefox-headed',
-        use: { 
-          ...devices['Desktop Firefox'],
+        // Visual walkthrough project: only runs the dedicated narration spec
+        // and adds slow-mo + a sane viewport so a human can sit and watch.
+        name: 'chromium-headed-slowmo',
+        testMatch: ['**/visual_walkthrough.spec.js'],
+        use: {
+          ...devices['Desktop Chrome'],
           headless: false,
+          viewport: { width: 1400, height: 900 },
+          launchOptions: { slowMo: 350 },
         },
       },
-    ]),
+    ];
+
+module.exports = defineConfig({
+  testDir: './tests',
+  // Only run alpha-scope specs by default. basic.spec.js is structural and
+  // covers the project layout; tests/alpha/ are the real-app E2E specs.
+  testMatch: ['basic.spec.js', 'alpha/*.spec.js'],
+  testIgnore: ['legacy/**', 'manual/**'],
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  workers: process.env.CI ? 1 : undefined,
+  reporter: process.env.CI ? [['line'], ['html', { open: 'never' }]] : 'html',
+  timeout: 120_000,
+  expect: { timeout: 15_000 },
+
+  use: {
+    baseURL: BASE_URL,
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+  },
+
+  projects: [
+    {
+      name: 'chromium-headless',
+      use: { ...devices['Desktop Chrome'], headless: true },
+    },
+    {
+      name: 'firefox-headless',
+      use: { ...devices['Desktop Firefox'], headless: true },
+    },
+    {
+      name: 'webkit-headless',
+      use: { ...devices['Desktop Safari'], headless: true },
+    },
+    ...HEADED_PROJECTS,
   ],
 
-  /* Run your local dev server before starting the tests */
+  // Boots the real Flask app (the same one users hit). Reuses an existing
+  // server in dev so iterating on a single spec is fast.
   webServer: {
-    command: 'python3 tests/mock_server.py',
-    url: 'http://127.0.0.1:5001/health',
+    command: 'python3 tests/real_app_server.py',
+    url: `${BASE_URL}/health`,
     reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
-  }
+    timeout: 60_000,
+    env: {
+      OPSECHAT_PLAYWRIGHT_PORT: String(PORT),
+    },
+  },
 });
