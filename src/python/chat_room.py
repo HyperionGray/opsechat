@@ -96,15 +96,15 @@ Security Features:
                     app.config['full_path'] = f"{hostname}/chat"
                     
                     print(f'\n{"="*60}')
-                    print(f'🧅 Tor Hidden Service Created!')
+                    print(f'[tor] OpSecChat hidden service created')
                     print(f'{"="*60}')
-                    print(f'\n🧭 Operator Console: http://{hostname}/')
-                    print(f'💬 Chat Rooms: http://{hostname}/chat')
+                    print(f'\n[console] Operator Console: http://{hostname}/')
+                    print(f'[chat]    Chat Rooms:        http://{hostname}/chat')
                     if app.config.get("OPSECHAT_ENABLE_LEGACY_CHAT"):
-                        print(f'🕳 Legacy Chat: http://{hostname}/{path}')
-                    print(f'\n⚠️  Share these URLs only with trusted contacts')
-                    print(f'⏱️  Messages auto-delete after 3 minutes')
-                    print(f'🔒 Closed-roster OpenPGP rooms require explicit roster bootstrap before the first message')
+                        print(f'[legacy]  Legacy Chat:        http://{hostname}/{path}')
+                    print(f'\n[!] Share these URLs only with trusted contacts')
+                    print(f'[!] Messages auto-delete after 3 minutes')
+                    print(f'[!] Closed-roster OpenPGP rooms require explicit roster bootstrap before the first message')
                     print(f'\n{"="*60}')
                     print('\nPress Ctrl+C to stop the server\n')
                     
@@ -141,15 +141,15 @@ Security Features:
         app.config['full_path'] = f"http://{args.host}:{args.port}/chat"
         
         print(f'\n{"="*60}')
-        print(f'💻 Local OpSecChat Server Started')
+        print(f'[local] OpSecChat server started')
         print(f'{"="*60}')
-        print(f'\n🧭 Operator Console: http://{args.host}:{args.port}/')
-        print(f'💬 Chat Rooms: http://{args.host}:{args.port}/chat')
+        print(f'\n[console] Operator Console: http://{args.host}:{args.port}/')
+        print(f'[chat]    Chat Rooms:        http://{args.host}:{args.port}/chat')
         if app.config.get("OPSECHAT_ENABLE_LEGACY_CHAT"):
-            print(f'🕳 Legacy Chat: http://{args.host}:{args.port}/{path}')
-        print(f'\n⚠️  For maximum security, use --tor flag')
-        print(f'⏱️  Messages auto-delete after 3 minutes')
-        print(f'🔒 Closed-roster OpenPGP rooms require explicit roster bootstrap before the first message')
+            print(f'[legacy]  Legacy Chat:        http://{args.host}:{args.port}/{path}')
+        print(f'\n[!] For maximum security, use --tor flag')
+        print(f'[!] Messages auto-delete after 3 minutes')
+        print(f'[!] Closed-roster OpenPGP rooms require explicit roster bootstrap before the first message')
         print(f'\n{"="*60}')
         print('\nPress Ctrl+C to stop the server\n')
         
