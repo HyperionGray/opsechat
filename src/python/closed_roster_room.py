@@ -112,6 +112,19 @@ class ClosedRosterState:
             raise ValueError("room roster already initialized")
 
         normalized_members = [ClosedRosterMember.from_payload(member) for member in members]
+
+        # Cross-check key-id uniqueness across the whole roster. The
+        # `RoomEpoch` layer only enforces fingerprint and member_id uniqueness;
+        # we also forbid two roster members from claiming the same OpenPGP
+        # key id (signing or encryption) so that envelope-validation later
+        # cannot ambiguously match the wrong member.
+        signing_key_ids = [member.signing_key_id for member in normalized_members]
+        if len(signing_key_ids) != len(set(signing_key_ids)):
+            raise ValueError("signing key ids must be unique within a roster")
+        encryption_key_ids = [member.encryption_key_id for member in normalized_members]
+        if len(encryption_key_ids) != len(set(encryption_key_ids)):
+            raise ValueError("encryption key ids must be unique within a roster")
+
         epoch = RoomEpoch(
             room_id=self.room_id,
             epoch=1,

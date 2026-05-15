@@ -11,7 +11,7 @@ import secrets
 from datetime import datetime, timezone
 from flask import Flask, jsonify
 from utils import id_generator, get_random_color, check_older_than, process_chat
-from monitoring import get_health_status, get_chat_stats, get_version
+from monitoring import get_health_status, get_chat_stats, get_version, get_version_info
 try:
     from rate_limiter import init_limiter
 except ModuleNotFoundError:
@@ -39,10 +39,7 @@ def register_operational_routes(app):
 
     @app.route('/version', methods=["GET"])
     def version():
-        return jsonify({
-            "version": get_version(),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        return jsonify(get_version_info())
 
     @app.route('/chat/stats', methods=["GET"])
     def chat_stats():
@@ -175,20 +172,8 @@ def create_app():
     from mvp_routes import register_mvp_routes
     register_mvp_routes(app)
 
-    # Health check endpoint
-    from monitoring import get_health_status, get_chat_stats, get_version
+    # Operational endpoints (/health, /version, /chat/stats).
+    # Defined once via the helper so the route signatures cannot drift apart.
+    register_operational_routes(app)
 
-    @app.route('/health', methods=["GET"])
-    def health():
-        return jsonify(get_health_status())
-
-    @app.route('/version', methods=["GET"])
-    def version():
-        return jsonify(get_version_info())
-
-    # Operational stats endpoint for monitoring dashboards
-    @app.route('/chat/stats', methods=["GET"])
-    def chat_stats():
-        return jsonify(get_chat_stats())
-    
     return app

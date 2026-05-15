@@ -24,6 +24,7 @@ from utils import id_generator
 def main():
     """Main entry point for chat room creation"""
     parser = argparse.ArgumentParser(
+        prog='python bin/chat-room.py',
         description='OpSecChat - Create secure, ephemeral chat rooms',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""

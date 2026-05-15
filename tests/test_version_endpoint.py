@@ -38,7 +38,12 @@ def test_version_endpoint_returns_version_from_file():
     assert response.status_code == 200
     assert isinstance(version, str)
     assert version.strip() != ""
-    assert response.get_json() == {"version": version}
+    payload = response.get_json()
+    # Stable monitoring payload: service, version, and a timestamp the operator
+    # can use to detect a stalled process.
+    assert payload["service"] == "opsechat"
+    assert payload["version"] == version
+    assert isinstance(payload["timestamp"], str) and payload["timestamp"]
 
 
 def test_version_endpoint_includes_security_headers():

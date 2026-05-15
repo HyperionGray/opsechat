@@ -348,8 +348,16 @@ def get_health_status() -> Dict[str, Any]:
 
 
 def get_version_info() -> Dict[str, str]:
-    """Return the current service version payload."""
-    return {'version': _read_version()}
+    """Return the current service version payload.
+
+    The shape is intentionally stable for monitoring tools:
+    `{service, version, timestamp}`.
+    """
+    return {
+        'service': 'opsechat',
+        'version': _read_version(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def _get_active_room_count() -> int:

@@ -74,19 +74,16 @@ class ChatRoom:
     
     def __init__(self, room_id):
         self.room_id = room_id
-        self.room_key = secrets.token_urlsafe(32)
         self.messages = []
         self.users = {}
         self.created_at = datetime.datetime.now()
-        self.room_key = generate_secure_room_id(32)
         self.lock = threading.Lock()
-        self._room_key = secrets.token_urlsafe(32)
-        # Legacy compatibility key kept for older tests/integrations that still
-        # assert room-level key generation. Closed-roster OpenPGP is the active
-        # messaging model and does not use this value for transport encryption.
-        self._legacy_room_key = secrets.token_urlsafe(32)
         self.closed_roster = ClosedRosterState(room_id)
-        # Backward-compatibility token for legacy room-key callers.
+        # Legacy room-key tokens kept for backwards-compat with older tests
+        # and integrations that asserted room-level key generation. The
+        # active messaging model is closed-roster OpenPGP and does NOT use
+        # any of these tokens for transport encryption -- they are inert.
+        self.room_key = generate_secure_room_id(32)
         self._legacy_room_key = secrets.token_urlsafe(32)
     
     def add_message(self, user_id, username, color, message_text):
@@ -96,10 +93,6 @@ class ChatRoom:
             "message": message_text,
         }
         self._store_message(user_id, username, color, payload)
-
-    def get_room_key(self):
-        """Return a legacy per-room key used by backwards-compatibility tests."""
-        return self.room_key
 
     def _store_message(self, user_id, username, color, payload):
         with self.lock:
@@ -145,9 +138,6 @@ class ChatRoom:
             normalized = self.closed_roster.validate_posted_envelope(payload)
         self._store_message(user_id, username, color, normalized)
 
-    def get_room_key(self):
-        """Return the backward-compatible legacy room key token."""
-        return self._legacy_room_key
     
     def cleanup_old_messages(self):
         """Remove messages older than 3 minutes and overwrite memory"""
