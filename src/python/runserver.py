@@ -21,6 +21,7 @@ from stem import ControllerError, SocketError
 from stem.connection import AuthenticationFailure
 from app_factory import create_app
 from tor_transport import (
+    get_hidden_service_target,
     resolve_tor_control_endpoint,
     tor_ingress_required,
 )
@@ -70,8 +71,10 @@ def setup_tor_configuration():
                 # (Tor setup runs in a background thread), so the health-check endpoint
                 # remains reachable throughout.
                 print('[*] Creating ephemeral hidden service, this may take a minute or two')
+                hs_target = get_hidden_service_target(default_port=5000)
+                print(f'[*] Hidden service target: {hs_target}')
                 result = controller.create_ephemeral_hidden_service(
-                    {80: 5000}, await_publication=True
+                    {80: hs_target}, await_publication=True
                 )
 
                 if result.service_id:

@@ -54,6 +54,9 @@ python bin/runserver.py test
 |--------------------------------|--------------------------------------------------------------------------------------------|
 | `OPSECHAT_REQUIRE_TOR`         | Refuse to start unless a hidden service can be published                                   |
 | `OPSECHAT_FORCE_TOR_EGRESS`    | Route outbound HTTP / SMTP / IMAP through the Tor SOCKS proxy                              |
+| `OPSECHAT_HS_TARGET_HOST`      | Host the Tor process should forward onion traffic to. Required for any deployment where Tor and Flask are in separate containers. |
+| `OPSECHAT_HS_TARGET_PORT`      | Port portion of the HS target (default 5000).                                              |
+| `OPSECHAT_HS_TARGET`           | Raw `host:port` override; takes priority over the two above.                               |
 
 The compose stack sets both flags by default. The ad-hoc CLI honours
 `OPSECHAT_REQUIRE_TOR=1` by automatically promoting itself to `--tor`

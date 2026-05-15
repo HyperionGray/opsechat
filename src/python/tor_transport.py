@@ -64,6 +64,54 @@ def get_tor_socks_endpoint() -> Tuple[str, int]:
     return host, port
 
 
+def get_hidden_service_target(default_port: int = 5000):
+    """
+    Return the target the Tor process should forward onion traffic to.
+
+    Stem accepts either an int (interpreted by Tor as ``127.0.0.1:<int>``)
+    or a string ``"host:port"`` for the value side of the
+    ``create_ephemeral_hidden_service`` ports map.
+
+    For ad-hoc / native runs (where Tor and Flask are on the same host),
+    the integer default is correct.
+
+    For the compose stack and quadlet deployment, Tor and Flask live in
+    *different* containers. The Tor container's ``127.0.0.1`` is not the
+    Flask container's ``127.0.0.1``. The deployment must pass
+    ``OPSECHAT_HS_TARGET_HOST`` (and optionally
+    ``OPSECHAT_HS_TARGET_PORT``) so this returns ``"<service>:<port>"``
+    that the Tor container can resolve and reach over its own bridge
+    network.
+
+    Honoured environment variables:
+
+    - ``OPSECHAT_HS_TARGET`` -- raw override of the form ``host:port``.
+      If set, it is returned verbatim (after type validation).
+    - ``OPSECHAT_HS_TARGET_HOST`` -- hostname or IP. When set, the
+      return value is the string ``"<host>:<port>"``.
+    - ``OPSECHAT_HS_TARGET_PORT`` -- int. Combines with ``HOST`` above,
+      or used standalone to override ``default_port`` for the integer
+      form.
+    """
+    raw = os.environ.get("OPSECHAT_HS_TARGET")
+    if raw:
+        raw = raw.strip()
+        if ":" not in raw:
+            raise RuntimeError(
+                "OPSECHAT_HS_TARGET must be in the form host:port, "
+                f"got {raw!r}"
+            )
+        return raw
+
+    host = os.environ.get("OPSECHAT_HS_TARGET_HOST")
+    port_str = os.environ.get("OPSECHAT_HS_TARGET_PORT")
+    port = int(port_str) if port_str else default_port
+
+    if host:
+        return f"{host}:{port}"
+    return port
+
+
 def tor_socks_proxy_url() -> str:
     """Return a requests-compatible SOCKS proxy URL with remote DNS."""
     host, port = get_tor_socks_endpoint()

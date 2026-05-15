@@ -30,6 +30,14 @@ Environment=TOR_SOCKS_PORT=9050
 Environment=TOR_SOCKS_HOST=opsechat-tor
 Environment=OPSECHAT_REQUIRE_TOR=1
 Environment=OPSECHAT_FORCE_TOR_EGRESS=1
+# The hidden-service target is interpreted by the Tor process inside
+# the opsechat-tor container, NOT by the app process. Both containers
+# share opsechat-network, so the Tor container can reach the app as
+# opsechat-app:5000. Without this, Tor would forward onion traffic to
+# 127.0.0.1:5000 inside its own container, where nothing is listening,
+# and clients see "site not reachable" or a name-resolution-style error.
+Environment=OPSECHAT_HS_TARGET_HOST=opsechat-app
+Environment=OPSECHAT_HS_TARGET_PORT=5000
 Environment=FLASK_DEBUG=0
 Environment=PYTHONUNBUFFERED=1
 

@@ -15,6 +15,7 @@ import sys
 import argparse
 from app_factory import create_app
 from tor_transport import (
+    get_hidden_service_target,
     resolve_tor_control_endpoint,
     tor_ingress_required,
 )
@@ -87,8 +88,9 @@ Security Features:
             with Controller.from_port(address=control_host, port=control_port) as controller:
                 controller.authenticate()
                 
+                hs_target = get_hidden_service_target(default_port=args.port)
                 result = controller.create_ephemeral_hidden_service(
-                    {80: args.port}, await_publication=True
+                    {80: hs_target}, await_publication=True
                 )
                 
                 if result.service_id:

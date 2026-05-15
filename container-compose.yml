@@ -65,6 +65,14 @@ services:
       TOR_SOCKS_HOST: tor
       OPSECHAT_REQUIRE_TOR: "1"
       OPSECHAT_FORCE_TOR_EGRESS: "1"
+      # The hidden-service target is interpreted by the Tor process. Tor
+      # lives in the `tor` container; the Flask app lives here in
+      # `opsechat`. Both share the `opsechat-network` bridge, so the Tor
+      # container can reach us as `opsechat:5000`. Without this, Tor
+      # would forward onion traffic to its own 127.0.0.1:5000, where
+      # nothing is listening, and clients see "site not reachable".
+      OPSECHAT_HS_TARGET_HOST: opsechat
+      OPSECHAT_HS_TARGET_PORT: "5000"
       FLASK_DEBUG: "0"
       PYTHONDONTWRITEBYTECODE: "1"
     volumes:

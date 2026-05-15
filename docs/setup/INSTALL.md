@@ -135,9 +135,16 @@ Full reference: [`QUADLETS.md`](QUADLETS.md) and
 | `TOR_SOCKS_PORT`                 | 9050    | Tor SOCKS port                                                                          |
 | `OPSECHAT_TOR_STARTUP_TIMEOUT`   | 30      | Seconds to wait for the Tor control port at boot                                        |
 | `OPSECHAT_TOR_RETRY_DELAY`       | 1       | Seconds between Tor control retries                                                     |
+| `OPSECHAT_HS_TARGET_HOST`        | unset   | Host the Tor process should forward onion traffic to. **Required when Tor and Flask run in separate containers** (compose, quadlets); the compose and quadlet files set it for you. |
+| `OPSECHAT_HS_TARGET_PORT`        | 5000    | Port portion of the hidden-service target, paired with `..._HOST`.                      |
+| `OPSECHAT_HS_TARGET`             | unset   | Raw `host:port` override; takes priority over the two above. Useful for one-off tests.  |
 
 The compose stack sets all of these for you and runs the app with
-`OPSECHAT_REQUIRE_TOR=1` and `OPSECHAT_FORCE_TOR_EGRESS=1`.
+`OPSECHAT_REQUIRE_TOR=1` and `OPSECHAT_FORCE_TOR_EGRESS=1`. If you fork
+the compose file and break the `OPSECHAT_HS_TARGET_HOST` env, Tor will
+publish the onion address but clients will get a "site unreachable" /
+name-resolution-style error in Tor Browser because Tor will try to
+forward to its own `127.0.0.1:5000`, where nothing is listening.
 
 ---
 

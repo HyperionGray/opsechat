@@ -80,6 +80,10 @@ def test_setup_tor_configuration_retries_transient_startup_errors(monkeypatch):
                 raise AuthenticationFailure("control_auth_cookie missing")
 
         def create_ephemeral_hidden_service(self, ports, await_publication):
+            # Default behaviour (no env override): the target side of the
+            # mapping is the integer port. This matches stem's "127.0.0.1
+            # inside the Tor process's namespace" semantics, which is the
+            # right thing for ad-hoc / native runs.
             assert ports == {80: 5000}
             assert await_publication is True
             return SimpleNamespace(service_id="example-service")
@@ -96,6 +100,9 @@ def test_setup_tor_configuration_retries_transient_startup_errors(monkeypatch):
     monkeypatch.setattr(runserver.time, "sleep", sleeps.append)
     monkeypatch.setenv("OPSECHAT_TOR_STARTUP_TIMEOUT", "5")
     monkeypatch.setenv("OPSECHAT_TOR_RETRY_DELAY", "0.2")
+    monkeypatch.delenv("OPSECHAT_HS_TARGET", raising=False)
+    monkeypatch.delenv("OPSECHAT_HS_TARGET_HOST", raising=False)
+    monkeypatch.delenv("OPSECHAT_HS_TARGET_PORT", raising=False)
 
     hostname, service_id = runserver.setup_tor_configuration()
 
@@ -103,6 +110,49 @@ def test_setup_tor_configuration_retries_transient_startup_errors(monkeypatch):
     assert service_id == "example-service"
     assert attempts["count"] == 3
     assert sleeps == [0.2, 0.2]
+
+
+def test_setup_tor_configuration_uses_hs_target_host_for_compose(monkeypatch):
+    """Regression: in the compose / quadlet stack, Tor and Flask are in
+    different containers. The hidden-service target value must therefore
+    be a ``host:port`` string the Tor container can resolve, not bare
+    ``127.0.0.1``. This test pins that behaviour.
+    """
+    captured_ports = {}
+
+    class FakeController:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def authenticate(self):
+            return None
+
+        def create_ephemeral_hidden_service(self, ports, await_publication):
+            captured_ports.update(ports)
+            return SimpleNamespace(service_id="compose-service")
+
+    class FakeControllerFactory:
+        @staticmethod
+        def from_port(address, port):
+            return FakeController()
+
+    monkeypatch.setattr(runserver, "Controller", FakeControllerFactory)
+    monkeypatch.setattr(runserver, "resolve_tor_control_endpoint", lambda: ("127.0.0.1", 9051))
+    monkeypatch.setenv("OPSECHAT_HS_TARGET_HOST", "opsechat")
+    monkeypatch.setenv("OPSECHAT_HS_TARGET_PORT", "5000")
+
+    hostname, service_id = runserver.setup_tor_configuration()
+
+    assert hostname == "compose-service.onion"
+    assert service_id == "compose-service"
+    assert captured_ports == {80: "opsechat:5000"}, (
+        "Hidden-service target must be a host:port string when "
+        "OPSECHAT_HS_TARGET_HOST is set, otherwise the Tor container "
+        "forwards onion traffic to its own 127.0.0.1 and the app is unreachable."
+    )
 
 
 def test_setup_tor_configuration_requires_service_id_when_tor_required(monkeypatch):
