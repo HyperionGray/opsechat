@@ -7,10 +7,13 @@
     <link rel="stylesheet" href="/static/simple-chat-error.css">
 </head>
 <body>
-    <div class="error-container">
-        <h1>Error</h1>
-        <p>{{ error }}</p>
-        <p><a href="/chat">Create a new chat room</a></p>
-    </div>
+    <main class="layout error-layout" role="main">
+        <section class="panel error-container">
+            <p class="eyebrow">OpSecChat</p>
+            <h1>Error</h1>
+            <p>{{ error }}</p>
+            <a class="button" href="/chat">Create a new chat room</a>
+        </section>
+    </main>
 </body>
 </html>

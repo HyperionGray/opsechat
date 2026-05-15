@@ -1,133 +1,20 @@
-body {
-  margin: 0;
-  background: #04070a;
-  color: #d7fbe8;
-  font-family: "Courier New", Courier, monospace;
-}
+/* Operator console + dashboard styling.
+ *
+ * Imports the shared base palette / layout. Anything specific to the
+ * operator console pages goes here.
+ */
+@import url("opsechat-base.css");
 
-a {
-  color: #7cf7c6;
-}
-
-code {
-  color: #9fd7ff;
-  word-break: break-all;
-}
-
-.layout {
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 32px 20px 56px;
-}
-
-.hero {
-  margin-bottom: 24px;
-}
-
-.eyebrow {
-  margin: 0 0 8px;
-  color: #7cf7c6;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
-h1,
-h2,
-h3 {
-  color: #f5fff9;
-}
-
-.lede {
-  max-width: 760px;
-  line-height: 1.5;
-  color: #bdd8cb;
-}
-
-.grid {
-  display: grid;
-  gap: 20px;
-  margin-bottom: 20px;
-}
-
-.two-up {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-}
-
-.panel,
-.card {
-  border: 1px solid #1e5845;
-  background: #09120f;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 0 0 1px rgba(124, 247, 198, 0.03);
-}
-
-.facts,
-.constraints {
-  display: grid;
-  gap: 12px;
-}
-
-.facts div,
-.constraints div {
-  border-top: 1px solid rgba(124, 247, 198, 0.15);
-  padding-top: 12px;
-}
-
-dt {
-  color: #84b39f;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-dd {
-  margin: 4px 0 0;
-}
-
-.cards {
-  display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-}
-
-.card-header {
+/* The operator console renders a service-cards grid; ensure it sits well
+ * inside the responsive `.layout` from the base stylesheet.
+ */
+.cards .card {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 14px;
 }
 
-.button {
-  display: inline-block;
-  padding: 8px 12px;
-  border: 1px solid #2f8d6f;
-  border-radius: 999px;
-  text-decoration: none;
-}
-
-.button.disabled {
-  border-color: #39564b;
-  color: #6e897e;
-}
-
-.endpoint-list,
-.bullets {
-  padding-left: 18px;
-  line-height: 1.55;
-}
-
-.numbered {
-  padding-left: 24px;
-}
-
-@media (max-width: 720px) {
-  .layout {
-    padding: 24px 14px 40px;
-  }
-
-  .card-header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
+.cards .card .card-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
 }

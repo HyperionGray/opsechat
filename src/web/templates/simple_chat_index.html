@@ -7,64 +7,90 @@
     <link rel="stylesheet" href="/static/simple-chat-index.css">
 </head>
 <body>
-    <div class="container" role="main">
-        <h1>OpSecChat</h1>
-        
-        <div class="info-box" role="region" aria-label="Security features">
-            <h2>Security Features</h2>
-            <ul>
-                <li>Messages disappear after 3 minutes</li>
-                <li>In-memory only - no disk storage</li>
-                <li>Memory overwritten on message deletion</li>
-                <li>Closed-roster OpenPGP room bootstrap</li>
-                <li>Signed and encrypted room messages to the full roster</li>
-                <li>Local verification states for known, changed, and verified keys</li>
-                <li>Text-only - no media or file sharing</li>
-                <li>Tor hidden service ready</li>
-            </ul>
-        </div>
-        
-        <div class="info-box" role="region" aria-label="How to use">
-            <h2>How It Works</h2>
-            <ul>
-                <li>Click "Create New Chat Room" below</li>
-                <li>Generate or import your local OpenPGP identity</li>
-                <li>Add every planned member and verify fingerprints out of band</li>
-                <li>Lock epoch 1 before the first room message</li>
-                <li>Share the room URL only after the roster is locked</li>
-            </ul>
-        </div>
-        
-        <div class="create-room">
-            <button id="createRoomBtn" aria-label="Create a new secure chat room">Create New Chat Room</button>
-            <div id="status" class="status" role="status" aria-live="polite"></div>
-        </div>
+    <main class="layout" role="main">
+        <header class="hero">
+            <p class="eyebrow">OpSecChat</p>
+            <h1>Secure Chat Rooms</h1>
+            <p class="lede">
+                Closed-roster OpenPGP rooms over Tor hidden services. Every
+                message is signed by the sender and encrypted to the full
+                roster. Messages auto-burn after three minutes; nothing
+                touches disk.
+            </p>
+        </header>
 
-        <div class="info-box" role="navigation" aria-label="Product navigation">
-            <h2>Navigation</h2>
-            <ul>
-                <li><a href="/dashboard">Open Dashboard</a></li>
-                <li><a href="/keys">Open Key Management</a></li>
-            </ul>
-        </div>
-        
-        <div class="info-box" role="region" aria-label="Security reminder">
-                <h2 class="warning">Security Reminder</h2>
-            <ul>
-                <li>Only share room URLs with trusted contacts</li>
-                <li>This alpha release keeps room rosters immutable after bootstrap</li>
-                <li>Use Tor Browser for maximum anonymity</li>
-                <li>Rooms expire after 1 hour of inactivity</li>
-                <li>Do not share sensitive credentials</li>
-                <li>This is for operational security communications only</li>
-            </ul>
-        </div>
-    </div>
-    
-    <div class="footer">
-        OpSecChat {{ version|default('0.8.0-alpha') }} | <a href="https://github.com/HyperionGray/opsechat">GitHub</a> | MIT License
-    </div>
-    
+        <section class="grid two-up">
+            <article class="panel" role="region" aria-label="Security features">
+                <h2>Security features</h2>
+                <ul class="bullets">
+                    <li>Messages disappear after three minutes</li>
+                    <li>In-memory only -- no disk storage</li>
+                    <li>Memory overwritten on message deletion</li>
+                    <li>Closed-roster OpenPGP room bootstrap</li>
+                    <li>Signed and encrypted to the full roster</li>
+                    <li>Local trust states for known, changed, and verified keys</li>
+                    <li>Text-only -- no media or file sharing</li>
+                    <li>Tor hidden service ready</li>
+                </ul>
+            </article>
+
+            <article class="panel" role="region" aria-label="How to use">
+                <h2>How it works</h2>
+                <ol class="bullets numbered">
+                    <li>Click <strong>Create New Chat Room</strong> below</li>
+                    <li>Generate or import your local OpenPGP identity</li>
+                    <li>Add every planned member and verify fingerprints out of band</li>
+                    <li>Lock epoch 1 before the first room message</li>
+                    <li>Share the room URL only after the roster is locked</li>
+                </ol>
+            </article>
+        </section>
+
+        <section class="panel">
+            <h2>Create a room</h2>
+            <p class="lede">
+                Each room is a fresh, unguessable id. The roster becomes
+                immutable the moment you lock epoch 1, so plan the
+                participant list first.
+            </p>
+            <div class="create-room">
+                <button id="createRoomBtn" type="button" aria-label="Create a new secure chat room">
+                    Create New Chat Room
+                </button>
+                <div id="status" class="status" role="status" aria-live="polite"></div>
+            </div>
+        </section>
+
+        <section class="grid two-up">
+            <article class="panel" role="navigation" aria-label="Product navigation">
+                <h2>Navigation</h2>
+                <ul class="bullets">
+                    <li><a href="/">Operator Console</a></li>
+                    <li><a href="/dashboard">Open Dashboard</a></li>
+                    <li><a href="/keys">Open Key Management</a></li>
+                </ul>
+            </article>
+
+            <article class="panel" role="region" aria-label="Security reminder">
+                <h2 class="warning">Security reminder</h2>
+                <ul class="bullets">
+                    <li>Only share room URLs with trusted contacts</li>
+                    <li>Alpha rosters are immutable after bootstrap</li>
+                    <li>Use Tor Browser for maximum anonymity</li>
+                    <li>Rooms expire after one hour of inactivity</li>
+                    <li>Do not share sensitive credentials</li>
+                    <li>This is for operational security communications only</li>
+                </ul>
+            </article>
+        </section>
+    </main>
+
+    <footer class="footer">
+        OpSecChat {{ version|default('0.8.0-alpha') }}
+        | <a href="https://github.com/HyperionGray/opsechat">GitHub</a>
+        | MIT License
+    </footer>
+
     <script src="/static/chat-index.js"></script>
 </body>
 </html>

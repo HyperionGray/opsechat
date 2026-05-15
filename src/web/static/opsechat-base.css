@@ -1,0 +1,302 @@
+/* OpSecChat shared base stylesheet.
+ *
+ * Single source of truth for the dark, monospace, terminal-ish look that the
+ * operator console (`/`, `/console`, `/dashboard`) established. Every alpha
+ * page loads this stylesheet first, then layers a tiny page-specific
+ * stylesheet on top for things only that page needs.
+ */
+
+:root {
+  --bg-deep: #04070a;
+  --bg-panel: #09120f;
+  --bg-panel-strong: #0b180f;
+  --line: #1e5845;
+  --line-soft: rgba(124, 247, 198, 0.15);
+  --line-strong: rgba(124, 247, 198, 0.34);
+  --text: #d7fbe8;
+  --text-strong: #f5fff9;
+  --muted: #84b39f;
+  --accent: #7cf7c6;
+  --accent-strong: #9cffd8;
+  --accent-ink: #04140d;
+  --info: #9fd7ff;
+  --warning: #f0d76b;
+  --danger: #ff7d7d;
+  --shadow-soft: 0 0 0 1px rgba(124, 247, 198, 0.03);
+  --shadow-card: 0 18px 40px rgba(0, 0, 0, 0.35);
+  --radius: 12px;
+  --radius-lg: 16px;
+  --font: "Courier New", "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--bg-deep);
+  color: var(--text);
+  font-family: var(--font);
+  line-height: 1.55;
+}
+
+a {
+  color: var(--accent);
+}
+
+a:hover {
+  color: var(--accent-strong);
+}
+
+code,
+textarea,
+input,
+button,
+select {
+  font-family: inherit;
+}
+
+code {
+  color: var(--info);
+  word-break: break-all;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--text-strong);
+  margin: 0 0 12px;
+  letter-spacing: 0.04em;
+}
+
+p {
+  margin: 0 0 12px;
+  line-height: 1.55;
+}
+
+ul,
+ol {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  line-height: 1.55;
+}
+
+dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+dd {
+  margin: 4px 0 0;
+}
+
+/* Standard page layout */
+
+.layout {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 32px 20px 56px;
+}
+
+.hero {
+  margin-bottom: 24px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.85rem;
+}
+
+.lede {
+  max-width: 760px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.grid {
+  display: grid;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.two-up {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.cards {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.panel,
+.card {
+  border: 1px solid var(--line);
+  background: var(--bg-panel);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow-soft);
+}
+
+.panel + .panel,
+.card + .card {
+  margin-top: 16px;
+}
+
+.facts,
+.constraints {
+  display: grid;
+  gap: 12px;
+}
+
+.facts > div,
+.constraints > div {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 12px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.endpoint-list,
+.bullets {
+  padding-left: 18px;
+  line-height: 1.55;
+}
+
+.numbered {
+  padding-left: 24px;
+}
+
+.warning {
+  color: var(--warning);
+  font-weight: 700;
+}
+
+/* Form controls */
+
+input,
+textarea,
+select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-deep);
+  color: var(--text);
+  padding: 10px 12px;
+  resize: vertical;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(132, 179, 159, 0.6);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(124, 247, 198, 0.12);
+}
+
+textarea {
+  min-height: 110px;
+}
+
+/* Buttons.
+ *
+ * `.button` is the link-shaped pill from the operator console.
+ * Bare <button> elements get the same look so existing handlers keep working.
+ */
+
+button,
+.button {
+  display: inline-block;
+  padding: 8px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  transition: background 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+button:hover:not(:disabled),
+.button:hover {
+  background: rgba(124, 247, 198, 0.12);
+  color: var(--accent-strong);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+button:disabled,
+.button.disabled {
+  border-color: rgba(132, 179, 159, 0.35);
+  color: rgba(132, 179, 159, 0.7);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.button-row > * {
+  flex: 1 1 150px;
+}
+
+/* Footer used on the chat-index style pages */
+
+.footer {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 16px 20px 32px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+/* Compact responsive tweaks. */
+@media (max-width: 720px) {
+  .layout {
+    padding: 24px 14px 40px;
+  }
+
+  .card-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .button-row > * {
+    flex-basis: 100%;
+  }
+}

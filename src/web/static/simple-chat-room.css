@@ -1,19 +1,28 @@
+/*
+ * Room shell.
+ *
+ * Palette mirrors `opsechat-base.css` so this page reads as part of the
+ * same product as `/`, `/dashboard`, `/chat`, and `/keys`. We do not
+ * @import the base here because the room layout uses its own grid
+ * structure (sidebar + chat column) that the base's `.layout` would
+ * fight with.
+ */
 :root {
-    --bg: #020603;
-    --panel: #07110a;
+    --bg: #04070a;
+    --panel: #09120f;
     --panel-alt: #0b180f;
-    --line: #1a5c26;
+    --line: #1e5845;
     --line-strong: #2c8f3e;
-    --text: #d7f8dc;
-    --muted: #7bb889;
-    --accent: #88ff7a;
-    --accent-ink: #041007;
+    --text: #d7fbe8;
+    --muted: #84b39f;
+    --accent: #7cf7c6;
+    --accent-ink: #04140d;
     --warning: #f0d76b;
     --danger: #ff7d7d;
-    --info: #83d8ff;
+    --info: #9fd7ff;
     --shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
-    --radius: 18px;
-    --font: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    --radius: 12px;
+    --font: "Courier New", "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 }
 
 * {
@@ -27,10 +36,7 @@ body {
 }
 
 body {
-    background:
-        radial-gradient(circle at top right, rgba(84, 255, 130, 0.08), transparent 28%),
-        radial-gradient(circle at bottom left, rgba(116, 189, 255, 0.08), transparent 24%),
-        linear-gradient(180deg, #030804 0%, #010301 100%);
+    background: var(--bg);
     color: var(--text);
     font-family: var(--font);
 }
@@ -184,41 +190,54 @@ textarea {
 }
 
 button {
-    border: none;
-    border-radius: 12px;
-    padding: 12px 14px;
-    background: linear-gradient(180deg, #9cff87, #66e666);
-    color: var(--accent-ink);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    padding: 10px 18px;
+    background: transparent;
+    color: var(--accent);
     cursor: pointer;
     font-weight: 700;
     letter-spacing: 0.03em;
-    transition: transform 120ms ease, filter 120ms ease, opacity 120ms ease;
+    transition: background 120ms ease, color 120ms ease, transform 120ms ease, opacity 120ms ease;
 }
 
 button:hover:not(:disabled) {
-    filter: brightness(1.06);
+    background: rgba(124, 247, 198, 0.12);
+    color: #9cffd8;
 }
 
 button:active:not(:disabled) {
-    transform: translateY(1px) scale(0.995);
+    transform: translateY(1px);
 }
 
 button:disabled {
     cursor: not-allowed;
-    opacity: 0.45;
+    opacity: 0.55;
+    border-color: rgba(132, 179, 159, 0.35);
+    color: rgba(132, 179, 159, 0.7);
 }
 
 .secondary-button,
 .roster-action.secondary {
     background: transparent;
     color: var(--muted);
-    border: 1px solid rgba(136, 255, 122, 0.26);
+    border: 1px solid rgba(132, 179, 159, 0.45);
+}
+
+.secondary-button:hover:not(:disabled),
+.roster-action.secondary:hover:not(:disabled) {
+    background: rgba(132, 179, 159, 0.1);
+    color: var(--text);
 }
 
 .danger-button {
-    background: rgba(255, 125, 125, 0.14);
+    background: transparent;
     color: var(--danger);
-    border: 1px solid rgba(255, 125, 125, 0.35);
+    border: 1px solid rgba(255, 125, 125, 0.55);
+}
+
+.danger-button:hover:not(:disabled) {
+    background: rgba(255, 125, 125, 0.1);
 }
 
 .button-row {

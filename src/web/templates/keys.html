@@ -7,38 +7,51 @@
     <link rel="stylesheet" href="/static/simple-chat-index.css">
 </head>
 <body>
-    <div class="container" role="main">
-        <h1>Key Management</h1>
+    <main class="layout" role="main">
+        <header class="hero">
+            <p class="eyebrow">OpSecChat</p>
+            <h1>Key Management</h1>
+            <p class="lede">
+                The real key workflow lives inside each chat room. This page
+                is a stable shell for upcoming standalone key tooling.
+            </p>
+        </header>
 
-        <div class="info-box" role="region" aria-label="Key management overview">
-            <h2>Current State</h2>
-            <ul>
-                <li>This page is a safe shell for upcoming key workflows.</li>
-                <li>Keys are generated or imported locally in the browser during chat room setup.</li>
-                <li>Servers do not retain plaintext room messages on disk.</li>
-            </ul>
-        </div>
+        <section class="grid two-up">
+            <article class="panel" role="region" aria-label="Current state">
+                <h2>Current state</h2>
+                <ul class="bullets">
+                    <li>This page is a safe shell for upcoming key workflows.</li>
+                    <li>Keys are generated or imported locally in the browser during chat-room setup.</li>
+                    <li>The server never sees your private key.</li>
+                    <li>The server never retains plaintext room messages on disk.</li>
+                </ul>
+            </article>
 
-        <div class="info-box" role="region" aria-label="Next key management actions">
-            <h2>Planned Next Actions</h2>
-            <ul>
-                <li>Add key generation helper flow</li>
-                <li>Add key import/export user interface</li>
-                <li>Add backup and verification guidance</li>
-            </ul>
-        </div>
+            <article class="panel" role="region" aria-label="Planned next actions">
+                <h2>Planned next actions</h2>
+                <ul class="bullets">
+                    <li>Standalone key generation helper</li>
+                    <li>Key import / export user interface</li>
+                    <li>Backup and verification guidance</li>
+                </ul>
+            </article>
+        </section>
 
-        <div class="info-box" role="navigation" aria-label="Navigation links">
+        <section class="panel" role="navigation" aria-label="Navigation links">
             <h2>Navigation</h2>
-            <ul>
+            <ul class="bullets">
+                <li><a href="/">Operator Console</a></li>
                 <li><a href="/dashboard">Back to Dashboard</a></li>
                 <li><a href="/chat">Go to Chat</a></li>
             </ul>
-        </div>
-    </div>
+        </section>
+    </main>
 
-    <div class="footer">
-        OpSecChat {{ version|default('0.8.0-alpha') }} | <a href="https://github.com/HyperionGray/opsechat">GitHub</a> | MIT License
-    </div>
+    <footer class="footer">
+        OpSecChat {{ version|default('0.8.0-alpha') }}
+        | <a href="https://github.com/HyperionGray/opsechat">GitHub</a>
+        | MIT License
+    </footer>
 </body>
 </html>

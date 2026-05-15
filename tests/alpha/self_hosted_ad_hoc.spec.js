@@ -30,7 +30,10 @@ test.describe('Self-hosted ad-hoc persona', () => {
 
   test('chat index renders with the create-room button', async ({ page }) => {
     await page.goto('/chat');
-    await expect(page.locator('h1')).toContainText('OpSecChat');
+    // Hero pattern from the operator console: an eyebrow with the brand,
+    // then the section H1.
+    await expect(page.locator('.eyebrow')).toContainText('OpSecChat');
+    await expect(page.locator('h1')).toContainText('Secure Chat Rooms');
     await expect(page.locator('#createRoomBtn')).toBeVisible();
     // No emoji glyphs should be on the alpha-shipping landing page.
     const html = await page.content();
