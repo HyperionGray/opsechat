@@ -1,129 +1,159 @@
-# Installation
+# OpSecChat Installation Reference
 
-There is no supported `install.sh` in this checkout.
+For the user-friendly walkthrough, see [`QUICKSTART.md`](../../QUICKSTART.md).
+This file is the dry, complete reference: every supported install path,
+every relevant environment variable, every helper script.
 
-Use one of these paths instead:
+There is no `install.sh`. The legacy native installer was retired.
 
-1. project-local virtualenv for local development and manual runtime checks
-2. compose stack for a containerized Tor setup
-3. quadlets for systemd-managed Podman deployment
+---
 
-## Recommended: Project-Local Virtualenv
-
-This is the least confusing path when picking the repo back up.
+## 1. Project-local virtualenv (recommended for development)
 
 ```bash
-cd /path/to/opsechat
-
+git clone https://github.com/HyperionGray/opsechat.git
+cd opsechat
 python3 -m venv .venv
 source .venv/bin/activate
-
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt -r requirements-dev.txt
 ```
 
-Optional frontend test dependencies:
+Optional Node deps for Playwright:
 
 ```bash
 npm ci
+npx playwright install
 ```
-
-Runtime note:
-
-`bin/*.py` are thin launchers for normal operator workflows; for example,
-`bin/chat-room.py` launches the app while the core modules live in
-`src/python/`.
-For normal operator use, prefer the `bin/` launchers; use direct
-`src/python/` entrypoints only for testing or advanced runtime checks.
 
 Sanity checks:
 
 ```bash
 python bin/chat-room.py --help
-python src/python/runserver_refactored.py test
+python bin/runserver.py test          # binds 127.0.0.1:5001
 curl http://127.0.0.1:5001/health
 ```
 
-Current local URLs in test mode:
+---
 
-- `http://127.0.0.1:5001/`
-- `http://127.0.0.1:5001/chat`
-- `http://127.0.0.1:5001/health`
+## 2. Self-hosted ad-hoc native runtime
 
-## Simple Native Runtime
-
-For the normal local web flow:
+Local-only:
 
 ```bash
 source .venv/bin/activate
 python bin/chat-room.py
+# binds 127.0.0.1:5000
 ```
 
-That starts the app on `127.0.0.1:5000` by default.
-
-## Tor Runtime
-
-Most operators should use the `bin/chat-room.py --tor` launcher. The
-lower-level `src/python/runserver_refactored.py` runtime is for advanced
-strict-Tor deployment checks and also expects a reachable Tor control port.
-
-Example local Tor daemon:
+Tor hidden service (requires a local Tor with a control port):
 
 ```bash
+# In a separate terminal:
 tor --ControlPort 9051 --CookieAuthentication 1
 ```
-
-Then start OpSecChat:
 
 ```bash
 source .venv/bin/activate
 python bin/chat-room.py --tor
 ```
 
-If you need the advanced strict Tor-only ingress/egress runtime:
+The CLI prints the operator console URL and the chat URL on the new
+ephemeral hidden service. `Ctrl+C` removes the hidden service and
+exits.
+
+---
+
+## 3. Compose stack (recommended for hosted deployment)
 
 ```bash
-export OPSECHAT_REQUIRE_TOR=1
-export OPSECHAT_FORCE_TOR_EGRESS=1
-export TOR_CONTROL_HOST=127.0.0.1
-export TOR_CONTROL_PORT=9051
-export TOR_SOCKS_HOST=127.0.0.1
-export TOR_SOCKS_PORT=9050
-python src/python/runserver_refactored.py
-```
-
-## Container Install
-
-Use this when you want Tor and the app isolated in containers.
-
-```bash
+git clone https://github.com/HyperionGray/opsechat.git
+cd opsechat
 ./compose-up.sh
 ```
 
-Current access points:
+The script auto-detects `podman compose`, `docker compose` (plugin),
+or `podman-compose`. It brings up:
 
-- `http://127.0.0.1:8080/`
-- `http://127.0.0.1:8080/chat`
+- `opsechat-tor` -- Tor daemon
+- `opsechat-app` -- Flask app
+- `opsechat-admin-proxy` -- Caddy on `127.0.0.1:8080` for the operator
 
-Current helper commands:
+Verify:
 
 ```bash
-./verify-setup.sh
-./compose-down.sh
-docker compose -f container-compose.yml logs opsechat
+curl http://127.0.0.1:8080/health
 ```
 
-The helper scripts auto-detect `podman-compose`, `docker-compose`, or the
-`docker compose` plugin.
+Tear down:
 
-## Quadlets
+```bash
+./compose-down.sh
+```
 
-For systemd-managed Podman deployment, use:
+End-to-end test:
 
-- [../../quadlets/README.md](../../quadlets/README.md)
-- [QUADLETS.md](QUADLETS.md)
+```bash
+./scripts/test-compose-e2e.sh
+```
 
-## Extended Services
+For container details (image build, networks, volumes), see
+[`DOCKER.md`](DOCKER.md).
 
-The default runtime is chat-focused. Mail features are disabled unless you
-enable them explicitly.
+---
+
+## 4. Quadlets (systemd-managed Podman)
+
+```bash
+git clone https://github.com/HyperionGray/opsechat.git
+cd opsechat
+podman build -t localhost/opsechat:latest .
+./install-quadlets.sh
+systemctl --user start opsechat-app
+```
+
+Find the onion address:
+
+```bash
+journalctl --user -u opsechat-app -f | grep -i onion
+```
+
+Full reference: [`QUADLETS.md`](QUADLETS.md) and
+[`../../quadlets/README.md`](../../quadlets/README.md).
+
+---
+
+## 5. Tor egress / ingress controls
+
+| Variable                         | Default | Effect                                                                                  |
+|----------------------------------|---------|-----------------------------------------------------------------------------------------|
+| `OPSECHAT_REQUIRE_TOR`           | off     | Refuse to start without a published hidden service                                      |
+| `OPSECHAT_FORCE_TOR_EGRESS`      | off     | Route outbound HTTP/SMTP/IMAP through the Tor SOCKS proxy                               |
+| `TOR_CONTROL_HOST`               | 127.0.0.1 | Host of the Tor control port                                                          |
+| `TOR_CONTROL_PORT`               | 9051    | Tor control port                                                                        |
+| `TOR_SOCKS_HOST`                 | inherit | Tor SOCKS host (defaults to `TOR_CONTROL_HOST`)                                         |
+| `TOR_SOCKS_PORT`                 | 9050    | Tor SOCKS port                                                                          |
+| `OPSECHAT_TOR_STARTUP_TIMEOUT`   | 30      | Seconds to wait for the Tor control port at boot                                        |
+| `OPSECHAT_TOR_RETRY_DELAY`       | 1       | Seconds between Tor control retries                                                     |
+
+The compose stack sets all of these for you and runs the app with
+`OPSECHAT_REQUIRE_TOR=1` and `OPSECHAT_FORCE_TOR_EGRESS=1`.
+
+---
+
+## 6. Extended (out-of-alpha) services
+
+Off by default. See [`PROFILES.md`](PROFILES.md) for the full flag table
+and [`../ALPHA_SCOPE.md`](../ALPHA_SCOPE.md) for what is in vs. out of
+alpha. For alpha, leave these flags unset.
+
+---
+
+## 7. Notes
+
+- Prefer `.venv` inside the repo over a shared home-directory venv.
+- The maintained alpha web paths are `/`, `/chat`, `/health`,
+  `/version`, `/chat/stats`, `/console`, `/console/api`, and
+  `/dashboard`.
+- The supported entrypoints are `bin/runserver.py` (production) and
+  `bin/chat-room.py` (CLI / ad-hoc). There is no `runserver_refactored.py`.

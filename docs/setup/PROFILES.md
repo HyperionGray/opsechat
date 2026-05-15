@@ -1,148 +1,119 @@
-# Installation
+# OpSecChat Deployment Profiles
 
-There is no supported `install.sh` in this checkout.
+OpSecChat ships with one alpha profile and a set of off-by-default
+"extended" route groups for features that are out of alpha scope (see
+[`../ALPHA_SCOPE.md`](../ALPHA_SCOPE.md)).
 
-Use one of these paths instead:
+This page is the flag reference. For the user-friendly setup walkthrough,
+see [`../../QUICKSTART.md`](../../QUICKSTART.md). For the dry install
+matrix, see [`INSTALL.md`](INSTALL.md).
 
-1. project-local virtualenv for local development and manual runtime checks
-2. compose stack for a containerized Tor setup
-3. quadlets for systemd-managed Podman deployment
+---
 
-## Recommended: Project-Local Virtualenv
+## 1. Default (alpha) profile
 
-This is the least confusing path when picking the repo back up.
+No flags set. The app exposes:
 
-```bash
-cd /path/to/opsechat
+- Closed-roster chat (`/chat`, `/chat/room/...`, `/chat/dm/...`)
+- Operator console (`/`, `/console`, `/console/api`, `/dashboard`)
+- Operational endpoints (`/health`, `/version`, `/chat/stats`)
+- Key-management shell (`/keys`)
 
-python3 -m venv .venv
-source .venv/bin/activate
+Recommended for every alpha deployment.
 
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt -r requirements-dev.txt
-```
+---
 
-Optional frontend test dependencies:
+## 2. Extended profile flags
 
-```bash
-npm ci
-```
+Set per-request via environment variables before starting the app.
+Leaving any of these unset keeps the corresponding routes unregistered.
 
-Sanity checks:
+| Variable                              | Effect when set to `1`                                                          |
+|---------------------------------------|---------------------------------------------------------------------------------|
+| `OPSECHAT_ENABLE_EXTENDED_SERVICES`   | Implicit on for `LEGACY_CHAT`, `EMAIL_STACK`, `HTTP_MAIL` (see below)           |
+| `OPSECHAT_ENABLE_LEGACY_CHAT`         | Registers the legacy `/<secret-path>/...` drop-chat (`chat_routes.py`)          |
+| `OPSECHAT_ENABLE_EMAIL_STACK`         | Registers the SMTP/IMAP / burner / domain-rotation routes (`email_routes.py`)   |
+| `OPSECHAT_ENABLE_HTTP_MAIL`           | Registers the HTTP-mail routes (`http_mail_routes.py`)                          |
+| `OPSECHAT_ENABLE_REVIEWS`             | Registers the product-review routes (`review_routes.py`)                        |
 
-```bash
-python chat-room.py --help
-python runserver_refactored.py test
-curl http://127.0.0.1:5001/health
-```
+All five default to off. They are out of alpha scope. Treat them as
+beta-track features and do not enable them in an alpha deployment.
 
-Current local URLs in test mode:
-
-- `http://127.0.0.1:5001/`
-- `http://127.0.0.1:5001/chat`
-- `http://127.0.0.1:5001/health`
-
-## Simple Native Runtime
-
-For the normal local web flow:
+Example (developer-only, for poking at the email stack):
 
 ```bash
-source .venv/bin/activate
-python chat-room.py
+export OPSECHAT_ENABLE_EXTENDED_SERVICES=1
+python bin/runserver.py test
 ```
 
-That starts the app on `127.0.0.1:5000` by default.
+---
 
-## Tor Runtime
+## 3. Tor enforcement flags
 
-`chat-room.py --tor` and `runserver_refactored.py` both expect a reachable Tor
-control port.
+| Variable                       | Effect when set                                                                            |
+|--------------------------------|--------------------------------------------------------------------------------------------|
+| `OPSECHAT_REQUIRE_TOR`         | Refuse to start unless a hidden service can be published                                   |
+| `OPSECHAT_FORCE_TOR_EGRESS`    | Route outbound HTTP / SMTP / IMAP through the Tor SOCKS proxy                              |
 
-Example local Tor daemon:
+The compose stack sets both flags by default. The ad-hoc CLI honours
+`OPSECHAT_REQUIRE_TOR=1` by automatically promoting itself to `--tor`
+mode if you forgot to pass the flag.
 
-```bash
-tor --ControlPort 9051 --CookieAuthentication 1
-```
+---
 
-Then start OpSecChat:
+## 4. Retention windows
 
-```bash
-source .venv/bin/activate
-python chat-room.py --tor
-```
+| Variable                  | Default | Effect                                          |
+|---------------------------|---------|-------------------------------------------------|
+| `MESSAGE_EXPIRY_SECONDS`  | 180     | Per-message TTL                                 |
+| `DM_EXPIRY_SECONDS`       | 60      | One-shot DM TTL                                 |
+| `ROOM_INACTIVE_SECONDS`   | 3600    | Room TTL after last activity                    |
 
-If you need strict Tor-only ingress/egress in the refactored runtime:
+Lowering these is safe; raising them widens the in-memory data window.
+Per-room overrides are not yet supported (alpha gap; see
+[`../ALPHA_SCOPE.md`](../ALPHA_SCOPE.md)).
 
-```bash
-export OPSECHAT_REQUIRE_TOR=1
-export OPSECHAT_FORCE_TOR_EGRESS=1
-export TOR_CONTROL_HOST=127.0.0.1
-export TOR_CONTROL_PORT=9051
-export TOR_SOCKS_HOST=127.0.0.1
-export TOR_SOCKS_PORT=9050
-python runserver_refactored.py
-```
+---
 
-## Container Install
+## 5. Other operational flags
 
-Use this when you want a dedicated Tor container for the app runtime. The
-compose stack also exposes a localhost-only admin proxy for operator access,
-and that proxy stays off the Tor network.
+| Variable                          | Default | Effect                                                            |
+|-----------------------------------|---------|-------------------------------------------------------------------|
+| `OPSECHAT_SECRET_KEY`             | random  | Flask session secret. Set to a stable value if you need stable session cookies across restarts. |
+| `OPSECHAT_TOR_STARTUP_TIMEOUT`    | 30      | Seconds to wait for the Tor control port at boot                  |
+| `OPSECHAT_TOR_RETRY_DELAY`        | 1       | Seconds between Tor control retries                               |
+| `OPSECHAT_LOG_FILE`               | unset   | If set, structured logs are also written to this file path        |
+
+---
+
+## 6. Worked examples
+
+### Pure alpha hosted operator (compose)
 
 ```bash
 ./compose-up.sh
 ```
 
-Current access points:
+(All Tor enforcement flags are baked into `container-compose.yml`.)
 
-- `http://127.0.0.1:8080/`
-- `http://127.0.0.1:8080/chat`
-
-Current container topology:
-
-- `tor` and `opsechat` share the backend `opsechat-network`
-- `admin-proxy` and `opsechat` share the frontend `admin-network`
-- `admin-proxy` does not join the Tor backend network
-
-Current helper commands:
+### Pure alpha self-hosted ad-hoc
 
 ```bash
-./verify-setup.sh
-./compose-down.sh
-docker compose -f container-compose.yml logs opsechat
+python bin/chat-room.py --tor
 ```
 
-The helper scripts auto-detect `podman-compose`, `docker-compose`, or the
-`docker compose` plugin.
-
-## Quadlets
-
-For systemd-managed Podman deployment, use:
-
-- [quadlets/README.md](quadlets/README.md)
-- [docs/setup/QUADLETS.md](docs/setup/QUADLETS.md)
-
-## Extended Services
-
-The default runtime is chat-focused. Mail features are disabled unless you
-enable them explicitly.
+### Developer test mode (no Tor, all alpha endpoints, port 5001)
 
 ```bash
-export OPSECHAT_ENABLE_EXTENDED_SERVICES=1
-python runserver_refactored.py test
+python bin/runserver.py test
 ```
 
-Or enable only selected subsystems:
+### Out-of-alpha exploration of the HTTP mail stack only
 
 ```bash
-export OPSECHAT_ENABLE_EMAIL_STACK=1
 export OPSECHAT_ENABLE_HTTP_MAIL=1
-python runserver_refactored.py test
+python bin/runserver.py test
 ```
 
-## Notes
-
-- Prefer `.venv` inside the repo over a shared home-directory virtualenv.
-- The maintained web paths are `/`, `/chat`, and `/health`.
-- `runserver.py` still exists for legacy compatibility, but the current docs
-  and container runtime target `runserver_refactored.py`.
+This is for development of beta features. Do not ship a deployment with
+extended flags set unless you know what you are signing up for.

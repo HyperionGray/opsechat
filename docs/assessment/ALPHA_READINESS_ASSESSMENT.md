@@ -1,9 +1,15 @@
 # Alpha Release Readiness Assessment
 
+> **Status note:** This assessment reflects the pre-fence view of alpha and
+> is preserved for historical context. The authoritative alpha scope is
+> [`docs/ALPHA_SCOPE.md`](../ALPHA_SCOPE.md). The original requirements
+> here (signup flow, registrar #2, AUP/ToS, etc.) are tracked in the
+> "Beta TODO" column of `ALPHA_SCOPE.md`.
+
 **Date:** January 6, 2026  
 **Repository:** HyperionGray/opsechat  
 **Assessment Type:** Comprehensive Alpha Release Requirements Check  
-**Status:** 🔄 IN PROGRESS
+**Status:** Historical (superseded by ALPHA_SCOPE.md)
 
 ---
 

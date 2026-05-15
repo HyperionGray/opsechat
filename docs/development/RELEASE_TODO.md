@@ -1,5 +1,9 @@
 # Product Release TODO
 
+> **Status note:** Superseded by [`docs/ALPHA_SCOPE.md`](../ALPHA_SCOPE.md)
+> for the alpha cut. The beta-track items below remain valid as
+> forward-looking guidance.
+
 **Last Updated:** March 2, 2026  
 **Status:** Post-Release Enhancements
 

@@ -68,18 +68,23 @@ class TestInstallEntryPoints(unittest.TestCase):
         with open(self.install_doc, 'r') as f:
             content = f.read()
 
-        self.assertIn('There is no supported `install.sh`', content)
+        # The doc must say there is no install.sh AND must point at the
+        # currently supported entrypoints for each persona.
+        self.assertIn('install.sh', content)
         self.assertIn('python bin/chat-room.py', content)
-        self.assertIn('python src/python/runserver_refactored.py test', content)
+        self.assertIn('python bin/runserver.py test', content)
         self.assertIn('./compose-up.sh', content)
 
     def test_readme_points_to_current_setup_paths(self):
         with open(self.readme, 'r') as f:
             content = f.read()
 
-        self.assertIn('docs/setup/INSTALL.md', content)
+        # The README is the alpha-shipping front door. It must link to the
+        # quickstart, mention the ad-hoc launcher, and not reinvent the
+        # retired install.sh.
         self.assertIn('QUICKSTART.md', content)
         self.assertIn('bin/chat-room.py', content)
+        self.assertIn('ALPHA_SCOPE.md', content)
         self.assertNotIn('./install.sh', content.lower())
 
 

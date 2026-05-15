@@ -1,235 +1,255 @@
-# OpSecChat Quick Start Guide
+# OpSecChat Quickstart
 
-Get started with OpSecChat in 5 minutes! This guide covers the fastest path to running your first secure, anonymous chat session.
+Three personas. Each is a copy-pasteable sequence that gets you to a
+working signed-and-encrypted chat exchange. Pick the one that matches
+how you want to run the service.
 
-## 🆕 NEW: Simple Chat Rooms (Fastest Start!)
+> Every shell command in this file is exercised by an automated test:
+>
+> - Self-hosted ad-hoc and operator-console flows: `tests/alpha/*.spec.js`
+>   driven against the real Flask app.
+> - Compose stack: `scripts/test-compose-e2e.sh` brings the stack up,
+>   runs the alpha specs against it, and tears it back down.
+>
+> If you change a command here and forget to update the matching test,
+> the test will fail and you will know.
 
-**The quickest way to get started:**
-
-```bash
-# Clone and enter directory
-git clone https://github.com/HyperionGray/opsechat.git
-cd opsechat
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Create a chat room (local)
-python bin/chat-room.py
-
-# OR create with Tor hidden service
-python bin/chat-room.py --tor
-```
-
-**What you get:**
-- ✅ Simple web interface at `/chat`
-- ✅ Create rooms with one click
-- ✅ Messages auto-delete after 3 minutes
-- ✅ Optional E2E encryption (Web Crypto API)
-- ✅ Randomized usernames with colors
-- ✅ Text-only, no media
-- ✅ In-memory only (no disk writes)
-- ✅ Rate limiting: 30 messages/min, 10 room creates/min, 5 DMs/min per session
-
-Access at `http://localhost:5000/chat` or your `.onion` address.
-
-### Verify the server is healthy
-
-```bash
-curl http://localhost:5000/health
-# {"active_rooms":0,"status":"healthy","version":"0.8.0-alpha"}
-```
+For an explanation of what is in scope vs. punted to beta, see
+[`docs/ALPHA_SCOPE.md`](docs/ALPHA_SCOPE.md). For the user-side how-to
+once a room is up, see [`USER_DOCS.md`](USER_DOCS.md).
 
 ---
 
-## Prerequisites
+## 1. Self-hosted ad-hoc (5 minutes)
 
-- Linux machine (any distribution)
-- Tor Browser installed
-- Docker/Podman installed (recommended) OR Python 3.8+
+You want a one-off room for one conversation. The fastest path is to run
+the Flask app on your own machine. Optionally publish it as a Tor hidden
+service so the other side never needs to be on the same network as you.
 
-## Quick Start (Recommended: Docker/Podman)
-
-### Step 1: Clone and Start
+### 1.1 Install (one-time)
 
 ```bash
-# Clone the repository
 git clone https://github.com/HyperionGray/opsechat.git
 cd opsechat
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-# Start with one command!
+### 1.2 Run locally (no Tor)
+
+```bash
+source .venv/bin/activate
+python bin/chat-room.py
+```
+
+The app prints:
+
+```
+[local] OpSecChat server started
+[console] Operator Console: http://127.0.0.1:5000/
+[chat]    Chat Rooms:        http://127.0.0.1:5000/chat
+```
+
+Open <http://127.0.0.1:5000/chat> in two browser tabs (or two browsers).
+One tab clicks **Create New Chat Room** and shares the resulting URL with
+the other tab. From there, follow [`USER_DOCS.md`](USER_DOCS.md) -- it
+walks you through generating identities, exchanging public keys, locking
+the roster, and sending the first message.
+
+### 1.3 Run as a Tor hidden service
+
+You will need a local Tor daemon with a control port:
+
+```bash
+# In a separate terminal:
+tor --ControlPort 9051 --CookieAuthentication 1
+```
+
+Then:
+
+```bash
+source .venv/bin/activate
+python bin/chat-room.py --tor
+```
+
+The app prints:
+
+```
+[tor] OpSecChat hidden service created
+[console] Operator Console: http://<...>.onion/
+[chat]    Chat Rooms:        http://<...>.onion/chat
+```
+
+Open the `<...>.onion/chat` URL in Tor Browser, click **Create New Chat
+Room**, and share the resulting URL with the other person via your
+preferred out-of-band channel.
+
+### 1.4 Stop
+
+`Ctrl+C` in the terminal running `bin/chat-room.py`. Hidden services are
+ephemeral; tearing the process down also removes the onion address.
+
+---
+
+## 2. Hosted operator (compose, 10 minutes)
+
+You want a long-running deployment so people can join you on a stable
+onion. Use the compose stack: it brings up a Tor container, the OpSecChat
+app, and a localhost-only admin proxy.
+
+### 2.1 Bring the stack up
+
+```bash
+git clone https://github.com/HyperionGray/opsechat.git
+cd opsechat
 ./compose-up.sh
 ```
 
-That's it! The script will:
-- Build the container
-- Start Tor daemon
-- Launch OpSecChat server
-- Display your unique .onion URL
+The script auto-detects `podman-compose`, `docker compose`, or
+`docker-compose`. Containers come up in dependency order:
 
-### Step 2: Access Your Chat
+1. `opsechat-tor` -- the Tor daemon
+2. `opsechat-app` -- the Flask app (binds port `5000` inside its network)
+3. `opsechat-admin-proxy` -- a Caddy proxy on **127.0.0.1:8080** for the
+   operator. The Tor onion is the public surface; the admin proxy is
+   never exposed off-host.
 
-Look for output like this:
-```
-[*] Started a new hidden service with the address of:
-    abc123def456ghi789jkl.onion/secret-path-xyz123
-```
-
-### Step 3: Share and Chat
-
-1. Open **Tor Browser**
-2. Navigate to your `.onion` URL
-3. Share the URL with your chat partners
-4. Start chatting securely and anonymously!
-
-## Alternative: Native Installation
-
-If you prefer running without containers:
+### 2.2 Verify health
 
 ```bash
-# Clone repository
-git clone https://github.com/HyperionGray/opsechat.git
-cd opsechat
-
-# Create virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Start Tor Browser (must be running)
-# Then start OpSecChat
-python bin/runserver.py
+curl http://127.0.0.1:8080/health
+# {"active_rooms":0,"checks":{...},"status":"healthy",...,"version":"0.8.0-alpha"}
 ```
 
-## What You Get
+### 2.3 Find the onion address
 
-✅ **Anonymous Chat** - Your identity is hidden via Tor  
-✅ **Ephemeral Service** - New .onion address every run  
-✅ **Encrypted Communication** - All traffic encrypted via Tor  
-✅ **No Persistence** - Messages disappear after 3 minutes  
-✅ **PGP Support** - Optional end-to-end encryption (see below)
-
-## Using PGP Encryption (Optional)
-
-For maximum security, enable PGP encryption:
-
-1. Enable JavaScript in Tor Browser (for your .onion only)
-2. Visit Settings → NoScript → Whitelist your .onion address
-3. Click "Enable Encryption" in the chat interface
-4. Generate a new key or import existing key
-5. Share your public key with chat partners
-
-See [PGP Usage Guide](docs/user-guide/PGP_USAGE.md) for detailed instructions.
-
-## Using Email Features
-
-OpSecChat includes a secure email system:
-
-1. Navigate to `/email` on your .onion URL
-2. Configure SMTP/IMAP (optional) at `/email/config`
-3. Generate burner emails at `/email/burner`
-4. Send encrypted emails with PGP support
-
-See [Email Quick Start](docs/user-guide/EMAIL_QUICKSTART.md) for more details.
-
-## Common Issues
-
-### "Tor Connection Failed"
-
-**Solution:** Ensure Tor Browser is running or Tor daemon is accessible on port 9051.
+Tor publication takes 60-120 seconds after first start. Once the descriptor
+is live:
 
 ```bash
-# Check if Tor is running
-ps aux | grep tor
-
-# Start Tor daemon if needed
-sudo systemctl start tor
+# docker compose:
+docker compose -f container-compose.yml logs opsechat | grep -i onion
+# podman compose:
+podman compose -f container-compose.yml logs opsechat | grep -i onion
 ```
 
-### "Port Already in Use"
+Look for a line like:
 
-**Solution:** Another service is using port 5000 or the Tor port.
-
-```bash
-# Find what's using port 5000
-sudo lsof -i :5000
-
-# Kill the process or choose different port
-PORT=5001 python bin/runserver.py
+```
+[*] Started a new hidden service with the address of <abc123...>.onion
 ```
 
-### "Module Not Found"
+### 2.4 Use it
 
-**Solution:** Install dependencies in virtual environment.
+Operator: open <http://127.0.0.1:8080/> for the operator console.
+Users: share `http://<abc123...>.onion/chat` over an out-of-band channel
+and follow [`USER_DOCS.md`](USER_DOCS.md).
 
-```bash
-source .venv/bin/activate
-pip install -r requirements.txt
-```
+### 2.5 Tear the stack down
 
-### Container Won't Start
-
-**Solution:** Check Docker/Podman is running and you have permissions.
-
-```bash
-# For Podman
-systemctl --user start podman
-podman ps
-
-# For Docker
-sudo systemctl start docker
-sudo docker ps
-```
-
-## Next Steps
-
-Now that you have OpSecChat running, explore these features:
-
-- **[Email System](docs/user-guide/EMAIL_SYSTEM.md)** - Send secure, anonymous emails
-- **[Burner Emails](docs/user-guide/EMAIL_SYSTEM.md#burner-email-system)** - Generate temporary email addresses
-- **[PGP Encryption](docs/user-guide/PGP_USAGE.md)** - Advanced end-to-end encryption
-- **[Testing](docs/user-guide/TESTING.md)** - Run the test suite
-- **[AWS Deployment](docs/setup/AWS_DEPLOYMENT.md)** - Deploy to the cloud
-- **[Contributing](docs/development/CONTRIBUTING.md)** - Help improve OpSecChat
-
-## Security Reminders
-
-⚠️ **Important Security Notes:**
-
-- **No Persistent Storage** - Messages are deleted after 3 minutes
-- **Ephemeral Services** - New .onion address each time you run the server
-- **Share Carefully** - Only share your .onion URL with trusted contacts
-- **Use Tor Browser** - Always access via Tor Browser for anonymity
-- **Backup Keys** - If using PGP, backup your private keys securely
-- **No Nefarious Use** - See [Acceptable Use Policy](docs/legal/ACCEPTABLE_USE_POLICY.md)
-
-## Need Help?
-
-- **Documentation**: [docs/README.md](docs/README.md)
-- **Full README**: [README.md](README.md)
-- **Security Info**: [docs/SECURITY.md](docs/SECURITY.md)
-- **Report Issues**: [GitHub Issues](https://github.com/HyperionGray/opsechat/issues)
-
-## Stopping the Server
-
-### Docker/Podman
 ```bash
 ./compose-down.sh
 ```
 
-### Native
-Press `Ctrl+C` in the terminal running `bin/runserver.py`
+### 2.6 Container-up-to-container-down test
+
+To prove the entire deployment works end-to-end, run:
+
+```bash
+./scripts/test-compose-e2e.sh
+```
+
+This script brings the stack up, polls `/health` until green, runs the
+alpha Playwright suite against `127.0.0.1:8080`, and brings the stack
+back down (in a `trap` so it tears down even on failure). Use this as
+your acceptance test before announcing a deployment.
 
 ---
 
-**That's it!** You now have a secure, anonymous chat server running on the Tor network. 🎉
+## 3. Hosted operator (quadlets, 15 minutes)
 
-For more advanced features and configuration options, see the [full documentation](docs/README.md).
+Same end state as the compose stack, but the units are managed by
+systemd. Recommended for production hosts where you want native systemd
+logging, restart policies, and boot ordering.
+
+### 3.1 Install
+
+```bash
+git clone https://github.com/HyperionGray/opsechat.git
+cd opsechat
+podman build -t localhost/opsechat:latest .
+./install-quadlets.sh
+```
+
+### 3.2 Start
+
+```bash
+systemctl --user start opsechat-app
+```
+
+### 3.3 Find the onion address
+
+```bash
+journalctl --user -u opsechat-app -f | grep -i onion
+```
+
+(Or omit `-f` and just grep historical journal output.)
+
+### 3.4 Manage
+
+```bash
+# Status
+systemctl --user status opsechat-app
+# Stop
+systemctl --user stop opsechat-app
+# Restart
+systemctl --user restart opsechat-app
+```
+
+To enable boot-time start without an interactive login, enable lingering
+once: `sudo loginctl enable-linger $USER`.
+
+See [`quadlets/README.md`](quadlets/README.md) for the full quadlet
+reference.
 
 ---
 
-**Version:** 0.8.0-alpha  
-**Last Updated:** February 23, 2026  
-**License:** MIT
+## 4. Test mode for developers
+
+If you are iterating on the code and just want the app on `127.0.0.1`
+with no Tor:
+
+```bash
+source .venv/bin/activate
+python bin/runserver.py test
+```
+
+This binds <http://127.0.0.1:5001> and skips the Tor publication
+entirely. The Playwright `webServer` block uses this same flow on
+port `5111`.
+
+For the full developer workflow including running all three test
+suites, see [`DEVELOPER_DOCS.md`](DEVELOPER_DOCS.md).
+
+---
+
+## What can go wrong (the short list)
+
+| Symptom                                     | Likely cause and fix                                                                                            |
+|---------------------------------------------|------------------------------------------------------------------------------------------------------------------|
+| `compose-up.sh: command not found`          | You did not `cd` into the repo. Or you are on Windows; this stack is Linux/macOS only.                          |
+| `[!] Error: No working compose command found` | Install `podman-compose`, `docker-compose`, or the `docker compose` plugin. Podman is preferred (`podman --version`). |
+| `/health` never goes green                  | Inspect `docker compose -f container-compose.yml logs opsechat`. The most common cause is a stale image; rebuild with `./compose-up.sh` (it builds on every up). |
+| `Tor proxy or Control Port are not running` | For ad-hoc: ensure `tor --ControlPort 9051 --CookieAuthentication 1` is running. For compose: it is built in.   |
+| Browser shows "Room not found or expired"   | Rooms expire after one hour of inactivity. Ask the other side to create a new room and share the URL again.     |
+| Sending message says "Bootstrap the room roster..." | You skipped the bootstrap step. See `USER_DOCS.md` -> "Locking the roster (epoch 1)".                  |
+
+---
+
+## Next steps
+
+- Read [`USER_DOCS.md`](USER_DOCS.md) before sharing a room URL with anyone.
+- Read [`docs/SECURITY.md`](docs/SECURITY.md) before deploying publicly.
+- Read [`docs/ALPHA_SCOPE.md`](docs/ALPHA_SCOPE.md) to understand exactly
+  what alpha promises and what it does not.
