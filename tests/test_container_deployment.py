@@ -100,7 +100,7 @@ class TestDockerComposeConfig:
             config = yaml.safe_load(f)
 
         proxy_ports = config['services']['admin-proxy']['ports']
-        assert proxy_ports == ['127.0.0.1:8080:8080']
+        assert proxy_ports == ['127.0.0.1:8087:8087']
 
     def test_compose_admin_proxy_only_reaches_app_on_admin_network(self):
         compose_path = self.get_compose_path()

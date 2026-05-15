@@ -77,12 +77,12 @@ or `podman-compose`. It brings up:
 
 - `opsechat-tor` -- Tor daemon
 - `opsechat-app` -- Flask app
-- `opsechat-admin-proxy` -- Caddy on `127.0.0.1:8080` for the operator
+- `opsechat-admin-proxy` -- Caddy on `127.0.0.1:8087` for the operator
 
 Verify:
 
 ```bash
-curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8087/health
 ```
 
 Tear down:

@@ -111,14 +111,14 @@ The script auto-detects `podman-compose`, `docker compose`, or
 
 1. `opsechat-tor` -- the Tor daemon
 2. `opsechat-app` -- the Flask app (binds port `5000` inside its network)
-3. `opsechat-admin-proxy` -- a Caddy proxy on **127.0.0.1:8080** for the
+3. `opsechat-admin-proxy` -- a Caddy proxy on **127.0.0.1:8087** for the
    operator. The Tor onion is the public surface; the admin proxy is
    never exposed off-host.
 
 ### 2.2 Verify health
 
 ```bash
-curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8087/health
 # {"active_rooms":0,"checks":{...},"status":"healthy",...,"version":"0.8.0-alpha"}
 ```
 
@@ -142,7 +142,7 @@ Look for a line like:
 
 ### 2.4 Use it
 
-Operator: open <http://127.0.0.1:8080/> for the operator console.
+Operator: open <http://127.0.0.1:8087/> for the operator console.
 Users: share `http://<abc123...>.onion/chat` over an out-of-band channel
 and follow [`USER_DOCS.md`](USER_DOCS.md).
 
@@ -161,7 +161,7 @@ To prove the entire deployment works end-to-end, run:
 ```
 
 This script brings the stack up, polls `/health` until green, runs the
-alpha Playwright suite against `127.0.0.1:8080`, and brings the stack
+alpha Playwright suite against `127.0.0.1:8087`, and brings the stack
 back down (in a `trap` so it tears down even on failure). Use this as
 your acceptance test before announcing a deployment.
 

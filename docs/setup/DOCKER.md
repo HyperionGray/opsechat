@@ -11,7 +11,7 @@ split yet.
 
 - `tor` container
 - `opsechat` app container
-- `admin-proxy` bound to `127.0.0.1:8080`
+- `admin-proxy` bound to `127.0.0.1:8087`
 
 Network layout:
 
@@ -38,8 +38,8 @@ The helper script auto-detects:
 
 Local operator access:
 
-- `http://127.0.0.1:8080/`
-- `http://127.0.0.1:8080/chat`
+- `http://127.0.0.1:8087/`
+- `http://127.0.0.1:8087/chat`
 
 The app inside the container uses the current refactored runtime, so the
 onion-service web paths are also `/` and `/chat`.

@@ -31,7 +31,7 @@ def main():
 Examples:
   %(prog)s                    # Create room on localhost
   %(prog)s --tor              # Create room as Tor hidden service
-  %(prog)s --port 8080        # Use custom port
+  %(prog)s --port 8087        # Use custom port
 
 Security Features:
   - Messages disappear after 3 minutes

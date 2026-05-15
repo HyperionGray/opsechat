@@ -4,12 +4,12 @@
  *
  * Run separately by `scripts/test-compose-e2e.sh` AFTER `compose-up.sh`
  * has the stack healthy. Drives the same alpha specs as the default config,
- * but against the localhost admin proxy on 127.0.0.1:8080 instead of
+ * but against the localhost admin proxy on 127.0.0.1:8087 instead of
  * spinning a new Flask process.
  */
 const { defineConfig, devices } = require('@playwright/test');
 
-const BASE_URL = process.env.OPSECHAT_BASE_URL || 'http://127.0.0.1:8080';
+const BASE_URL = process.env.OPSECHAT_BASE_URL || 'http://127.0.0.1:8087';
 
 module.exports = defineConfig({
   testDir: './tests/alpha',

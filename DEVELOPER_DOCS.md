@@ -190,7 +190,7 @@ end-to-end before tagging a release.
 This script:
 
 1. `./compose-up.sh` (podman or docker auto-detected).
-2. Polls `http://127.0.0.1:8080/health` until green or 180s timeout.
+2. Polls `http://127.0.0.1:8087/health` until green or 180s timeout.
 3. Runs the alpha Playwright specs against the admin proxy URL.
 4. `./compose-down.sh` in an EXIT trap, so the stack tears down even on
    test failure.

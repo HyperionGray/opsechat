@@ -287,7 +287,7 @@ OpSecChat - Create secure, ephemeral chat rooms
 Examples:
   chat-room.py                    # Create room on localhost
   chat-room.py --tor              # Create room as Tor hidden service
-  chat-room.py --port 8080        # Use custom port
+  chat-room.py --port 8087        # Use custom port
 ```
 
 ## Performance Metrics

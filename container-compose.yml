@@ -11,7 +11,7 @@ services:
       opsechat:
         condition: service_healthy
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8087:8087"
     networks:
       - admin-network
     restart: unless-stopped
@@ -20,7 +20,7 @@ services:
     cap_drop:
       - ALL
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/health"]
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8087/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -70,7 +70,7 @@ services:
     volumes:
       - tor-data:/var/lib/tor:ro
     # No app host ports by default. Use the onion service or the localhost-only
-    # admin proxy on 127.0.0.1:8080.
+    # admin proxy on 127.0.0.1:8087.
     # For direct localhost debugging only, uncomment:
     # ports:
     #   - "127.0.0.1:5000:5000"

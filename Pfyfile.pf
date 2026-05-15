@@ -1,4 +1,19 @@
-task build python3 pf-tasks/build.py
-task deploy python3 pf-tasks/deploy.py
-task test python3 pf-tasks/test.py
-task clean python3 pf-tasks/clean.py
+task build
+description "build"
+  python pf-tasks/build.py
+end
+
+task deploy
+description "deploy"
+   python pf-tasks/deploy.py
+end
+
+task test
+description "test"
+   python pf-tasks/test.py
+end
+
+task clean
+description "clean"
+   python pf-tasks/clean.py
+end

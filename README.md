@@ -52,7 +52,7 @@ and contributor docs are in [`DEVELOPER_DOCS.md`](DEVELOPER_DOCS.md).
 git clone https://github.com/HyperionGray/opsechat.git
 cd opsechat
 ./compose-up.sh
-curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8087/health
 ```
 
 Find the onion URL once Tor publishes the descriptor:

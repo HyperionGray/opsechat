@@ -271,7 +271,7 @@ podman-compose ps
 
 **Expected Result:**
 - `opsechat` and `tor` have no host ports
-- `admin-proxy` exposes only `127.0.0.1:8080`
+- `admin-proxy` exposes only `127.0.0.1:8087`
 - Anonymous ingress still uses the onion service
 
 ### Test 16: Verify Tor Hidden Service
