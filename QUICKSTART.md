@@ -225,9 +225,12 @@ source .venv/bin/activate
 python bin/runserver.py test
 ```
 
-This binds <http://127.0.0.1:5001> and skips the Tor publication
-entirely. The Playwright `webServer` block uses this same flow on
-port `5111`.
+This binds <http://127.0.0.1:5006> and skips the Tor publication
+entirely. The non-standard port keeps OpSecChat from clashing with
+other Flask projects you may have on `5000`/`5001`. Override with
+`OPSECHAT_TEST_PORT=5007 python bin/runserver.py test` if you need
+something else. The Playwright `webServer` block uses an unrelated
+port (`5111`) for the same reason.
 
 For the full developer workflow including running all three test
 suites, see [`DEVELOPER_DOCS.md`](DEVELOPER_DOCS.md).

@@ -30,9 +30,12 @@ Sanity checks:
 
 ```bash
 python bin/chat-room.py --help
-python bin/runserver.py test          # binds 127.0.0.1:5001
-curl http://127.0.0.1:5001/health
+python bin/runserver.py test          # binds 127.0.0.1:5006 (non-standard, conflict-free)
+curl http://127.0.0.1:5006/health
 ```
+
+Override the test port with `OPSECHAT_TEST_PORT=5007 python bin/runserver.py test`
+if 5006 is taken.
 
 ---
 

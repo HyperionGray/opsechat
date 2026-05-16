@@ -85,6 +85,7 @@ Per-room overrides are not yet supported (alpha gap; see
 | `OPSECHAT_SECRET_KEY`             | random  | Flask session secret. Set to a stable value if you need stable session cookies across restarts. |
 | `OPSECHAT_TOR_STARTUP_TIMEOUT`    | 30      | Seconds to wait for the Tor control port at boot                  |
 | `OPSECHAT_TOR_RETRY_DELAY`        | 1       | Seconds between Tor control retries                               |
+| `OPSECHAT_TEST_PORT`              | 5006    | Port the `bin/runserver.py test` dev server binds on 127.0.0.1.   |
 | `OPSECHAT_LOG_FILE`               | unset   | If set, structured logs are also written to this file path        |
 
 ---
@@ -105,7 +106,7 @@ Per-room overrides are not yet supported (alpha gap; see
 python bin/chat-room.py --tor
 ```
 
-### Developer test mode (no Tor, all alpha endpoints, port 5001)
+### Developer test mode (no Tor, all alpha endpoints, port 5006)
 
 ```bash
 python bin/runserver.py test

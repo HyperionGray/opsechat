@@ -115,14 +115,19 @@ def main():
     # Generate random path for security
     path = id_generator(size=32)
     
-    # Check for test mode
+    # Check for test mode.
+    # Port 5006 (not the more common 5000/5001) so that running the dev
+    # server next to other Flask projects on the same machine is
+    # conflict-free. Override with OPSECHAT_TEST_PORT if you really need
+    # a different port.
     if len(sys.argv) > 1 and sys.argv[1] == "test":
-        print("Test mode: Running on localhost:5001")
+        test_port = int(os.environ.get("OPSECHAT_TEST_PORT", "5006"))
+        print(f"Test mode: Running on localhost:{test_port}")
         app.config['path'] = path
         app.config['hostname'] = "localhost"
-        app.config['full_path'] = f"localhost:5001/{path}"
+        app.config['full_path'] = f"localhost:{test_port}/{path}"
         print(f"[*] Your service is available at: http://{app.config['full_path']}")
-        app.run(host='127.0.0.1', port=5001, debug=False)
+        app.run(host='127.0.0.1', port=test_port, debug=False)
         return
     
     # Set provisional config so Flask can answer health checks before Tor is ready.
